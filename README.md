@@ -34,7 +34,7 @@ z21-Terminal/
 
 ### Hardware
 - **Control Station**: Roco Z21 White (192.168.1.111)
-- **Software**: JMRI with Web Server active (port 12080)
+- **Software**: JMRI (for roster/consist management - does not need to be running)
 
 ### Layout Tracks
 - **Inner** (long): 2 synchronized locomotives (address 1 and 5)
@@ -82,10 +82,10 @@ python3 read_consists.py 10             # Consist 10 details
 ### Interactive Controller ✅
 - [x] Complete speed control (w/s, 0-9, hotkeys)
 - [x] Emergency stop with power toggle and audio feedback
-- [x] Function control F0-F28 (dynamic loading from roster)
-- [x] Read function state from locomotives (automatic sync)
+- [x] Function control F0-F28 (dynamic loading from roster, Shift+A-Z hotkeys)
+- [x] Periodic polling sync (track power, functions - 500ms interval)
 - [x] Support for single locomotives and consists
-- [x] Real-time status bar
+- [x] Real-time unified UI (functions always visible)
 - [x] On-the-fly locomotive switching
 
 ### Z21 Library ✅
@@ -103,7 +103,7 @@ python3 read_consists.py 10             # Consist 10 details
 ### TODO ⏳
 - [ ] Direct CV reading from locomotives (via Z21 programming track)
 - [ ] CV writing via Z21 (for decoder configuration)
-- [ ] Z21 broadcast listener for real-time updates (bidirectional sync with JMRI)
+- [x] Periodic polling for real-time updates (track power, functions sync with JMRI)
 - [ ] Web dashboard for remote control
 
 ## Notes
