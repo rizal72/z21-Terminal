@@ -1,0 +1,36 @@
+# Claude private notes - NEVER commit to git
+CLAUDE.md
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Project specific
+data/*.log
+data/*.backup
+*.tmp
+
+# Sensitive data
+config.local.py
+secrets.json
+.env
