@@ -8,7 +8,6 @@ Interactive terminal controller for DCC locomotives via Z21 LAN protocol.
 
 ```
 z21-Terminal/
-├── CLAUDE.md          # Detailed setup and configuration documentation (Italian)
 ├── README.md          # This file
 ├── scripts/           # Python scripts for automation
 ├── docs/              # Additional documentation
@@ -117,5 +116,3 @@ python3 read_consists.py 10             # Consist 10 details
   - Coexists with JMRI: both can control locomotives simultaneously
   - Read locomotive state (speed, direction, functions F0-F28) implemented
 - **CV Operations**: CV read/write to be implemented (via Z21 programming track)
-
-For complete details see `CLAUDE.md` (Italian)
