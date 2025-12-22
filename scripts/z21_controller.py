@@ -301,6 +301,9 @@ FUNCTIONS (always visible below slider):
   Shift+C    Toggle F2
   ...        ...
   Shift+Z    Toggle F25
+  ,          Toggle F26
+  .          Toggle F27
+  -          Toggle F28
   f          Sync function states (re-read from loco)
 
 OTHER:
@@ -348,7 +351,7 @@ OTHER:
         output += self._render_functions_display()
 
         output += "━" * 120 + "\n"
-        output += "Commands: w/s=±speed  \\=0%  1-9=10-90%  0=100%  d=dir  SPACE=stop  TAB=emergency  Shift+A-Z=functions  h=help  q=quit\n"
+        output += "Commands: w/s=±speed  \\=0%  1-9=10-90%  0=100%  d=dir  SPACE=stop  TAB=emergency  Shift+A-Z,.-=funcs  h=help  q=quit\n"
 
         print(output, end="", flush=True)
 
@@ -379,12 +382,18 @@ OTHER:
         if not functions:
             return "FUNCTIONS: No functions defined for this locomotive\n"
 
-        # Mappa funzioni -> tasti (Shift+A-Z = F0-F25)
+        # Mappa funzioni -> tasti (Shift+A-Z = F0-F25, ,.-=- = F26-F28)
         def get_key_for_func(num):
             if num <= 25:
                 return chr(ord('A') + num)  # A-Z
+            elif num == 26:
+                return ','
+            elif num == 27:
+                return '.'
+            elif num == 28:
+                return '-'
             else:
-                return f"F{num}"  # F26-F28 no hotkey
+                return f"F{num}"  # F29+ se mai servisse
 
         output = "FUNCTIONS:\n"
 
@@ -869,6 +878,15 @@ OTHER:
                         # Shift+A-Z = toggle F0-F25
                         func_num = ord(cmd) - ord('A')
                         self.toggle_function(func_num)
+                    elif cmd == ',':
+                        # , = toggle F26
+                        self.toggle_function(26)
+                    elif cmd == '.':
+                        # . = toggle F27
+                        self.toggle_function(27)
+                    elif cmd == '-':
+                        # - = toggle F28
+                        self.toggle_function(28)
                     elif cmd.lower() == 'w':
                         self.increase_speed(5)
                     elif cmd.lower() == 's':
