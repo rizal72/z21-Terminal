@@ -91,14 +91,15 @@ export default function ConsistController({
         e.preventDefault();
         setSpeedPercent(0);
       }
-      // 1-9 = 10-90%
-      else if (e.key >= '1' && e.key <= '9') {
+      // 1-9 = 10-90% (use e.code to detect physical key, works with Shift/Ctrl)
+      else if (e.code >= 'Digit1' && e.code <= 'Digit9') {
         e.preventDefault();
-        const percent = parseInt(e.key) * 10;
+        const digit = parseInt(e.code.slice(-1)); // Extract digit from "Digit1", "Digit2", etc.
+        const percent = digit * 10;
         setSpeedPercent(percent);
       }
-      // 0 = 100%
-      else if (e.key === '0') {
+      // 0 = 100% (use e.code to detect physical key, works with Shift/Ctrl)
+      else if (e.code === 'Digit0') {
         e.preventDefault();
         setSpeedPercent(100);
       }
