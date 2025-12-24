@@ -220,7 +220,57 @@ function App() {
       type: 'emergency_stop',
       powerOn: newPowerState
     });
+
+    // If turning power ON, send speed=0 to all consists/locomotives
+    // to prevent them from restarting at previous speed
+    if (newPowerState) {
+      // Wait a bit for track power to stabilize, then reset speeds
+      setTimeout(() => {
+        // Reset all consists to speed 0
+        Object.keys(consists).forEach(address => {
+          sendMessage({
+            type: 'set_speed',
+            address: parseInt(address),
+            speed: 0,
+            forward: true
+          });
+        });
+
+        // Reset all standalone locomotives to speed 0
+        Object.values(locomotives).forEach(loco => {
+          if (!loco.in_consist) {
+            sendMessage({
+              type: 'set_speed',
+              address: loco.address,
+              speed: 0,
+              forward: true
+            });
+          }
+        });
+      }, 100); // 100ms delay for Z21 to power up
+    }
   };
+
+  // Global keyboard shortcut for Emergency Stop (ESC key)
+  useEffect(() => {
+    const handleGlobalKeyPress = (e) => {
+      // Only handle if no input/select/textarea is focused
+      if (document.activeElement.tagName === 'INPUT' ||
+          document.activeElement.tagName === 'TEXTAREA' ||
+          document.activeElement.tagName === 'SELECT') {
+        return;
+      }
+
+      // ESC key for emergency stop toggle
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleEmergencyStop();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyPress);
+    return () => window.removeEventListener('keydown', handleGlobalKeyPress);
+  }, [trackPower, consists, locomotives]); // Dependencies for handleEmergencyStop
 
   // Get selected item (consist or locomotive) for a controller
   const getSelectedItem = (selection) => {
@@ -292,7 +342,7 @@ function App() {
               <button
                 onClick={handleEmergencyStop}
                 className={`emergency-stop ${!trackPower ? 'active' : ''}`}
-                title={trackPower ? 'Cut track power (Emergency Stop)' : 'Restore track power'}
+                title={trackPower ? 'Cut track power (Emergency Stop) - Press ESC' : 'Restore track power - Press ESC'}
               >
                 <div className="flex items-center gap-3 px-6 py-3">
                   {trackPower ? (
@@ -305,7 +355,7 @@ function App() {
                       {trackPower ? 'Emergency' : 'Restart'}
                     </span>
                     <span className="text-xs opacity-70">
-                      {trackPower ? 'Stop All' : 'Power On'}
+                      {trackPower ? 'Stop All' : 'Power On'} <kbd className="ml-1 px-1 bg-white/10 rounded text-[10px]">ESC</kbd>
                     </span>
                   </div>
                 </div>

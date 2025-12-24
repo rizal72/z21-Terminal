@@ -72,9 +72,12 @@ Access at: **http://localhost:5173** (or from network: `http://192.168.1.xxx:517
 - Dual controller layout (control 2 consists/locomotives simultaneously)
 - Touch-optimized controls (speed slider, functions)
 - Real-time sync via WebSocket (multi-device support)
-- Emergency stop with audio feedback
+- Emergency stop with audio feedback (ESC keyboard shortcut)
+- STOP button for each controller (speed=0 quick action)
+- Power-on speed reset (prevents locomotives from restarting at previous speed)
 - Function state sync with Z21
 - Support for standalone locomotives and consists
+- Elegant UI with Font Awesome 6 icons
 
 ### Terminal Controller ⌨️
 Interactive keyboard control:
@@ -103,18 +106,21 @@ python3 read_consists.py 10             # Consist 10 details
 ## Features
 
 ### Web Dashboard ✅
-- [x] Modern web UI (Vite + React + Tailwind CSS)
+- [x] Modern web UI (Vite + React + Tailwind CSS + Font Awesome 6)
 - [x] FastAPI backend with WebSocket real-time sync
 - [x] Dual controller layout (2 consists/locomotives simultaneously)
 - [x] Flexible roster selection (consists + standalone locomotives)
 - [x] Touch-optimized controls (mobile-first design)
 - [x] Speed control slider (0-126 steps, keyboard shortcuts)
+- [x] STOP button for each controller (quick speed=0)
 - [x] Direction toggle (forward/reverse)
 - [x] Functions F0-F28 with ON/OFF indicators
-- [x] Global emergency stop (track power on/off)
+- [x] Global emergency stop with ESC keyboard shortcut
+- [x] Power-on speed reset (prevents restart at previous speed)
 - [x] Multi-device support (iPad, phone, desktop)
 - [x] Track power polling (500ms) with auto-sync
 - [x] Function state sync from Z21
+- [x] Elegant icon design (Font Awesome 6)
 
 ### Terminal Controller ✅
 - [x] Complete speed control (w/s, 0-9, hotkeys)
