@@ -67,10 +67,8 @@
   /* Touch-optimized slider */
   input[type="range"] {
     @apply w-full h-3 rounded-full appearance-none cursor-pointer;
-    background: linear-gradient(to right,
-      #2a2a2a 0%,
-      #ff9500 50%,
-      #e63946 100%);
+    background: #3a3a3a; /* lighter grey - more visible */
+    border: 0.5px solid rgba(100, 116, 139, 0.5); /* track-steel border */
   }
 
   input[type="range"]::-webkit-slider-thumb {

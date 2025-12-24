@@ -184,20 +184,40 @@ export default function ConsistController({
           <label className="text-xs font-mono text-track-steel uppercase tracking-wider mb-2 block">
             Select {controllerNumber === 1 ? 'Left' : 'Right'} Controller
           </label>
-          <select
-            value={`${selection.type}-${selection.address}`}
-            onChange={(e) => {
-              const [type, address] = e.target.value.split('-');
-              onSelectionChange({ type, address: parseInt(address) });
-            }}
-            className="w-full bg-control-dark border border-control-grey rounded px-3 py-2 text-white font-mono text-sm focus:border-signal-amber focus:outline-none"
-          >
-            {rosterOptions.map((option) => (
-              <option key={`${option.type}-${option.address}`} value={`${option.type}-${option.address}`}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-3">
+            <select
+              value={`${selection.type}-${selection.address}`}
+              onChange={(e) => {
+                const [type, address] = e.target.value.split('-');
+                onSelectionChange({ type, address: parseInt(address) });
+              }}
+              className="flex-1 bg-control-dark border border-control-grey rounded px-3 py-2 text-white font-mono text-sm focus:border-signal-amber focus:outline-none"
+            >
+              {rosterOptions.map((option) => (
+                <option key={`${option.type}-${option.address}`} value={`${option.type}-${option.address}`}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {/* Train icon indicator */}
+            <div className="flex items-center justify-center w-12 h-10 bg-control-dark border border-control-grey rounded">
+              <div className="relative">
+                <div
+                  className="absolute inset-0 bg-signal-amber rounded-full opacity-20 blur-md transition-opacity duration-300"
+                  style={{
+                    opacity: speed > 0 ? 0.3 : 0
+                  }}
+                ></div>
+                <i
+                  className="fa-solid fa-train text-signal-amber relative z-10 transition-all duration-300"
+                  style={{
+                    fontSize: '1.25rem',
+                    filter: speed > 0 ? 'drop-shadow(0 0 4px rgba(255, 149, 0, 0.8))' : 'none'
+                  }}
+                ></i>
+              </div>
+            </div>
+          </div>
         </div>
 
         <h2 className="text-2xl font-display font-bold text-signal-amber mb-2">
@@ -220,39 +240,6 @@ export default function ConsistController({
         )}
       </div>
 
-      {/* Track visualization */}
-      <div className="mb-8">
-        <div className="relative">
-          <div className="track-line"></div>
-          <div
-            className="absolute top-1/2 -translate-y-1/2 flex items-center justify-center transition-all duration-300"
-            style={{
-              left: `${speedPercent}%`,
-              transform: 'translate(-50%, -50%)'
-            }}
-          >
-            <div
-              className="absolute w-8 h-8 bg-signal-amber rounded-full opacity-20 blur-md"
-              style={{
-                boxShadow: speed > 0 ? '0 0 20px rgba(255, 149, 0, 0.8)' : 'none'
-              }}
-            ></div>
-            <i
-              className="fa-solid fa-train text-signal-amber relative z-10"
-              style={{
-                fontSize: '1.25rem',
-                filter: speed > 0 ? 'drop-shadow(0 0 4px rgba(255, 149, 0, 0.8))' : 'none'
-              }}
-            ></i>
-          </div>
-        </div>
-        <div className="flex justify-between mt-2 text-xs font-mono text-track-steel">
-          <span>0%</span>
-          <span className="text-signal-amber font-bold">{speedPercent}%</span>
-          <span>100%</span>
-        </div>
-      </div>
-
       {/* Speed control */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
@@ -268,38 +255,63 @@ export default function ConsistController({
             </span>
           </div>
         </div>
-        <input
-          type="range"
-          min="0"
-          max="126"
-          value={speed}
-          onChange={handleSpeedChange}
-          disabled={!trackPower || isLocoInConsist}
-          className="w-full touch-none"
-        />
+        {/* Slider with progress fill */}
+        <div className="relative">
+          {/* Progress fill reveals gradient */}
+          <div
+            className="absolute left-0 top-1/2 -translate-y-1/2 h-3 rounded-full pointer-events-none transition-all duration-200 overflow-hidden"
+            style={{
+              width: `${speedPercent}%`,
+              zIndex: 0
+            }}
+          >
+            <div
+              className="h-3 rounded-full"
+              style={{
+                width: '200vw', // Extra wide to ensure full coverage
+                background: 'linear-gradient(to right, #2a2a2a 0%, #ff9500 25%, #e63946 50%)',
+                boxShadow: speed > 0 ? '0 0 15px rgba(255, 149, 0, 0.4)' : 'none'
+              }}
+            ></div>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="126"
+            value={speed}
+            onChange={handleSpeedChange}
+            disabled={!trackPower || isLocoInConsist}
+            className="w-full touch-none relative z-10"
+            style={{ background: 'transparent' }}
+          />
+        </div>
 
         {/* Speed tick marks (0%, 10%, 20%, ..., 100%) */}
-        <div className="relative mt-4 px-1">
-          <div className="flex justify-between items-center">
-            {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((percent) => (
+        <div className="relative mt-8 h-12">
+          {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((percent) => {
+            // Calculate offset to align with thumb position
+            // Thumb is 48px wide, so at 0% center is at 24px, at 100% center is at calc(100% - 24px)
+            const offset = 24 - (percent * 0.48);
+            return (
               <button
                 key={percent}
                 onClick={() => setSpeedPercent(percent)}
                 disabled={!trackPower || isLocoInConsist}
-                className="group flex flex-col items-center gap-1 touch-manipulation disabled:opacity-30 disabled:cursor-not-allowed"
+                className="group absolute flex flex-col items-center gap-1 touch-manipulation disabled:opacity-30 disabled:cursor-not-allowed -translate-x-1/2"
+                style={{ left: `calc(${percent}% + ${offset}px)` }}
                 title={isLocoInConsist ? 'Disabled (loco in consist)' : `Set speed to ${percent}%`}
               >
-                <div className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                  Math.abs(speedPercent - percent) < 3
-                    ? 'bg-signal-amber scale-150 shadow-[0_0_8px_rgba(255,149,0,0.8)]'
-                    : 'bg-control-grey group-hover:bg-track-steel group-hover:scale-125'
-                }`}></div>
-                <span className="text-xs font-mono text-track-steel group-hover:text-white transition-colors">
-                  {percent}
-                </span>
-              </button>
-            ))}
-          </div>
+              <div className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                Math.abs(speedPercent - percent) < 3
+                  ? 'bg-signal-amber scale-150 shadow-[0_0_8px_rgba(255,149,0,0.8)]'
+                  : 'bg-control-grey group-hover:bg-track-steel group-hover:scale-125'
+              }`}></div>
+              <span className="text-xs font-mono text-track-steel group-hover:text-white transition-colors">
+                {percent}
+              </span>
+            </button>
+            );
+          })}
         </div>
 
         {/* Keyboard shortcuts hint */}
