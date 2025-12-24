@@ -9,7 +9,9 @@ Interactive terminal controller for DCC locomotives via Z21 LAN protocol.
 ```
 z21-Terminal/
 ├── README.md          # This file
-├── scripts/           # Python scripts for automation
+├── scripts/           # Python scripts (terminal controller, utilities)
+├── backend/           # FastAPI backend + WebSocket + Z21Manager
+├── web/               # React frontend (Vite + Tailwind)
 ├── docs/              # Additional documentation
 └── data/              # Exported data, logs, CV backups
 ```
@@ -55,6 +57,28 @@ z21-Terminal/
 
 ## Main Usage
 
+### Web Dashboard 🌐
+Modern web interface for locomotive control (mobile-first, multi-device):
+
+```bash
+z21-dev          # Start backend + frontend (opens in new iTerm tab)
+z21-backend      # Start only backend (FastAPI + WebSocket)
+z21-frontend     # Start only frontend (Vite dev server)
+```
+
+Access at: **http://localhost:5173** (or from network: `http://192.168.1.xxx:5173`)
+
+**Features:**
+- Dual controller layout (control 2 consists/locomotives simultaneously)
+- Touch-optimized controls (speed slider, functions)
+- Real-time sync via WebSocket (multi-device support)
+- Emergency stop with audio feedback
+- Function state sync with Z21
+- Support for standalone locomotives and consists
+
+### Terminal Controller ⌨️
+Interactive keyboard control:
+
 ```bash
 cd ~/Documents/_PROGETTI/z21-Terminal/scripts
 
@@ -78,7 +102,21 @@ python3 read_consists.py 10             # Consist 10 details
 
 ## Features
 
-### Interactive Controller ✅
+### Web Dashboard ✅
+- [x] Modern web UI (Vite + React + Tailwind CSS)
+- [x] FastAPI backend with WebSocket real-time sync
+- [x] Dual controller layout (2 consists/locomotives simultaneously)
+- [x] Flexible roster selection (consists + standalone locomotives)
+- [x] Touch-optimized controls (mobile-first design)
+- [x] Speed control slider (0-126 steps, keyboard shortcuts)
+- [x] Direction toggle (forward/reverse)
+- [x] Functions F0-F28 with ON/OFF indicators
+- [x] Global emergency stop (track power on/off)
+- [x] Multi-device support (iPad, phone, desktop)
+- [x] Track power polling (500ms) with auto-sync
+- [x] Function state sync from Z21
+
+### Terminal Controller ✅
 - [x] Complete speed control (w/s, 0-9, hotkeys)
 - [x] Emergency stop with power toggle and audio feedback
 - [x] Function control F0-F28 (dynamic loading from roster, Shift+A-Z hotkeys)
@@ -102,8 +140,8 @@ python3 read_consists.py 10             # Consist 10 details
 ### TODO ⏳
 - [ ] Direct CV reading from locomotives (via Z21 programming track)
 - [ ] CV writing via Z21 (for decoder configuration)
-- [x] Periodic polling for real-time updates (track power, functions sync with JMRI)
-- [ ] Web dashboard for remote control
+- [ ] Progressive Web App (installable on iPad)
+- [ ] Custom automation scenarios
 
 ## Notes
 

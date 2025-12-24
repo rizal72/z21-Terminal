@@ -34,3 +34,10 @@ data/*.backup
 config.local.py
 secrets.json
 .env
+
+# Node/NPM (Frontend)
+node_modules/
+web/dist/
+web/.vite/
+npm-debug.log*
+package-lock.json

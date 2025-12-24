@@ -1,0 +1,175 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-control-black text-white font-body antialiased;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-control-dark;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-track-steel rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-signal-amber;
+  }
+}
+
+@layer components {
+  /* Grain texture overlay for industrial feel */
+  .grain-overlay {
+    position: relative;
+  }
+
+  .grain-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Glow effect for active elements */
+  .signal-glow {
+    box-shadow: 0 0 20px currentColor,
+                0 0 40px currentColor,
+                inset 0 0 10px currentColor;
+  }
+
+  /* Control panel styling */
+  .control-panel {
+    @apply bg-control-dark border border-control-grey rounded-lg p-6;
+    @apply shadow-2xl backdrop-blur-sm;
+    background: linear-gradient(135deg,
+      rgba(26, 26, 26, 0.95) 0%,
+      rgba(42, 42, 42, 0.85) 100%);
+  }
+
+  /* Touch-optimized slider */
+  input[type="range"] {
+    @apply w-full h-3 rounded-full appearance-none cursor-pointer;
+    background: linear-gradient(to right,
+      #2a2a2a 0%,
+      #ff9500 50%,
+      #e63946 100%);
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    @apply appearance-none w-12 h-12 rounded-full cursor-pointer;
+    @apply bg-signal-amber border-4 border-control-black;
+    @apply shadow-lg transition-all duration-200;
+    box-shadow: 0 0 20px rgba(255, 149, 0, 0.6),
+                0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+
+  input[type="range"]::-webkit-slider-thumb:active {
+    @apply scale-110;
+    box-shadow: 0 0 30px rgba(255, 149, 0, 0.8),
+                0 6px 30px rgba(0, 0, 0, 0.6);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    @apply w-12 h-12 rounded-full cursor-pointer;
+    @apply bg-signal-amber border-4 border-control-black;
+    @apply shadow-lg transition-all duration-200;
+  }
+
+  /* Function button styles */
+  .function-btn {
+    @apply relative px-4 py-3 rounded-lg font-mono text-sm;
+    @apply border-2 transition-all duration-200;
+    @apply touch-manipulation select-none;
+    min-height: 56px; /* Touch-friendly */
+  }
+
+  .function-btn.active {
+    @apply bg-signal-green border-signal-green text-control-black;
+    @apply shadow-lg;
+    box-shadow: 0 0 20px rgba(6, 214, 160, 0.5),
+                0 4px 15px rgba(0, 0, 0, 0.3);
+  }
+
+  .function-btn.inactive {
+    @apply bg-control-grey border-signal-red/30 text-signal-red/70;
+  }
+
+  .function-btn.momentary {
+    @apply bg-signal-amber/20 border-signal-amber/50;
+  }
+
+  /* Emergency stop button */
+  .emergency-stop {
+    @apply bg-signal-red text-white font-bold text-lg;
+    @apply border-4 border-signal-red/50 rounded-xl;
+    @apply shadow-2xl transition-all duration-300;
+    @apply touch-manipulation;
+    min-height: 72px;
+  }
+
+  .emergency-stop.active {
+    @apply animate-pulse-slow;
+    box-shadow: 0 0 40px rgba(230, 57, 70, 0.8),
+                0 0 80px rgba(230, 57, 70, 0.4),
+                inset 0 0 20px rgba(230, 57, 70, 0.3);
+  }
+
+  /* Track visualization */
+  .track-line {
+    @apply relative h-2 bg-track-steel rounded-full overflow-hidden;
+  }
+
+  .track-line::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent;
+    animation: shimmer 3s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* Status indicators */
+  .status-indicator {
+    @apply w-4 h-4 rounded-full;
+    @apply shadow-lg transition-all duration-300;
+  }
+
+  .status-indicator.on {
+    @apply bg-signal-green animate-glow;
+    box-shadow: 0 0 15px rgba(6, 214, 160, 0.8);
+  }
+
+  .status-indicator.off {
+    @apply bg-signal-red/30;
+  }
+}
+
+@layer utilities {
+  .touch-none {
+    touch-action: none;
+  }
+
+  .text-shadow-glow {
+    text-shadow: 0 0 20px currentColor;
+  }
+}
