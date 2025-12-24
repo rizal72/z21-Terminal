@@ -192,6 +192,108 @@ async def broadcast_state_update(address: int):
             connected_clients.remove(client)
 
 
+async def broadcast_initial_state():
+    """Broadcast complete initial state to all connected clients"""
+    # Build consists state
+    consists_state = {}
+    for address, data in consist_data.items():
+        state = z21_manager.get_consist_state(address) if z21_manager else {}
+        consists_state[address] = {
+            'address': address,
+            'type': 'consist',
+            'trackName': 'INTERNAL TRACK' if address == 10 else 'EXTERNAL TRACK',
+            'lead': data.get('lead_name', ''),
+            'rear': data.get('rear_name', ''),
+            'speed': state.get('speed', 0),
+            'direction': state.get('direction', 'forward'),
+            'power': state.get('power', True),
+            'functions': data.get('functions', []),
+            'functionStates': state.get('functions', {})
+        }
+
+    # Build locomotives state
+    locomotives_state = {}
+    for address, data in locomotive_data.items():
+        state = z21_manager.get_consist_state(address) if z21_manager else {}
+        locomotives_state[address] = {
+            'address': address,
+            'name': data.get('name', ''),
+            'in_consist': data.get('in_consist'),
+            'speed': state.get('speed', 0),
+            'direction': state.get('direction', 'forward'),
+            'functions': data.get('functions', []),
+            'functionStates': state.get('functions', {})
+        }
+
+    message = {
+        'type': 'initial_state',
+        'consists': consists_state,
+        'locomotives': locomotives_state
+    }
+
+    # Send to all connected clients
+    disconnected_clients = []
+    for client in connected_clients:
+        try:
+            await client.send_json(message)
+        except Exception as e:
+            print(f"Error broadcasting initial state: {e}")
+            disconnected_clients.append(client)
+
+    # Remove disconnected clients
+    for client in disconnected_clients:
+        if client in connected_clients:
+            connected_clients.remove(client)
+
+
+async def reload_roster_data():
+    """Reload roster and consists from JMRI XML files and reinitialize Z21 Manager"""
+    global consist_data, locomotive_data
+
+    print("\n🔄 Reloading roster from JMRI...")
+
+    # Load data from XML
+    consist_data, locomotive_data = load_consist_with_functions(), load_all_locomotives()
+
+    if not consist_data:
+        print("⚠️  Warning: No consists loaded from JMRI")
+    else:
+        print(f"  ✓ Loaded {len(consist_data)} consists")
+
+    if not locomotive_data:
+        print("⚠️  Warning: No locomotives loaded from JMRI")
+    else:
+        print(f"  ✓ Loaded {len(locomotive_data)} locomotives")
+
+    if not z21_manager or not z21_manager.z21:
+        print("  ✗ Z21 not connected, cannot reinitialize")
+        return False
+
+    # Re-initialize consist states
+    for address, data in consist_data.items():
+        z21_manager.initialize_consist(address, data)
+        print(f"  ✓ Re-initialized consist {address}")
+
+    # Re-initialize locomotive states
+    for address, data in locomotive_data.items():
+        z21_manager.initialize_consist(address, {
+            'lead': address,
+            'rear': None,
+            'lead_name': data['name'],
+            'rear_name': None,
+            'functions': data['functions']
+        })
+        in_consist_note = f" (in consist {data['in_consist']})" if data.get('in_consist') else ""
+        print(f"  ✓ Re-initialized locomotive {address}{in_consist_note}")
+
+    # Broadcast new state to all connected clients
+    await broadcast_initial_state()
+    print("  ✓ Broadcasted new state to all clients")
+
+    print("✅ Roster reload complete!\n")
+    return True
+
+
 @app.get("/")
 async def root():
     """API root"""
@@ -260,6 +362,32 @@ async def get_full_roster():
         'consists': await get_consists(),
         'locomotives': await get_locomotives()
     }
+
+
+@app.post("/api/reload-roster")
+async def reload_roster():
+    """Reload roster and consists from JMRI XML files without restarting backend"""
+    try:
+        success = await reload_roster_data()
+        if success:
+            return {
+                "status": "success",
+                "message": "Roster reloaded successfully",
+                "consists_loaded": len(consist_data),
+                "locomotives_loaded": len(locomotive_data),
+                "clients_notified": len(connected_clients)
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Failed to reload roster (Z21 not connected)"
+            }
+    except Exception as e:
+        print(f"❌ Error reloading roster: {e}")
+        return {
+            "status": "error",
+            "message": f"Exception during reload: {str(e)}"
+        }
 
 
 @app.websocket("/ws")

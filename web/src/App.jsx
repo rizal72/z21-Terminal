@@ -44,12 +44,15 @@ function App() {
   const [consists, setConsists] = useState(MOCK_CONSISTS);
   const [locomotives, setLocomotives] = useState({});
   const [trackPower, setTrackPower] = useState(true);
+  const [reloadingRoster, setReloadingRoster] = useState(false);
+  const [reloadSuccess, setReloadSuccess] = useState(false);
 
   // Selected items for each controller (left and right)
   const [selectedLeft, setSelectedLeft] = useState({ type: 'consist', address: 10 });
   const [selectedRight, setSelectedRight] = useState({ type: 'consist', address: 11 });
 
   const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws';
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
   const { isConnected, lastMessage, sendMessage } = useWebSocket(WS_URL);
 
   // Audio feedback for power changes using Web Audio API
@@ -272,6 +275,43 @@ function App() {
     return () => window.removeEventListener('keydown', handleGlobalKeyPress);
   }, [trackPower, consists, locomotives]); // Dependencies for handleEmergencyStop
 
+  // Reload roster from JMRI without restarting backend
+  const handleReloadRoster = async () => {
+    if (reloadingRoster) return; // Prevent double-click
+
+    setReloadingRoster(true);
+    setReloadSuccess(false);
+
+    try {
+      const response = await fetch(`${API_URL}/api/reload-roster`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.status === 'success') {
+        console.log('✅ Roster reloaded:', data);
+        setReloadSuccess(true);
+
+        // Hide success indicator after 3 seconds
+        setTimeout(() => {
+          setReloadSuccess(false);
+        }, 3000);
+      } else {
+        console.error('❌ Roster reload failed:', data.message);
+        alert(`Failed to reload roster: ${data.message}`);
+      }
+    } catch (error) {
+      console.error('❌ Error reloading roster:', error);
+      alert(`Error reloading roster: ${error.message}`);
+    } finally {
+      setReloadingRoster(false);
+    }
+  };
+
   // Get selected item (consist or locomotive) for a controller
   const getSelectedItem = (selection) => {
     if (selection.type === 'consist') {
@@ -356,6 +396,31 @@ function App() {
                     </span>
                     <span className="text-xs opacity-70">
                       {trackPower ? 'Stop All' : 'Power On'} <kbd className="ml-1 px-1 bg-white/10 rounded text-[10px]">ESC</kbd>
+                    </span>
+                  </div>
+                </div>
+              </button>
+
+              {/* Reload Roster Button */}
+              <button
+                onClick={handleReloadRoster}
+                disabled={reloadingRoster || !isConnected}
+                className={`px-4 py-2 bg-control-dark border rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  reloadSuccess
+                    ? 'border-signal-green text-signal-green'
+                    : 'border-control-grey text-track-steel hover:border-signal-amber hover:text-signal-amber'
+                }`}
+                title="Reload roster from JMRI XML files"
+              >
+                <div className="flex items-center gap-2">
+                  <i className={`fa-solid ${
+                    reloadingRoster ? 'fa-spinner fa-spin' :
+                    reloadSuccess ? 'fa-check' :
+                    'fa-rotate-right'
+                  } text-lg`}></i>
+                  <div className="flex flex-col items-start">
+                    <span className="text-xs font-mono uppercase tracking-wider">
+                      {reloadingRoster ? 'Reloading...' : reloadSuccess ? 'Reloaded!' : 'Reload Roster'}
                     </span>
                   </div>
                 </div>
