@@ -161,7 +161,7 @@ export default function ConsistController({
     return (
       <div className="control-panel grain-overlay">
         <div className="text-center text-track-steel py-12">
-          <div className="text-4xl mb-4">⚙️</div>
+          <i className="fa-solid fa-gear text-5xl mb-4 opacity-50"></i>
           <div className="font-mono">No item selected</div>
         </div>
       </div>
@@ -208,8 +208,13 @@ export default function ConsistController({
 
         {/* Warning for loco in consist */}
         {isLocoInConsist && (
-          <div className="mt-3 p-2 bg-signal-amber/20 border border-signal-amber/50 rounded text-xs">
-            <span className="text-signal-amber font-mono">⚠️ This locomotive is in consist {item.in_consist}. Speed/Direction disabled - Functions only.</span>
+          <div className="mt-3 p-2 bg-signal-amber/20 border border-signal-amber/50 rounded">
+            <div className="flex items-center gap-2 text-xs">
+              <i className="fa-solid fa-triangle-exclamation text-signal-amber"></i>
+              <span className="text-signal-amber font-mono">
+                This locomotive is in consist {item.in_consist}. Speed/Direction disabled - Functions only.
+              </span>
+            </div>
           </div>
         )}
       </div>
@@ -219,15 +224,25 @@ export default function ConsistController({
         <div className="relative">
           <div className="track-line"></div>
           <div
-            className="absolute top-1/2 -translate-y-1/2 w-6 h-6 bg-signal-amber rounded-full shadow-lg transition-all duration-300"
+            className="absolute top-1/2 -translate-y-1/2 flex items-center justify-center transition-all duration-300"
             style={{
               left: `${speedPercent}%`,
-              boxShadow: speed > 0 ? '0 0 20px rgba(255, 149, 0, 0.8)' : 'none'
+              transform: 'translate(-50%, -50%)'
             }}
           >
-            <div className="absolute inset-0 flex items-center justify-center text-xs">
-              🚂
-            </div>
+            <div
+              className="absolute w-8 h-8 bg-signal-amber rounded-full opacity-20 blur-md"
+              style={{
+                boxShadow: speed > 0 ? '0 0 20px rgba(255, 149, 0, 0.8)' : 'none'
+              }}
+            ></div>
+            <i
+              className="fa-solid fa-train text-signal-amber relative z-10"
+              style={{
+                fontSize: '1.25rem',
+                filter: speed > 0 ? 'drop-shadow(0 0 4px rgba(255, 149, 0, 0.8))' : 'none'
+              }}
+            ></i>
           </div>
         </div>
         <div className="flex justify-between mt-2 text-xs font-mono text-track-steel">
@@ -298,17 +313,40 @@ export default function ConsistController({
         </div>
       </div>
 
-      {/* Direction control */}
-      <div className="mb-8">
+      {/* Stop and Direction controls */}
+      <div className="mb-8 grid grid-cols-2 gap-4">
+        {/* Stop button */}
+        <button
+          onClick={() => {
+            setSpeed(0);
+            if (onSpeedChange) {
+              onSpeedChange(selection.address, 0, direction === 'forward');
+            }
+          }}
+          disabled={!trackPower || isLocoInConsist}
+          className="control-panel py-4 px-6 flex items-center justify-center gap-3 hover:border-signal-red transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+          title={isLocoInConsist ? 'Disabled (loco in consist)' : 'Stop (set speed to 0)'}
+        >
+          <i
+            className="fa-solid fa-stop text-xl"
+            style={{ color: trackPower && !isLocoInConsist ? '#e63946' : '#64748b' }}
+          ></i>
+          <span className="font-display font-semibold uppercase text-sm">
+            Stop
+          </span>
+        </button>
+
+        {/* Direction control */}
         <button
           onClick={toggleDirection}
           disabled={!trackPower || isLocoInConsist}
-          className="control-panel w-full py-4 px-6 flex items-center justify-center gap-3 hover:border-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+          className="control-panel py-4 px-6 flex items-center justify-center gap-3 hover:border-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
           title={isLocoInConsist ? 'Disabled (loco in consist)' : 'Toggle direction'}
         >
-          <span className="text-2xl">
-            {direction === 'forward' ? '▶️' : '◀️'}
-          </span>
+          <i
+            className={`fa-solid fa-arrow-right text-xl transition-transform duration-300 ${direction === 'reverse' ? 'rotate-180' : ''}`}
+            style={{ color: trackPower && !isLocoInConsist ? '#ff9500' : '#64748b' }}
+          ></i>
           <span className="font-display font-semibold uppercase text-sm">
             {direction}
           </span>

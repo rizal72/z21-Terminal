@@ -294,8 +294,12 @@ function App() {
                 className={`emergency-stop ${!trackPower ? 'active' : ''}`}
                 title={trackPower ? 'Cut track power (Emergency Stop)' : 'Restore track power'}
               >
-                <div className="flex items-center gap-2 px-6 py-3">
-                  <span className="text-2xl">⚠️</span>
+                <div className="flex items-center gap-3 px-6 py-3">
+                  {trackPower ? (
+                    <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
+                  ) : (
+                    <i className="fa-solid fa-power-off text-2xl"></i>
+                  )}
                   <div className="flex flex-col items-start">
                     <span className="uppercase tracking-wider text-sm font-bold">
                       {trackPower ? 'Emergency' : 'Restart'}
@@ -330,7 +334,7 @@ function App() {
         {!isConnected && (
           <div className="mb-6 p-4 bg-signal-red/20 border border-signal-red/50 rounded-lg">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">⚠️</span>
+              <i className="fa-solid fa-wifi text-2xl text-signal-red" style={{ transform: 'scaleX(-1)' }}></i>
               <div>
                 <div className="font-display font-semibold text-signal-red">
                   Backend Disconnected
