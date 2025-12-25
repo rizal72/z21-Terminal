@@ -19,7 +19,9 @@ locomotive_data: Dict[int, Dict[str, Any]] = {}
 
 
 polling_task = None
+health_check_task = None
 last_track_power_state = True
+z21_online = False
 
 
 async def poll_track_power():
@@ -56,10 +58,77 @@ async def poll_track_power():
             print(f"Error polling track power: {e}")
 
 
+async def health_check_z21():
+    """Background task to monitor Z21 connection health"""
+    global z21_online, last_track_power_state
+
+    print("🏥 Starting Z21 health check (5s interval)")
+
+    while True:
+        await asyncio.sleep(5)  # Check every 5 seconds
+
+        if not z21_manager or not z21_manager.z21:
+            continue
+
+        previous_state = z21_online
+
+        try:
+            # Try to get status from Z21 (acts as ping)
+            status = z21_manager.z21.get_status()
+
+            if status is not None:
+                z21_online = True
+            else:
+                z21_online = False
+
+        except Exception as e:
+            z21_online = False
+            if previous_state:  # Only log when transitioning to offline
+                print(f"⚠️ Z21 connection lost: {e}")
+
+        # If state changed, broadcast to all clients
+        if z21_online != previous_state:
+            status_emoji = "✅" if z21_online else "❌"
+            status_text = "ONLINE" if z21_online else "OFFLINE"
+            print(f"{status_emoji} Z21 status changed: {status_text}")
+
+            # If Z21 went offline, set track power to OFF
+            if not z21_online:
+                print("⚡ Setting track power to OFF (Z21 offline)")
+                last_track_power_state = False
+                # Update all consist states
+                for address in consist_data.keys():
+                    if address in z21_manager.consist_state:
+                        z21_manager.consist_state[address]['power'] = False
+                        await broadcast_state_update(address)
+
+            await broadcast_z21_status()
+
+
+async def broadcast_z21_status():
+    """Broadcast Z21 connection status to all connected clients"""
+    message = {
+        'type': 'z21_status',
+        'online': z21_online
+    }
+
+    disconnected_clients = []
+    for client in connected_clients:
+        try:
+            await client.send_json(message)
+        except Exception as e:
+            disconnected_clients.append(client)
+
+    # Remove disconnected clients
+    for client in disconnected_clients:
+        if client in connected_clients:
+            connected_clients.remove(client)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    global z21_manager, consist_data, locomotive_data, polling_task, last_track_power_state
+    global z21_manager, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online
 
     print("🚂 z21-Terminal Backend Starting...")
 
@@ -116,12 +185,16 @@ async def lifespan(app: FastAPI):
         if status:
             last_track_power_state = not status.get('track_power_off', False)
             print(f"  ✓ Initial track power: {'ON' if last_track_power_state else 'OFF'}")
+            z21_online = True
+            print(f"  ✓ Z21 connection: ONLINE")
 
-        # Start background polling task
+        # Start background polling tasks
         polling_task = asyncio.create_task(poll_track_power())
+        health_check_task = asyncio.create_task(health_check_z21())
 
     else:
         print("  ✗ Failed to connect to Z21")
+        z21_online = False
 
     print("✅ Backend ready!")
     print("🌐 WebSocket endpoint: ws://localhost:8000/ws")
@@ -134,6 +207,12 @@ async def lifespan(app: FastAPI):
         polling_task.cancel()
         try:
             await polling_task
+        except asyncio.CancelledError:
+            pass
+    if health_check_task:
+        health_check_task.cancel()
+        try:
+            await health_check_task
         except asyncio.CancelledError:
             pass
     if z21_manager:
@@ -228,7 +307,9 @@ async def broadcast_initial_state():
     message = {
         'type': 'initial_state',
         'consists': consists_state,
-        'locomotives': locomotives_state
+        'locomotives': locomotives_state,
+        'trackPower': last_track_power_state,
+        'z21Online': z21_online
     }
 
     # Send to all connected clients
@@ -404,8 +485,11 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_json({
             'type': 'initial_state',
             'consists': roster_data['consists'],
-            'locomotives': roster_data['locomotives']
+            'locomotives': roster_data['locomotives'],
+            'trackPower': last_track_power_state,
+            'z21Online': z21_online
         })
+        print(f"  ✓ Sent initial state (trackPower={last_track_power_state}, z21Online={z21_online})")
 
         # Handle incoming messages
         while True:

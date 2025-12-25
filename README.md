@@ -120,7 +120,10 @@ python3 read_consists.py 10             # Consist 10 details
 - [x] Multi-device support (iPad, phone, desktop)
 - [x] Track power polling (500ms) with auto-sync
 - [x] Function state sync from Z21
-- [x] Elegant icon design (Font Awesome 6)
+- [x] Z21 connection health monitoring (5s polling)
+- [x] Status indicators with Font Awesome icons (power, WebSocket, Z21)
+- [x] Auto-disable controls when Z21 offline
+- [x] Tailscale HTTPS support (wss:// auto-detection)
 
 ### Terminal Controller ✅
 - [x] Complete speed control (w/s, 0-9, hotkeys)

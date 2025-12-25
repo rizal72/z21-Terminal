@@ -44,6 +44,7 @@ function App() {
   const [consists, setConsists] = useState(MOCK_CONSISTS);
   const [locomotives, setLocomotives] = useState({});
   const [trackPower, setTrackPower] = useState(true);
+  const [z21Online, setZ21Online] = useState(false); // Z21 connection status
   const [reloadingRoster, setReloadingRoster] = useState(false);
   const [reloadSuccess, setReloadSuccess] = useState(false);
 
@@ -55,7 +56,8 @@ function App() {
   const getWebSocketUrl = () => {
     if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
     const hostname = window.location.hostname;
-    return `ws://${hostname}:8000/ws`;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${hostname}:8000/ws`;
   };
 
   const getApiUrl = () => {
@@ -151,6 +153,20 @@ function App() {
         if (backendLocomotives) {
           setLocomotives(backendLocomotives);
         }
+
+        // Set Z21 connection status from backend
+        if (typeof lastMessage.z21Online !== 'undefined') {
+          setZ21Online(lastMessage.z21Online);
+        }
+
+        // Track power can also be in top-level initial_state
+        if (typeof lastMessage.trackPower !== 'undefined') {
+          setTrackPower(lastMessage.trackPower);
+        }
+      } else if (lastMessage.type === 'z21_status') {
+        // Z21 connection status update
+        console.log('Z21 status update:', lastMessage.online);
+        setZ21Online(lastMessage.online);
       } else if (lastMessage.type === 'consist_update') {
         console.log('Consist update:', lastMessage.address, lastMessage.data);
 
@@ -280,13 +296,18 @@ function App() {
       // ESC key for emergency stop toggle
       if (e.key === 'Escape') {
         e.preventDefault();
-        handleEmergencyStop();
+        // Only allow emergency stop if Z21 is online
+        if (z21Online) {
+          handleEmergencyStop();
+        } else {
+          console.log('ESC blocked: Z21 is offline');
+        }
       }
     };
 
     window.addEventListener('keydown', handleGlobalKeyPress);
     return () => window.removeEventListener('keydown', handleGlobalKeyPress);
-  }, [trackPower, consists, locomotives]); // Dependencies for handleEmergencyStop
+  }, [trackPower, z21Online, consists, locomotives]); // Dependencies for handleEmergencyStop
 
   // Reload roster from JMRI without restarting backend
   const handleReloadRoster = async () => {
@@ -370,45 +391,71 @@ function App() {
     <div className="min-h-screen bg-control-black grain-overlay">
       {/* Header */}
       <header className="border-b border-control-grey bg-control-dark/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="w-full lg:container lg:mx-auto px-2 py-2 lg:px-4 lg:py-4">
-          <div className="flex items-center justify-between gap-2">
-            {/* Mobile: solo "z21" */}
-            <div className="flex-shrink-0 block md:hidden">
-              <h1 className="text-lg font-display font-bold text-signal-amber text-shadow-glow">
+        <div className="w-full lg:container lg:mx-auto px-3 py-2 md:px-4 lg:py-4">
+          <div className="flex items-center gap-2 md:gap-4">
+            {/* Left: Title */}
+            <div className="flex-shrink-0">
+              {/* Mobile: solo "z21" */}
+              <h1 className="text-lg md:text-2xl lg:text-3xl font-display font-bold text-signal-amber text-shadow-glow md:hidden">
                 z21
               </h1>
-            </div>
-            {/* Tablet/Desktop: titolo completo */}
-            <div className="hidden md:block">
-              <h1 className="text-2xl lg:text-3xl font-display font-bold text-signal-amber text-shadow-glow">
-                z21 Terminal
-              </h1>
-              <p className="text-xs lg:text-sm font-mono text-track-steel mt-1">
-                DCC Locomotive Controller
-              </p>
-            </div>
-            <div className="flex items-center gap-1 md:gap-2 lg:gap-4">
-              {/* Track Power Status */}
-              <div className="flex items-center gap-1 px-1.5 py-1.5 md:gap-2 md:px-4 md:py-2 bg-control-dark border border-control-grey rounded">
-                <div className={`status-indicator ${trackPower ? 'on' : 'off'}`}></div>
-                <div className="text-[10px] md:text-xs font-mono hidden md:block">
-                  <div className={trackPower ? 'text-signal-green' : 'text-signal-red'}>
-                    {trackPower ? 'ON' : 'OFF'}
-                  </div>
-                </div>
+              {/* Tablet/Desktop: titolo completo */}
+              <div className="hidden md:block">
+                <h1 className="text-2xl lg:text-3xl font-display font-bold text-signal-amber text-shadow-glow">
+                  z21 Terminal
+                </h1>
+                <p className="text-xs lg:text-sm font-mono text-track-steel mt-1">
+                  DCC Locomotive Controller
+                </p>
               </div>
+            </div>
 
+            {/* Reload Roster Button */}
+            <button
+              onClick={handleReloadRoster}
+              disabled={reloadingRoster || !isConnected}
+              className={`px-2 md:px-4 py-2 bg-control-dark border rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                reloadSuccess
+                  ? 'border-signal-green text-signal-green'
+                  : 'border-control-grey text-track-steel hover:border-signal-amber hover:text-signal-amber'
+              }`}
+              title="Reload roster from JMRI XML files"
+            >
+              <div className="flex items-center gap-2">
+                <i className={`fa-solid ${
+                  reloadingRoster ? 'fa-spinner fa-spin' :
+                  reloadSuccess ? 'fa-check' :
+                  'fa-rotate-right'
+                } text-base md:text-lg`}></i>
+                <span className="hidden lg:inline text-xs font-mono uppercase tracking-wider">
+                  {reloadingRoster ? 'Reloading...' : reloadSuccess ? 'Reloaded!' : 'Reload'}
+                </span>
+              </div>
+            </button>
+
+            {/* Spacer */}
+            <div className="flex-grow"></div>
+
+            {/* Right: Emergency + Status Icons */}
+            <div className="flex items-center gap-2 md:gap-3">
               {/* Global Emergency Stop */}
               <button
                 onClick={handleEmergencyStop}
-                className={`emergency-stop ${!trackPower ? 'active' : ''}`}
-                title={trackPower ? 'Cut track power (Emergency Stop) - Press ESC' : 'Restore track power - Press ESC'}
+                disabled={!z21Online}
+                className={`emergency-stop ${!trackPower ? 'active' : ''} disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={
+                  !z21Online
+                    ? 'Z21 offline - Cannot control power'
+                    : trackPower
+                      ? 'Cut track power (Emergency Stop) - Press ESC'
+                      : 'Restore track power - Press ESC'
+                }
               >
-                <div className="flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-3">
+                <div className="flex items-center gap-1.5 md:gap-3 px-4 md:px-6 py-2 md:py-3">
                   {trackPower ? (
-                    <i className="fa-solid fa-triangle-exclamation text-xl md:text-2xl"></i>
+                    <i className="fa-solid fa-triangle-exclamation text-lg md:text-2xl"></i>
                   ) : (
-                    <i className="fa-solid fa-power-off text-xl md:text-2xl"></i>
+                    <i className="fa-solid fa-power-off text-lg md:text-2xl"></i>
                   )}
                   <div className="flex flex-col items-start">
                     <span className="uppercase tracking-wider text-xs md:text-sm font-bold">
@@ -421,40 +468,32 @@ function App() {
                 </div>
               </button>
 
-              {/* Reload Roster Button */}
-              <button
-                onClick={handleReloadRoster}
-                disabled={reloadingRoster || !isConnected}
-                className={`px-3 md:px-4 py-2 bg-control-dark border rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  reloadSuccess
-                    ? 'border-signal-green text-signal-green'
-                    : 'border-control-grey text-track-steel hover:border-signal-amber hover:text-signal-amber'
-                }`}
-                title="Reload roster from JMRI XML files"
-              >
-                <div className="flex items-center gap-2">
-                  <i className={`fa-solid ${
-                    reloadingRoster ? 'fa-spinner fa-spin' :
-                    reloadSuccess ? 'fa-check' :
-                    'fa-rotate-right'
-                  } text-lg`}></i>
-                  <div className="hidden md:flex flex-col items-start">
-                    <span className="text-xs font-mono uppercase tracking-wider">
-                      {reloadingRoster ? 'Reloading...' : reloadSuccess ? 'Reloaded!' : 'Reload'}
-                    </span>
+              {/* Track Power Status */}
+              <div className="flex items-center gap-2 px-2 md:px-3 py-2 bg-control-dark border border-control-grey rounded">
+                <i className={`fa-solid fa-bolt text-lg md:text-xl ${trackPower ? 'text-signal-green' : 'text-signal-red'}`}></i>
+                <div className="hidden md:block text-xs font-mono">
+                  <div className={trackPower ? 'text-signal-green' : 'text-signal-red'}>
+                    {trackPower ? 'ON' : 'OFF'}
                   </div>
                 </div>
-              </button>
+              </div>
 
-              {/* Connection Status */}
-              <div className="flex items-center gap-2 md:gap-3">
-                <div className={`status-indicator ${isConnected ? 'on' : 'off'}`}></div>
-                <div className="text-right hidden md:block">
-                  <div className="text-xs font-mono text-track-steel">
-                    {isConnected ? 'Connected' : 'Disconnected'}
+              {/* WebSocket Status */}
+              <div className="flex items-center gap-2 px-2 md:px-3 py-2 bg-control-dark border border-control-grey rounded">
+                <i className={`fa-solid fa-wifi text-lg md:text-xl ${isConnected ? 'text-signal-green' : 'text-signal-red'}`}></i>
+                <div className="hidden md:block text-xs font-mono">
+                  <div className={isConnected ? 'text-signal-green' : 'text-signal-red'}>
+                    WS
                   </div>
-                  <div className="text-xs font-mono text-white/50">
-                    Z21: 192.168.1.111
+                </div>
+              </div>
+
+              {/* Z21 Status */}
+              <div className="flex items-center gap-2 px-2 md:px-3 py-2 bg-control-dark border border-control-grey rounded">
+                <i className={`fa-solid fa-server text-lg md:text-xl ${z21Online ? 'text-signal-green' : 'text-signal-red'}`}></i>
+                <div className="hidden md:block text-xs font-mono">
+                  <div className={z21Online ? 'text-signal-green' : 'text-signal-red'}>
+                    z21
                   </div>
                 </div>
               </div>
