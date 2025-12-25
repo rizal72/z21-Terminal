@@ -51,8 +51,21 @@ function App() {
   const [selectedLeft, setSelectedLeft] = useState({ type: 'consist', address: 10 });
   const [selectedRight, setSelectedRight] = useState({ type: 'consist', address: 11 });
 
-  const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws';
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  // Auto-detect WebSocket URL based on current hostname
+  const getWebSocketUrl = () => {
+    if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
+    const hostname = window.location.hostname;
+    return `ws://${hostname}:8000/ws`;
+  };
+
+  const getApiUrl = () => {
+    if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+    const hostname = window.location.hostname;
+    return `http://${hostname}:8000`;
+  };
+
+  const WS_URL = getWebSocketUrl();
+  const API_URL = getApiUrl();
   const { isConnected, lastMessage, sendMessage } = useWebSocket(WS_URL);
 
   // Audio feedback for power changes using Web Audio API
@@ -357,23 +370,30 @@ function App() {
     <div className="min-h-screen bg-control-black grain-overlay">
       {/* Header */}
       <header className="border-b border-control-grey bg-control-dark/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-display font-bold text-signal-amber text-shadow-glow">
-                z21-Terminal
+        <div className="w-full lg:container lg:mx-auto px-2 py-2 lg:px-4 lg:py-4">
+          <div className="flex items-center justify-between gap-2">
+            {/* Mobile: solo "z21" */}
+            <div className="flex-shrink-0 block md:hidden">
+              <h1 className="text-lg font-display font-bold text-signal-amber text-shadow-glow">
+                z21
               </h1>
-              <p className="text-sm text-track-steel font-mono mt-1">
-                DCC Locomotive Control Dashboard
+            </div>
+            {/* Tablet/Desktop: titolo completo */}
+            <div className="hidden md:block">
+              <h1 className="text-2xl lg:text-3xl font-display font-bold text-signal-amber text-shadow-glow">
+                z21 Terminal
+              </h1>
+              <p className="text-xs lg:text-sm font-mono text-track-steel mt-1">
+                DCC Locomotive Controller
               </p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1 md:gap-2 lg:gap-4">
               {/* Track Power Status */}
-              <div className="flex items-center gap-2 px-4 py-2 bg-control-dark border border-control-grey rounded">
+              <div className="flex items-center gap-1 px-1.5 py-1.5 md:gap-2 md:px-4 md:py-2 bg-control-dark border border-control-grey rounded">
                 <div className={`status-indicator ${trackPower ? 'on' : 'off'}`}></div>
-                <div className="text-xs font-mono">
+                <div className="text-[10px] md:text-xs font-mono hidden md:block">
                   <div className={trackPower ? 'text-signal-green' : 'text-signal-red'}>
-                    TRACK POWER {trackPower ? 'ON' : 'OFF'}
+                    {trackPower ? 'ON' : 'OFF'}
                   </div>
                 </div>
               </div>
@@ -384,17 +404,17 @@ function App() {
                 className={`emergency-stop ${!trackPower ? 'active' : ''}`}
                 title={trackPower ? 'Cut track power (Emergency Stop) - Press ESC' : 'Restore track power - Press ESC'}
               >
-                <div className="flex items-center gap-3 px-6 py-3">
+                <div className="flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-3">
                   {trackPower ? (
-                    <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
+                    <i className="fa-solid fa-triangle-exclamation text-xl md:text-2xl"></i>
                   ) : (
-                    <i className="fa-solid fa-power-off text-2xl"></i>
+                    <i className="fa-solid fa-power-off text-xl md:text-2xl"></i>
                   )}
                   <div className="flex flex-col items-start">
-                    <span className="uppercase tracking-wider text-sm font-bold">
+                    <span className="uppercase tracking-wider text-xs md:text-sm font-bold">
                       {trackPower ? 'Emergency' : 'Restart'}
                     </span>
-                    <span className="text-xs opacity-70">
+                    <span className="text-[10px] md:text-xs opacity-70 hidden md:block">
                       {trackPower ? 'Stop All' : 'Power On'} <kbd className="ml-1 px-1 bg-white/10 rounded text-[10px]">ESC</kbd>
                     </span>
                   </div>
@@ -405,7 +425,7 @@ function App() {
               <button
                 onClick={handleReloadRoster}
                 disabled={reloadingRoster || !isConnected}
-                className={`px-4 py-2 bg-control-dark border rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`px-3 md:px-4 py-2 bg-control-dark border rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                   reloadSuccess
                     ? 'border-signal-green text-signal-green'
                     : 'border-control-grey text-track-steel hover:border-signal-amber hover:text-signal-amber'
@@ -418,18 +438,18 @@ function App() {
                     reloadSuccess ? 'fa-check' :
                     'fa-rotate-right'
                   } text-lg`}></i>
-                  <div className="flex flex-col items-start">
+                  <div className="hidden md:flex flex-col items-start">
                     <span className="text-xs font-mono uppercase tracking-wider">
-                      {reloadingRoster ? 'Reloading...' : reloadSuccess ? 'Reloaded!' : 'Reload Roster'}
+                      {reloadingRoster ? 'Reloading...' : reloadSuccess ? 'Reloaded!' : 'Reload'}
                     </span>
                   </div>
                 </div>
               </button>
 
               {/* Connection Status */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 md:gap-3">
                 <div className={`status-indicator ${isConnected ? 'on' : 'off'}`}></div>
-                <div className="text-right">
+                <div className="text-right hidden md:block">
                   <div className="text-xs font-mono text-track-steel">
                     {isConnected ? 'Connected' : 'Disconnected'}
                   </div>
@@ -444,7 +464,7 @@ function App() {
       </header>
 
       {/* Main content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="w-full lg:container lg:mx-auto px-0 sm:px-4 py-8">
         {/* Connection warning */}
         {!isConnected && (
           <div className="mb-6 p-4 bg-signal-red/20 border border-signal-red/50 rounded-lg">
@@ -463,7 +483,7 @@ function App() {
         )}
 
         {/* Controllers grid */}
-        <div className="grid lg:grid-cols-2 gap-6 mb-8">
+        <div className="controllers-grid grid lg:grid-cols-2 gap-0 lg:gap-6 mb-8">
           <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
             <ConsistController
               item={getSelectedItem(selectedLeft)}

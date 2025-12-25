@@ -10,7 +10,6 @@
     margin: 0;
     padding: 0;
     min-height: 100vh;
-    overflow-x: hidden;
   }
 
   /* Custom scrollbar */
@@ -57,11 +56,31 @@
 
   /* Control panel styling */
   .control-panel {
-    @apply bg-control-dark border border-control-grey rounded-lg p-6;
+    @apply bg-control-dark border border-control-grey rounded-lg p-2;
     @apply shadow-2xl backdrop-blur-sm;
     background: linear-gradient(135deg,
       rgba(26, 26, 26, 0.95) 0%,
       rgba(42, 42, 42, 0.85) 100%);
+  }
+
+  @media (min-width: 768px) {
+    .control-panel {
+      @apply p-6;
+    }
+  }
+
+  /* Scale down grid su iPhone 13 mini e schermi piccoli */
+  @media (max-width: 390px) {
+    .controllers-grid {
+      transform: scale(0.6);
+      transform-origin: top left;
+      width: 166.67%; /* Compensa lo scale 0.6 */
+      margin-bottom: -1110px !important; /* Compensa lo spazio verticale fantasma */
+    }
+
+    .controllers-grid > * + * {
+      margin-top: 60px; /* Spazio tra i due controller (60 * 0.6 = ~36px visibili) */
+    }
   }
 
   /* Touch-optimized slider */
@@ -93,10 +112,17 @@
 
   /* Function button styles */
   .function-btn {
-    @apply relative px-4 py-3 rounded-lg font-mono text-sm;
+    @apply relative px-2 py-2 rounded-lg font-mono text-xs;
     @apply border-2 transition-all duration-200;
     @apply touch-manipulation select-none;
-    min-height: 56px; /* Touch-friendly */
+    min-height: 44px;
+  }
+
+  @media (min-width: 640px) {
+    .function-btn {
+      @apply px-4 py-3 text-sm;
+      min-height: 56px;
+    }
   }
 
   .function-btn.active {

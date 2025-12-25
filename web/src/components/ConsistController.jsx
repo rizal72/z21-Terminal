@@ -184,14 +184,14 @@ export default function ConsistController({
           <label className="text-xs font-mono text-track-steel uppercase tracking-wider mb-2 block">
             Select {controllerNumber === 1 ? 'Left' : 'Right'} Controller
           </label>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <select
               value={`${selection.type}-${selection.address}`}
               onChange={(e) => {
                 const [type, address] = e.target.value.split('-');
                 onSelectionChange({ type, address: parseInt(address) });
               }}
-              className="flex-1 bg-control-dark border border-control-grey rounded px-3 py-2 text-white font-mono text-sm focus:border-signal-amber focus:outline-none"
+              className="flex-1 min-w-0 bg-control-dark border border-control-grey rounded px-3 py-2 text-white font-mono text-sm focus:border-signal-amber focus:outline-none"
             >
               {rosterOptions.map((option) => (
                 <option key={`${option.type}-${option.address}`} value={`${option.type}-${option.address}`}>
@@ -200,7 +200,7 @@ export default function ConsistController({
               ))}
             </select>
             {/* Train icon indicator */}
-            <div className="flex items-center justify-center w-12 h-10 bg-control-dark border border-control-grey rounded">
+            <div className="flex items-center justify-center w-10 h-10 bg-control-dark border border-control-grey rounded flex-shrink-0">
               <div className="relative">
                 <div
                   className="absolute inset-0 bg-signal-amber rounded-full opacity-20 blur-md transition-opacity duration-300"
@@ -259,20 +259,14 @@ export default function ConsistController({
         <div className="relative">
           {/* Progress fill reveals gradient */}
           <div
-            className="absolute left-0 top-1/2 -translate-y-1/2 h-3 rounded-full pointer-events-none transition-all duration-200 overflow-hidden"
+            className="absolute left-0 top-1/2 -translate-y-1/2 h-3 rounded-full pointer-events-none transition-all duration-200"
             style={{
               width: `${speedPercent}%`,
-              zIndex: 0
+              zIndex: 0,
+              background: 'linear-gradient(to right, #2a2a2a 0%, #ff9500 50%, #e63946 100%)',
+              boxShadow: speed > 0 ? '0 0 15px rgba(255, 149, 0, 0.4)' : 'none'
             }}
           >
-            <div
-              className="h-3 rounded-full"
-              style={{
-                width: '200vw', // Extra wide to ensure full coverage
-                background: 'linear-gradient(to right, #2a2a2a 0%, #ff9500 25%, #e63946 50%)',
-                boxShadow: speed > 0 ? '0 0 15px rgba(255, 149, 0, 0.4)' : 'none'
-              }}
-            ></div>
           </div>
           <input
             type="range"
@@ -327,7 +321,7 @@ export default function ConsistController({
       </div>
 
       {/* Stop and Direction controls */}
-      <div className="mb-8 grid grid-cols-2 gap-4">
+      <div className="mb-8 grid grid-cols-2 gap-2 md:gap-4">
         {/* Stop button */}
         <button
           onClick={() => {
@@ -337,7 +331,7 @@ export default function ConsistController({
             }
           }}
           disabled={!trackPower || isLocoInConsist}
-          className="control-panel py-4 px-6 flex items-center justify-center gap-3 hover:border-signal-red transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+          className="control-panel py-3 px-2 md:py-4 md:px-6 flex items-center justify-center gap-2 md:gap-3 hover:border-signal-red transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
           title={isLocoInConsist ? 'Disabled (loco in consist)' : 'Stop (set speed to 0)'}
         >
           <i
@@ -353,7 +347,7 @@ export default function ConsistController({
         <button
           onClick={toggleDirection}
           disabled={!trackPower || isLocoInConsist}
-          className="control-panel py-4 px-6 flex items-center justify-center gap-3 hover:border-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+          className="control-panel py-3 px-2 md:py-4 md:px-6 flex items-center justify-center gap-2 md:gap-3 hover:border-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
           title={isLocoInConsist ? 'Disabled (loco in consist)' : 'Toggle direction'}
         >
           <i
@@ -372,7 +366,7 @@ export default function ConsistController({
           <h3 className="text-sm font-display font-semibold text-white/80 uppercase tracking-wider mb-4">
             Functions ({item.functions.length} available)
           </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 md:gap-3">
             {item.functions.map((fn) => {
               if (!fn || typeof fn.number === 'undefined') {
                 console.warn('Invalid function:', fn);
