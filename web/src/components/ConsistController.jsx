@@ -242,7 +242,7 @@ export default function ConsistController({
       </div>
 
       {/* Speed control */}
-      <div className="mb-8">
+      <div className="mb-4 lg:mb-8">
         <div className="flex items-center justify-between mb-4">
           <label className="text-sm font-display font-semibold text-white/80 uppercase tracking-wider">
             Throttle
@@ -309,24 +309,14 @@ export default function ConsistController({
           })}
         </div>
 
-        {/* Keyboard shortcuts hint */}
-        <div className="mt-3 text-xs font-mono text-track-steel text-center opacity-60 overflow-hidden">
+        {/* Keyboard shortcuts hint - Desktop only (touch devices don't need keyboard hints) */}
+        <div className="mt-3 text-xs font-mono text-track-steel text-center opacity-60 overflow-hidden hidden lg:block">
           {isLocoInConsist ? (
             <span className="text-signal-amber">Speed control disabled (loco in consist)</span>
           ) : controllerNumber === 1 ? (
-            <div className="flex flex-wrap justify-center gap-x-2 gap-y-1">
-              <span className="whitespace-nowrap">\ = Both</span>
-              <span className="whitespace-nowrap">• Shift+\ = This</span>
-              <span className="whitespace-nowrap">• 1-9 = 10-90%</span>
-              <span className="whitespace-nowrap">• 0 = 100%</span>
-            </div>
+            <div>Speed: \=0% • 1,2,3..0=10-100% → All | +Shift → this only</div>
           ) : (
-            <div className="flex flex-wrap justify-center gap-x-2 gap-y-1">
-              <span className="whitespace-nowrap">\ = Both</span>
-              <span className="whitespace-nowrap">• Ctrl+\ = This</span>
-              <span className="whitespace-nowrap">• 1-9 = 10-90%</span>
-              <span className="whitespace-nowrap">• 0 = 100%</span>
-            </div>
+            <div>Speed: \=0% • 1,2,3..0=10-100% → All | +Ctrl → this only</div>
           )}
         </div>
       </div>
