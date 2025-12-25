@@ -184,14 +184,15 @@ export default function ConsistController({
           <label className="text-xs font-mono text-track-steel uppercase tracking-wider mb-2 block">
             Select {controllerNumber === 1 ? 'Left' : 'Right'} Controller
           </label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-hidden">
             <select
               value={`${selection.type}-${selection.address}`}
               onChange={(e) => {
                 const [type, address] = e.target.value.split('-');
                 onSelectionChange({ type, address: parseInt(address) });
               }}
-              className="flex-1 min-w-0 bg-control-dark border border-control-grey rounded px-3 py-2 text-white font-mono text-sm focus:border-signal-amber focus:outline-none"
+              className="flex-1 min-w-0 max-w-full bg-control-dark border border-control-grey rounded px-3 py-2 text-white font-mono text-sm focus:border-signal-amber focus:outline-none overflow-hidden text-ellipsis"
+              style={{ width: '100%' }}
             >
               {rosterOptions.map((option) => (
                 <option key={`${option.type}-${option.address}`} value={`${option.type}-${option.address}`}>
@@ -309,13 +310,23 @@ export default function ConsistController({
         </div>
 
         {/* Keyboard shortcuts hint */}
-        <div className="mt-3 text-xs font-mono text-track-steel text-center opacity-60">
+        <div className="mt-3 text-xs font-mono text-track-steel text-center opacity-60 overflow-hidden">
           {isLocoInConsist ? (
             <span className="text-signal-amber">Speed control disabled (loco in consist)</span>
           ) : controllerNumber === 1 ? (
-            <>\ = Both • Shift+\ = This only • 1-9 = 10-90% • 0 = 100%</>
+            <div className="flex flex-wrap justify-center gap-x-2 gap-y-1">
+              <span className="whitespace-nowrap">\ = Both</span>
+              <span className="whitespace-nowrap">• Shift+\ = This</span>
+              <span className="whitespace-nowrap">• 1-9 = 10-90%</span>
+              <span className="whitespace-nowrap">• 0 = 100%</span>
+            </div>
           ) : (
-            <>\ = Both • Ctrl+\ = This only • 1-9 = 10-90% • 0 = 100%</>
+            <div className="flex flex-wrap justify-center gap-x-2 gap-y-1">
+              <span className="whitespace-nowrap">\ = Both</span>
+              <span className="whitespace-nowrap">• Ctrl+\ = This</span>
+              <span className="whitespace-nowrap">• 1-9 = 10-90%</span>
+              <span className="whitespace-nowrap">• 0 = 100%</span>
+            </div>
           )}
         </div>
       </div>

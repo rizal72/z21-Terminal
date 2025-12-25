@@ -69,17 +69,10 @@
     }
   }
 
-  /* Scale down grid su iPhone 13 mini e schermi piccoli */
+  /* Mobile optimization for small screens */
   @media (max-width: 390px) {
     .controllers-grid {
-      transform: scale(0.6);
-      transform-origin: top left;
-      width: 166.67%; /* Compensa lo scale 0.6 */
-      margin-bottom: -1110px !important; /* Compensa lo spazio verticale fantasma */
-    }
-
-    .controllers-grid > * + * {
-      margin-top: 60px; /* Spazio tra i due controller (60 * 0.6 = ~36px visibili) */
+      /* Removed scale workaround - using proper responsive design instead */
     }
   }
 
