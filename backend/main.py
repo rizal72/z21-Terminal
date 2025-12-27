@@ -140,7 +140,12 @@ async def lifespan(app: FastAPI):
         print("⚠️  Warning: No consists loaded from JMRI")
     else:
         for addr, data in consist_data.items():
-            print(f"  ✓ Consist {addr}: {data['lead_name']} + {data['rear_name']} ({len(data['functions'])} functions)")
+            locomotives = data.get('locomotives', [])
+            if locomotives:
+                names = ' + '.join([loco['name'] for loco in locomotives])
+                print(f"  ✓ Consist {addr}: {names} ({len(data['functions'])} functions)")
+            else:
+                print(f"  ✓ Consist {addr}: (empty) ({len(data['functions'])} functions)")
 
     # Load all locomotives from JMRI
     print("📋 Loading all locomotives from JMRI...")
@@ -171,10 +176,7 @@ async def lifespan(app: FastAPI):
         # Even locos in consist need state tracking for individual function control
         for address, data in locomotive_data.items():
             z21_manager.initialize_consist(address, {
-                'lead': address,  # For standalone loco, lead = itself
-                'rear': None,
-                'lead_name': data['name'],
-                'rear_name': None,
+                'locomotives': [{'address': address, 'name': data['name']}],  # Single loco array
                 'functions': data['functions']
             })
             in_consist_note = f" (in consist {data['in_consist']})" if data.get('in_consist') else ""
@@ -276,12 +278,19 @@ async def broadcast_initial_state():
     consists_state = {}
     for address, data in consist_data.items():
         state = z21_manager.get_consist_state(address) if z21_manager else {}
+        locomotives = data.get('locomotives', [])
+        # Build names for display
+        lead_name = locomotives[0]['name'] if locomotives else ''
+        rear_names = [loco['name'] for loco in locomotives[1:]] if len(locomotives) > 1 else []
+        rear_name = ' + '.join(rear_names) if rear_names else None
+
         consists_state[address] = {
             'address': address,
             'type': 'consist',
             'trackName': 'INTERNAL TRACK' if address == 10 else 'EXTERNAL TRACK',
-            'lead': data.get('lead_name', ''),
-            'rear': data.get('rear_name', ''),
+            'locomotives': locomotives,  # Array: [lead, rear1, rear2, ...]
+            'lead_name': lead_name,  # For display convenience
+            'rear_name': rear_name,  # For display convenience (None if solo)
             'speed': state.get('speed', 0),
             'direction': state.get('direction', 'forward'),
             'power': state.get('power', True),
@@ -357,10 +366,7 @@ async def reload_roster_data():
     # Re-initialize locomotive states
     for address, data in locomotive_data.items():
         z21_manager.initialize_consist(address, {
-            'lead': address,
-            'rear': None,
-            'lead_name': data['name'],
-            'rear_name': None,
+            'locomotives': [{'address': address, 'name': data['name']}],  # Single loco array
             'functions': data['functions']
         })
         in_consist_note = f" (in consist {data['in_consist']})" if data.get('in_consist') else ""
@@ -395,12 +401,19 @@ async def get_consists():
     for address, data in consist_data.items():
         state = z21_manager.get_consist_state(address) if z21_manager else {}
 
+        locomotives = data.get('locomotives', [])
+        # Build names for display
+        lead_name = locomotives[0]['name'] if locomotives else ''
+        rear_names = [loco['name'] for loco in locomotives[1:]] if len(locomotives) > 1 else []
+        rear_name = ' + '.join(rear_names) if rear_names else None
+
         result[address] = {
             'address': address,
             'type': 'consist',
             'trackName': 'INTERNAL TRACK' if address == 10 else 'EXTERNAL TRACK',
-            'lead': data['lead_name'],
-            'rear': data['rear_name'],
+            'locomotives': locomotives,  # Array: [lead, rear1, rear2, ...]
+            'lead_name': lead_name,  # For display convenience
+            'rear_name': rear_name,  # For display convenience (None if solo)
             'speed': state.get('speed', 0),
             'direction': state.get('direction', 'forward'),
             'power': state.get('power', True),

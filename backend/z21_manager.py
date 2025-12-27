@@ -52,14 +52,11 @@ class Z21Manager:
 
         Args:
             address (int): DCC address del consist
-            data (dict): Dati consist (lead, rear, functions, etc.)
+            data (dict): Dati consist con array locomotives
         """
         self.consist_state[address] = {
             'address': address,
-            'lead': data.get('lead'),
-            'rear': data.get('rear'),
-            'lead_name': data.get('lead_name'),
-            'rear_name': data.get('rear_name'),
+            'locomotives': data.get('locomotives', []),  # Array: [lead, rear1, rear2, ...]
             'speed': 0,
             'direction': 'forward',
             'power': True,
@@ -72,8 +69,9 @@ class Z21Manager:
 
         # Sync initial state from Z21 (read current function states from lead loco)
         if self.z21:
-            lead_addr = data.get('lead')
-            if lead_addr:
+            locomotives = data.get('locomotives', [])
+            if locomotives:
+                lead_addr = locomotives[0]['address']  # First in array = lead
                 try:
                     loco_info = self.z21.get_loco_info(lead_addr)
                     if loco_info and 'functions' in loco_info:
@@ -131,22 +129,26 @@ class Z21Manager:
             return False
 
         try:
-            # If this is a consist, get the lead and rear locomotive addresses
+            # If this is a consist, get locomotive addresses from array
             # Functions must be sent to individual locos, not the consist address
             target_addresses = []
 
-            if address in self.consist_state and 'lead' in self.consist_state[address]:
-                lead_addr = self.consist_state[address]['lead']
-                rear_addr = self.consist_state[address]['rear']
+            if address in self.consist_state:
+                locomotives = self.consist_state[address].get('locomotives', [])
 
-                # F0 (lights) goes to both lead and rear
-                if function_number == 0:
-                    target_addresses = [lead_addr, rear_addr]
-                    print(f"   → Consist {address}: F0 to lead ({lead_addr}) and rear ({rear_addr})")
+                if locomotives:
+                    # F0 (lights) goes to ALL locomotives in consist
+                    if function_number == 0:
+                        target_addresses = [loco['address'] for loco in locomotives]
+                        loco_addrs = ', '.join(map(str, target_addresses))
+                        print(f"   → Consist {address}: F0 to all locos ({loco_addrs})")
+                    else:
+                        # Other functions only to lead (sound decoder)
+                        target_addresses = [locomotives[0]['address']]
+                        print(f"   → Consist {address}: F{function_number} to lead ({target_addresses[0]})")
                 else:
-                    # Other functions only to lead (sound decoder)
-                    target_addresses = [lead_addr]
-                    print(f"   → Consist {address}: F{function_number} to lead ({lead_addr})")
+                    # Fallback: treat as single locomotive
+                    target_addresses = [address]
             else:
                 # Single locomotive
                 target_addresses = [address]
@@ -273,10 +275,10 @@ if __name__ == '__main__':
 
         # Initialize test consist
         manager.initialize_consist(10, {
-            'lead': 1,
-            'rear': 5,
-            'lead_name': 'Gr.675 017',
-            'rear_name': 'D645 014',
+            'locomotives': [
+                {'address': 1, 'name': 'Gr.675 017'},  # Lead
+                {'address': 5, 'name': 'D645 014'}      # Rear
+            ],
             'functions': [
                 {'number': 0, 'label': 'Light', 'lockable': True},
                 {'number': 1, 'label': 'Sound', 'lockable': True}

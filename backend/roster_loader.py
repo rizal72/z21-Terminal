@@ -42,15 +42,13 @@ def load_consist_from_jmri():
             except ValueError:
                 continue
 
-            lead = None
-            rear = None
-            lead_name = None
-            rear_name = None
+            locomotives = []  # Array of locomotives in order: [lead, rear1, rear2, ...]
 
             for loco_elem in consist_elem.findall('.//loco'):
                 loco_id = loco_elem.get('dccLocoAddress')
                 loco_direction = loco_elem.get('locoDir', 'normal')
                 loco_role = loco_elem.get('locoName', '')  # 'lead' or 'rear'
+                roster_entry = loco_elem.get('locoRosterId')
 
                 if not loco_id:
                     continue
@@ -60,22 +58,24 @@ def load_consist_from_jmri():
                 except ValueError:
                     continue
 
-                # Get roster entry name
-                roster_entry = loco_elem.get('locoRosterId')
-
+                # Add to locomotives array (lead first, then rear)
                 if loco_role == 'lead':
-                    lead = loco_address
-                    lead_name = roster_entry
-                elif loco_role == 'rear':
-                    rear = loco_address
-                    rear_name = roster_entry
+                    # Insert at beginning (lead is always first)
+                    locomotives.insert(0, {
+                        'address': loco_address,
+                        'name': roster_entry or f'Loco {loco_address}'
+                    })
+                else:
+                    # Append rear locomotives
+                    locomotives.append({
+                        'address': loco_address,
+                        'name': roster_entry or f'Loco {loco_address}'
+                    })
 
-            if lead and rear:
+            # Consist valid if has at least 1 locomotive (lead)
+            if locomotives:
                 consists[consist_address] = {
-                    'lead': lead,
-                    'rear': rear,
-                    'lead_name': lead_name,
-                    'rear_name': rear_name,
+                    'locomotives': locomotives,  # Array: first = lead, rest = rear
                     'type': consist_type
                 }
 
@@ -175,8 +175,9 @@ def load_all_locomotives():
     locos_in_consist = {}  # {loco_address: consist_address}
 
     for consist_addr, consist_data in consists.items():
-        locos_in_consist[consist_data['lead']] = consist_addr
-        locos_in_consist[consist_data['rear']] = consist_addr
+        # All locomotives in the consist array belong to this consist
+        for loco in consist_data.get('locomotives', []):
+            locos_in_consist[loco['address']] = consist_addr
 
     # Load all roster files
     try:
@@ -245,10 +246,10 @@ def load_consist_with_functions():
         dict: {
             10: {
                 'address': 10,
-                'lead': 1,
-                'rear': 5,
-                'lead_name': 'Gr.675 017',
-                'rear_name': 'D645 014',
+                'locomotives': [
+                    {'address': 1, 'name': 'Gr.675 017'},  # First = lead
+                    {'address': 5, 'name': 'D645 014'}     # Rest = rear
+                ],
                 'functions': [...]
             },
             ...
@@ -258,15 +259,17 @@ def load_consist_with_functions():
     result = {}
 
     for consist_addr, consist_data in consists.items():
-        # Load functions from lead locomotive
-        functions = load_functions_from_roster(consist_data['lead'])
+        locomotives = consist_data.get('locomotives', [])
+
+        # Load functions from lead locomotive (first in array)
+        functions = []
+        if locomotives:
+            lead_address = locomotives[0]['address']
+            functions = load_functions_from_roster(lead_address)
 
         result[consist_addr] = {
             'address': consist_addr,
-            'lead': consist_data['lead'],
-            'rear': consist_data['rear'],
-            'lead_name': consist_data['lead_name'],
-            'rear_name': consist_data['rear_name'],
+            'locomotives': locomotives,  # Array: [lead, rear1, rear2, ...]
             'functions': functions,
             'speed': 0,
             'direction': 'forward',
@@ -282,9 +285,12 @@ if __name__ == '__main__':
     consists = load_consist_with_functions()
 
     for addr, data in consists.items():
+        locomotives = data['locomotives']
         print(f"\nConsist {addr}:")
-        print(f"  Lead: {data['lead']} - {data['lead_name']}")
-        print(f"  Rear: {data['rear']} - {data['rear_name']}")
+        print(f"  Locomotives: {len(locomotives)}")
+        for i, loco in enumerate(locomotives):
+            role = "Lead" if i == 0 else f"Rear {i}"
+            print(f"    {role}: {loco['address']} - {loco['name']}")
         print(f"  Functions: {len(data['functions'])} found")
         for fn in data['functions'][:5]:  # Show first 5
             print(f"    F{fn['number']}: {fn['label']} ({'lockable' if fn['lockable'] else 'momentary'})")

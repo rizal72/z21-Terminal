@@ -165,9 +165,11 @@ export default function ConsistController({
     );
   }
 
-  // Build display name
+  // Build display name: use names, handle consist with only lead
   const displayName = selection.type === 'consist'
-    ? `${item.lead} + ${item.rear}`
+    ? item.rear_name
+      ? `${item.lead_name} + ${item.rear_name}`
+      : item.lead_name
     : item.name;
 
   const trackLabel = item.trackName || `${selection.type === 'consist' ? 'Consist' : 'Loco'} ${selection.address}`;

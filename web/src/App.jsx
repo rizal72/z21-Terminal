@@ -63,7 +63,8 @@ function App() {
   const getApiUrl = () => {
     if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
     const hostname = window.location.hostname;
-    return `http://${hostname}:8000`;
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    return `${protocol}//${hostname}:8000`;
   };
 
   const WS_URL = getWebSocketUrl();
@@ -351,10 +352,15 @@ function App() {
     // Add consists
     Object.values(consists).forEach(consist => {
       if (consist) {
+        // Build consist label: use names if available, fallback to "lead only" if no rear
+        const consistLabel = consist.rear_name
+          ? `Consist ${consist.address}: ${consist.lead_name} + ${consist.rear_name}`
+          : `Consist ${consist.address}: ${consist.lead_name}`;
+
         options.push({
           type: 'consist',
           address: consist.address,
-          label: `Consist ${consist.address}: ${consist.lead} + ${consist.rear}`,
+          label: consistLabel,
           trackName: consist.trackName
         });
       }
