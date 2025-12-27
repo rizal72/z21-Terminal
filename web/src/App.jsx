@@ -110,8 +110,6 @@ function App() {
   // Handle incoming WebSocket messages
   useEffect(() => {
     if (lastMessage) {
-      console.log('Received message:', lastMessage);
-
       // Update consist state based on message type
       if (lastMessage.type === 'initial_state') {
         // Load initial state from backend
@@ -165,11 +163,8 @@ function App() {
         }
       } else if (lastMessage.type === 'z21_status') {
         // Z21 connection status update
-        console.log('Z21 status update:', lastMessage.online);
         setZ21Online(lastMessage.online);
       } else if (lastMessage.type === 'consist_update') {
-        console.log('Consist update:', lastMessage.address, lastMessage.data);
-
         // Update global track power state if changed
         if (typeof lastMessage.data.power !== 'undefined') {
           setTrackPower(prev => {
@@ -206,7 +201,6 @@ function App() {
   }, [lastMessage]);
 
   const handleSpeedChange = (address, speed, forward) => {
-    console.log(`Speed change: consist ${address}, speed ${speed}, forward ${forward}`);
     sendMessage({
       type: 'set_speed',
       address,
@@ -216,7 +210,6 @@ function App() {
   };
 
   const handleDirectionChange = (address, direction) => {
-    console.log(`Direction change: consist ${address}, direction ${direction}`);
     sendMessage({
       type: 'set_direction',
       address,
@@ -225,21 +218,17 @@ function App() {
   };
 
   const handleFunctionToggle = (address, funcNumber, state) => {
-    console.log(`Function toggle: consist ${address}, F${funcNumber} = ${state}`);
     const message = {
       type: 'set_function',
       address,
       function: funcNumber,
       state
     };
-    console.log('Sending WebSocket message:', message);
-    const sent = sendMessage(message);
-    console.log('Message sent:', sent);
+    sendMessage(message);
   };
 
   const handleEmergencyStop = () => {
     const newPowerState = !trackPower;
-    console.log(`Emergency stop: power ${newPowerState ? 'ON' : 'OFF'}`);
 
     // Update local state immediately for responsive UI
     setTrackPower(newPowerState);

@@ -121,7 +121,6 @@ export default function ConsistController({
 
   const toggleFunction = (funcNumber, isLockable) => {
     const newState = !functions[funcNumber];
-    console.log(`Toggle F${funcNumber}: ${newState} (lockable: ${isLockable})`);
 
     setFunctions(prev => ({
       ...prev,
@@ -129,10 +128,7 @@ export default function ConsistController({
     }));
 
     if (onFunctionToggle) {
-      console.log(`Calling onFunctionToggle for address ${selection.address}, F${funcNumber} = ${newState}`);
       onFunctionToggle(selection.address, funcNumber, newState);
-    } else {
-      console.warn('onFunctionToggle not defined');
     }
 
     // Auto-release for momentary functions

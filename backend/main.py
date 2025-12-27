@@ -261,8 +261,7 @@ async def broadcast_state_update(address: int):
     for client in connected_clients:
         try:
             await client.send_json(message)
-        except Exception as e:
-            print(f"Error sending to client: {e}")
+        except Exception:
             disconnected_clients.append(client)
 
     # Remove disconnected clients
@@ -526,15 +525,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     is_consist = address in consist_data
                     is_loco = address in locomotive_data
 
-                    item_type = "consist" if is_consist else "locomotive" if is_loco else "unknown"
-                    print(f"🎛️  Function command: {item_type} {address}, F{function_num} = {state}")
-
                     if z21_manager and (is_consist or is_loco):
-                        success = z21_manager.set_function(address, function_num, state)
-                        print(f"   Z21 response: {'✓ OK' if success else '✗ FAILED'}")
+                        z21_manager.set_function(address, function_num, state)
                         await broadcast_state_update(address)
-                    else:
-                        print(f"   ✗ Invalid address or Z21 not connected")
 
                 elif message_type == 'emergency_stop':
                     power_on = data.get('powerOn', False)
