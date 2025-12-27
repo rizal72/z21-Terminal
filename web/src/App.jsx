@@ -464,7 +464,10 @@ function App() {
               </button>
 
               {/* Track Power Status */}
-              <div className="flex items-center gap-2 px-2 md:px-3 py-2 bg-control-dark border border-control-grey rounded">
+              <div
+                className="flex items-center gap-2 px-2 md:px-3 py-1.5 md:py-2 bg-control-dark/30 rounded cursor-default"
+                title={`Track Power: ${trackPower ? 'ON' : 'OFF'}`}
+              >
                 <i className={`fa-solid fa-bolt text-lg md:text-xl ${trackPower ? 'text-signal-green' : 'text-signal-red'}`}></i>
                 <div className="hidden md:block text-xs font-mono">
                   <div className={trackPower ? 'text-signal-green' : 'text-signal-red'}>
@@ -474,7 +477,10 @@ function App() {
               </div>
 
               {/* WebSocket Status */}
-              <div className="flex items-center gap-2 px-2 md:px-3 py-2 bg-control-dark border border-control-grey rounded">
+              <div
+                className="flex items-center gap-2 px-2 md:px-3 py-1.5 md:py-2 bg-control-dark/30 rounded cursor-default"
+                title={`WebSocket Connection: ${isConnected ? 'Connected' : 'Disconnected'}`}
+              >
                 <i className={`fa-solid fa-wifi text-lg md:text-xl ${isConnected ? 'text-signal-green' : 'text-signal-red'}`}></i>
                 <div className="hidden md:block text-xs font-mono">
                   <div className={isConnected ? 'text-signal-green' : 'text-signal-red'}>
@@ -484,7 +490,10 @@ function App() {
               </div>
 
               {/* Z21 Status */}
-              <div className="flex items-center gap-2 px-2 md:px-3 py-2 bg-control-dark border border-control-grey rounded">
+              <div
+                className="flex items-center gap-2 px-2 md:px-3 py-1.5 md:py-2 bg-control-dark/30 rounded cursor-default"
+                title={`Z21 Device: ${z21Online ? 'Online' : 'Offline'}`}
+              >
                 <i className={`fa-solid fa-server text-lg md:text-xl ${z21Online ? 'text-signal-green' : 'text-signal-red'}`}></i>
                 <div className="hidden md:block text-xs font-mono">
                   <div className={z21Online ? 'text-signal-green' : 'text-signal-red'}>
