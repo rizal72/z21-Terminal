@@ -340,10 +340,19 @@ function App() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  // Global keyboard shortcut for Emergency Stop (ESC key)
+  // Global keyboard shortcuts (ESC for emergency stop, TAB to cycle controllers)
   useEffect(() => {
     const handleGlobalKeyPress = (e) => {
-      // Only handle if no input/select/textarea is focused
+      // TAB: cycle through controllers (allow even when dropdown focused)
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const currentIndex = controllers.findIndex(c => c.id === activeControllerId);
+        const nextIndex = (currentIndex + 1) % controllers.length;
+        setActiveControllerId(controllers[nextIndex].id);
+        return;
+      }
+
+      // For other keys, don't handle if input/select/textarea is focused
       if (document.activeElement.tagName === 'INPUT' ||
           document.activeElement.tagName === 'TEXTAREA' ||
           document.activeElement.tagName === 'SELECT') {
@@ -364,7 +373,7 @@ function App() {
 
     window.addEventListener('keydown', handleGlobalKeyPress);
     return () => window.removeEventListener('keydown', handleGlobalKeyPress);
-  }, [trackPower, z21Online, consists, locomotives]); // Dependencies for handleEmergencyStop
+  }, [trackPower, z21Online, consists, locomotives, controllers, activeControllerId]); // Dependencies
 
   // Reload roster from JMRI without restarting backend
   const handleReloadRoster = async () => {
@@ -540,16 +549,15 @@ function App() {
     <div className="min-h-screen bg-control-black grain-overlay">
       {/* Header */}
       <header className="border-b border-control-grey bg-control-dark/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="w-full lg:container lg:mx-auto px-3 py-2 md:px-4 lg:py-4">
-          <div className="flex items-center gap-2 md:gap-4">
-            {/* Left: Title */}
-            <div className="flex-shrink-0">
-              {/* Mobile: solo "z21" */}
-              <h1 className="text-lg md:text-2xl lg:text-3xl font-display font-bold text-signal-amber text-shadow-glow md:hidden">
-                z21
-              </h1>
-              {/* Tablet/Desktop: titolo completo */}
-              <div className="hidden md:block">
+        <div className="w-full lg:container lg:mx-auto px-4 py-2 md:px-4 lg:py-4">
+          <div className="flex items-center gap-4">
+            {/* Left: Logo + Title */}
+            <div className="flex-shrink-0 flex items-center gap-2 md:gap-3">
+              {/* Train icon logo - always visible */}
+              <i className="fa-solid fa-train text-signal-amber text-2xl md:text-3xl lg:text-4xl" style={{ filter: 'drop-shadow(0 0 8px rgba(255, 149, 0, 0.6))' }}></i>
+
+              {/* Landscape/Tablet/Desktop: titolo completo */}
+              <div className="hidden landscape:block md:block">
                 <h1 className="text-2xl lg:text-3xl font-display font-bold text-signal-amber text-shadow-glow">
                   z21 Terminal
                 </h1>
@@ -596,12 +604,12 @@ function App() {
             </button>
 
             {/* Right: Emergency + Status Icons */}
-            <div className="flex items-center gap-2 md:gap-3">
+            <div className="flex items-center gap-2 md:portrait:gap-1.5 md:landscape:gap-2 lg:gap-3">
               {/* Global Emergency Stop */}
               <button
                 onClick={handleEmergencyStop}
                 disabled={!z21Online}
-                className={`emergency-stop ${!trackPower ? 'active' : ''} disabled:opacity-50 disabled:cursor-not-allowed`}
+                className={`emergency-stop ${!trackPower ? 'active' : ''} disabled:opacity-50 disabled:cursor-not-allowed aspect-square landscape:aspect-auto landscape:w-[140px] md:aspect-auto md:w-[140px]`}
                 title={
                   !z21Online
                     ? 'Z21 offline - Cannot control power'
@@ -610,30 +618,32 @@ function App() {
                       : 'Restore track power - Press ESC'
                 }
               >
-                <div className="flex items-center gap-1.5 md:gap-3 px-2 md:px-6 py-2 md:py-3">
-                  {trackPower ? (
-                    <i className="fa-solid fa-triangle-exclamation text-lg md:text-2xl"></i>
-                  ) : (
-                    <i className="fa-solid fa-power-off text-lg md:text-2xl"></i>
-                  )}
-                  <div className="flex flex-col items-start">
-                    <span className="uppercase tracking-wider text-xs md:text-sm font-bold">
-                      {trackPower ? 'Emergency' : 'Restart'}
-                    </span>
-                    <span className="text-[10px] md:text-xs opacity-70 hidden md:block">
-                      {trackPower ? 'Stop All' : 'Power On'} <kbd className="ml-1 px-1 bg-white/10 rounded text-[10px]">ESC</kbd>
-                    </span>
+                <div className="flex items-center justify-center px-2 py-2 md:px-6 md:py-3">
+                  {/* Contenuto raggruppato: icona + testo come blocco unico */}
+                  <div className="flex items-center gap-2">
+                    {trackPower ? (
+                      <i className="fa-solid fa-triangle-exclamation text-2xl md:text-3xl"></i>
+                    ) : (
+                      <i className="fa-solid fa-power-off text-2xl md:text-3xl"></i>
+                    )}
+                    {/* Testo su landscape/tablet/desktop */}
+                    <div className="hidden landscape:flex md:flex flex-col items-start text-left h-[44px] justify-center">
+                      <span className="uppercase tracking-wider text-sm font-bold w-full text-left leading-tight">
+                        {trackPower ? 'Stop All' : 'Restart'}
+                      </span>
+                      <span className="text-[10px] md:text-xs opacity-70 w-full text-left leading-tight">{trackPower ? <kbd className="pl-0 pr-1 bg-white/10 rounded text-[10px]">ESC</kbd> : <>Power On <kbd className="pl-0 pr-1 bg-white/10 rounded text-[10px]">ESC</kbd></>}</span>
+                    </div>
                   </div>
                 </div>
               </button>
 
               {/* Track Power Status */}
               <div
-                className="flex items-center gap-2 px-2 md:px-3 py-1.5 md:py-2 bg-control-dark/30 rounded cursor-default"
+                className="flex items-center gap-2 px-2 py-1.5 md:py-2 bg-control-dark/30 rounded cursor-default"
                 title={`Track Power: ${trackPower ? 'ON' : 'OFF'}`}
               >
                 <i className={`fa-solid fa-bolt text-lg md:text-xl ${trackPower ? 'text-signal-green' : 'text-signal-red'}`}></i>
-                <div className="hidden md:block text-xs font-mono">
+                <div className="hidden landscape:block md:block text-xs font-mono w-7">
                   <div className={trackPower ? 'text-signal-green' : 'text-signal-red'}>
                     {trackPower ? 'ON' : 'OFF'}
                   </div>
@@ -646,7 +656,7 @@ function App() {
                 title={`WebSocket Connection: ${isConnected ? 'Connected' : 'Disconnected'}`}
               >
                 <i className={`fa-solid fa-wifi text-lg md:text-xl ${isConnected ? 'text-signal-green' : 'text-signal-red'}`}></i>
-                <div className="hidden md:block text-xs font-mono">
+                <div className="hidden landscape:block md:block text-xs font-mono">
                   <div className={isConnected ? 'text-signal-green' : 'text-signal-red'}>
                     WS
                   </div>
@@ -659,7 +669,7 @@ function App() {
                 title={`Z21 Device: ${z21Online ? 'Online' : 'Offline'}`}
               >
                 <i className={`fa-solid fa-server text-lg md:text-xl ${z21Online ? 'text-signal-green' : 'text-signal-red'}`}></i>
-                <div className="hidden md:block text-xs font-mono">
+                <div className="hidden landscape:block md:block text-xs font-mono">
                   <div className={z21Online ? 'text-signal-green' : 'text-signal-red'}>
                     z21
                   </div>
@@ -671,7 +681,7 @@ function App() {
       </header>
 
       {/* Main content */}
-      <main className="w-full lg:container lg:mx-auto px-0 sm:px-4 py-8">
+      <main className="w-full lg:container lg:mx-auto px-2 sm:px-4 py-8">
         {/* Connection warning */}
         {!isConnected && (
           <div className="mb-6 p-4 bg-signal-red/20 border border-signal-red/50 rounded-lg">
@@ -690,7 +700,7 @@ function App() {
         )}
 
         {/* Controllers grid - Dynamic and scalable */}
-        <div className="controllers-grid grid grid-cols-1 lg:grid-cols-2 gap-0 lg:gap-6 mb-8">
+        <div className="controllers-grid grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-8">
           {controllers.map((controller, index) => {
             const selection = getControllerSelection(controller.id);
             const isActive = activeControllerId === controller.id;

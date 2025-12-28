@@ -96,9 +96,8 @@ export default function ConsistController({
   };
 
   // Keyboard shortcuts for speed control
-  // No modifier: controls both controllers
-  // Shift: controls only controller 1 (left)
-  // Ctrl: controls only controller 2 (right)
+  // No modifier: controls only active controller
+  // Shift: controls ALL controllers simultaneously
   useEffect(() => {
     const handleKeyPress = (e) => {
       // Only handle if no input/select is focused
@@ -111,12 +110,10 @@ export default function ConsistController({
       // Determine if this controller should respond
       const noModifiers = !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
       const shiftOnly = e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
-      const ctrlOnly = e.ctrlKey && !e.shiftKey && !e.metaKey && !e.altKey;
 
       const shouldRespond =
-        noModifiers ||  // No modifiers: both controllers respond
-        (shiftOnly && controllerNumber === 1) ||  // Shift: only controller 1 (left)
-        (ctrlOnly && controllerNumber === 2);     // Ctrl: only controller 2 (right)
+        (noModifiers && isActive) ||  // No modifiers: only active controller responds
+        shiftOnly;                     // Shift: ALL controllers respond
 
       if (!shouldRespond) {
         return;
@@ -143,7 +140,7 @@ export default function ConsistController({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [trackPower, isLocoInConsist, selection?.address, direction, onSpeedChange, controllerNumber]);
+  }, [trackPower, isLocoInConsist, selection?.address, direction, onSpeedChange, isActive]);
 
   const toggleDirection = () => {
     if (isLocoInConsist) return; // Disabled for locos in consist
@@ -222,7 +219,7 @@ export default function ConsistController({
         )}
 
         {/* Dropdown always visible even without selection */}
-        <div className="mb-6 pb-4 border-b border-control-grey">
+        <div className="mt-6 mb-6 pb-4 border-b border-control-grey">
           <div className="mb-3">
             <label className="text-xs font-mono text-track-steel uppercase tracking-wider mb-2 block">
               Controller #{controllerNumber}
@@ -301,7 +298,7 @@ export default function ConsistController({
       )}
 
       {/* Header with selection dropdown */}
-      <div className="mb-6 pb-4 border-b border-control-grey">
+      <div className="mt-6 mb-6 pb-4 border-b border-control-grey">
         <div className="mb-3">
           <label className="text-xs font-mono text-track-steel uppercase tracking-wider mb-2 block">
             Controller #{controllerNumber}
@@ -445,10 +442,8 @@ export default function ConsistController({
         <div className="mt-3 text-xs font-mono text-track-steel text-center opacity-60 overflow-hidden hidden lg:block">
           {isLocoInConsist ? (
             <span className="text-signal-amber">Speed control disabled (loco in consist)</span>
-          ) : controllerNumber === 1 ? (
-            <div>Speed: \=0% • 1,2,3..0=10-100% → All | +Shift → this only</div>
           ) : (
-            <div>Speed: \=0% • 1,2,3..0=10-100% → All | +Ctrl → this only</div>
+            <div>Speed: \=0% • 1,2,3..0=10-100% → <span className="text-signal-amber">{isActive ? 'This' : '(click to activate)'}</span> | +Shift → <span className="text-signal-amber">All</span></div>
           )}
         </div>
       </div>
