@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function ConsistController({
   item,
@@ -15,6 +15,11 @@ export default function ConsistController({
   const [direction, setDirection] = useState('forward');
   const [functions, setFunctions] = useState({});
   const [speedFlash, setSpeedFlash] = useState(false);
+
+  // Throttling refs for speed commands (like JMRI throttle)
+  const lastSpeedSentTime = useRef(0);
+  const speedThrottleTimeout = useRef(null);
+  const pendingSpeedValue = useRef(null);
 
   // Check if speed/direction should be disabled (locomotive in consist)
   const isLocoInConsist = selection.type === 'locomotive' && item?.in_consist;
@@ -37,9 +42,36 @@ export default function ConsistController({
     if (isLocoInConsist) return; // Disabled for locos in consist
 
     const newSpeed = parseInt(e.target.value);
-    setSpeed(newSpeed);
-    if (onSpeedChange) {
-      onSpeedChange(selection.address, newSpeed, direction === 'forward');
+    setSpeed(newSpeed); // Update UI immediately
+
+    // Throttle Z21 commands to 200ms (like JMRI throttle behavior)
+    const now = Date.now();
+    const timeSinceLastSend = now - lastSpeedSentTime.current;
+    const THROTTLE_MS = 200;
+
+    // Clear any pending timeout
+    if (speedThrottleTimeout.current) {
+      clearTimeout(speedThrottleTimeout.current);
+    }
+
+    // If enough time passed, send immediately
+    if (timeSinceLastSend >= THROTTLE_MS) {
+      if (onSpeedChange) {
+        onSpeedChange(selection.address, newSpeed, direction === 'forward');
+        lastSpeedSentTime.current = now;
+      }
+    } else {
+      // Schedule send after remaining time
+      pendingSpeedValue.current = newSpeed;
+      const remainingTime = THROTTLE_MS - timeSinceLastSend;
+
+      speedThrottleTimeout.current = setTimeout(() => {
+        if (onSpeedChange && pendingSpeedValue.current !== null) {
+          onSpeedChange(selection.address, pendingSpeedValue.current, direction === 'forward');
+          lastSpeedSentTime.current = Date.now();
+          pendingSpeedValue.current = null;
+        }
+      }, remainingTime);
     }
   };
 
@@ -151,6 +183,15 @@ export default function ConsistController({
       setSpeed(0);
     }
   }, [trackPower]);
+
+  // Cleanup throttle timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (speedThrottleTimeout.current) {
+        clearTimeout(speedThrottleTimeout.current);
+      }
+    };
+  }, []);
 
   const speedPercent = Math.round((speed / 126) * 100);
 
