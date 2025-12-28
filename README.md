@@ -21,39 +21,33 @@ z21-Terminal/
 **z21-Terminal is an extension of JMRI, not a replacement.**
 
 - **JMRI is required**: z21-Terminal reads roster and consists from JMRI XML files
+  - Your specific roster configuration lives in JMRI
+  - z21-Terminal dynamically loads functions, consists, and locomotive data
+  - JMRI does not need to be running (only XML files are read)
 - **Coexistence**: Both systems can control locomotives simultaneously
 - **Complementarity**:
   - **JMRI**: Decoder configuration (DecoderPro), programming track, roster/consist management
-  - **z21-Terminal**: Fast terminal control, automation, Python scripting
+  - **z21-Terminal**: Fast operational control, modern web UI, automation, Python scripting
 
 **Typical workflow**:
 1. Configure locomotives and consists in JMRI (DecoderPro)
-2. Use z21-Terminal for operational keyboard control
-3. Both software can remain open and work together
+2. Use z21-Terminal for operational control (web dashboard or terminal)
+3. Both software can remain open and work together (last command has priority)
 
 ## Setup
 
-### Hardware
-- **Control Station**: Roco Z21 White (192.168.1.111)
-- **Software**: JMRI (for roster/consist management - does not need to be running)
+### Requirements
+- **Control Station**: Roco Z21 (White, Black, or Pro) connected to your network
+- **Software**: JMRI installed with configured roster (does not need to be running)
+- **Network**: Z21 and computer on same network (or accessible via VPN/Tailscale)
 
-### Layout Tracks
-- **Inner** (long): 2 synchronized locomotives (address 1 and 5)
-- **Outer** (oval): 2 synchronized locomotives (address 6 and 7)
+### Example Setup
+Your specific layout and roster are configured in JMRI:
+- Configure locomotives in JMRI DecoderPro (assign DCC addresses, program CVs)
+- Create consists for synchronized operations (e.g., multiple locomotives on same track)
+- z21-Terminal automatically loads roster and consists from JMRI XML files
 
-## Locomotives
-
-### Inner Track (Consist 10)
-- **1**: Gr.675 017 (Os.kar) - Lead 🔊
-- **5**: D645 014 (Rivarossi) - Rear
-
-### Outer Track (Consist 11)
-- **6**: D445 1140 (Os.kar) - Rear
-- **7**: E656 239 (Rivarossi) - Lead 🔊
-
-### Other Locomotives
-- **3**: E656 182 (ACME)
-- **4**: 2048 010-9 (Roco ÖBB)
+**Example roster**: 7 locomotives with 2 consists configured for dual-track operations
 
 ## Main Usage
 
@@ -61,7 +55,7 @@ z21-Terminal/
 Modern web interface for locomotive control (mobile-first, multi-device):
 
 ```bash
-z21-dev          # Start backend + frontend (opens in new iTerm tab)
+z21              # Start backend + frontend (opens in new iTerm tabs)
 z21-backend      # Start only backend (FastAPI + WebSocket)
 z21-frontend     # Start only frontend (Vite dev server)
 ```
@@ -70,14 +64,18 @@ Access at: **http://localhost:5173** (or from network: `http://192.168.1.xxx:517
 
 **Features:**
 - Dual controller layout (control 2 consists/locomotives simultaneously)
-- Touch-optimized controls (speed slider, functions)
+- Touch-optimized controls (speed slider with 200ms throttling for stability)
 - Real-time sync via WebSocket (multi-device support)
+- Empty state UX: dropdown always visible even without selection
 - Emergency stop with audio feedback (ESC keyboard shortcut)
 - STOP button for each controller (speed=0 quick action)
 - Power-on speed reset (prevents locomotives from restarting at previous speed)
 - Function state sync with Z21
+- Color-coded function indicators (red dot=toggle, amber dot=temporary, green=ON)
 - Support for standalone locomotives and consists
 - Elegant UI with Font Awesome 6 icons
+- Performance optimized for Chrome Mac Intel (backdrop-blur removed)
+- Safari Mac animation compatibility (smooth transitions)
 
 ### Terminal Controller ⌨️
 Interactive keyboard control:
@@ -110,11 +108,12 @@ python3 read_consists.py 10             # Consist 10 details
 - [x] FastAPI backend with WebSocket real-time sync
 - [x] Dual controller layout (2 consists/locomotives simultaneously)
 - [x] Flexible roster selection (consists + standalone locomotives)
+- [x] Empty state UX: dropdown always visible for recovery
 - [x] Touch-optimized controls (mobile-first design)
-- [x] Speed control slider (0-126 steps, keyboard shortcuts)
+- [x] Speed control slider with 200ms throttling (prevents Z21 disconnections)
 - [x] STOP button for each controller (quick speed=0)
 - [x] Direction toggle (forward/reverse)
-- [x] Functions F0-F28 with ON/OFF indicators
+- [x] Functions F0-F28 with color-coded indicators (red=toggle, amber=temporary)
 - [x] Global emergency stop with ESC keyboard shortcut
 - [x] Power-on speed reset (prevents restart at previous speed)
 - [x] Multi-device support (iPad, phone, desktop)
@@ -124,6 +123,8 @@ python3 read_consists.py 10             # Consist 10 details
 - [x] Status indicators with Font Awesome icons (power, WebSocket, Z21)
 - [x] Auto-disable controls when Z21 offline
 - [x] Tailscale HTTPS support (wss:// auto-detection)
+- [x] Performance optimized for Chrome Mac Intel
+- [x] Safari Mac animation compatibility
 
 ### Terminal Controller ✅
 - [x] Complete speed control (w/s, 0-9, hotkeys)
@@ -154,12 +155,16 @@ python3 read_consists.py 10             # Consist 10 details
 
 ## Notes
 
-- **Current roster**: 6 locomotives (address 1, 3, 4, 5, 6, 7)
-- **Consists**: 2 configured consists (10 and 11), controllable as single unit
-- **Speed matching**: Managed manually by user (speed tables CV)
+- **Roster Management**: Configure your locomotives in JMRI DecoderPro
+  - z21-Terminal automatically loads roster from JMRI XML files
+  - Supports individual locomotives and consists (DAC software-based)
+  - No limit on number of locomotives (tested with 7+ locomotives)
+- **Speed Matching**: Managed manually in JMRI using speed tables (CV67-94)
 - **Z21 Protocol**:
   - Direct Z21 LAN control (UDP port 21105) ✅
-  - Hardware: Z21 White (serial 111466, firmware 1.67)
+  - Tested on Z21 White (also compatible with Z21 Black/Pro)
   - Coexists with JMRI: both can control locomotives simultaneously
   - Read locomotive state (speed, direction, functions F0-F28) implemented
+  - Slider throttling (200ms) prevents buffer overflow and disconnections
 - **CV Operations**: CV read/write to be implemented (via Z21 programming track)
+- **Browser Compatibility**: Optimized for Safari Mac, Chrome Mac, and mobile browsers
