@@ -41,36 +41,48 @@ class Locomotive:
         # Leggi CV speed
         self.cv = self._read_cv(root)
 
-    def _read_cv(self, root) -> Dict[str, int]:
-        """Legge le CV dal file XML."""
+    def _read_cv(self, root) -> Dict[int, int]:
+        """Legge TUTTI i CV dal file XML."""
         cv = {}
-        values = root.find('.//values/decoderDef')
 
-        if values is not None:
-            for var in values.findall('varValue'):
-                item = var.get('item', '')
-                value = var.get('value', '')
+        # Cerca tutti i tag CVvalue nel formato: <CVvalue name="2" value="2" />
+        for cv_elem in root.findall('.//CVvalue'):
+            cv_name = cv_elem.get('name', '')
+            cv_value = cv_elem.get('value', '')
 
-                # Cerca Vstart, Vmid, Vhigh
-                if item == 'Vstart':
-                    cv['vstart'] = int(value)
-                elif item == 'Vmid':
-                    cv['vmid'] = int(value)
-                elif item == 'Vhigh':
-                    cv['vhigh'] = int(value)
+            if cv_name and cv_value:
+                try:
+                    cv[int(cv_name)] = int(cv_value)
+                except ValueError:
+                    pass  # Ignora CV con valori non numerici
 
         return cv
 
     def __str__(self) -> str:
         """Rappresentazione testuale."""
-        cv_str = f"CV: Vstart={self.cv.get('vstart', '?')}, " \
-                 f"Vmid={self.cv.get('vmid', '?')}, " \
-                 f"Vhigh={self.cv.get('vhigh', '?')}"
+        # Mostra CV principali (speed control)
+        cv2 = self.cv.get(2, '?')   # Vstart
+        cv6 = self.cv.get(6, '?')   # Vmid
+        cv5 = self.cv.get(5, '?')   # Vhigh
 
-        return f"{self.name} (addr {self.address})\n" \
-               f"  {self.mfg} {self.model}\n" \
-               f"  Decoder: {self.decoder_model}\n" \
-               f"  {cv_str}"
+        result = f"{self.name} (addr {self.address})\n" \
+                 f"  {self.mfg} {self.model}\n" \
+                 f"  Decoder: {self.decoder_model}\n" \
+                 f"  Speed CV: Vstart(2)={cv2}, Vmid(6)={cv6}, Vhigh(5)={cv5}\n"
+
+        # Mostra tutti i CV configurati
+        if self.cv:
+            result += f"  Totale CV configurati: {len(self.cv)}\n"
+            result += "  CV: "
+            # Mostra CV in ordine, max 10 per riga
+            cv_list = sorted(self.cv.items())
+            for i, (cv_num, cv_val) in enumerate(cv_list):
+                if i > 0 and i % 10 == 0:
+                    result += "\n      "
+                result += f"CV{cv_num}={cv_val} "
+            result = result.rstrip()  # Remove trailing space
+
+        return result
 
 
 def load_all_locomotives() -> Dict[str, Locomotive]:
@@ -101,23 +113,23 @@ def compare_locomotives(loco1: Locomotive, loco2: Locomotive):
     print(f"{'='*60}\n")
 
     print(f"Locomotiva 1: {loco1.name} (address {loco1.address})")
-    print(f"  CV: {loco1.cv.get('vstart', '?')}/{loco1.cv.get('vmid', '?')}/{loco1.cv.get('vhigh', '?')}\n")
+    print(f"  CV: {loco1.cv.get(2, '?')}/{loco1.cv.get(6, '?')}/{loco1.cv.get(5, '?')} (Vstart/Vmid/Vhigh)\n")
 
     print(f"Locomotiva 2: {loco2.name} (address {loco2.address})")
-    print(f"  CV: {loco2.cv.get('vstart', '?')}/{loco2.cv.get('vmid', '?')}/{loco2.cv.get('vhigh', '?')}\n")
+    print(f"  CV: {loco2.cv.get(2, '?')}/{loco2.cv.get(6, '?')}/{loco2.cv.get(5, '?')} (Vstart/Vmid/Vhigh)\n")
 
-    # Calcola rapporti
-    if all(k in loco1.cv and k in loco2.cv for k in ['vstart', 'vmid', 'vhigh']):
-        ratio_start = loco1.cv['vstart'] / loco2.cv['vstart'] if loco2.cv['vstart'] != 0 else 0
-        ratio_mid = loco1.cv['vmid'] / loco2.cv['vmid'] if loco2.cv['vmid'] != 0 else 0
-        ratio_high = loco1.cv['vhigh'] / loco2.cv['vhigh'] if loco2.cv['vhigh'] != 0 else 0
+    # Calcola rapporti (CV2=Vstart, CV6=Vmid, CV5=Vhigh)
+    if all(k in loco1.cv and k in loco2.cv for k in [2, 6, 5]):
+        ratio_start = loco1.cv[2] / loco2.cv[2] if loco2.cv[2] != 0 else 0
+        ratio_mid = loco1.cv[6] / loco2.cv[6] if loco2.cv[6] != 0 else 0
+        ratio_high = loco1.cv[5] / loco2.cv[5] if loco2.cv[5] != 0 else 0
 
         print(f"Rapporti (Loco1/Loco2):")
-        print(f"  Vstart: {ratio_start:.3f}")
-        print(f"  Vmid:   {ratio_mid:.3f}")
-        print(f"  Vhigh:  {ratio_high:.3f}")
+        print(f"  Vstart (CV2): {ratio_start:.3f}")
+        print(f"  Vmid (CV6):   {ratio_mid:.3f}")
+        print(f"  Vhigh (CV5):  {ratio_high:.3f}")
     else:
-        print("⚠️  CV incomplete, impossibile calcolare rapporti")
+        print("⚠️  CV speed incomplete, impossibile calcolare rapporti")
 
 
 def main():

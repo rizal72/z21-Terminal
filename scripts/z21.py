@@ -441,25 +441,23 @@ class Z21:
             print("✅ Comando funzione inviato")
         return True
 
-    def read_cv_on_main(self, address: int, cv_number: int, timeout: float = 5.0, retries: int = 3) -> Optional[int]:
+    def read_cv_on_main(self, address: int, cv_number: int, timeout: float = 2.0, retries: int = 3) -> Optional[int]:
         """
-        Legge un CV in POM (Program On Main / operations mode) usando Ops Byte Read.
+        Legge un CV in POM (Program On Main / operations mode) usando Ops Byte Verify.
 
-        ⚠️  IMPORTANTE: Testato su Z21 White - NON FUNZIONANTE
-        La Z21 White risponde sempre con errore 0x82 "No loco on track" anche se
-        la locomotiva è sul binario e risponde ad altri comandi.
-
-        Per lettura CV affidabile: usa PROGRAMMING TRACK.
+        ⚠️  NOTA: Successo ~50% su decoder ESU (instabile)
+        Consigliato: retry multipli (default 3)
 
         NOTA decoder:
         - ❌ Hornby TXS (loco 7): Non supporta POM Read
-        - ⚠️  ESU, Lenz, Zimo: Supportano POM Read ma Z21 White non lo implementa
+        - ⚠️  ESU LokPilot/LokSound: Supportano ma instabile (~50% successo)
+        - ✅ Comando XpressNet: E6 30 [addr] [E4] [cv_lsb] [xor]
 
         Args:
             address: DCC address della locomotiva
             cv_number: Numero CV da leggere (1-1024)
-            timeout: Timeout in secondi per ogni tentativo (default 5s)
-            retries: Numero di tentativi (default 3)
+            timeout: Timeout in secondi per attesa risposta (default 2s)
+            retries: Numero di tentativi con pausa 2s tra ognuno (default 3)
 
         Returns:
             Valore CV (0-255) o None se errore/timeout
@@ -476,15 +474,18 @@ class Z21:
         # CV number nel protocollo parte da 0 (CV1 = 0)
         cv_address = cv_number - 1
 
-        # Prepara comando XpressNet POM Read: 0xE6 0x30 [MSB addr] [LSB addr] [CV_MSB] [CV_LSB] [XOR]
+        # Prepara comando XpressNet POM Verify: 0xE6 0x30 [MSB addr] [LSB addr] [CV_MSB] [CV_LSB] [value] [XOR]
         # 0xE6 = POM operations
-        # 0x30 = Ops Byte Read
+        # 0x30 = Ops Byte Verify (con valore "guess" - JMRI usa 0x00)
         msb = (address >> 8) & 0x3F
         lsb = address & 0xFF
-        cv_msb = (cv_address >> 8) & 0x03  # Solo 2 bit per CV > 255
+        # CV_MSB formato XpressNet POM Verify: 0xE4 | bit[9:8] del CV
+        # 0xE4 = 1110 0100 = [1110:prefix] [01:byte verify mode] [00:CV bit 9-8]
+        cv_msb = 0xE4 | ((cv_address >> 8) & 0x03)  # E4 per CV<256, E5 per CV<512, etc.
         cv_lsb = cv_address & 0xFF
+        value_guess = 0x00  # Valore "guess" (JMRI usa 0, risposta contiene valore reale)
 
-        xpressnet_data = bytes([0xE6, 0x30, msb, lsb, cv_msb, cv_lsb])
+        xpressnet_data = bytes([0xE6, 0x30, msb, lsb, cv_msb, cv_lsb, value_guess])
         xor = 0
         for b in xpressnet_data:
             xor ^= b
@@ -496,7 +497,7 @@ class Z21:
             if attempt > 0:
                 if self.verbose:
                     print(f"   Retry {attempt}/{retries-1}...")
-                time.sleep(1.0)  # Pausa tra i tentativi
+                time.sleep(2.0)  # Pausa 2s tra i tentativi (decoder ESU instabile)
 
             if self.verbose:
                 print(f"   Packet: {data.hex()}")
@@ -504,10 +505,10 @@ class Z21:
             # Invia comando
             self._send_packet(0x0040, data)  # X-Bus tunnel
 
-            # Attendi risposta: 0xE6 0x10 [MSB] [LSB] [CV_MSB] [CV_LSB] [value] [XOR]
-            # oppure: 0x61 0x82 per errore "no loco on track"
+            # Attendi risposta: 0x64 0x14 [addr_msb] [addr_lsb] [value] [XOR]
+            # oppure: 0x61 per errori
             start_time = time.time()
-            got_error_082 = False
+            got_error = False
 
             while time.time() - start_time < timeout:
                 response = self._receive_packet(timeout=0.5)
@@ -516,34 +517,24 @@ class Z21:
 
                     # Risposta è X-Bus tunnel (0x0040)
                     if header == 0x0040 and len(payload) >= 2:
-                        # Controllo errori XpressNet
-                        if payload[0] == 0x61 and payload[1] == 0x02:
+                        # Controllo errori XpressNet (0x61)
+                        if payload[0] == 0x61:
                             if self.verbose:
-                                print(f"❌ Decoder non ha riconosciuto il comando (not acknowledged)")
-                            return None
-                        if payload[0] == 0x61 and payload[1] == 0x82:
-                            if self.verbose:
-                                print(f"   ⚠️  Error 0x82 (No loco on track)")
-                            got_error_082 = True
+                                print(f"   ⚠️  Error 0x{payload[1]:02x}")
+                            got_error = True
                             break  # Esci dal while, riprova nel for
 
-                        # Risposta valida: 0xE6 0x10
-                        if len(payload) >= 7 and payload[0] == 0xE6 and payload[1] == 0x10:
-                            # Verifica address e CV number
-                            resp_addr = ((payload[2] & 0x3F) << 8) | payload[3]
-                            resp_cv = ((payload[4] & 0x03) << 8) | payload[5]
-                            value = payload[6]
+                        # Risposta ACK verify: 0x64 0x14 [addr_msb] [addr_lsb] [value] [xor]
+                        if len(payload) >= 6 and payload[0] == 0x64 and payload[1] == 0x14:
+                            # Il valore è nel byte 5 (indice 4)
+                            value = payload[4]
 
-                            if resp_addr == address and resp_cv == cv_address:
-                                if self.verbose:
-                                    print(f"✅ CV{cv_number} = {value}")
-                                return value
-                            else:
-                                if self.verbose:
-                                    print(f"⚠️  Risposta per diverso address/CV: addr={resp_addr} cv={resp_cv+1}")
+                            if self.verbose:
+                                print(f"✅ CV{cv_number} = {value}")
+                            return value
 
-            # Se abbiamo ricevuto errore 0x82, riprova
-            if got_error_082:
+            # Se abbiamo ricevuto errore, riprova
+            if got_error:
                 continue
 
         if self.verbose:
@@ -553,6 +544,96 @@ class Z21:
             print("   - Locomotiva non sul binario o spenta")
             print("   - Binari senza corrente (power off)")
         return None
+
+    def write_cv_ops_mode(self, address: int, cv_number: int, value: int, timeout: float = 3.0) -> bool:
+        """
+        Scrive un CV in operations mode (POM - Program On Main).
+        La locomotiva può essere sul binario principale, anche in movimento.
+
+        Comando XpressNet: E6 30 [addr_msb] [addr_lsb] [cv_msb] [cv_lsb] [value] [xor]
+
+        Args:
+            address: DCC address della locomotiva
+            cv_number: Numero CV da scrivere (1-1024)
+            value: Valore da scrivere (0-255)
+            timeout: Timeout in secondi (default 3s)
+
+        Returns:
+            True se scrittura confermata, False se errore/timeout
+        """
+        if not (0 <= value <= 255):
+            if self.verbose:
+                print(f"❌ Valore CV fuori range: {value} (deve essere 0-255)")
+            return False
+
+        if self.verbose:
+            print(f"\n✍️  Scrittura CV{cv_number} = {value} su address {address} (POM - Ops Mode Write)...")
+
+        # Prima "sveglia" la locomotiva
+        if self.verbose:
+            print("   Sveglia locomotiva...")
+        self.get_loco_info(address)
+        time.sleep(0.3)
+
+        # CV number nel protocollo parte da 0 (CV1 = 0)
+        cv_address = cv_number - 1
+
+        # Prepara comando XpressNet POM Write: 0xE6 0x30 [MSB addr] [LSB addr] [CV_MSB] [CV_LSB] [value] [XOR]
+        # 0xE6 = POM (Program On Main) operations
+        # 0x30 = Ops Byte Write
+        msb = (address >> 8) & 0x3F
+        lsb = address & 0xFF
+        # CV_MSB formato XpressNet POM: 0xEC | bit[9:8] del CV
+        # 0xEC = 1110 1100 = [1110:prefix] [11:byte write mode] [00:CV bit 9-8]
+        cv_msb = 0xEC | ((cv_address >> 8) & 0x03)  # EC per CV<256, ED per CV<512, etc.
+        cv_lsb = cv_address & 0xFF
+
+        xpressnet_data = bytes([0xE6, 0x30, msb, lsb, cv_msb, cv_lsb, value])
+        xor = 0
+        for b in xpressnet_data:
+            xor ^= b
+
+        data = xpressnet_data + bytes([xor])
+
+        if self.verbose:
+            print(f"   Packet: {data.hex()}")
+
+        # Invia comando
+        self._send_packet(0x0040, data)  # X-Bus tunnel
+
+        # WRITE (E6 30): Z21 NON invia ACK, solo errori!
+        # Aspetta solo eventuali errori per 500ms
+        start_time = time.time()
+        error_timeout = 0.5
+
+        while time.time() - start_time < error_timeout:
+            response = self._receive_packet(timeout=0.2)
+            if response:
+                header, payload = response
+
+                # Risposta è X-Bus tunnel (0x0040)
+                if header == 0x0040 and len(payload) >= 2:
+                    if self.verbose:
+                        print(f"   Risposta: {payload.hex()}")
+
+                    # Controllo errori XpressNet (0x61)
+                    if payload[0] == 0x61:
+                        error_code = payload[1]
+                        error_msgs = {
+                            0x01: "Command rejected (busy)",
+                            0x02: "Instruction not supported",
+                            0x82: "No loco on track"
+                        }
+                        error_msg = error_msgs.get(error_code, f"Unknown error 0x{error_code:02x}")
+                        if self.verbose:
+                            print(f"❌ Error: {error_msg}")
+                        return False
+
+        # Nessun errore = successo!
+        if self.verbose:
+            print(f"✅ CV{cv_number} scritto = {value}")
+            print("   (Z21 non invia ACK per write, solo errori)")
+        return True
 
     def close(self):
         """Chiude la connessione."""
