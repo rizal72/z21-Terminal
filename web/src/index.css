@@ -120,18 +120,19 @@
   }
 
   .function-btn.active {
-    @apply bg-signal-green border-signal-green text-control-black;
+    @apply bg-control-black border-signal-green text-white;
     @apply shadow-lg;
     box-shadow: 0 0 20px rgba(6, 214, 160, 0.5),
                 0 4px 15px rgba(0, 0, 0, 0.3);
   }
 
   .function-btn.inactive {
-    @apply bg-control-grey border-signal-red/30 text-signal-red/70;
+    @apply bg-control-grey border-signal-red/30 text-white;
   }
 
   .function-btn.momentary {
-    @apply bg-signal-amber/20 border-signal-amber/50;
+    @apply bg-control-grey border-signal-red/30 text-white;
+    /* Same style as inactive - only dot color differs */
   }
 
   /* Emergency stop button */
@@ -177,8 +178,12 @@
     box-shadow: 0 0 15px rgba(6, 214, 160, 0.8);
   }
 
-  .status-indicator.off {
+  .status-indicator.off.toggle {
     @apply bg-signal-red/30;
+  }
+
+  .status-indicator.off.temporary {
+    @apply bg-signal-amber/70;
   }
 }
 
