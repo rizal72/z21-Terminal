@@ -157,9 +157,50 @@ export default function ConsistController({
   if (!item) {
     return (
       <div className="control-panel grain-overlay">
+        {/* Dropdown always visible even without selection */}
+        <div className="mb-6 pb-4 border-b border-control-grey">
+          <div className="mb-3">
+            <label className="text-xs font-mono text-track-steel uppercase tracking-wider mb-2 block">
+              Select {controllerNumber === 1 ? 'Left' : 'Right'} Controller
+            </label>
+            <div className="flex items-center gap-2 overflow-hidden">
+              <div className="relative flex-1 min-w-0">
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const [type, address] = e.target.value.split('-');
+                      onSelectionChange({ type, address: parseInt(address) });
+                    }
+                  }}
+                  className="w-full max-w-full bg-control-dark border border-control-grey rounded px-3 py-2 pr-8 text-white font-mono text-sm focus:border-signal-amber focus:outline-none overflow-hidden text-ellipsis appearance-none"
+                  style={{
+                    width: '100%',
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'none'
+                  }}
+                >
+                  <option value="">-- Select Locomotive or Consist --</option>
+                  {rosterOptions.map((option) => (
+                    <option key={`${option.type}-${option.address}`} value={`${option.type}-${option.address}`}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {/* Custom dropdown arrow */}
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-track-steel">
+                  <i className="fa-solid fa-chevron-down text-xs"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* No selection message */}
         <div className="text-center text-track-steel py-12">
           <i className="fa-solid fa-gear text-5xl mb-4 opacity-50"></i>
           <div className="font-mono">No item selected</div>
+          <div className="text-xs mt-2 opacity-60">Use the dropdown above to select a locomotive</div>
         </div>
       </div>
     );
@@ -403,19 +444,19 @@ export default function ConsistController({
                   </div>
                   <div className={`absolute top-2 right-2 status-indicator ${
                     functions[fn.number] ? 'on' : 'off'
-                  }`}></div>
+                  } ${fn.lockable !== false ? 'toggle' : 'temporary'}`}></div>
                 </button>
               );
             })}
           </div>
           <div className="mt-4 text-xs text-track-steel font-mono flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-signal-green rounded-full"></div>
-              <span>Toggle</span>
+              <div className="w-3 h-3 bg-signal-red/30 rounded-full"></div>
+              <span>Toggle (stays ON)</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-signal-amber/50 rounded-full"></div>
-              <span>Momentary</span>
+              <div className="w-3 h-3 bg-signal-amber/70 rounded-full"></div>
+              <span>Temporary (auto-release)</span>
             </div>
           </div>
         </div>
