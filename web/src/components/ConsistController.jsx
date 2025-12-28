@@ -444,19 +444,19 @@ export default function ConsistController({
                   </div>
                   <div className={`absolute top-2 right-2 status-indicator ${
                     functions[fn.number] ? 'on' : 'off'
-                  } ${fn.lockable !== false ? 'toggle' : 'temporary'}`}></div>
+                  }`}></div>
                 </button>
               );
             })}
           </div>
           <div className="mt-4 text-xs text-track-steel font-mono flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-signal-red/30 rounded-full"></div>
-              <span>Toggle (stays ON)</span>
+              <div className="w-3 h-3 bg-signal-green rounded-full"></div>
+              <span>Toggle</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-signal-amber/70 rounded-full"></div>
-              <span>Temporary (auto-release)</span>
+              <div className="w-3 h-3 bg-signal-amber/50 rounded-full"></div>
+              <span>Momentary</span>
             </div>
           </div>
         </div>
