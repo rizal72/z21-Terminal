@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ConsistController from './components/ConsistController';
 import { useWebSocket } from './hooks/useWebSocket';
 
@@ -48,9 +48,13 @@ function App() {
   const [reloadingRoster, setReloadingRoster] = useState(false);
   const [reloadSuccess, setReloadSuccess] = useState(false);
 
-  // Selected items for each controller (left and right)
-  const [selectedLeft, setSelectedLeft] = useState({ type: 'consist', address: 10 });
-  const [selectedRight, setSelectedRight] = useState({ type: 'consist', address: 11 });
+  // Dynamic controllers array (scalable UI with focus management)
+  const [controllers, setControllers] = useState([
+    { id: 1, type: 'consist', address: 10 },
+    { id: 2, type: 'consist', address: 11 },
+  ]);
+  const [activeControllerId, setActiveControllerId] = useState(1); // Focus-based control
+  const lastControllerRef = useRef(null); // Ref for auto-scroll to new controller
 
   // Auto-detect WebSocket URL based on current hostname
   const getWebSocketUrl = () => {
@@ -116,7 +120,8 @@ function App() {
         // Load initial state from backend
         const backendConsists = lastMessage.consists;
         const backendLocomotives = lastMessage.locomotives;
-        console.log('Initial state received:', { consists: backendConsists, locomotives: backendLocomotives });
+        const backendControllers = lastMessage.controllers;
+        console.log('Initial state received:', { consists: backendConsists, locomotives: backendLocomotives, controllers: backendControllers });
 
         if (backendConsists) {
           // Initialize functionStates from backend (uses actual Z21 state)
@@ -162,10 +167,26 @@ function App() {
         if (typeof lastMessage.trackPower !== 'undefined') {
           setTrackPower(lastMessage.trackPower);
         }
+
+        // Load controllers configuration from backend
+        if (backendControllers) {
+          console.log('Loading controllers from backend:', backendControllers);
+          setControllers(backendControllers);
+          // Set active controller to first one if any
+          if (backendControllers.length > 0) {
+            setActiveControllerId(backendControllers[0].id);
+          }
+        }
+      } else if (lastMessage.type === 'controllers_update') {
+        // Sync controllers from another device
+        console.log('Controllers update received:', lastMessage.controllers);
+        setControllers(lastMessage.controllers);
       } else if (lastMessage.type === 'z21_status') {
         // Z21 connection status update
         setZ21Online(lastMessage.online);
       } else if (lastMessage.type === 'consist_update') {
+        console.log('consist_update received for address:', lastMessage.address, lastMessage.data);
+
         // Update global track power state if changed
         if (typeof lastMessage.data.power !== 'undefined') {
           setTrackPower(prev => {
@@ -178,13 +199,16 @@ function App() {
           });
         }
 
+        // Try to update consists first
         setConsists(prev => {
           const currentConsist = prev[lastMessage.address];
           if (!currentConsist) {
-            console.warn('Consist not found:', lastMessage.address);
+            console.log('Not a consist, checking locomotives...');
+            // Not a consist, will try locomotives next
             return prev;
           }
 
+          console.log('Updating consist:', lastMessage.address);
           return {
             ...prev,
             [lastMessage.address]: {
@@ -194,6 +218,29 @@ function App() {
               power: lastMessage.data.power ?? currentConsist.power,
               // Update function states from backend
               functionStates: lastMessage.data.functions || currentConsist.functionStates || {}
+            }
+          };
+        });
+
+        // Also try to update locomotives (if address is a locomotive)
+        setLocomotives(prev => {
+          const currentLoco = prev[lastMessage.address];
+          if (!currentLoco) {
+            console.log('Address', lastMessage.address, 'not found in locomotives either');
+            // Not a locomotive either (it was a consist handled above)
+            return prev;
+          }
+
+          console.log('Updating locomotive:', lastMessage.address, 'with functionStates:', lastMessage.data.functions);
+          return {
+            ...prev,
+            [lastMessage.address]: {
+              ...currentLoco,
+              speed: lastMessage.data.speed ?? currentLoco.speed,
+              direction: lastMessage.data.direction ?? currentLoco.direction,
+              power: lastMessage.data.power ?? currentLoco.power,
+              // Update function states from backend
+              functionStates: lastMessage.data.functions || currentLoco.functionStates || {}
             }
           };
         });
@@ -272,6 +319,26 @@ function App() {
       }, 100); // 100ms delay for Z21 to power up
     }
   };
+
+  // Force repaint when page becomes visible (macOS full screen app switching)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Page just became visible (e.g., switching back from another full screen app)
+        // Force a full repaint to prevent lazy rendering glitches
+        requestAnimationFrame(() => {
+          document.body.offsetHeight; // Force reflow
+          // Double RAF for Chrome to ensure GPU layers are reconstructed
+          requestAnimationFrame(() => {
+            document.body.offsetHeight;
+          });
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   // Global keyboard shortcut for Emergency Stop (ESC key)
   useEffect(() => {
@@ -382,6 +449,93 @@ function App() {
     return options;
   };
 
+  // Controller management functions
+  const addController = () => {
+    const newId = Math.max(...controllers.map(c => c.id)) + 1;
+    const newController = {
+      id: newId,
+      type: null,  // No selection initially
+      address: null
+    };
+
+    // Update local state immediately (optimistic update)
+    setControllers([...controllers, newController]);
+    setActiveControllerId(newId); // Focus on new controller
+
+    // Broadcast to other devices via WebSocket
+    sendMessage({
+      type: 'add_controller',
+      controller: newController
+    });
+
+    // Force repaint to cleanup GPU layers (prevents accumulation)
+    requestAnimationFrame(() => {
+      document.body.offsetHeight; // Force reflow
+    });
+
+    // Auto-scroll to new controller after DOM update
+    setTimeout(() => {
+      if (lastControllerRef.current) {
+        lastControllerRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest'
+        });
+      }
+    }, 100);
+  };
+
+  const removeController = (id) => {
+    if (controllers.length === 1) {
+      // Don't allow removing the last controller
+      return;
+    }
+
+    // Update local state immediately (optimistic update)
+    setControllers(controllers.filter(c => c.id !== id));
+
+    // If removing active controller, switch focus to first remaining
+    if (activeControllerId === id) {
+      const remaining = controllers.filter(c => c.id !== id);
+      if (remaining.length > 0) {
+        setActiveControllerId(remaining[0].id);
+      }
+    }
+
+    // Broadcast to other devices via WebSocket
+    sendMessage({
+      type: 'remove_controller',
+      id
+    });
+
+    // Force repaint to cleanup GPU layers and prevent hover lag accumulation
+    // This prevents the browser from keeping "ghost" layers from removed panels
+    requestAnimationFrame(() => {
+      document.body.offsetHeight; // Force reflow
+    });
+  };
+
+  const updateControllerSelection = (id, type, address) => {
+    console.log('updateControllerSelection called:', { id, type, address });
+
+    // Update local state immediately (optimistic update)
+    setControllers(controllers.map(c =>
+      c.id === id ? { ...c, type, address } : c
+    ));
+
+    // Broadcast to other devices via WebSocket
+    console.log('Sending update_controller_selection message:', { id, selection: { type, address } });
+    sendMessage({
+      type: 'update_controller_selection',
+      id,
+      selection: { type, address }
+    });
+  };
+
+  const getControllerSelection = (id) => {
+    const controller = controllers.find(c => c.id === id);
+    return controller ? { type: controller.type, address: controller.address } : null;
+  };
+
   return (
     <div className="min-h-screen bg-control-black grain-overlay">
       {/* Header */}
@@ -431,6 +585,16 @@ function App() {
             {/* Spacer */}
             <div className="flex-grow"></div>
 
+            {/* Add Controller Button - compact on mobile */}
+            <button
+              onClick={addController}
+              disabled={!isConnected}
+              className="px-2 py-2 md:px-3 bg-control-dark border border-control-grey rounded hover:border-signal-amber hover:text-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Add controller panel"
+            >
+              <i className="fa-solid fa-plus text-base md:text-lg"></i>
+            </button>
+
             {/* Right: Emergency + Status Icons */}
             <div className="flex items-center gap-2 md:gap-3">
               {/* Global Emergency Stop */}
@@ -446,7 +610,7 @@ function App() {
                       : 'Restore track power - Press ESC'
                 }
               >
-                <div className="flex items-center gap-1.5 md:gap-3 px-4 md:px-6 py-2 md:py-3">
+                <div className="flex items-center gap-1.5 md:gap-3 px-2 md:px-6 py-2 md:py-3">
                   {trackPower ? (
                     <i className="fa-solid fa-triangle-exclamation text-lg md:text-2xl"></i>
                   ) : (
@@ -525,35 +689,38 @@ function App() {
           </div>
         )}
 
-        {/* Controllers grid */}
-        <div className="controllers-grid grid lg:grid-cols-2 gap-0 lg:gap-6 mb-8">
-          <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-            <ConsistController
-              item={getSelectedItem(selectedLeft)}
-              selection={selectedLeft}
-              rosterOptions={getRosterOptions()}
-              trackPower={trackPower}
-              controllerNumber={1}
-              onSelectionChange={setSelectedLeft}
-              onSpeedChange={handleSpeedChange}
-              onDirectionChange={handleDirectionChange}
-              onFunctionToggle={handleFunctionToggle}
-            />
-          </div>
+        {/* Controllers grid - Dynamic and scalable */}
+        <div className="controllers-grid grid grid-cols-1 lg:grid-cols-2 gap-0 lg:gap-6 mb-8">
+          {controllers.map((controller, index) => {
+            const selection = getControllerSelection(controller.id);
+            const isActive = activeControllerId === controller.id;
+            const isLast = index === controllers.length - 1;
 
-          <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
-            <ConsistController
-              item={getSelectedItem(selectedRight)}
-              selection={selectedRight}
-              rosterOptions={getRosterOptions()}
-              trackPower={trackPower}
-              controllerNumber={2}
-              onSelectionChange={setSelectedRight}
-              onSpeedChange={handleSpeedChange}
-              onDirectionChange={handleDirectionChange}
-              onFunctionToggle={handleFunctionToggle}
-            />
-          </div>
+            return (
+              <div
+                key={controller.id}
+                ref={isLast ? lastControllerRef : null}
+                className="animate-fade-in"
+                style={{ animationDelay: `${index * 0.1}s` }}
+              >
+                <ConsistController
+                  item={selection ? getSelectedItem(selection) : null}
+                  selection={selection || { type: null, address: null }}
+                  rosterOptions={getRosterOptions()}
+                  trackPower={trackPower}
+                  controllerNumber={index + 1}
+                  isActive={isActive}
+                  canRemove={controllers.length > 1}
+                  onSelectionChange={(newSelection) => updateControllerSelection(controller.id, newSelection.type, newSelection.address)}
+                  onRemove={() => removeController(controller.id)}
+                  onFocus={() => setActiveControllerId(controller.id)}
+                  onSpeedChange={handleSpeedChange}
+                  onDirectionChange={handleDirectionChange}
+                  onFunctionToggle={handleFunctionToggle}
+                />
+              </div>
+            );
+          })}
         </div>
 
         {/* Info footer */}

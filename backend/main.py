@@ -16,6 +16,7 @@ z21_manager: Z21Manager = None
 connected_clients: List[WebSocket] = []
 consist_data: Dict[int, Dict[str, Any]] = {}
 locomotive_data: Dict[int, Dict[str, Any]] = {}
+controllers_config: List[Dict[str, Any]] = []  # Shared controller configuration
 
 
 polling_task = None
@@ -125,10 +126,30 @@ async def broadcast_z21_status():
             connected_clients.remove(client)
 
 
+async def broadcast_controllers_update():
+    """Broadcast controllers configuration to all connected clients"""
+    message = {
+        'type': 'controllers_update',
+        'controllers': controllers_config
+    }
+
+    disconnected_clients = []
+    for client in connected_clients:
+        try:
+            await client.send_json(message)
+        except Exception as e:
+            disconnected_clients.append(client)
+
+    # Remove disconnected clients
+    for client in disconnected_clients:
+        if client in connected_clients:
+            connected_clients.remove(client)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    global z21_manager, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online
+    global z21_manager, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config
 
     print("🚂 z21-Terminal Backend Starting...")
 
@@ -158,6 +179,22 @@ async def lifespan(app: FastAPI):
         for addr, data in locomotive_data.items():
             in_consist = f" (in consist {data['in_consist']})" if data['in_consist'] else ""
             print(f"    Loco {addr}: {data['name']}{in_consist}")
+
+    # Initialize default controllers configuration
+    # Try to pre-select consist 10 and 11 if they exist, otherwise leave empty
+    print("🎮 Initializing default controllers...")
+    controller1 = {'id': 1, 'type': 'consist', 'address': 10} if 10 in consist_data else {'id': 1, 'type': None, 'address': None}
+    controller2 = {'id': 2, 'type': 'consist', 'address': 11} if 11 in consist_data else {'id': 2, 'type': None, 'address': None}
+    controllers_config = [controller1, controller2]
+
+    if controller1['type'] and controller2['type']:
+        print(f"  ✓ Initialized 2 controllers (consist {controller1['address']} + consist {controller2['address']})")
+    elif controller1['type']:
+        print(f"  ✓ Initialized 2 controllers (consist {controller1['address']} + empty)")
+    elif controller2['type']:
+        print(f"  ✓ Initialized 2 controllers (empty + consist {controller2['address']})")
+    else:
+        print("  ✓ Initialized 2 empty controllers")
 
     # Initialize Z21 Manager
     print("🔌 Connecting to Z21...")
@@ -241,14 +278,19 @@ app.add_middleware(
 
 
 async def broadcast_state_update(address: int):
-    """Broadcast consist state update to all connected clients"""
-    if not consist_data.get(address):
+    """Broadcast consist/locomotive state update to all connected clients"""
+    # Check if address exists in either consists or locomotives
+    is_consist = address in consist_data
+    is_locomotive = address in locomotive_data
+
+    if not (is_consist or is_locomotive):
+        print(f"⚠️ Address {address} not found in consists or locomotives")
         return
 
     state = z21_manager.get_consist_state(address)
 
     message = {
-        'type': 'consist_update',
+        'type': 'consist_update',  # Same type for both (backwards compatible)
         'address': address,
         'data': {
             'speed': state.get('speed', 0),
@@ -316,6 +358,7 @@ async def broadcast_initial_state():
         'type': 'initial_state',
         'consists': consists_state,
         'locomotives': locomotives_state,
+        'controllers': controllers_config,
         'trackPower': last_track_power_state,
         'z21Online': z21_online
     }
@@ -498,6 +541,7 @@ async def websocket_endpoint(websocket: WebSocket):
             'type': 'initial_state',
             'consists': roster_data['consists'],
             'locomotives': roster_data['locomotives'],
+            'controllers': controllers_config,
             'trackPower': last_track_power_state,
             'z21Online': z21_online
         })
@@ -561,6 +605,46 @@ async def websocket_endpoint(websocket: WebSocket):
                     if z21_manager and address in consist_data:
                         z21_manager.sync_consist_state(address)
                         await broadcast_state_update(address)
+
+                elif message_type == 'add_controller':
+                    # Add new controller to shared configuration
+                    new_controller = data.get('controller')
+                    if new_controller:
+                        controllers_config.append(new_controller)
+                        print(f"➕ Controller added: {new_controller}")
+                        await broadcast_controllers_update()
+
+                elif message_type == 'remove_controller':
+                    # Remove controller from shared configuration
+                    controller_id = data.get('id')
+                    if controller_id:
+                        # Don't allow removing last controller
+                        if len(controllers_config) > 1:
+                            controllers_config[:] = [c for c in controllers_config if c['id'] != controller_id]
+                            print(f"➖ Controller removed: {controller_id}")
+                            await broadcast_controllers_update()
+
+                elif message_type == 'update_controller_selection':
+                    # Update controller selection
+                    controller_id = data.get('id')
+                    selection = data.get('selection')
+                    if controller_id and selection:
+                        for controller in controllers_config:
+                            if controller['id'] == controller_id:
+                                controller['type'] = selection.get('type')
+                                controller['address'] = selection.get('address')
+                                print(f"🔄 Controller {controller_id} updated: {selection}")
+                                await broadcast_controllers_update()
+
+                                # Small delay to ensure controllers_update is processed first
+                                await asyncio.sleep(0.05)  # 50ms delay
+
+                                # Also broadcast current state of the selected consist/loco
+                                # so the new panel gets updated functionStates
+                                selected_address = selection.get('address')
+                                if selected_address and (selected_address in consist_data or selected_address in locomotive_data):
+                                    await broadcast_state_update(selected_address)
+                                break
 
             except json.JSONDecodeError:
                 print("Invalid JSON received")

@@ -148,10 +148,9 @@ python3 read_consists.py 10             # Consist 10 details
 - [x] View configured consists
 
 ### TODO ⏳
-- [ ] Direct CV reading from locomotives (via Z21 programming track)
-- [ ] CV writing via Z21 (for decoder configuration)
-- [ ] Progressive Web App (installable on iPad)
-- [ ] Custom automation scenarios
+- [ ] Scalable UI (dynamic controller panels with + button)
+- [ ] Computer Vision locomotive tracking (OpenCV + webcam)
+- [ ] Auto consist calibration (operations mode CV write)
 
 ## Notes
 

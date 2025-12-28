@@ -6,7 +6,11 @@ export default function ConsistController({
   rosterOptions,
   trackPower,
   controllerNumber,
+  isActive = false,
+  canRemove = false,
   onSelectionChange,
+  onRemove,
+  onFocus,
   onSpeedChange,
   onDirectionChange,
   onFunctionToggle
@@ -197,12 +201,31 @@ export default function ConsistController({
 
   if (!item) {
     return (
-      <div className="control-panel grain-overlay">
+      <div
+        className={`control-panel grain-overlay relative cursor-pointer ${
+          isActive ? 'ring-2 ring-signal-amber' : ''
+        }`}
+        onClick={onFocus}
+      >
+        {/* Close button */}
+        {canRemove && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            className="absolute top-3 right-3 z-20 w-8 h-8 flex items-center justify-center bg-control-dark border border-control-grey rounded hover:border-signal-red hover:text-signal-red transition-all duration-200"
+            title="Remove this controller"
+          >
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
+        )}
+
         {/* Dropdown always visible even without selection */}
         <div className="mb-6 pb-4 border-b border-control-grey">
           <div className="mb-3">
             <label className="text-xs font-mono text-track-steel uppercase tracking-wider mb-2 block">
-              Select {controllerNumber === 1 ? 'Left' : 'Right'} Controller
+              Controller #{controllerNumber}
             </label>
             <div className="flex items-center gap-2 overflow-hidden">
               <div className="relative flex-1 min-w-0">
@@ -257,12 +280,31 @@ export default function ConsistController({
   const trackLabel = item.trackName || `${selection.type === 'consist' ? 'Consist' : 'Loco'} ${selection.address}`;
 
   return (
-    <div className="control-panel grain-overlay relative z-10">
+    <div
+      className={`control-panel grain-overlay relative z-10 cursor-pointer ${
+        isActive ? 'ring-2 ring-signal-amber' : ''
+      }`}
+      onClick={onFocus}
+    >
+      {/* Close button */}
+      {canRemove && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent panel click (focus change)
+            onRemove();
+          }}
+          className="absolute top-3 right-3 z-20 w-8 h-8 flex items-center justify-center bg-control-dark border border-control-grey rounded hover:border-signal-red hover:text-signal-red transition-all duration-200"
+          title="Remove this controller"
+        >
+          <i className="fa-solid fa-xmark text-lg"></i>
+        </button>
+      )}
+
       {/* Header with selection dropdown */}
       <div className="mb-6 pb-4 border-b border-control-grey">
         <div className="mb-3">
           <label className="text-xs font-mono text-track-steel uppercase tracking-wider mb-2 block">
-            Select {controllerNumber === 1 ? 'Left' : 'Right'} Controller
+            Controller #{controllerNumber}
           </label>
           <div className="flex items-center gap-2 overflow-hidden">
             <div className="relative flex-1 min-w-0">
