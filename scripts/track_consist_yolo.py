@@ -22,6 +22,16 @@ Controls:
     - S: Save current frame as snapshot
     - SPACE: Pause/Resume
 
+Marker Mode (for gate positioning):
+    - M: Toggle marker mode ON/OFF
+    - CLICK: Place gate rectangle at mouse position
+    - W/S: Increase/decrease height (+/- 10px)
+    - Z/X: Decrease/increase width (+/- 20px)
+    - R: Rotate counter-clockwise (15° steps)
+    - ENTER: Save current gate
+    - C: Clear (current gate if present, otherwise all saved gates)
+    - E: Export gates to console
+
 Requirements:
     - Trained YOLOv8 model (best.pt) with all 4 locomotive classes
     - Camera accessible at 192.168.1.4:554/stream2 (720P)
@@ -33,6 +43,7 @@ import numpy as np
 from pathlib import Path
 from collections import deque
 import argparse
+import time
 
 try:
     from ultralytics import YOLO
@@ -101,6 +112,213 @@ PERSPECTIVE_MATRIX = cv2.getPerspectiveTransform(
 # Scale: 6 px/cm on corrected frame
 PX_PER_CM = 6.0
 
+# Marker mode settings
+DEFAULT_GATE_WIDTH = 100
+DEFAULT_GATE_HEIGHT = 100
+DEFAULT_GATE_ANGLE = 0  # Degrees (starts horizontal)
+ROTATION_STEP = -15  # Degrees per R key press (counter-clockwise, negative for OpenCV coords)
+GATE_COLOR = (0, 255, 255)  # Yellow
+GATE_SAVED_COLOR = (0, 255, 0)  # Green
+
+# Gate timing detection (Phase 4 - hardcoded from marker mode 2025-12-30)
+# Consist 11: 2 shared gates - both locos cross both gates
+GATE_1 = {  # VICINO (bottom right, larger - near camera)
+    'center_x': 1227,
+    'center_y': 213,  # Moved up 80px from 293
+    'width': 100,
+    'height': 100,
+    'angle': 0
+}
+
+GATE_2 = {  # LONTANO (top left, smaller - far from camera)
+    'center_x': 141,
+    'center_y': 162,
+    'width': 60,
+    'height': 60,
+    'angle': 0
+}
+
+# Timing thresholds (seconds)
+TIMING_THRESHOLD_NORMAL = 0.5   # |Δt| < 0.5s = green (synced)
+TIMING_THRESHOLD_WARNING = 1.0  # |Δt| 0.5-1.0s = yellow (warning)
+# |Δt| > 1.0s = red (critical desync)
+
+
+class MarkerState:
+    """State management for gate marker mode."""
+
+    def __init__(self):
+        self.enabled = False
+        self.current_gate = None  # Current gate being positioned: {'x', 'y', 'width', 'height'}
+        self.saved_gates = []  # List of saved gates
+
+    def toggle(self):
+        """Toggle marker mode on/off."""
+        self.enabled = not self.enabled
+        if not self.enabled:
+            self.current_gate = None
+        return self.enabled
+
+    def place_gate(self, x, y):
+        """Place a new gate at position (x, y)."""
+        self.current_gate = {
+            'center_x': x,
+            'center_y': y,
+            'width': DEFAULT_GATE_WIDTH,
+            'height': DEFAULT_GATE_HEIGHT,
+            'angle': DEFAULT_GATE_ANGLE  # Rotation in degrees
+        }
+
+    def adjust_width(self, delta):
+        """Adjust current gate width (expands from center)."""
+        if self.current_gate:
+            new_width = max(50, self.current_gate['width'] + delta)
+            self.current_gate['width'] = new_width
+
+    def adjust_height(self, delta):
+        """Adjust current gate height (expands from center)."""
+        if self.current_gate:
+            new_height = max(30, self.current_gate['height'] + delta)
+            self.current_gate['height'] = new_height
+
+    def adjust_angle(self, delta):
+        """Adjust current gate rotation angle."""
+        if self.current_gate:
+            new_angle = (self.current_gate['angle'] + delta) % 360
+            self.current_gate['angle'] = new_angle
+
+    def save_current_gate(self):
+        """Save current gate to list."""
+        if self.current_gate:
+            self.saved_gates.append(self.current_gate.copy())
+            print(f"✅ Gate saved: {len(self.saved_gates)} total")
+            self.current_gate = None
+
+    def clear_current(self):
+        """Clear current gate only."""
+        if self.current_gate:
+            self.current_gate = None
+            print("🗑️  Current gate discarded")
+            return True
+        return False
+
+    def clear_all_saved(self):
+        """Clear all saved gates."""
+        if self.saved_gates:
+            self.saved_gates = []
+            print("🗑️  All saved gates cleared")
+            return True
+        return False
+
+    def export_gates(self):
+        """Export gates as Python code."""
+        if not self.saved_gates:
+            print("⚠️  No gates to export")
+            return
+
+        print("\n" + "="*60)
+        print("GATE ZONES (Copy-paste ready for Python code)")
+        print("="*60)
+
+        for i, gate in enumerate(self.saved_gates):
+            cx, cy = gate['center_x'], gate['center_y']
+            w, h = gate['width'], gate['height']
+            angle = gate['angle']
+
+            print(f"\n# Gate {i+1}")
+            print(f"gate_{i+1} = {{")
+            print(f"    'center_x': {cx},")
+            print(f"    'center_y': {cy},")
+            print(f"    'width': {w},")
+            print(f"    'height': {h},")
+            print(f"    'angle': {angle}  # degrees")
+            print(f"}}")
+
+            # Also show as rotated polygon coordinates
+            import math
+            angle_rad = math.radians(angle)
+            cos_a = math.cos(angle_rad)
+            sin_a = math.sin(angle_rad)
+            hw, hh = w / 2.0, h / 2.0
+
+            corners = [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]
+            print(f"# Or as rotated polygon:")
+            print(f"# gate_{i+1}_poly = np.float32([")
+            for x, y in corners:
+                x_rot = int(cx + x * cos_a - y * sin_a)
+                y_rot = int(cy + x * sin_a + y * cos_a)
+                print(f"#     [{x_rot}, {y_rot}],")
+            print(f"# ])")
+
+        print("\n" + "="*60)
+
+
+def get_rotated_rect_points(center_x, center_y, width, height, angle_deg):
+    """
+    Calculate 4 corner points of a rotated rectangle.
+
+    Args:
+        center_x, center_y: Center of rectangle
+        width, height: Dimensions
+        angle_deg: Rotation angle in degrees (negative = clockwise)
+
+    Returns:
+        np.array of 4 points (TL, TR, BR, BL)
+    """
+    import math
+    angle_rad = math.radians(angle_deg)
+    cos_a = math.cos(angle_rad)
+    sin_a = math.sin(angle_rad)
+
+    # Half dimensions
+    hw = width / 2.0
+    hh = height / 2.0
+
+    # 4 corners relative to center (before rotation)
+    corners = [
+        (-hw, -hh),  # Top-left
+        (hw, -hh),   # Top-right
+        (hw, hh),    # Bottom-right
+        (-hw, hh)    # Bottom-left
+    ]
+
+    # Rotate and translate to absolute position
+    rotated = []
+    for x, y in corners:
+        # Rotation matrix
+        x_rot = x * cos_a - y * sin_a
+        y_rot = x * sin_a + y * cos_a
+        # Translate to center
+        rotated.append((int(center_x + x_rot), int(center_y + y_rot)))
+
+    return np.array(rotated, dtype=np.int32)
+
+
+def is_point_in_gate(point, gate):
+    """
+    Check if a point (locomotive center) is inside a gate zone.
+
+    Args:
+        point: (x, y) tuple
+        gate: dict with 'center_x', 'center_y', 'width', 'height', 'angle'
+
+    Returns:
+        bool: True if point is inside gate
+    """
+    if point is None:
+        return False
+
+    # Get gate polygon points
+    gate_points = get_rotated_rect_points(
+        gate['center_x'], gate['center_y'],
+        gate['width'], gate['height'],
+        gate['angle']
+    )
+
+    # Use OpenCV pointPolygonTest (returns positive if inside)
+    result = cv2.pointPolygonTest(gate_points, point, False)
+    return result >= 0  # >= 0 means inside or on edge
+
 
 def transform_to_corrected(point):
     """
@@ -135,6 +353,33 @@ class YOLOTracker:
         self.c11_lead_pos = None
         self.c11_rear_pos = None
         self.c11_visible_together_count = 0
+
+        # Gate timing detection (Phase 4 - Consist 11 only for now)
+        # CRITICAL: Locomotives travel in OPPOSITE directions on oval track!
+        # When loco7 is at G1, loco8 is at G2 (and vice versa)
+        # So we calculate CROSS-GATE Δt, not same-gate
+
+        # Track last timestamp for each loco crossing each gate
+        self.c11_lead_gate1_timestamp = None
+        self.c11_lead_gate2_timestamp = None
+        self.c11_rear_gate1_timestamp = None
+        self.c11_rear_gate2_timestamp = None
+
+        # Track if loco is currently inside gate (for edge detection)
+        self.c11_lead_in_gate1 = False
+        self.c11_lead_in_gate2 = False
+        self.c11_rear_in_gate1 = False
+        self.c11_rear_in_gate2 = False
+
+        # Latest Δt value (cross-gate)
+        self.delta_t = None  # Δt = loco7_gate1 - loco8_gate2 OR loco7_gate2 - loco8_gate1
+        self.delta_t_type = None  # "L7G1-L8G2" or "L7G2-L8G1"
+
+        # Gate crossing statistics
+        self.gate_crossing_count = 0  # Total number of Δt calculations
+
+        # Last Δt calculation time (to avoid calculating with stale timestamps)
+        self.last_delta_t_time = 0  # Initialize to 0 (epoch start)
 
         print("✅ YOLO model loaded")
 
@@ -211,6 +456,82 @@ class YOLOTracker:
             self.c11_rear_pos = c11_rear_pos
             self.c11_visible_together_count += 1
 
+        # === GATE TIMING DETECTION (Phase 4 - Consist 11) ===
+        # CRITICAL: Locomotives travel in OPPOSITE directions!
+        # When Loco7 is at G1, Loco8 is at G2 (cross-gate timing)
+
+        # Gate 1 (VICINO) - Lead loco (E656_239)
+        in_gate1 = is_point_in_gate(c11_lead_pos, GATE_1)
+        if in_gate1 and not self.c11_lead_in_gate1:
+            # Rising edge: loco just entered gate
+            self.c11_lead_gate1_timestamp = time.time()
+            self.c11_lead_in_gate1 = True
+            # Calculate CROSS-GATE Δt: Loco7@G1 - Loco8@G2
+            # Only if BOTH timestamps are fresh (after last Δt calculation)
+            if (self.c11_rear_gate2_timestamp is not None and
+                self.c11_rear_gate2_timestamp > self.last_delta_t_time):
+                self.delta_t = self.c11_lead_gate1_timestamp - self.c11_rear_gate2_timestamp
+                self.delta_t_type = "L7G1-L8G2"
+                self.gate_crossing_count += 1
+                self.last_delta_t_time = time.time()
+                print(f"🚪 Cross-gate: Loco7@G1 - Loco8@G2 = Δt = {self.delta_t:+.3f}s")
+        elif not in_gate1:
+            self.c11_lead_in_gate1 = False
+
+        # Gate 1 (VICINO) - Rear loco (E444_056)
+        in_gate1 = is_point_in_gate(c11_rear_pos, GATE_1)
+        if in_gate1 and not self.c11_rear_in_gate1:
+            # Rising edge: loco just entered gate
+            self.c11_rear_gate1_timestamp = time.time()
+            self.c11_rear_in_gate1 = True
+            # Calculate CROSS-GATE Δt: Loco7@G2 - Loco8@G1
+            # Only if BOTH timestamps are fresh (after last Δt calculation)
+            if (self.c11_lead_gate2_timestamp is not None and
+                self.c11_lead_gate2_timestamp > self.last_delta_t_time):
+                self.delta_t = self.c11_lead_gate2_timestamp - self.c11_rear_gate1_timestamp
+                self.delta_t_type = "L7G2-L8G1"
+                self.gate_crossing_count += 1
+                self.last_delta_t_time = time.time()
+                print(f"🚪 Cross-gate: Loco7@G2 - Loco8@G1 = Δt = {self.delta_t:+.3f}s")
+        elif not in_gate1:
+            self.c11_rear_in_gate1 = False
+
+        # Gate 2 (LONTANO) - Lead loco (E656_239)
+        in_gate2 = is_point_in_gate(c11_lead_pos, GATE_2)
+        if in_gate2 and not self.c11_lead_in_gate2:
+            # Rising edge: loco just entered gate
+            self.c11_lead_gate2_timestamp = time.time()
+            self.c11_lead_in_gate2 = True
+            # Calculate CROSS-GATE Δt: Loco7@G2 - Loco8@G1
+            # Only if BOTH timestamps are fresh (after last Δt calculation)
+            if (self.c11_rear_gate1_timestamp is not None and
+                self.c11_rear_gate1_timestamp > self.last_delta_t_time):
+                self.delta_t = self.c11_lead_gate2_timestamp - self.c11_rear_gate1_timestamp
+                self.delta_t_type = "L7G2-L8G1"
+                self.gate_crossing_count += 1
+                self.last_delta_t_time = time.time()
+                print(f"🚪 Cross-gate: Loco7@G2 - Loco8@G1 = Δt = {self.delta_t:+.3f}s")
+        elif not in_gate2:
+            self.c11_lead_in_gate2 = False
+
+        # Gate 2 (LONTANO) - Rear loco (E444_056)
+        in_gate2 = is_point_in_gate(c11_rear_pos, GATE_2)
+        if in_gate2 and not self.c11_rear_in_gate2:
+            # Rising edge: loco just entered gate
+            self.c11_rear_gate2_timestamp = time.time()
+            self.c11_rear_in_gate2 = True
+            # Calculate CROSS-GATE Δt: Loco7@G1 - Loco8@G2
+            # Only if BOTH timestamps are fresh (after last Δt calculation)
+            if (self.c11_lead_gate1_timestamp is not None and
+                self.c11_lead_gate1_timestamp > self.last_delta_t_time):
+                self.delta_t = self.c11_lead_gate1_timestamp - self.c11_rear_gate2_timestamp
+                self.delta_t_type = "L7G1-L8G2"
+                self.gate_crossing_count += 1
+                self.last_delta_t_time = time.time()
+                print(f"🚪 Cross-gate: Loco7@G1 - Loco8@G2 = Δt = {self.delta_t:+.3f}s")
+        elif not in_gate2:
+            self.c11_rear_in_gate2 = False
+
         return {
             'c10': {'lead_pos': c10_lead_pos, 'rear_pos': c10_rear_pos,
                     'lead_conf': c10_lead_conf, 'rear_conf': c10_rear_conf},
@@ -227,7 +548,7 @@ class YOLOTracker:
         return count, percentage
 
 
-def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total_frames=0):
+def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total_frames=0, marker_state=None):
     """Draw tracking overlay on frame for BOTH consists."""
 
     c10 = track_data['c10']
@@ -251,10 +572,81 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
         cv2.circle(frame, c11['lead_pos'], 10, (0, 255, 0), -1)  # Green
 
     if c11['rear_pos']:
-        cv2.circle(frame, c11['rear_pos'], 10, (255, 0, 0), -1)  # Red
+        cv2.circle(frame, c11['rear_pos'], 10, (0, 0, 255), -1)  # Red (readable on black)
 
     if c11['lead_pos'] and c11['rear_pos']:
         cv2.line(frame, c11['lead_pos'], c11['rear_pos'], (255, 255, 0), 2)
+
+    # Draw gate markers (always visible, even if panels hidden)
+    if marker_state:
+        # Draw saved gates (green)
+        for gate in marker_state.saved_gates:
+            cx, cy = gate['center_x'], gate['center_y']
+            w, h = gate['width'], gate['height']
+            angle = gate['angle']
+
+            # Get rotated rectangle points
+            points = get_rotated_rect_points(cx, cy, w, h, angle)
+            cv2.polylines(frame, [points], True, GATE_SAVED_COLOR, 2)
+
+            # Draw center crosshair
+            cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_SAVED_COLOR, 1)
+            cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_SAVED_COLOR, 1)
+
+        # Draw current gate being positioned (yellow)
+        if marker_state.current_gate:
+            gate = marker_state.current_gate
+            cx, cy = gate['center_x'], gate['center_y']
+            w, h = gate['width'], gate['height']
+            angle = gate['angle']
+
+            # Get rotated rectangle points
+            points = get_rotated_rect_points(cx, cy, w, h, angle)
+            cv2.polylines(frame, [points], True, GATE_COLOR, 2)
+
+            # Draw center crosshair
+            cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_COLOR, 1)
+            cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_COLOR, 1)
+
+            # Show dimensions and angle
+            dim_text = f"{w}x{h}px @ {angle}deg"
+            cv2.putText(frame, dim_text, (cx - 60, cy - h//2 - 15),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, GATE_COLOR, 2)
+
+        # Show marker mode indicator
+        if marker_state.enabled:
+            overlay = frame.copy()
+            cv2.rectangle(overlay, (5, frame.shape[0] - 90), (380, frame.shape[0] - 5), (0, 0, 0), -1)
+            cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+            cv2.putText(frame, "MARKER MODE (M to exit)", (15, frame.shape[0] - 75),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+            cv2.putText(frame, "CLICK: place | W/S: height | Z/X: width", (15, frame.shape[0] - 53),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            cv2.putText(frame, "R: rotate 15deg | ENTER: save | C: clear", (15, frame.shape[0] - 33),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            cv2.putText(frame, "E: export gates to console", (15, frame.shape[0] - 13),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+
+    # Draw timing gates (always visible - cyan/blue color for distinction)
+    # Gate 1 (VICINO - bottom right)
+    gate1_points = get_rotated_rect_points(
+        GATE_1['center_x'], GATE_1['center_y'],
+        GATE_1['width'], GATE_1['height'],
+        GATE_1['angle']
+    )
+    cv2.polylines(frame, [gate1_points], True, (255, 255, 0), 2)  # Cyan
+    cv2.putText(frame, "G1", (GATE_1['center_x'] - 10, GATE_1['center_y'] + 5),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+
+    # Gate 2 (LONTANO - top left)
+    gate2_points = get_rotated_rect_points(
+        GATE_2['center_x'], GATE_2['center_y'],
+        GATE_2['width'], GATE_2['height'],
+        GATE_2['angle']
+    )
+    cv2.polylines(frame, [gate2_points], True, (255, 128, 0), 2)  # Orange/cyan
+    cv2.putText(frame, "G2", (GATE_2['center_x'] - 10, GATE_2['center_y'] + 5),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 128, 0), 2)
 
     # Early return if panels hidden (P key pressed) - calculation continues in background
     if not show_panels:
@@ -278,13 +670,13 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
 
     # Consist 10 stats
     c10_count, c10_pct = tracker.get_visibility_stats('c10', total_frames)
-    c10_status = "✓" if (c10['lead_pos'] and c10['rear_pos']) else "✗"
+    c10_status = "YES" if (c10['lead_pos'] and c10['rear_pos']) else "NO"
     cv2.putText(frame, f"C10: {c10_status}  {c10_count} frames ({c10_pct:.1f}%)", (20, 85),
                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 200, 0), 1)
 
     # Consist 11 stats
     c11_count, c11_pct = tracker.get_visibility_stats('c11', total_frames)
-    c11_status = "✓" if (c11['lead_pos'] and c11['rear_pos']) else "✗"
+    c11_status = "YES" if (c11['lead_pos'] and c11['rear_pos']) else "NO"
     cv2.putText(frame, f"C11: {c11_status}  {c11_count} frames ({c11_pct:.1f}%)", (280, 85),
                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
 
@@ -312,21 +704,73 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
             conf = all_detections[class_id][1]
             reliable = conf >= CONFIDENCE_THRESHOLD
             if reliable:
-                indicator = "✓"
+                indicator = "+"
                 color = (0, 255, 0)  # Green
                 status_text = f"{indicator} {class_name} ({conf:.2f})"
             else:
-                indicator = "✓"
+                indicator = "+"
                 color = (0, 255, 255)  # Yellow
                 status_text = f"{indicator} {class_name} ({conf:.2f}) LOW"
         else:
-            indicator = "✗"
+            indicator = "X"
             color = (0, 0, 255)  # Red
             status_text = f"{indicator} {class_name}"
 
         cv2.putText(frame, status_text, (20, y_pos),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
         y_pos += 20
+
+    # Gate Timing Panel (Consist 11) - Cross-gate detection
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (5, 285), (450, 390), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
+    cv2.putText(frame, "Gate Timing (Consist 11 - Cross-gate):", (10, 305),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
+    # Last timestamps
+    cv2.putText(frame, "Last crossing timestamps:", (15, 325),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+
+    # Loco 7 timestamps (both gates)
+    l7g1_str = "---"
+    l7g2_str = "---"
+    if tracker.c11_lead_gate1_timestamp:
+        l7g1_str = time.strftime("%H:%M:%S", time.localtime(tracker.c11_lead_gate1_timestamp))
+    if tracker.c11_lead_gate2_timestamp:
+        l7g2_str = time.strftime("%H:%M:%S", time.localtime(tracker.c11_lead_gate2_timestamp))
+
+    cv2.putText(frame, f"Loco 7: G1={l7g1_str}  G2={l7g2_str}", (25, 345),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 255, 0), 1)
+
+    # Loco 8 timestamps (both gates)
+    l8g1_str = "---"
+    l8g2_str = "---"
+    if tracker.c11_rear_gate1_timestamp:
+        l8g1_str = time.strftime("%H:%M:%S", time.localtime(tracker.c11_rear_gate1_timestamp))
+    if tracker.c11_rear_gate2_timestamp:
+        l8g2_str = time.strftime("%H:%M:%S", time.localtime(tracker.c11_rear_gate2_timestamp))
+
+    cv2.putText(frame, f"Loco 8: G1={l8g1_str}  G2={l8g2_str}", (25, 365),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)  # Red (readable on black)
+
+    # Cross-gate Δt (single value)
+    if tracker.delta_t is not None:
+        dt_abs = abs(tracker.delta_t)
+        if dt_abs < TIMING_THRESHOLD_NORMAL:
+            color = (0, 255, 0)  # Green
+            status = "SYNCED"
+        elif dt_abs < TIMING_THRESHOLD_WARNING:
+            color = (0, 255, 255)  # Yellow
+            status = "WARNING"
+        else:
+            color = (0, 0, 255)  # Red
+            status = "CRITICAL"
+
+        cv2.putText(frame, f"Dt (cross-gate) = {tracker.delta_t:+.3f}s  {status}", (15, 385),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
+    else:
+        cv2.putText(frame, "Dt (cross-gate) = --- (waiting for crossing)", (15, 385),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)  # White
 
     # Debug view - draw all bounding boxes
     if debug_view and results:
@@ -337,7 +781,7 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
             class_name = CLASS_NAMES.get(cls, f"Class_{cls}")
 
             # Draw bounding box (color by class)
-            colors = {0: (255, 255, 0), 1: (255, 128, 0), 2: (0, 255, 0), 3: (255, 0, 0)}
+            colors = {0: (255, 255, 0), 1: (255, 128, 0), 2: (0, 255, 0), 3: (0, 0, 255)}
             color = colors.get(cls, (255, 255, 255))
             cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
 
@@ -345,6 +789,56 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
             label = f"{class_name} {conf:.2f}"
             cv2.putText(frame, label, (int(x1), int(y1) - 10),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+    # Draw gate markers (always visible, even if panels hidden)
+    if marker_state:
+        # Draw saved gates (green)
+        for gate in marker_state.saved_gates:
+            cx, cy = gate['center_x'], gate['center_y']
+            w, h = gate['width'], gate['height']
+            angle = gate['angle']
+
+            # Get rotated rectangle points
+            points = get_rotated_rect_points(cx, cy, w, h, angle)
+            cv2.polylines(frame, [points], True, GATE_SAVED_COLOR, 2)
+
+            # Draw center crosshair
+            cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_SAVED_COLOR, 1)
+            cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_SAVED_COLOR, 1)
+
+        # Draw current gate being positioned (yellow)
+        if marker_state.current_gate:
+            gate = marker_state.current_gate
+            cx, cy = gate['center_x'], gate['center_y']
+            w, h = gate['width'], gate['height']
+            angle = gate['angle']
+
+            # Get rotated rectangle points
+            points = get_rotated_rect_points(cx, cy, w, h, angle)
+            cv2.polylines(frame, [points], True, GATE_COLOR, 2)
+
+            # Draw center crosshair
+            cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_COLOR, 1)
+            cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_COLOR, 1)
+
+            # Show dimensions and angle
+            dim_text = f"{w}x{h}px @ {angle}deg"
+            cv2.putText(frame, dim_text, (cx - 60, cy - h//2 - 15),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, GATE_COLOR, 2)
+
+        # Show marker mode indicator
+        if marker_state.enabled:
+            overlay = frame.copy()
+            cv2.rectangle(overlay, (5, frame.shape[0] - 90), (380, frame.shape[0] - 5), (0, 0, 0), -1)
+            cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+            cv2.putText(frame, "MARKER MODE (M to exit)", (15, frame.shape[0] - 75),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+            cv2.putText(frame, "CLICK: place | W/S: height | Z/X: width", (15, frame.shape[0] - 53),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            cv2.putText(frame, "R: rotate 15deg | ENTER: save | C: clear", (15, frame.shape[0] - 33),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            cv2.putText(frame, "E: export gates to console", (15, frame.shape[0] - 13),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
 
 def track_consist(username: str, password: str, model_path: str):
@@ -383,6 +877,17 @@ def track_consist(username: str, password: str, model_path: str):
     # Initialize tracker
     tracker = YOLOTracker(model_path)
 
+    # Initialize marker state
+    marker_state = MarkerState()
+
+    # Mouse callback for marker mode
+    def mouse_callback(event, x, y, flags, param):
+        if marker_state.enabled and event == cv2.EVENT_LBUTTONDOWN:
+            marker_state.place_gate(x, y)
+            print(f"📍 Gate placed at ({x}, {y}) - size: 100x100px")
+
+    cv2.setMouseCallback(window_name, mouse_callback)
+
     # State
     paused = False
     debug_view = False
@@ -395,6 +900,9 @@ def track_consist(username: str, password: str, model_path: str):
 
     print("🚂 Tracking started! Locomotives will be detected automatically...")
     print()
+
+    # Session tracking
+    start_time = time.time()
 
     while True:
         if not paused:
@@ -409,7 +917,7 @@ def track_consist(username: str, password: str, model_path: str):
             track_data = tracker.update(frame)
             all_detections = track_data['detections']
 
-            # Log detection state changes (immediate)
+            # Log detection state changes (immediate) - COMMENTED OUT for cleaner logs
             current_detection_state = {}
             for class_id in range(4):  # Classes 0-3
                 detected = class_id in all_detections
@@ -424,17 +932,18 @@ def track_consist(username: str, password: str, model_path: str):
                 if class_id not in prev_detection_state:
                     prev_detection_state[class_id] = False
 
-                if current_detection_state[class_id] != prev_detection_state[class_id]:
-                    class_name = CLASS_NAMES.get(class_id, f"Class_{class_id}")
-                    if current_detection_state[class_id]:
-                        conf = all_detections[class_id][1]
-                        print(f"✅ {class_name} detected (confidence: {conf:.2f})")
-                    else:
-                        if class_id in all_detections:
-                            conf = all_detections[class_id][1]
-                            print(f"⚠️  {class_name} lost (low confidence: {conf:.2f})")
-                        else:
-                            print(f"❌ {class_name} lost (not detected)")
+                # Uncomment for immediate detection/lost logging (debug mode)
+                # if current_detection_state[class_id] != prev_detection_state[class_id]:
+                #     class_name = CLASS_NAMES.get(class_id, f"Class_{class_id}")
+                #     if current_detection_state[class_id]:
+                #         conf = all_detections[class_id][1]
+                #         print(f"✅ {class_name} detected (confidence: {conf:.2f})")
+                #     else:
+                #         if class_id in all_detections:
+                #             conf = all_detections[class_id][1]
+                #             print(f"⚠️  {class_name} lost (low confidence: {conf:.2f})")
+                #         else:
+                #             print(f"❌ {class_name} lost (not detected)")
 
             prev_detection_state = current_detection_state.copy()
 
@@ -456,7 +965,7 @@ def track_consist(username: str, password: str, model_path: str):
                 print()
 
             # Draw overlay
-            draw_overlay(frame, tracker, track_data, debug_view, show_panels, frame_count)
+            draw_overlay(frame, tracker, track_data, debug_view, show_panels, frame_count, marker_state)
 
             # Display
             cv2.imshow(window_name, frame)
@@ -468,10 +977,19 @@ def track_consist(username: str, password: str, model_path: str):
             print("\nQuitting...")
             break
         elif key == ord('r') or key == ord('R'):
-            print("🔄 Reset visibility counters for BOTH consists")
-            tracker.c10_visible_together_count = 0
-            tracker.c11_visible_together_count = 0
-            frame_count = 0  # Reset frame count too
+            # In marker mode with current gate: rotate
+            if marker_state.enabled and marker_state.current_gate:
+                marker_state.adjust_angle(ROTATION_STEP)
+                angle = marker_state.current_gate['angle']
+                print(f"🔄 Rotated: {angle}°")
+            else:
+                # Otherwise: reset tracking counters
+                print("🔄 Reset tracking counters (visibility + gate crossings)")
+                tracker.c10_visible_together_count = 0
+                tracker.c11_visible_together_count = 0
+                tracker.gate_crossing_count = 0  # Reset gate crossing count
+                tracker.last_delta_t_time = 0  # Reset last Δt time
+                frame_count = 0  # Reset frame count too
         elif key == ord('d') or key == ord('D'):
             debug_view = not debug_view
             print(f"🐛 Debug view: {'ON' if debug_view else 'OFF'}")
@@ -479,48 +997,118 @@ def track_consist(username: str, password: str, model_path: str):
             show_panels = not show_panels
             print(f"📋 All panels: {'ON' if show_panels else 'OFF (markers only)'}")
         elif key == ord('s') or key == ord('S'):
-            # Save snapshot
-            import time
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            filename = f"tracking_snapshot_{timestamp}.jpg"
-            script_dir = Path(__file__).parent
-            filepath = script_dir / filename
-            cv2.imwrite(str(filepath), frame)
-            print(f"📸 Snapshot saved: {filepath}")
+            # In marker mode, S = decrease height
+            if marker_state.enabled and marker_state.current_gate:
+                marker_state.adjust_height(-10)
+                h = marker_state.current_gate['height']
+                print(f"⬇️  Height decreased: {h}px")
+            else:
+                # Save snapshot (only when NOT in marker mode)
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                filename = f"tracking_snapshot_{timestamp}.jpg"
+                script_dir = Path(__file__).parent
+                filepath = script_dir / filename
+                cv2.imwrite(str(filepath), frame)
+                print(f"📸 Snapshot saved: {filepath}")
         elif key == ord(' '):
             paused = not paused
             print(f"{'⏸️  Paused' if paused else '▶️  Resumed'}")
+        # Marker mode controls
+        elif key == ord('m') or key == ord('M'):
+            enabled = marker_state.toggle()
+            print(f"🎯 Marker mode: {'ON' if enabled else 'OFF'}")
+        elif key == ord('w') or key == ord('W'):
+            if marker_state.current_gate:
+                marker_state.adjust_height(10)
+                h = marker_state.current_gate['height']
+                print(f"⬆️  Height increased: {h}px")
+        elif key == ord('z') or key == ord('Z'):
+            if marker_state.current_gate:
+                marker_state.adjust_width(-20)
+                w = marker_state.current_gate['width']
+                print(f"⬅️  Width decreased: {w}px")
+        elif key == ord('x') or key == ord('X'):
+            if marker_state.current_gate:
+                marker_state.adjust_width(20)
+                w = marker_state.current_gate['width']
+                print(f"➡️  Width increased: {w}px")
+        elif key == 13:  # ENTER key
+            if marker_state.current_gate:
+                marker_state.save_current_gate()
+        elif key == ord('c') or key == ord('C'):
+            if marker_state.enabled:
+                # Smart clear: current gate first, then all saved
+                if not marker_state.clear_current():
+                    marker_state.clear_all_saved()
+        elif key == ord('e') or key == ord('E'):
+            marker_state.export_gates()
 
     # Cleanup
     cap.release()
     cv2.destroyAllWindows()
 
-    # Summary (co-visibility statistics)
-    print(f"\n📊 Tracking Summary:")
-    print(f"   Frames processed: {frame_count}")
+    # Export gates if any were saved
+    if marker_state.saved_gates:
+        print("\n" + "="*60)
+        print("🎯 GATES SAVED DURING SESSION:")
+        print("="*60)
+        marker_state.export_gates()
+
+    # Session summary
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    elapsed_minutes = int(elapsed_time // 60)
+    elapsed_seconds = int(elapsed_time % 60)
+
+    print(f"\n📊 SESSION SUMMARY")
+    print("=" * 60)
+    print(f"⏱️  Duration: {elapsed_minutes}m {elapsed_seconds}s")
+    print(f"🎞️  Frames processed: {frame_count}")
     print()
 
-    # Consist 10 (Tracciato Interno)
+    # Gate timing statistics (Consist 11)
+    print("🚪 GATE TIMING DETECTION (Consist 11 - Cross-Gate)")
+    print("-" * 60)
+    print(f"   Gate crossings detected: {tracker.gate_crossing_count}")
+
+    if tracker.delta_t is not None:
+        # Calculate status based on thresholds
+        dt_abs = abs(tracker.delta_t)
+        if dt_abs < TIMING_THRESHOLD_NORMAL:
+            status = "🟢 SYNCED"
+        elif dt_abs < TIMING_THRESHOLD_WARNING:
+            status = "🟡 WARNING"
+        else:
+            status = "🔴 CRITICAL DESYNC"
+
+        print(f"   Last Δt measured: {tracker.delta_t:+.3f}s  {status}")
+        print(f"   Crossing type: {tracker.delta_t_type}")
+        print()
+        print("   Δt Interpretation:")
+        if tracker.delta_t > 0:
+            print("   → Loco 7 (E656_239) passing first - running faster")
+        else:
+            print("   → Loco 8 (E444_056) passing first - Loco 7 running slower")
+    else:
+        print("   Last Δt: --- (no crossing detected)")
+        print("   ⚠️  Locomotives not detected passing through gates")
+
+    print()
+    print("   Thresholds:")
+    print(f"   🟢 |Δt| < {TIMING_THRESHOLD_NORMAL}s = SYNCED")
+    print(f"   🟡 |Δt| {TIMING_THRESHOLD_NORMAL}-{TIMING_THRESHOLD_WARNING}s = WARNING")
+    print(f"   🔴 |Δt| > {TIMING_THRESHOLD_WARNING}s = CRITICAL")
+    print()
+
+    # Co-visibility statistics (secondary)
+    print("👁️  CO-VISIBILITY STATISTICS")
+    print("-" * 60)
     c10_count, c10_pct = tracker.get_visibility_stats('c10', frame_count)
-    print(f"🟡 Consist 10 (Tracciato Interno):")
-    print(f"   Co-Visibility: {c10_count} frames ({c10_pct:.1f}%)")
-    print(f"   → Lead + Rear detected together {c10_count} times")
-    if c10_pct < 10:
-        print(f"   ⚠️  Low co-visibility - complex track (8-crossing + tunnel)")
-        print(f"   💡 Timing-based approach recommended")
-    print()
-
-    # Consist 11 (Tracciato Esterno)
     c11_count, c11_pct = tracker.get_visibility_stats('c11', frame_count)
-    print(f"🟢 Consist 11 (Tracciato Esterno):")
-    print(f"   Co-Visibility: {c11_count} frames ({c11_pct:.1f}%)")
-    print(f"   → Lead + Rear detected together {c11_count} times")
-    if c11_pct > 30:
-        print(f"   ✅ Good co-visibility - simple oval track")
+    print(f"   Consist 10 (Interno): {c10_count} frames ({c10_pct:.1f}%) - {c10_count} co-detections")
+    print(f"   Consist 11 (Esterno): {c11_count} frames ({c11_pct:.1f}%) - {c11_count} co-detections")
     print()
-
-    print("📝 Note: Perspective correction (6px/cm) available for gate positioning")
-    print("🎯 Next: Implement timing-based gate crossing detection")
+    print("="*60)
 
 
 def main():
