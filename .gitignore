@@ -29,6 +29,14 @@ ENV/
 data/
 *.tmp
 
+# YOLO Training - DO NOT commit (large files)
+scripts/models/               # Trained models (best.pt, etc.)
+scripts/utils/data/           # Videos, frames, datasets
+*.mp4                         # Video files (global pattern)
+*.avi
+*.mov
+*.zip                         # Dataset archives (Roboflow exports)
+
 # Sensitive data
 config.local.py
 secrets.json

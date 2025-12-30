@@ -47,6 +47,7 @@ function App() {
   const [z21Online, setZ21Online] = useState(false); // Z21 connection status
   const [reloadingRoster, setReloadingRoster] = useState(false);
   const [reloadSuccess, setReloadSuccess] = useState(false);
+  const [wakeLockActive, setWakeLockActive] = useState(false); // Wake Lock status
 
   // Dynamic controllers array (scalable UI with focus management)
   const [controllers, setControllers] = useState([
@@ -340,6 +341,60 @@ function App() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
+  // Wake Lock API - Keep screen awake while using the app (iOS/Android)
+  const wakeLockRef = useRef(null);
+
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        setWakeLockActive(true);
+        console.log('✅ Wake Lock acquired - screen will stay awake');
+
+        // Re-acquire wake lock if it's released (e.g., when returning to tab)
+        wakeLockRef.current.addEventListener('release', () => {
+          console.log('⚠️ Wake Lock released');
+          setWakeLockActive(false);
+        });
+      } else {
+        console.log('⚠️ Wake Lock API not supported on this browser');
+      }
+    } catch (err) {
+      console.log('❌ Wake Lock request failed:', err.name, err.message);
+      setWakeLockActive(false);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    if (wakeLockRef.current !== null) {
+      await wakeLockRef.current.release();
+      wakeLockRef.current = null;
+      setWakeLockActive(false);
+      console.log('Wake Lock released manually');
+    }
+  };
+
+  useEffect(() => {
+    // Try to request wake lock on mount (works on desktop/Android Chrome)
+    // Will fail on iOS Safari (requires user interaction) - handled by button
+    requestWakeLock();
+
+    // Re-acquire wake lock when page becomes visible again
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && wakeLockRef.current === null && wakeLockActive) {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Release wake lock on unmount
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      releaseWakeLock();
+    };
+  }, []);
+
   // Global keyboard shortcuts (ESC for emergency stop, TAB to cycle controllers)
   useEffect(() => {
     const handleGlobalKeyPress = (e) => {
@@ -590,6 +645,23 @@ function App() {
               </div>
             </button>
 
+            {/* Keep Screen Awake Button (iOS/Android) - only on mobile/tablet */}
+            {'wakeLock' in navigator && (
+              <button
+                onClick={wakeLockActive ? releaseWakeLock : requestWakeLock}
+                className={`lg:hidden px-2 md:px-4 py-2 bg-control-dark border rounded transition-all duration-200 ${
+                  wakeLockActive
+                    ? 'border-signal-green text-signal-green'
+                    : 'border-control-grey text-track-steel hover:border-signal-amber hover:text-signal-amber'
+                }`}
+                title={wakeLockActive ? 'Screen will stay awake - click to release' : 'Click to keep screen awake (prevent sleep)'}
+              >
+                <div className="flex items-center gap-2">
+                  <i className={`fa-solid fa-moon text-base md:text-lg ${wakeLockActive ? 'text-signal-green' : ''}`}></i>
+                </div>
+              </button>
+            )}
+
             {/* Spacer */}
             <div className="flex-grow"></div>
 
@@ -604,12 +676,12 @@ function App() {
             </button>
 
             {/* Right: Emergency + Status Icons */}
-            <div className="flex items-center gap-2 md:portrait:gap-1.5 md:landscape:gap-2 lg:gap-3">
+            <div className="flex items-center gap-2 md:gap-2 lg:gap-3">
               {/* Global Emergency Stop */}
               <button
                 onClick={handleEmergencyStop}
                 disabled={!z21Online}
-                className={`emergency-stop ${!trackPower ? 'active' : ''} disabled:opacity-50 disabled:cursor-not-allowed aspect-square landscape:aspect-auto landscape:w-[140px] md:aspect-auto md:w-[140px]`}
+                className={`emergency-stop ${!trackPower ? 'active' : ''} disabled:opacity-50 disabled:cursor-not-allowed aspect-square md:aspect-auto md:w-[140px]`}
                 title={
                   !z21Online
                     ? 'Z21 offline - Cannot control power'
@@ -626,8 +698,8 @@ function App() {
                     ) : (
                       <i className="fa-solid fa-power-off text-2xl md:text-3xl"></i>
                     )}
-                    {/* Testo su landscape/tablet/desktop */}
-                    <div className="hidden landscape:flex md:flex flex-col items-start text-left h-[44px] justify-center">
+                    {/* Testo su tablet/desktop */}
+                    <div className="hidden md:flex flex-col items-start text-left h-[44px] justify-center">
                       <span className="uppercase tracking-wider text-sm font-bold w-full text-left leading-tight">
                         {trackPower ? 'Stop All' : 'Restart'}
                       </span>
@@ -639,11 +711,11 @@ function App() {
 
               {/* Track Power Status */}
               <div
-                className="flex items-center gap-2 px-2 py-1.5 md:py-2 bg-control-dark/30 rounded cursor-default"
+                className="md:flex md:items-center md:gap-2 md:px-2 md:py-2 md:bg-control-dark/30 md:rounded cursor-default"
                 title={`Track Power: ${trackPower ? 'ON' : 'OFF'}`}
               >
                 <i className={`fa-solid fa-bolt text-lg md:text-xl ${trackPower ? 'text-signal-green' : 'text-signal-red'}`}></i>
-                <div className="hidden landscape:block md:block text-xs font-mono w-7">
+                <div className="hidden md:block text-xs font-mono w-7">
                   <div className={trackPower ? 'text-signal-green' : 'text-signal-red'}>
                     {trackPower ? 'ON' : 'OFF'}
                   </div>
@@ -652,11 +724,11 @@ function App() {
 
               {/* WebSocket Status */}
               <div
-                className="flex items-center gap-2 px-2 md:px-3 py-1.5 md:py-2 bg-control-dark/30 rounded cursor-default"
+                className="md:flex md:items-center md:gap-2 md:px-2 md:px-3 md:py-2 md:bg-control-dark/30 md:rounded cursor-default"
                 title={`WebSocket Connection: ${isConnected ? 'Connected' : 'Disconnected'}`}
               >
                 <i className={`fa-solid fa-wifi text-lg md:text-xl ${isConnected ? 'text-signal-green' : 'text-signal-red'}`}></i>
-                <div className="hidden landscape:block md:block text-xs font-mono">
+                <div className="hidden md:block text-xs font-mono">
                   <div className={isConnected ? 'text-signal-green' : 'text-signal-red'}>
                     WS
                   </div>
@@ -665,11 +737,11 @@ function App() {
 
               {/* Z21 Status */}
               <div
-                className="flex items-center gap-2 px-2 md:px-3 py-1.5 md:py-2 bg-control-dark/30 rounded cursor-default"
+                className="md:flex md:items-center md:gap-2 md:px-2 md:px-3 md:py-2 md:bg-control-dark/30 md:rounded cursor-default"
                 title={`Z21 Device: ${z21Online ? 'Online' : 'Offline'}`}
               >
                 <i className={`fa-solid fa-server text-lg md:text-xl ${z21Online ? 'text-signal-green' : 'text-signal-red'}`}></i>
-                <div className="hidden landscape:block md:block text-xs font-mono">
+                <div className="hidden md:block text-xs font-mono">
                   <div className={z21Online ? 'text-signal-green' : 'text-signal-red'}>
                     z21
                   </div>

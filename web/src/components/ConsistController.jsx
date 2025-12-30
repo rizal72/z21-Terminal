@@ -42,6 +42,20 @@ export default function ConsistController({
     }
   }, [item, item?.functionStates]);
 
+  // Sync speed from WebSocket updates (multi-device sync)
+  useEffect(() => {
+    if (item?.speed !== undefined) {
+      setSpeed(item.speed);
+    }
+  }, [item?.speed]);
+
+  // Sync direction from WebSocket updates (multi-device sync)
+  useEffect(() => {
+    if (item?.direction !== undefined) {
+      setDirection(item.direction);
+    }
+  }, [item?.direction]);
+
   const handleSpeedChange = (e) => {
     if (isLocoInConsist) return; // Disabled for locos in consist
 
