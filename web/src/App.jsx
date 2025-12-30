@@ -217,8 +217,10 @@ function App() {
               speed: lastMessage.data.speed ?? currentConsist.speed,
               direction: lastMessage.data.direction ?? currentConsist.direction,
               power: lastMessage.data.power ?? currentConsist.power,
-              // Update function states from backend
-              functionStates: lastMessage.data.functions || currentConsist.functionStates || {}
+              // Update function definitions if provided (for new panel selections)
+              functions: lastMessage.data.functions || currentConsist.functions,
+              // Update function states from backend (correct key!)
+              functionStates: lastMessage.data.functionStates || currentConsist.functionStates || {}
             }
           };
         });
@@ -232,7 +234,7 @@ function App() {
             return prev;
           }
 
-          console.log('Updating locomotive:', lastMessage.address, 'with functionStates:', lastMessage.data.functions);
+          console.log('Updating locomotive:', lastMessage.address, 'with functionStates:', lastMessage.data.functionStates);
           return {
             ...prev,
             [lastMessage.address]: {
@@ -240,8 +242,10 @@ function App() {
               speed: lastMessage.data.speed ?? currentLoco.speed,
               direction: lastMessage.data.direction ?? currentLoco.direction,
               power: lastMessage.data.power ?? currentLoco.power,
-              // Update function states from backend
-              functionStates: lastMessage.data.functions || currentLoco.functionStates || {}
+              // Update function definitions if provided (for new panel selections)
+              functions: lastMessage.data.functions || currentLoco.functions,
+              // Update function states from backend (correct key!)
+              functionStates: lastMessage.data.functionStates || currentLoco.functionStates || {}
             }
           };
         });
