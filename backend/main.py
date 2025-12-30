@@ -289,6 +289,12 @@ async def broadcast_state_update(address: int):
 
     state = z21_manager.get_consist_state(address)
 
+    # Get function definitions from roster data
+    if is_consist:
+        function_definitions = consist_data[address].get('functions', [])
+    else:
+        function_definitions = locomotive_data[address].get('functions', [])
+
     message = {
         'type': 'consist_update',  # Same type for both (backwards compatible)
         'address': address,
@@ -296,7 +302,8 @@ async def broadcast_state_update(address: int):
             'speed': state.get('speed', 0),
             'direction': state.get('direction', 'forward'),
             'power': state.get('power', True),
-            'functions': state.get('functions', {})
+            'functions': function_definitions,  # Function definitions (array)
+            'functionStates': state.get('functions', {})  # Function states (object)
         }
     }
 
