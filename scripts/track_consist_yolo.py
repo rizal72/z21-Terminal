@@ -129,16 +129,12 @@ class YOLOTracker:
         # Consist 10 (Tracciato Interno)
         self.c10_lead_pos = None
         self.c10_rear_pos = None
-        self.c10_distance_history = deque(maxlen=DISTANCE_HISTORY_SIZE)
-        self.c10_min_distance = float('inf')
-        self.c10_max_distance = 0.0
+        self.c10_visible_together_count = 0
 
         # Consist 11 (Tracciato Esterno)
         self.c11_lead_pos = None
         self.c11_rear_pos = None
-        self.c11_distance_history = deque(maxlen=DISTANCE_HISTORY_SIZE)
-        self.c11_min_distance = float('inf')
-        self.c11_max_distance = 0.0
+        self.c11_visible_together_count = 0
 
         print("✅ YOLO model loaded")
 
@@ -193,21 +189,11 @@ class YOLOTracker:
         c10_rear_pos = c10_rear_data[0] if c10_rear_data else None
         c10_rear_conf = c10_rear_data[1] if c10_rear_data else 0.0
 
-        c10_distance = None
+        # Track visibility (both locomotives visible together)
         if c10_lead_pos and c10_rear_pos:
-            lead_corrected = transform_to_corrected(c10_lead_pos)
-            rear_corrected = transform_to_corrected(c10_rear_pos)
-            c10_distance = np.sqrt(
-                (lead_corrected[0] - rear_corrected[0]) ** 2 +
-                (lead_corrected[1] - rear_corrected[1]) ** 2
-            )
             self.c10_lead_pos = c10_lead_pos
             self.c10_rear_pos = c10_rear_pos
-            self.c10_distance_history.append(c10_distance)
-            if c10_distance < self.c10_min_distance:
-                self.c10_min_distance = c10_distance
-            if c10_distance > self.c10_max_distance:
-                self.c10_max_distance = c10_distance
+            self.c10_visible_together_count += 1
 
         # === CONSIST 11 (Tracciato Esterno) ===
         c11_lead_data = detections.get(2)  # E656_239 (class 2)
@@ -219,40 +205,29 @@ class YOLOTracker:
         c11_rear_pos = c11_rear_data[0] if c11_rear_data else None
         c11_rear_conf = c11_rear_data[1] if c11_rear_data else 0.0
 
-        c11_distance = None
+        # Track visibility (both locomotives visible together)
         if c11_lead_pos and c11_rear_pos:
-            lead_corrected = transform_to_corrected(c11_lead_pos)
-            rear_corrected = transform_to_corrected(c11_rear_pos)
-            c11_distance = np.sqrt(
-                (lead_corrected[0] - rear_corrected[0]) ** 2 +
-                (lead_corrected[1] - rear_corrected[1]) ** 2
-            )
             self.c11_lead_pos = c11_lead_pos
             self.c11_rear_pos = c11_rear_pos
-            self.c11_distance_history.append(c11_distance)
-            if c11_distance < self.c11_min_distance:
-                self.c11_min_distance = c11_distance
-            if c11_distance > self.c11_max_distance:
-                self.c11_max_distance = c11_distance
+            self.c11_visible_together_count += 1
 
         return {
-            'c10': {'lead_pos': c10_lead_pos, 'rear_pos': c10_rear_pos, 'distance': c10_distance,
+            'c10': {'lead_pos': c10_lead_pos, 'rear_pos': c10_rear_pos,
                     'lead_conf': c10_lead_conf, 'rear_conf': c10_rear_conf},
-            'c11': {'lead_pos': c11_lead_pos, 'rear_pos': c11_rear_pos, 'distance': c11_distance,
+            'c11': {'lead_pos': c11_lead_pos, 'rear_pos': c11_rear_pos,
                     'lead_conf': c11_lead_conf, 'rear_conf': c11_rear_conf},
             'detections': detections,
             'results': results
         }
 
-    def get_average_distance(self, consist='c11'):
-        """Get average distance from history for specified consist."""
-        history = self.c11_distance_history if consist == 'c11' else self.c10_distance_history
-        if len(history) > 0:
-            return np.mean(history)
-        return None
+    def get_visibility_stats(self, consist, total_frames):
+        """Get visibility statistics for specified consist."""
+        count = self.c11_visible_together_count if consist == 'c11' else self.c10_visible_together_count
+        percentage = (count / total_frames * 100) if total_frames > 0 else 0
+        return count, percentage
 
 
-def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True):
+def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total_frames=0):
     """Draw tracking overlay on frame for BOTH consists."""
 
     c10 = track_data['c10']
@@ -294,66 +269,24 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True):
     cv2.putText(frame, info_text, (10, 25),
                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-    # Distance info - ALWAYS VISIBLE (corrected frame values: 6px/cm uniform scale)
+    # Co-Visibility Stats Panel
     overlay = frame.copy()
-    cv2.rectangle(overlay, (5, 40), (650, 120), (0, 0, 0), -1)
+    cv2.rectangle(overlay, (5, 40), (550, 110), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
+    cv2.putText(frame, "Co-Visibility (Lead + Rear together):", (10, 60),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-    # Consist 10 distance (left side)
-    c10_dist = c10['distance']
-    if c10_dist:
-        c10_cm = c10_dist / PX_PER_CM
-        cv2.putText(frame, f"C10: {c10_dist:.1f}px ({c10_cm:.1f}cm)", (10, 60),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 200, 0), 2)
-    else:
-        if len(tracker.c10_distance_history) > 0:
-            last = tracker.c10_distance_history[-1]
-            cv2.putText(frame, f"C10: {last:.1f}px LAST", (10, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, (128, 128, 0), 2)
-        else:
-            cv2.putText(frame, "C10: --", (10, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, (128, 128, 128), 2)
+    # Consist 10 stats
+    c10_count, c10_pct = tracker.get_visibility_stats('c10', total_frames)
+    c10_status = "✓" if (c10['lead_pos'] and c10['rear_pos']) else "✗"
+    cv2.putText(frame, f"C10: {c10_status}  {c10_count} frames ({c10_pct:.1f}%)", (20, 85),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 200, 0), 1)
 
-    # Consist 11 distance (right side)
-    c11_dist = c11['distance']
-    if c11_dist:
-        c11_cm = c11_dist / PX_PER_CM
-        cv2.putText(frame, f"C11: {c11_dist:.1f}px ({c11_cm:.1f}cm)", (330, 60),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 2)
-    else:
-        if len(tracker.c11_distance_history) > 0:
-            last = tracker.c11_distance_history[-1]
-            cv2.putText(frame, f"C11: {last:.1f}px LAST", (330, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 128, 0), 2)
-        else:
-            cv2.putText(frame, "C11: --", (330, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, (128, 128, 128), 2)
-
-    # Average distances (bottom row)
-    avg_c10 = tracker.get_average_distance('c10')
-    avg_c11 = tracker.get_average_distance('c11')
-
-    if avg_c10:
-        cv2.putText(frame, f"Avg C10: {avg_c10:.1f}px ({len(tracker.c10_distance_history)} s)",
-                   (10, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 200, 0), 1)
-    else:
-        cv2.putText(frame, "Avg C10: -- (0 s)", (10, 85),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (128, 128, 0), 1)
-
-    if avg_c11:
-        cv2.putText(frame, f"Avg C11: {avg_c11:.1f}px ({len(tracker.c11_distance_history)} s)",
-                   (330, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
-    else:
-        cv2.putText(frame, "Avg C11: -- (0 s)", (330, 85),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 128, 0), 1)
-
-    # Status line
-    c10_tracking = c10['lead_pos'] and c10['rear_pos']
-    c11_tracking = c11['lead_pos'] and c11['rear_pos']
-    status_c10 = "✓" if c10_tracking else "✗"
-    status_c11 = "✓" if c11_tracking else "✗"
-    cv2.putText(frame, f"Tracking: C10 {status_c10}  C11 {status_c11}", (10, 110),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+    # Consist 11 stats
+    c11_count, c11_pct = tracker.get_visibility_stats('c11', total_frames)
+    c11_status = "✓" if (c11['lead_pos'] and c11['rear_pos']) else "✗"
+    cv2.putText(frame, f"C11: {c11_status}  {c11_count} frames ({c11_pct:.1f}%)", (280, 85),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
 
     # Controls
     overlay = frame.copy()
@@ -523,7 +456,7 @@ def track_consist(username: str, password: str, model_path: str):
                 print()
 
             # Draw overlay
-            draw_overlay(frame, tracker, track_data, debug_view, show_panels)
+            draw_overlay(frame, tracker, track_data, debug_view, show_panels, frame_count)
 
             # Display
             cv2.imshow(window_name, frame)
@@ -535,15 +468,10 @@ def track_consist(username: str, password: str, model_path: str):
             print("\nQuitting...")
             break
         elif key == ord('r') or key == ord('R'):
-            print("🔄 Reset distance history + min/max for BOTH consists")
-            # Reset Consist 10
-            tracker.c10_distance_history.clear()
-            tracker.c10_min_distance = float('inf')
-            tracker.c10_max_distance = 0.0
-            # Reset Consist 11
-            tracker.c11_distance_history.clear()
-            tracker.c11_min_distance = float('inf')
-            tracker.c11_max_distance = 0.0
+            print("🔄 Reset visibility counters for BOTH consists")
+            tracker.c10_visible_together_count = 0
+            tracker.c11_visible_together_count = 0
+            frame_count = 0  # Reset frame count too
         elif key == ord('d') or key == ord('D'):
             debug_view = not debug_view
             print(f"🐛 Debug view: {'ON' if debug_view else 'OFF'}")
@@ -567,76 +495,32 @@ def track_consist(username: str, password: str, model_path: str):
     cap.release()
     cv2.destroyAllWindows()
 
-    # Summary (perspective-corrected values)
-    print(f"\n📊 Tracking Summary (perspective corrected @ 6px/cm):")
+    # Summary (co-visibility statistics)
+    print(f"\n📊 Tracking Summary:")
     print(f"   Frames processed: {frame_count}")
     print()
 
     # Consist 10 (Tracciato Interno)
-    avg_c10 = tracker.get_average_distance('c10')
-    if avg_c10:
-        avg_c10_cm = avg_c10 / PX_PER_CM
-        print(f"🟡 Consist 10 (Tracciato Interno):")
-        print(f"   Average distance: {avg_c10:.1f}px = {avg_c10_cm:.1f}cm")
-        print(f"   Measurements: {len(tracker.c10_distance_history)}")
-
-        # Min/Max tracking for baseline determination
-        if tracker.c10_min_distance != float('inf'):
-            min_c10_cm = tracker.c10_min_distance / PX_PER_CM
-            suggested_alarm_c10_px = tracker.c10_min_distance + 50
-            suggested_alarm_c10_cm = suggested_alarm_c10_px / PX_PER_CM
-            print(f"   🚨 Safety Threshold Testing:")
-            print(f"      🔴 MINIMUM distance: {tracker.c10_min_distance:.1f}px = {min_c10_cm:.1f}cm")
-            print(f"      💡 Suggested alarm: {suggested_alarm_c10_px:.1f}px = {suggested_alarm_c10_cm:.1f}cm (+50px margin)")
-
-        if tracker.c10_max_distance > 0:
-            max_c10_cm = tracker.c10_max_distance / PX_PER_CM
-            print(f"      🔵 MAXIMUM distance: {tracker.c10_max_distance:.1f}px = {max_c10_cm:.1f}cm")
-
-        print(f"   📋 Baseline for drift monitoring:")
-        target_variation_cm = 50 / PX_PER_CM
-        warning_c10_cm = (avg_c10 + 100) / PX_PER_CM
-        print(f"      Target: {avg_c10:.1f}px ({avg_c10_cm:.1f}cm) ±50px ({target_variation_cm:.1f}cm) normal variation")
-        if tracker.c10_min_distance != float('inf'):
-            print(f"      Critical: <{suggested_alarm_c10_px:.1f}px (<{suggested_alarm_c10_cm:.1f}cm) DANGER")
-        print(f"      Warning: >{avg_c10 + 100:.1f}px (>{warning_c10_cm:.1f}cm) elongating")
-        print()
-    else:
-        print(f"🟡 Consist 10 (Tracciato Interno): No data (locomotives not detected together)")
-        print()
+    c10_count, c10_pct = tracker.get_visibility_stats('c10', frame_count)
+    print(f"🟡 Consist 10 (Tracciato Interno):")
+    print(f"   Co-Visibility: {c10_count} frames ({c10_pct:.1f}%)")
+    print(f"   → Lead + Rear detected together {c10_count} times")
+    if c10_pct < 10:
+        print(f"   ⚠️  Low co-visibility - complex track (8-crossing + tunnel)")
+        print(f"   💡 Timing-based approach recommended")
+    print()
 
     # Consist 11 (Tracciato Esterno)
-    avg_c11 = tracker.get_average_distance('c11')
-    if avg_c11:
-        avg_c11_cm = avg_c11 / PX_PER_CM
-        print(f"🟢 Consist 11 (Tracciato Esterno):")
-        print(f"   Average distance: {avg_c11:.1f}px = {avg_c11_cm:.1f}cm")
-        print(f"   Measurements: {len(tracker.c11_distance_history)}")
+    c11_count, c11_pct = tracker.get_visibility_stats('c11', frame_count)
+    print(f"🟢 Consist 11 (Tracciato Esterno):")
+    print(f"   Co-Visibility: {c11_count} frames ({c11_pct:.1f}%)")
+    print(f"   → Lead + Rear detected together {c11_count} times")
+    if c11_pct > 30:
+        print(f"   ✅ Good co-visibility - simple oval track")
+    print()
 
-        # Min/Max tracking for baseline determination
-        if tracker.c11_min_distance != float('inf'):
-            min_c11_cm = tracker.c11_min_distance / PX_PER_CM
-            suggested_alarm_c11_px = tracker.c11_min_distance + 50
-            suggested_alarm_c11_cm = suggested_alarm_c11_px / PX_PER_CM
-            print(f"   🚨 Safety Threshold Testing:")
-            print(f"      🔴 MINIMUM distance: {tracker.c11_min_distance:.1f}px = {min_c11_cm:.1f}cm")
-            print(f"      💡 Suggested alarm: {suggested_alarm_c11_px:.1f}px = {suggested_alarm_c11_cm:.1f}cm (+50px margin)")
-
-        if tracker.c11_max_distance > 0:
-            max_c11_cm = tracker.c11_max_distance / PX_PER_CM
-            print(f"      🔵 MAXIMUM distance: {tracker.c11_max_distance:.1f}px = {max_c11_cm:.1f}cm")
-
-        print(f"   📋 Baseline for drift monitoring:")
-        target_variation_cm = 50 / PX_PER_CM
-        warning_c11_cm = (avg_c11 + 100) / PX_PER_CM
-        print(f"      Target: {avg_c11:.1f}px ({avg_c11_cm:.1f}cm) ±50px ({target_variation_cm:.1f}cm) normal variation")
-        if tracker.c11_min_distance != float('inf'):
-            print(f"      Critical: <{suggested_alarm_c11_px:.1f}px (<{suggested_alarm_c11_cm:.1f}cm) DANGER")
-        print(f"      Warning: >{avg_c11 + 100:.1f}px (>{warning_c11_cm:.1f}cm) elongating")
-        print()
-    else:
-        print(f"🟢 Consist 11 (Tracciato Esterno): No data (locomotives not detected together)")
-        print()
+    print("📝 Note: Perspective correction (6px/cm) available for gate positioning")
+    print("🎯 Next: Implement timing-based gate crossing detection")
 
 
 def main():
