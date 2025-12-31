@@ -1,0 +1,43 @@
+{
+  "gates": [
+    {
+      "id": 1,
+      "name": "Bottom Right (vicino)",
+      "center": [1227, 213],
+      "width": 100,
+      "height": 100,
+      "angle": 0,
+      "color": [255, 255, 0],
+      "notes": "Gate vicino alla camera - bottom right"
+    },
+    {
+      "id": 2,
+      "name": "Top Left (lontano)",
+      "center": [141, 162],
+      "width": 60,
+      "height": 60,
+      "angle": 0,
+      "color": [255, 165, 0],
+      "notes": "Gate lontano dalla camera - top left"
+    }
+  ],
+  "tracking_assignments": {
+    "consist_11": {
+      "name": "Consist 11 - Tracciato Esterno (Ovale)",
+      "gate_ids": [
+        1,
+        2
+      ],
+      "lead_address": 7,
+      "rear_address": 8,
+      "notes": "Dual-gate co-presence timing"
+    },
+    "consist_10": {
+      "name": "Consist 10 - Tracciato Interno (Figura 8)",
+      "gate_ids": [],
+      "lead_address": 1,
+      "rear_address": 5,
+      "notes": "Gates to be configured"
+    }
+  }
+}
