@@ -48,3 +48,8 @@ web/dist/
 web/.vite/
 npm-debug.log*
 package-lock.json
+CLAUDE.md.backup
+
+# Docs (private notes)
+docs/
+*.backup
