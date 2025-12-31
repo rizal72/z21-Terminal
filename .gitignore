@@ -30,12 +30,13 @@ data/
 *.tmp
 
 # YOLO Training - DO NOT commit (large files)
-scripts/models/               # Trained models (best.pt, etc.)
-scripts/utils/data/           # Videos, frames, datasets
-*.mp4                         # Video files (global pattern)
+scripts/models/
+scripts/utils/data/
+*.mp4
 *.avi
 *.mov
-*.zip                         # Dataset archives (Roboflow exports)
+*.zip
+*snapshot*
 
 # Sensitive data
 config.local.py
