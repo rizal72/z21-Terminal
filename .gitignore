@@ -44,6 +44,9 @@ secrets.json
 .env
 camera_config.json
 
+# Runtime state (not to be committed)
+backend/consist_state.json
+
 # Node/NPM (Frontend)
 node_modules/
 web/dist/

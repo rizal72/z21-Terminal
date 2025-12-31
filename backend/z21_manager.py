@@ -2,6 +2,7 @@
 Z21Manager - Wrapper per la libreria z21.py con gestione stato consist
 """
 import sys
+import json
 from pathlib import Path
 
 # Add scripts directory to path per importare z21.py
@@ -9,6 +10,9 @@ scripts_dir = Path(__file__).parent.parent / 'scripts'
 sys.path.insert(0, str(scripts_dir))
 
 from z21 import Z21
+
+# Path to persist virtual mode state
+CONSIST_STATE_FILE = Path(__file__).parent / 'consist_state.json'
 
 
 class Z21Manager:
@@ -28,6 +32,7 @@ class Z21Manager:
         self.verbose = verbose
         self.z21 = None
         self.consist_state = {}  # {address: {'speed': 0, 'direction': 'forward', 'power': True, 'functions': {}}}
+        self.persisted_state = self._load_persisted_state()  # Load virtual_mode from file
 
     def connect(self):
         """Connetti alla Z21"""
@@ -54,6 +59,10 @@ class Z21Manager:
             address (int): DCC address del consist
             data (dict): Dati consist con array locomotives
         """
+        # Load virtual_mode from persisted state if available
+        persisted = self.persisted_state.get(str(address), {})
+        virtual_mode = persisted.get('virtual_mode', False)
+
         self.consist_state[address] = {
             'address': address,
             'locomotives': data.get('locomotives', []),  # Array: [lead, rear1, rear2, ...]
@@ -61,10 +70,13 @@ class Z21Manager:
             'direction': 'forward',
             'power': True,
             'functions': {},  # {0: False, 1: False, ...}
-            'virtual_mode': False,  # NEW: Virtual Consist Mode toggle
+            'virtual_mode': virtual_mode,  # Load from persisted state
             'delta_t': None,  # NEW: Latest Δt from tracking daemon (for display only)
             'delta_t_timestamp': None  # NEW: When Δt was last updated
         }
+
+        if virtual_mode:
+            print(f"  ✓ Consist {address}: Restored Virtual Mode from saved state")
 
         # Initialize function states
         for fn in data.get('functions', []):
@@ -107,7 +119,28 @@ class Z21Manager:
             return False
 
         try:
-            self.z21.set_loco_speed(address, speed, forward)
+            # Check if this is a consist in Virtual Mode
+            if address in self.consist_state:
+                consist = self.consist_state[address]
+                is_virtual = consist.get('virtual_mode', False)
+                locomotives = consist.get('locomotives', [])
+
+                if is_virtual and len(locomotives) >= 2:
+                    # Virtual Mode: control locomotives separately
+                    lead_addr = locomotives[0]['address']
+                    rear_addr = locomotives[1]['address']
+
+                    # For MVP: same speed to both (no Δt compensation yet)
+                    # TODO Phase 4B: add Δt-based speed compensation
+                    self.z21.set_loco_speed(lead_addr, speed, forward)
+                    self.z21.set_loco_speed(rear_addr, speed, forward)
+                    print(f"  🎯 Virtual Mode: loco {lead_addr}={speed}, loco {rear_addr}={speed}")
+                else:
+                    # Normal DCC consist mode
+                    self.z21.set_loco_speed(address, speed, forward)
+            else:
+                # Single locomotive
+                self.z21.set_loco_speed(address, speed, forward)
 
             # Update state
             if address in self.consist_state:
@@ -176,6 +209,15 @@ class Z21Manager:
             # Update state in consist
             if address in self.consist_state:
                 self.consist_state[address]['functions'][function_number] = state
+
+                # Also update individual locomotive states (for single loco panels)
+                locomotives = self.consist_state[address].get('locomotives', [])
+                for loco in locomotives:
+                    loco_addr = loco['address']
+                    if loco_addr in self.consist_state:
+                        # F0 goes to all locos, other functions only to lead
+                        if function_number == 0 or loco_addr == locomotives[0]['address']:
+                            self.consist_state[loco_addr]['functions'][function_number] = state
 
             return success
         except Exception as e:
@@ -305,6 +347,7 @@ class Z21Manager:
 
         if success_lead and success_rear:
             consist['virtual_mode'] = True
+            self._save_persisted_state()  # Persist to file
             print(f"  ✓ Virtual Mode enabled for consist {consist_address}")
             return True
         else:
@@ -352,6 +395,7 @@ class Z21Manager:
 
         if success_lead and success_rear:
             consist['virtual_mode'] = False
+            self._save_persisted_state()  # Persist to file
             print(f"  ✓ Virtual Mode disabled for consist {consist_address}")
             return True
         else:
@@ -362,6 +406,38 @@ class Z21Manager:
                 error_locos.append(f"rear {rear_addr}")
             print(f"  ✗ Failed to disable Virtual Mode: CV write failed for {', '.join(error_locos)}")
             return False
+
+    def _load_persisted_state(self):
+        """Load persisted virtual_mode state from JSON file"""
+        try:
+            if CONSIST_STATE_FILE.exists():
+                with open(CONSIST_STATE_FILE, 'r') as f:
+                    state = json.load(f)
+                    if self.verbose:
+                        print(f"  ✓ Loaded persisted state: {state}")
+                    return state
+        except Exception as e:
+            print(f"  ⚠️  Failed to load persisted state: {e}")
+        return {}
+
+    def _save_persisted_state(self):
+        """Save virtual_mode state to JSON file"""
+        try:
+            state = {}
+            for address, consist in self.consist_state.items():
+                if 'locomotives' in consist and len(consist.get('locomotives', [])) >= 2:
+                    # Only save virtual_mode for consists (not single locos)
+                    state[str(address)] = {
+                        'virtual_mode': consist.get('virtual_mode', False)
+                    }
+
+            with open(CONSIST_STATE_FILE, 'w') as f:
+                json.dump(state, f, indent=2)
+
+            if self.verbose:
+                print(f"  ✓ Saved persisted state: {state}")
+        except Exception as e:
+            print(f"  ⚠️  Failed to save persisted state: {e}")
 
 
 if __name__ == '__main__':

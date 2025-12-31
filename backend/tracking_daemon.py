@@ -59,11 +59,6 @@ RTSP_URL = load_camera_config()
 # YOLO confidence threshold
 CONFIDENCE_THRESHOLD = 0.5
 
-# Gate timing thresholds (seconds)
-TIMING_THRESHOLD_NORMAL = 1.0   # |Δt| < 1.0s = SYNCED
-TIMING_THRESHOLD_WARNING = 2.0  # |Δt| 1.0-2.0s = WARNING
-# |Δt| > 2.0s = CRITICAL
-
 # Class mapping (YOLO model classes)
 CLASS_NAMES = {
     0: '1_Gr675_017',    # Consist 10 lead
@@ -81,10 +76,10 @@ def load_gate_config():
         return config
     except FileNotFoundError:
         print(f"⚠️  Gate config not found: {GATE_CONFIG_PATH}")
-        return {'gates': []}
+        return {'gates': [], 'timing_thresholds': {'normal': 1.0, 'warning': 2.0}}
     except json.JSONDecodeError as e:
         print(f"⚠️  Invalid JSON in gate config: {e}")
-        return {'gates': []}
+        return {'gates': [], 'timing_thresholds': {'normal': 1.0, 'warning': 2.0}}
 
 
 def gate_json_to_dict(gate_json):
@@ -177,12 +172,18 @@ class YOLOTracker:
         print(f"🤖 Loading YOLO model: {model_path}")
         self.model = YOLO(model_path)
 
-        # Load gates from config
+        # Load gates and thresholds from config
         config = load_gate_config()
         self.gates = {}
         for gate in config['gates']:
             self.gates[gate['id']] = gate_json_to_dict(gate)
         print(f"🚪 Loaded {len(self.gates)} gates from config")
+
+        # Load timing thresholds
+        thresholds = config.get('timing_thresholds', {'normal': 1.0, 'warning': 2.0})
+        self.threshold_normal = thresholds.get('normal', 1.0)
+        self.threshold_warning = thresholds.get('warning', 2.0)
+        print(f"⏱️  Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
 
         # Consist 10 (Tracciato Interno)
         self.c10_lead_pos = None
@@ -373,9 +374,9 @@ class YOLOTracker:
             return None
 
         dt_abs = abs(self.delta_t)
-        if dt_abs < TIMING_THRESHOLD_NORMAL:
+        if dt_abs < self.threshold_normal:
             return 'SYNCED'
-        elif dt_abs < TIMING_THRESHOLD_WARNING:
+        elif dt_abs < self.threshold_warning:
             return 'WARNING'
         else:
             return 'CRITICAL'
@@ -463,7 +464,11 @@ class TrackingDaemon:
             'delta_t': current_delta_t,
             'gate_type': current_type,
             'status': self.tracker.get_delta_t_status(),
-            'timestamp': time.time()
+            'timestamp': time.time(),
+            'thresholds': {
+                'normal': self.tracker.threshold_normal,
+                'warning': self.tracker.threshold_warning
+            }
         }
 
         try:

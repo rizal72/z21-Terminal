@@ -1,4 +1,8 @@
-export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimestamp }) {
+export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimestamp, timingThresholds }) {
+  // Use dynamic thresholds from backend (or fallback to defaults)
+  const thresholdNormal = timingThresholds?.normal || 1.0;
+  const thresholdWarning = timingThresholds?.warning || 2.0;
+
   // Calculate status based on |Δt| thresholds
   const getStatusInfo = () => {
     if (deltaT === null || deltaT === undefined) {
@@ -12,14 +16,14 @@ export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimesta
 
     const absDeltaT = Math.abs(deltaT);
 
-    if (absDeltaT < 0.5) {
+    if (absDeltaT < thresholdNormal) {
       return {
         status: 'SYNCED',
         color: 'text-signal-green',
         bgColor: 'bg-signal-green/10',
         message: 'Locomotives synchronized'
       };
-    } else if (absDeltaT < 1.0) {
+    } else if (absDeltaT < thresholdWarning) {
       return {
         status: 'WARNING',
         color: 'text-signal-amber',

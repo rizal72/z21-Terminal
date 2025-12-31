@@ -255,6 +255,7 @@ function App() {
         const consistAddress = lastMessage.consist_address;
         const deltaT = lastMessage.delta_t;
         const timestamp = lastMessage.timestamp;
+        const thresholds = lastMessage.thresholds; // NEW: dynamic thresholds from config
 
         // Update consist with delta_t data (only if changed)
         setConsists(prev => {
@@ -273,7 +274,8 @@ function App() {
             [consistAddress]: {
               ...currentConsist,
               delta_t: deltaT,
-              delta_t_timestamp: timestamp
+              delta_t_timestamp: timestamp,
+              timing_thresholds: thresholds // Store thresholds for DeltaTStatsPanel
             }
           };
         });

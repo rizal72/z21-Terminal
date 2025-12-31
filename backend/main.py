@@ -8,11 +8,20 @@ from typing import List, Dict, Any
 import json
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from z21_manager import Z21Manager
 from roster_loader import load_consist_with_functions, load_all_locomotives
 from tracking_manager import TrackingManager
 from video_feed import generate_video_frames
+
+# Default constants (single source of truth)
+DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 2.0}
+DEFAULT_CONTROLLER = {'id': None, 'type': None, 'address': None}
+
+# Configuration paths (all in project root)
+project_root = Path(__file__).parent.parent  # z21-Terminal/ root
+GATE_CONFIG_PATH = project_root / 'gate_config.json'
 
 # Global instances
 z21_manager: Z21Manager = None
@@ -22,6 +31,7 @@ consist_data: Dict[int, Dict[str, Any]] = {}
 locomotive_data: Dict[int, Dict[str, Any]] = {}
 controllers_config: List[Dict[str, Any]] = []  # Shared controller configuration
 yolo_detections: Dict[str, Any] = {}  # Latest YOLO detections for video overlay
+timing_thresholds: Dict[str, float] = DEFAULT_TIMING_THRESHOLDS.copy()  # Dynamic thresholds from gate_config.json
 
 
 polling_task = None
@@ -154,9 +164,27 @@ async def broadcast_controllers_update():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    global z21_manager, tracking_manager, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config
+    global z21_manager, tracking_manager, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config, timing_thresholds
 
     print("🚂 z21-Terminal Backend Starting...")
+
+    # Load timing thresholds from gate_config.json
+    print("⏱️  Loading timing thresholds from gate_config.json...")
+    try:
+        with open(GATE_CONFIG_PATH, 'r') as f:
+            gate_config = json.load(f)
+            thresholds = gate_config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
+            timing_thresholds = {
+                'normal': thresholds.get('normal', DEFAULT_TIMING_THRESHOLDS['normal']),
+                'warning': thresholds.get('warning', DEFAULT_TIMING_THRESHOLDS['warning'])
+            }
+            print(f"  ✓ Timing thresholds: SYNCED < {timing_thresholds['normal']}s, WARNING < {timing_thresholds['warning']}s")
+    except FileNotFoundError:
+        print(f"  ⚠️  gate_config.json not found, using default thresholds ({DEFAULT_TIMING_THRESHOLDS['normal']}s/{DEFAULT_TIMING_THRESHOLDS['warning']}s)")
+        timing_thresholds = DEFAULT_TIMING_THRESHOLDS.copy()
+    except Exception as e:
+        print(f"  ⚠️  Error loading gate_config.json: {e}, using defaults")
+        timing_thresholds = DEFAULT_TIMING_THRESHOLDS.copy()
 
     # Load consist configuration from JMRI
     print("📋 Loading consists from JMRI...")
@@ -188,8 +216,8 @@ async def lifespan(app: FastAPI):
     # Initialize default controllers configuration
     # Try to pre-select consist 10 and 11 if they exist, otherwise leave empty
     print("🎮 Initializing default controllers...")
-    controller1 = {'id': 1, 'type': 'consist', 'address': 10} if 10 in consist_data else {'id': 1, 'type': None, 'address': None}
-    controller2 = {'id': 2, 'type': 'consist', 'address': 11} if 11 in consist_data else {'id': 2, 'type': None, 'address': None}
+    controller1 = {'id': 1, 'type': 'consist', 'address': 10} if 10 in consist_data else {**DEFAULT_CONTROLLER, 'id': 1}
+    controller2 = {'id': 2, 'type': 'consist', 'address': 11} if 11 in consist_data else {**DEFAULT_CONTROLLER, 'id': 2}
     controllers_config = [controller1, controller2]
 
     if controller1['type'] and controller2['type']:
@@ -570,11 +598,11 @@ async def video_feed():
             state = z21_manager.consist_state[11]
             delta_t = state.get('delta_t')
             if delta_t is not None:
-                # Calculate status based on thresholds
+                # Calculate status based on dynamic thresholds from gate_config.json
                 abs_delta_t = abs(delta_t)
-                if abs_delta_t < 0.5:
+                if abs_delta_t < timing_thresholds['normal']:
                     status = 'SYNCED'
-                elif abs_delta_t < 1.0:
+                elif abs_delta_t < timing_thresholds['warning']:
                     status = 'WARNING'
                 else:
                     status = 'CRITICAL'
@@ -668,6 +696,16 @@ async def websocket_endpoint(websocket: WebSocket):
                     if z21_manager and (is_consist or is_loco):
                         z21_manager.set_function(address, function_num, state)
                         await broadcast_state_update(address)
+
+                        # Also broadcast to individual loco panels if setting function on consist
+                        if is_consist and address in consist_data:
+                            locomotives = consist_data[address].get('locomotives', [])
+                            for loco in locomotives:
+                                loco_addr = loco['address']
+                                if loco_addr in locomotive_data:
+                                    # F0 goes to all, other functions only to lead
+                                    if function_num == 0 or loco_addr == locomotives[0]['address']:
+                                        await broadcast_state_update(loco_addr)
 
                 elif message_type == 'emergency_stop':
                     power_on = data.get('powerOn', False)
@@ -784,19 +822,21 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                     delta_t = data.get('delta_t')
                     status = data.get('status', 'UNKNOWN')
                     timestamp = data.get('timestamp')
+                    thresholds = data.get('thresholds', timing_thresholds)  # From daemon or fallback to loaded
 
                     if z21_manager and consist_address in consist_data:
                         # Update consist state with Δt data
                         z21_manager.consist_state[consist_address]['delta_t'] = delta_t
                         z21_manager.consist_state[consist_address]['delta_t_timestamp'] = timestamp
 
-                        # Broadcast to all frontend clients
+                        # Broadcast to all frontend clients (include thresholds)
                         message = {
                             'type': 'delta_t_update',
                             'consist_address': consist_address,
                             'delta_t': delta_t,
                             'status': status,
-                            'timestamp': timestamp
+                            'timestamp': timestamp,
+                            'thresholds': thresholds  # Dynamic thresholds from daemon
                         }
 
                         disconnected_clients = []

@@ -128,12 +128,7 @@ GATE_SAVED_COLOR = (0, 255, 0)  # Green
 
 # Gate timing detection (Phase 4 - loaded from gate_config.json)
 # Consist 11: 2 shared gates - both locos cross both gates
-# Gates are now loaded dynamically from JSON config
-
-# Timing thresholds (seconds)
-TIMING_THRESHOLD_NORMAL = 1.0   # |Δt| < 1.0s = green (synced)
-TIMING_THRESHOLD_WARNING = 2.0  # |Δt| 1.0-2.0s = yellow (warning)
-# |Δt| > 2.0s = red (critical desync)
+# Gates and timing thresholds loaded dynamically from JSON config
 
 # Gate configuration file (in project root)
 CONFIG_FILE = Path(__file__).parent.parent / "gate_config.json"
@@ -143,7 +138,7 @@ def load_gate_config():
     """Load gate configuration from JSON file."""
     if not CONFIG_FILE.exists():
         print(f"⚠️  Config file not found: {CONFIG_FILE}")
-        return {"gates": [], "tracking_assignments": {}}
+        return {"gates": [], "tracking_assignments": {}, "timing_thresholds": {"normal": 1.0, "warning": 2.0}}
 
     try:
         with open(CONFIG_FILE, 'r') as f:
@@ -152,7 +147,7 @@ def load_gate_config():
         return config
     except Exception as e:
         print(f"❌ Error loading config: {e}")
-        return {"gates": [], "tracking_assignments": {}}
+        return {"gates": [], "tracking_assignments": {}, "timing_thresholds": {"normal": 1.0, "warning": 2.0}}
 
 
 def save_gate_config(config):
@@ -457,12 +452,18 @@ class YOLOTracker:
         print(f"🤖 Loading YOLO model: {model_path}")
         self.model = YOLO(model_path)
 
-        # Load gates from config
+        # Load gates and thresholds from config
         config = load_gate_config()
         self.gates = {}
         for gate in config['gates']:
             self.gates[gate['id']] = gate_json_to_dict(gate)
         print(f"🚪 Loaded {len(self.gates)} gates from config")
+
+        # Load timing thresholds
+        thresholds = config.get('timing_thresholds', {'normal': 1.0, 'warning': 2.0})
+        self.threshold_normal = thresholds.get('normal', 1.0)
+        self.threshold_warning = thresholds.get('warning', 2.0)
+        print(f"⏱️  Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
 
         # Consist 10 (Tracciato Interno)
         self.c10_lead_pos = None
@@ -888,10 +889,10 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
     # Cross-gate Δt (single value)
     if tracker.delta_t is not None:
         dt_abs = abs(tracker.delta_t)
-        if dt_abs < TIMING_THRESHOLD_NORMAL:
+        if dt_abs < tracker.threshold_normal:
             color = (0, 255, 0)  # Green
             status = "SYNCED"
-        elif dt_abs < TIMING_THRESHOLD_WARNING:
+        elif dt_abs < tracker.threshold_warning:
             color = (0, 255, 255)  # Yellow
             status = "WARNING"
         else:
@@ -1259,9 +1260,9 @@ def track_consist(model_path: str):
     if tracker.delta_t is not None:
         # Calculate status based on thresholds
         dt_abs = abs(tracker.delta_t)
-        if dt_abs < TIMING_THRESHOLD_NORMAL:
+        if dt_abs < tracker.threshold_normal:
             status = "🟢 SYNCED"
-        elif dt_abs < TIMING_THRESHOLD_WARNING:
+        elif dt_abs < tracker.threshold_warning:
             status = "🟡 WARNING"
         else:
             status = "🔴 CRITICAL DESYNC"
@@ -1280,9 +1281,9 @@ def track_consist(model_path: str):
 
     print()
     print("   Thresholds:")
-    print(f"   🟢 |Δt| < {TIMING_THRESHOLD_NORMAL}s = SYNCED")
-    print(f"   🟡 |Δt| {TIMING_THRESHOLD_NORMAL}-{TIMING_THRESHOLD_WARNING}s = WARNING")
-    print(f"   🔴 |Δt| > {TIMING_THRESHOLD_WARNING}s = CRITICAL")
+    print(f"   🟢 |Δt| < {tracker.threshold_normal}s = SYNCED")
+    print(f"   🟡 |Δt| {tracker.threshold_normal}-{tracker.threshold_warning}s = WARNING")
+    print(f"   🔴 |Δt| > {tracker.threshold_warning}s = CRITICAL")
     print()
 
     # Co-visibility statistics (secondary)

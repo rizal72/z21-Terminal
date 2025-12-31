@@ -53,5 +53,10 @@
       "rear_address": 5,
       "notes": "Gates to be configured"
     }
+  },
+  "timing_thresholds": {
+    "normal": 1.0,
+    "warning": 2.0,
+    "notes": "Thresholds in seconds: |Δt| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL"
   }
 }
