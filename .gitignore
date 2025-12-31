@@ -42,6 +42,7 @@ scripts/utils/data/
 config.local.py
 secrets.json
 .env
+camera_config.json
 
 # Node/NPM (Frontend)
 node_modules/

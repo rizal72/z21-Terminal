@@ -3,6 +3,7 @@ FastAPI backend per z21-Terminal Web Dashboard
 """
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any
 import json
 import asyncio
@@ -10,13 +11,17 @@ from contextlib import asynccontextmanager
 
 from z21_manager import Z21Manager
 from roster_loader import load_consist_with_functions, load_all_locomotives
+from tracking_manager import TrackingManager
+from video_feed import generate_video_frames
 
 # Global instances
 z21_manager: Z21Manager = None
+tracking_manager: TrackingManager = None
 connected_clients: List[WebSocket] = []
 consist_data: Dict[int, Dict[str, Any]] = {}
 locomotive_data: Dict[int, Dict[str, Any]] = {}
 controllers_config: List[Dict[str, Any]] = []  # Shared controller configuration
+yolo_detections: Dict[str, Any] = {}  # Latest YOLO detections for video overlay
 
 
 polling_task = None
@@ -149,7 +154,7 @@ async def broadcast_controllers_update():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    global z21_manager, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config
+    global z21_manager, tracking_manager, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config
 
     print("🚂 z21-Terminal Backend Starting...")
 
@@ -231,12 +236,18 @@ async def lifespan(app: FastAPI):
         polling_task = asyncio.create_task(poll_track_power())
         health_check_task = asyncio.create_task(health_check_z21())
 
+        # Initialize Tracking Manager
+        print("🎯 Initializing Tracking Manager...")
+        tracking_manager = TrackingManager(z21_manager, connected_clients)
+        print("  ✓ Tracking Manager ready")
+
     else:
         print("  ✗ Failed to connect to Z21")
         z21_online = False
 
     print("✅ Backend ready!")
     print("🌐 WebSocket endpoint: ws://localhost:8000/ws")
+    print("🎥 WebSocket tracking endpoint: ws://localhost:8000/ws/tracking")
 
     yield
 
@@ -254,6 +265,8 @@ async def lifespan(app: FastAPI):
             await health_check_task
         except asyncio.CancelledError:
             pass
+    if tracking_manager:
+        await tracking_manager.shutdown()
     if z21_manager:
         z21_manager.disconnect()
     print("✅ Cleanup complete")
@@ -303,7 +316,10 @@ async def broadcast_state_update(address: int):
             'direction': state.get('direction', 'forward'),
             'power': state.get('power', True),
             'functions': function_definitions,  # Function definitions (array)
-            'functionStates': state.get('functions', {})  # Function states (object)
+            'functionStates': state.get('functions', {}),  # Function states (object)
+            'virtual_mode': state.get('virtual_mode', False),  # NEW: Virtual Mode status
+            'delta_t': state.get('delta_t'),  # NEW: Latest Δt from tracking (or None)
+            'delta_t_timestamp': state.get('delta_t_timestamp')  # NEW: Timestamp
         }
     }
 
@@ -344,7 +360,10 @@ async def broadcast_initial_state():
             'direction': state.get('direction', 'forward'),
             'power': state.get('power', True),
             'functions': data.get('functions', []),
-            'functionStates': state.get('functions', {})
+            'functionStates': state.get('functions', {}),
+            'virtual_mode': state.get('virtual_mode', False),  # NEW
+            'delta_t': state.get('delta_t'),  # NEW
+            'delta_t_timestamp': state.get('delta_t_timestamp')  # NEW
         }
 
     # Build locomotives state
@@ -468,7 +487,10 @@ async def get_consists():
             'direction': state.get('direction', 'forward'),
             'power': state.get('power', True),
             'functions': data['functions'],
-            'functionStates': state.get('functions', {})  # Actual function states from Z21
+            'functionStates': state.get('functions', {}),  # Actual function states from Z21
+            'virtual_mode': state.get('virtual_mode', False),  # NEW
+            'delta_t': state.get('delta_t'),  # NEW
+            'delta_t_timestamp': state.get('delta_t_timestamp')  # NEW
         }
 
     return result
@@ -533,6 +555,52 @@ async def reload_roster():
         }
 
 
+@app.get("/api/video_feed")
+async def video_feed():
+    """
+    MJPEG video stream with gate overlay and tracking info
+
+    Returns:
+        StreamingResponse: MJPEG stream
+    """
+    def get_tracking_data():
+        """Callback to get latest tracking data for overlay"""
+        # For now, return Consist 11 data if available
+        if z21_manager and 11 in z21_manager.consist_state:
+            state = z21_manager.consist_state[11]
+            delta_t = state.get('delta_t')
+            if delta_t is not None:
+                # Calculate status based on thresholds
+                abs_delta_t = abs(delta_t)
+                if abs_delta_t < 0.5:
+                    status = 'SYNCED'
+                elif abs_delta_t < 1.0:
+                    status = 'WARNING'
+                else:
+                    status = 'CRITICAL'
+
+                return {
+                    'consist_address': 11,
+                    'delta_t': delta_t,
+                    'status': status,
+                    'timestamp': state.get('delta_t_timestamp')
+                }
+        return None
+
+    def get_yolo_detections():
+        """Callback to get latest YOLO detections for locomotive markers"""
+        global yolo_detections
+        return yolo_detections.get('detections', [])
+
+    return StreamingResponse(
+        generate_video_frames(
+            tracking_data_callback=get_tracking_data,
+            yolo_detections_callback=get_yolo_detections
+        ),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time control"""
@@ -554,6 +622,10 @@ async def websocket_endpoint(websocket: WebSocket):
         })
         print(f"  ✓ Sent initial state (trackPower={last_track_power_state}, z21Online={z21_online})")
 
+        # Notify tracking manager of client connection
+        if tracking_manager:
+            await tracking_manager.on_client_connected()
+
         # Handle incoming messages
         while True:
             try:
@@ -568,6 +640,10 @@ async def websocket_endpoint(websocket: WebSocket):
                     if z21_manager and (address in consist_data or address in locomotive_data):
                         z21_manager.set_speed(address, speed, forward)
                         await broadcast_state_update(address)
+
+                        # Notify tracking manager of speed change
+                        if tracking_manager and address in consist_data:
+                            await tracking_manager.on_speed_change(address, speed)
 
                 elif message_type == 'set_direction':
                     address = data.get('address')
@@ -653,6 +729,24 @@ async def websocket_endpoint(websocket: WebSocket):
                                     await broadcast_state_update(selected_address)
                                 break
 
+                elif message_type == 'toggle_virtual_mode':
+                    # Toggle Virtual Consist Mode (CV19 write only, no speed compensation)
+                    consist_address = data.get('address')
+                    enable = data.get('enable', False)
+
+                    if z21_manager and consist_address in consist_data:
+                        if enable:
+                            success = z21_manager.enable_virtual_mode(consist_address)
+                        else:
+                            success = z21_manager.disable_virtual_mode(consist_address)
+
+                        if success:
+                            # Broadcast updated state to all clients
+                            await broadcast_state_update(consist_address)
+                            print(f"  ✓ Virtual Mode {'enabled' if enable else 'disabled'} for consist {consist_address}")
+                        else:
+                            print(f"  ✗ Failed to toggle Virtual Mode for consist {consist_address}")
+
             except json.JSONDecodeError:
                 print("Invalid JSON received")
                 continue
@@ -664,6 +758,81 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         if websocket in connected_clients:
             connected_clients.remove(websocket)
+
+        # Notify tracking manager of client disconnection
+        if tracking_manager:
+            await tracking_manager.on_client_disconnected()
+
+
+@app.websocket("/ws/tracking")
+async def websocket_tracking_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for tracking daemon connection"""
+    await websocket.accept()
+
+    print(f"🎥 Tracking daemon connected")
+
+    try:
+        # Handle incoming messages from tracking daemon
+        while True:
+            try:
+                data = await websocket.receive_json()
+                message_type = data.get('type')
+
+                if message_type == 'delta_t_update':
+                    # Update from tracking daemon with new Δt calculation
+                    consist_address = data.get('consist_address')
+                    delta_t = data.get('delta_t')
+                    status = data.get('status', 'UNKNOWN')
+                    timestamp = data.get('timestamp')
+
+                    if z21_manager and consist_address in consist_data:
+                        # Update consist state with Δt data
+                        z21_manager.consist_state[consist_address]['delta_t'] = delta_t
+                        z21_manager.consist_state[consist_address]['delta_t_timestamp'] = timestamp
+
+                        # Broadcast to all frontend clients
+                        message = {
+                            'type': 'delta_t_update',
+                            'consist_address': consist_address,
+                            'delta_t': delta_t,
+                            'status': status,
+                            'timestamp': timestamp
+                        }
+
+                        disconnected_clients = []
+                        for client in connected_clients:
+                            try:
+                                await client.send_json(message)
+                            except Exception:
+                                disconnected_clients.append(client)
+
+                        # Remove disconnected clients
+                        for client in disconnected_clients:
+                            if client in connected_clients:
+                                connected_clients.remove(client)
+
+                        print(f"  📊 Δt update: consist {consist_address} = {delta_t:.3f}s ({status})")
+
+                elif message_type == 'yolo_detections':
+                    # YOLO detection positions for video overlay
+                    global yolo_detections
+                    yolo_detections = {
+                        'detections': data.get('detections', []),
+                        'timestamp': data.get('timestamp')
+                    }
+
+                elif message_type == 'tracking_positions':
+                    # Legacy position format (optional, for debugging)
+                    pass
+
+            except json.JSONDecodeError:
+                print("Invalid JSON received from tracking daemon")
+                continue
+
+    except WebSocketDisconnect:
+        print(f"🎥 Tracking daemon disconnected")
+    except Exception as e:
+        print(f"Tracking WebSocket error: {e}")
 
 
 if __name__ == "__main__":

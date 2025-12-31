@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import DeltaTStatsPanel from './DeltaTStatsPanel';
 
 export default function ConsistController({
   item,
@@ -13,7 +14,8 @@ export default function ConsistController({
   onFocus,
   onSpeedChange,
   onDirectionChange,
-  onFunctionToggle
+  onFunctionToggle,
+  onToggleVirtualMode
 }) {
   const [speed, setSpeed] = useState(0);
   const [direction, setDirection] = useState('forward');
@@ -462,6 +464,17 @@ export default function ConsistController({
         </div>
       </div>
 
+      {/* Delta T Stats Panel - Only for consists */}
+      {selection.type === 'consist' && item.delta_t !== undefined && (
+        <div className="mb-6">
+          <DeltaTStatsPanel
+            consistAddress={selection.address}
+            deltaT={item.delta_t}
+            deltaTTimestamp={item.delta_t_timestamp}
+          />
+        </div>
+      )}
+
       {/* Stop and Direction controls */}
       <div className="mb-8 grid grid-cols-2 gap-2 md:gap-4">
         {/* Stop button */}
@@ -501,6 +514,51 @@ export default function ConsistController({
           </span>
         </button>
       </div>
+
+      {/* Virtual Mode Toggle - Only for consists */}
+      {selection.type === 'consist' && (
+        <div className="mb-8">
+          <button
+            onClick={() => {
+              if (onToggleVirtualMode) {
+                onToggleVirtualMode(selection.address, !item.virtual_mode);
+              }
+            }}
+            disabled={!trackPower}
+            className={`w-full control-panel py-4 px-6 flex items-center justify-between hover:border-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation ${
+              item.virtual_mode ? 'border-signal-green' : ''
+            }`}
+            title={item.virtual_mode ? 'Virtual Mode Active - CV19=0' : 'DCC Consist Mode - CV19=consist_address'}
+          >
+            <div className="flex items-center gap-3">
+              <i className={`fa-solid ${item.virtual_mode ? 'fa-gears' : 'fa-link'} text-xl`}
+                style={{ color: item.virtual_mode ? '#06d6a0' : '#64748b' }}
+              ></i>
+              <span className="font-display font-semibold uppercase text-sm">
+                {item.virtual_mode ? 'Virtual Consist Mode' : 'DCC Consist Mode'}
+              </span>
+            </div>
+            <div className={`px-3 py-1 rounded-full text-xs font-mono ${
+              item.virtual_mode
+                ? 'bg-signal-green/20 text-signal-green'
+                : 'bg-control-grey text-track-steel'
+            }`}>
+              {item.virtual_mode ? 'CV19=0' : `CV19=${selection.address}`}
+            </div>
+          </button>
+          <div className="mt-2 text-xs text-track-steel font-sans text-center">
+            {item.virtual_mode ? (
+              <>
+                <span className="text-signal-green">●</span> Locomotives freed from consist • Individual speed control possible
+              </>
+            ) : (
+              <>
+                <span className="text-track-steel">●</span> Standard DCC consist • Locomotives synchronized via CV19
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Functions grid */}
       {Array.isArray(item.functions) && item.functions.length > 0 ? (

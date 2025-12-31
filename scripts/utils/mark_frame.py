@@ -240,12 +240,11 @@ class FrameMarker:
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python3 mark_frame.py <username> <password>")
-        return
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))  # Add scripts/ to path
+    from camera_utils import load_camera_config
 
-    username, password = sys.argv[1], sys.argv[2]
-    rtsp_url = f"rtsp://{username}:{password}@{CAMERA_IP}:{CAMERA_PORT}/{STREAM}"
+    rtsp_url, camera_ip, camera_port, stream = load_camera_config()
 
     print("🎥 Connecting to camera...")
     cap = cv2.VideoCapture(rtsp_url)

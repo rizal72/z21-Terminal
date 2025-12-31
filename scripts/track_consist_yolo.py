@@ -12,7 +12,10 @@ Perspective Correction:
     - Coordinates transformed in background for accurate measurements
 
 Usage:
-    python track_consist_yolo.py <username> <password> [--model best.pt]
+    python track_consist_yolo.py [--model best.pt]
+
+    Camera credentials are loaded from backend/camera_config.json
+    (see backend/README_CAMERA.md for setup)
 
 Controls:
     - Q: Quit
@@ -128,12 +131,12 @@ GATE_SAVED_COLOR = (0, 255, 0)  # Green
 # Gates are now loaded dynamically from JSON config
 
 # Timing thresholds (seconds)
-TIMING_THRESHOLD_NORMAL = 0.5   # |Δt| < 0.5s = green (synced)
-TIMING_THRESHOLD_WARNING = 1.0  # |Δt| 0.5-1.0s = yellow (warning)
-# |Δt| > 1.0s = red (critical desync)
+TIMING_THRESHOLD_NORMAL = 1.0   # |Δt| < 1.0s = green (synced)
+TIMING_THRESHOLD_WARNING = 2.0  # |Δt| 1.0-2.0s = yellow (warning)
+# |Δt| > 2.0s = red (critical desync)
 
-# Gate configuration file
-CONFIG_FILE = Path(__file__).parent / "gate_config.json"
+# Gate configuration file (in project root)
+CONFIG_FILE = Path(__file__).parent.parent / "gate_config.json"
 
 
 def load_gate_config():
@@ -979,9 +982,11 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
 
-def track_consist(username: str, password: str, model_path: str):
+def track_consist(model_path: str):
     """Main tracking loop."""
-    rtsp_url = f"rtsp://{username}:{password}@{CAMERA_IP}:{CAMERA_PORT}/{STREAM}"
+    # Load camera config from shared config file
+    from camera_utils import load_camera_config
+    rtsp_url, camera_ip, camera_port, stream = load_camera_config()
 
     print("🎥 Starting YOLO Tracking...")
     print()
@@ -1296,14 +1301,6 @@ def main():
         description="YOLO-based tracking for BOTH Consist 10 and Consist 11"
     )
     parser.add_argument(
-        "username",
-        help="Camera username"
-    )
-    parser.add_argument(
-        "password",
-        help="Camera password"
-    )
-    parser.add_argument(
         "--model",
         default="models/best.pt",
         help="Path to trained YOLO model (default: models/best.pt)"
@@ -1319,7 +1316,7 @@ def main():
         print(f"   and place it in: {Path(__file__).parent / 'models'}")
         return
 
-    track_consist(args.username, args.password, str(model_path))
+    track_consist(str(model_path))
 
 
 if __name__ == '__main__':

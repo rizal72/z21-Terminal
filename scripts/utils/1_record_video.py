@@ -26,10 +26,14 @@ CAMERA_PORT = 554
 STREAM = "stream1"  # 2K/1080P stream (maximum resolution)
 
 
-def view_camera(username: str, password: str):
+def view_camera():
     """View live camera feed."""
-    # Build RTSP URL
-    rtsp_url = f"rtsp://{username}:{password}@{CAMERA_IP}:{CAMERA_PORT}/{STREAM}"
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))  # Add scripts/ to path
+    from camera_utils import load_camera_config
+
+    # Load camera config
+    rtsp_url, camera_ip, camera_port, stream = load_camera_config()
 
     print("🎥 Opening camera feed...")
     print("Controls:")
@@ -184,17 +188,7 @@ def view_camera(username: str, password: str):
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python view_camera.py <username> <password>")
-        print()
-        print("Example:")
-        print("  python view_camera.py rizal72 mypassword")
-        return
-
-    username = sys.argv[1]
-    password = sys.argv[2]
-
-    view_camera(username, password)
+    view_camera()
 
 
 if __name__ == '__main__':

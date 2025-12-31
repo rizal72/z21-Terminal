@@ -60,7 +60,10 @@ class Z21Manager:
             'speed': 0,
             'direction': 'forward',
             'power': True,
-            'functions': {}  # {0: False, 1: False, ...}
+            'functions': {},  # {0: False, 1: False, ...}
+            'virtual_mode': False,  # NEW: Virtual Consist Mode toggle
+            'delta_t': None,  # NEW: Latest Δt from tracking daemon (for display only)
+            'delta_t_timestamp': None  # NEW: When Δt was last updated
         }
 
         # Initialize function states
@@ -264,6 +267,101 @@ class Z21Manager:
             print(f"Error syncing consist {address}: {e}")
 
         return None
+
+    def enable_virtual_mode(self, consist_address):
+        """
+        Enable Virtual Mode: write CV19=0 to both locos (operations mode)
+
+        This frees locomotives from consist, but does NOT auto-compensate speed yet.
+        MVP: Only CV19 toggle, speed compensation is Phase 2.
+
+        Args:
+            consist_address (int): Consist address
+
+        Returns:
+            bool: True if successful
+        """
+        if consist_address not in self.consist_state:
+            print(f"⚠️  Consist {consist_address} not found")
+            return False
+
+        consist = self.consist_state[consist_address]
+        locomotives = consist.get('locomotives', [])
+
+        if len(locomotives) < 2:
+            print(f"⚠️  Consist {consist_address} has less than 2 locomotives")
+            return False
+
+        lead_addr = locomotives[0]['address']
+        rear_addr = locomotives[1]['address']
+
+        print(f"⚙️  Enabling Virtual Mode for consist {consist_address}...")
+        print(f"   → Writing CV19=0 to loco {lead_addr} (lead)")
+        print(f"   → Writing CV19=0 to loco {rear_addr} (rear)")
+
+        # Write CV19=0 to free from consist (operations mode)
+        success_lead = self.z21.write_cv_ops_mode(lead_addr, 19, 0)
+        success_rear = self.z21.write_cv_ops_mode(rear_addr, 19, 0)
+
+        if success_lead and success_rear:
+            consist['virtual_mode'] = True
+            print(f"  ✓ Virtual Mode enabled for consist {consist_address}")
+            return True
+        else:
+            error_locos = []
+            if not success_lead:
+                error_locos.append(f"lead {lead_addr}")
+            if not success_rear:
+                error_locos.append(f"rear {rear_addr}")
+            print(f"  ✗ Failed to enable Virtual Mode: CV write failed for {', '.join(error_locos)}")
+            return False
+
+    def disable_virtual_mode(self, consist_address):
+        """
+        Disable Virtual Mode: restore CV19=consist_address
+
+        This restores normal DCC consist operation.
+
+        Args:
+            consist_address (int): Consist address
+
+        Returns:
+            bool: True if successful
+        """
+        if consist_address not in self.consist_state:
+            print(f"⚠️  Consist {consist_address} not found")
+            return False
+
+        consist = self.consist_state[consist_address]
+        locomotives = consist.get('locomotives', [])
+
+        if len(locomotives) < 2:
+            print(f"⚠️  Consist {consist_address} has less than 2 locomotives")
+            return False
+
+        lead_addr = locomotives[0]['address']
+        rear_addr = locomotives[1]['address']
+
+        print(f"⚙️  Disabling Virtual Mode for consist {consist_address}...")
+        print(f"   → Writing CV19={consist_address} to loco {lead_addr} (lead)")
+        print(f"   → Writing CV19={consist_address} to loco {rear_addr} (rear)")
+
+        # Restore CV19 to consist address (operations mode)
+        success_lead = self.z21.write_cv_ops_mode(lead_addr, 19, consist_address)
+        success_rear = self.z21.write_cv_ops_mode(rear_addr, 19, consist_address)
+
+        if success_lead and success_rear:
+            consist['virtual_mode'] = False
+            print(f"  ✓ Virtual Mode disabled for consist {consist_address}")
+            return True
+        else:
+            error_locos = []
+            if not success_lead:
+                error_locos.append(f"lead {lead_addr}")
+            if not success_rear:
+                error_locos.append(f"rear {rear_addr}")
+            print(f"  ✗ Failed to disable Virtual Mode: CV write failed for {', '.join(error_locos)}")
+            return False
 
 
 if __name__ == '__main__':

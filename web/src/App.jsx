@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import ConsistController from './components/ConsistController';
+import VideoFeedPanel from './components/VideoFeedPanel';
 import { useWebSocket } from './hooks/useWebSocket';
 
 // Mock data for development - will be replaced with real data from backend
@@ -246,6 +247,33 @@ function App() {
               functions: lastMessage.data.functions || currentLoco.functions,
               // Update function states from backend (correct key!)
               functionStates: lastMessage.data.functionStates || currentLoco.functionStates || {}
+            }
+          };
+        });
+      } else if (lastMessage.type === 'delta_t_update') {
+        // Delta T update from tracking daemon
+        const consistAddress = lastMessage.consist_address;
+        const deltaT = lastMessage.delta_t;
+        const timestamp = lastMessage.timestamp;
+
+        // Update consist with delta_t data (only if changed)
+        setConsists(prev => {
+          const currentConsist = prev[consistAddress];
+          if (!currentConsist) {
+            return prev; // Consist not found
+          }
+
+          // Check if delta_t actually changed (prevent unnecessary re-renders)
+          if (currentConsist.delta_t === deltaT) {
+            return prev; // Same value, don't update
+          }
+
+          return {
+            ...prev,
+            [consistAddress]: {
+              ...currentConsist,
+              delta_t: deltaT,
+              delta_t_timestamp: timestamp
             }
           };
         });
@@ -604,6 +632,32 @@ function App() {
     return controller ? { type: controller.type, address: controller.address } : null;
   };
 
+  // Virtual Mode toggle handler
+  const handleToggleVirtualMode = (consistAddress, enable) => {
+    console.log('toggleVirtualMode:', { consistAddress, enable });
+
+    // Send to backend
+    sendMessage({
+      type: 'toggle_virtual_mode',
+      address: consistAddress,
+      enable
+    });
+
+    // Optimistic update - backend will broadcast confirmation
+    setConsists(prev => {
+      const currentConsist = prev[consistAddress];
+      if (!currentConsist) return prev;
+
+      return {
+        ...prev,
+        [consistAddress]: {
+          ...currentConsist,
+          virtual_mode: enable
+        }
+      };
+    });
+  };
+
   return (
     <div className="min-h-screen bg-control-black grain-overlay">
       {/* Header */}
@@ -775,6 +829,9 @@ function App() {
           </div>
         )}
 
+        {/* Video Feed Panel - Collapsible */}
+        <VideoFeedPanel apiUrl={API_URL} />
+
         {/* Controllers grid - Dynamic and scalable */}
         <div className="controllers-grid grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-8">
           {controllers.map((controller, index) => {
@@ -803,6 +860,7 @@ function App() {
                   onSpeedChange={handleSpeedChange}
                   onDirectionChange={handleDirectionChange}
                   onFunctionToggle={handleFunctionToggle}
+                  onToggleVirtualMode={handleToggleVirtualMode}
                 />
               </div>
             );
