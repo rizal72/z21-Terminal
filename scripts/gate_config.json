@@ -3,21 +3,35 @@
     {
       "id": 1,
       "name": "Bottom Right (vicino)",
-      "center": [1227, 213],
+      "center": [
+        1227,
+        213
+      ],
       "width": 100,
       "height": 100,
       "angle": 0,
-      "color": [255, 255, 0],
+      "color": [
+        255,
+        255,
+        0
+      ],
       "notes": "Gate vicino alla camera - bottom right"
     },
     {
       "id": 2,
       "name": "Top Left (lontano)",
-      "center": [141, 162],
+      "center": [
+        141,
+        162
+      ],
       "width": 60,
       "height": 60,
       "angle": 0,
-      "color": [255, 165, 0],
+      "color": [
+        255,
+        165,
+        0
+      ],
       "notes": "Gate lontano dalla camera - top left"
     }
   ],

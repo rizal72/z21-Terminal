@@ -26,8 +26,8 @@ Marker Mode (for gate positioning):
     - M: Toggle marker mode ON/OFF
     - CLICK: Place new gate OR start dragging existing gate
     - DRAG: Move gate (click + hold on gate, drag with mouse, release)
-    - W/H: Increase/decrease height (+/- 10px)
-    - Z/X: Decrease/increase width (+/- 10px)
+    - Arrow UP/DOWN: Increase/decrease height (+/- 10px)
+    - Arrow LEFT/RIGHT: Decrease/increase width (+/- 10px)
     - R: Rotate counter-clockwise (15° steps)
     - ENTER: Save current gate (auto-generates ID, adds to config)
     - C: Clear current gate being positioned (unsaved)
@@ -746,14 +746,19 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
             cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
             cv2.putText(frame, "MARKER MODE (M to exit)", (15, frame.shape[0] - 75),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-            cv2.putText(frame, "CLICK/DRAG: move | W/H: height | Z/X: width", (15, frame.shape[0] - 53),
+            cv2.putText(frame, "CLICK/DRAG: move | UP/DOWN: height | LEFT/RIGHT: width", (15, frame.shape[0] - 53),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
             cv2.putText(frame, "ENTER: save | S: save all | C: clear", (15, frame.shape[0] - 33),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
             cv2.putText(frame, "E: export gates to console", (15, frame.shape[0] - 13),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
-    # Draw timing gates (always visible - cyan/blue color for distinction)
+    # Early return if panels hidden (P key pressed) - calculation continues in background
+    # Gate markers also hidden when panels are off
+    if not show_panels:
+        return
+
+    # Draw timing gates (visible only when panels ON)
     # Gate 1 (VICINO - bottom right)
     gate1 = tracker.gates[1]
     gate1_points = get_rotated_rect_points(
@@ -775,10 +780,6 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
     cv2.polylines(frame, [gate2_points], True, (255, 128, 0), 2)  # Orange/cyan
     cv2.putText(frame, "G2", (gate2['center_x'] - 10, gate2['center_y'] + 5),
                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 128, 0), 2)
-
-    # Early return if panels hidden (P key pressed) - calculation continues in background
-    if not show_panels:
-        return
 
     # All panels below (can be toggled with P key)
     # Info panel with background
@@ -970,7 +971,7 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
             cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
             cv2.putText(frame, "MARKER MODE (M to exit)", (15, frame.shape[0] - 75),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-            cv2.putText(frame, "CLICK/DRAG: move | W/H: height | Z/X: width", (15, frame.shape[0] - 53),
+            cv2.putText(frame, "CLICK/DRAG: move | UP/DOWN: height | LEFT/RIGHT: width", (15, frame.shape[0] - 53),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
             cv2.putText(frame, "ENTER: save | S: save all | C: clear", (15, frame.shape[0] - 33),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
@@ -1192,26 +1193,26 @@ def track_consist(username: str, password: str, model_path: str):
         elif key == ord('m') or key == ord('M'):
             enabled = marker_state.toggle()
             print(f"🎯 Marker mode: {'ON' if enabled else 'OFF'}")
-        elif key == ord('w') or key == ord('W'):
+        elif key == 0 or key == 82:  # Arrow UP (Mac: 0, Linux: 82)
             if marker_state.current_gate:
                 marker_state.adjust_height(10)
                 h = marker_state.current_gate['height']
-                print(f"⬆️  Height increased: {h}px")
-        elif key == ord('h') or key == ord('H'):
+                print(f"^ Height increased: {h}px")
+        elif key == 1 or key == 84:  # Arrow DOWN (Mac: 1, Linux: 84)
             if marker_state.current_gate:
                 marker_state.adjust_height(-10)
                 h = marker_state.current_gate['height']
-                print(f"⬇️  Height decreased: {h}px")
-        elif key == ord('z') or key == ord('Z'):
+                print(f"v Height decreased: {h}px")
+        elif key == 2 or key == 81:  # Arrow LEFT (Mac: 2, Linux: 81)
             if marker_state.current_gate:
                 marker_state.adjust_width(-10)
                 w = marker_state.current_gate['width']
-                print(f"⬅️  Width decreased: {w}px")
-        elif key == ord('x') or key == ord('X'):
+                print(f"< Width decreased: {w}px")
+        elif key == 3 or key == 83:  # Arrow RIGHT (Mac: 3, Linux: 83)
             if marker_state.current_gate:
                 marker_state.adjust_width(10)
                 w = marker_state.current_gate['width']
-                print(f"➡️  Width increased: {w}px")
+                print(f"> Width increased: {w}px")
         elif key == 13:  # ENTER key
             if marker_state.current_gate:
                 marker_state.save_current_gate()
