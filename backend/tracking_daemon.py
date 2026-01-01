@@ -76,6 +76,14 @@ CLASS_NAMES = {
     3: '8_E444_056'      # Consist 11 rear
 }
 
+# Reverse mapping: DCC address → YOLO class ID
+ADDRESS_TO_CLASS = {
+    1: 0,  # Consist 10 lead
+    5: 1,  # Consist 10 rear
+    7: 2,  # Consist 11 lead
+    8: 3   # Consist 11 rear
+}
+
 # === GATE CONFIGURATION ===
 def load_gate_config():
     """Load gate configuration from JSON file."""
@@ -175,7 +183,7 @@ def is_point_in_gate(point, gate):
 # === YOLO TRACKER ===
 class YOLOTracker:
     """
-    YOLO-based locomotive tracker with cross-gate timing detection.
+    YOLO-based locomotive tracker with cross-gate timing detection (config-driven multi-consist).
 
     NOMENCLATURE (CRITICAL):
     - lead/rear = JMRI consist roles (NOT physical position!)
@@ -185,7 +193,7 @@ class YOLOTracker:
       - reference: stable decoder, NEVER modified
       - adjust: unstable decoder, ALWAYS compensated
 
-    CONSIST 11 MAPPING:
+    CONSIST 11 MAPPING EXAMPLE:
     - Lead JMRI (loco 7, E656_239) = Adjust (Hornby unstable)
     - Rear JMRI (loco 8, E444_056) = Reference (ESU stable)
 
@@ -197,16 +205,15 @@ class YOLOTracker:
     - Cross-validation: |Δt₁ - Δt₂| < threshold confirms drift
 
     FRESH TIMESTAMPS LOGIC:
-    - self.last_delta_t_time = max(timestamp1, timestamp2)
+    - last_delta_t_time = max(timestamp1, timestamp2)
     - Ensures BOTH timestamps are fresh (> last_delta_t_time)
     - Prevents spurious Δt from stale timestamps
 
-    NOTE: Currently hardcoded for Consist 11 only.
-    Future refactoring (Phase 4C) will support multiple consists dynamically.
+    PHASE 5 COMPLETE: Generic multi-consist support (consists loaded from gate_config.json).
     """
 
     def __init__(self, model_path: str):
-        """Initialize tracker with YOLO model."""
+        """Initialize tracker with YOLO model (config-driven multi-consist support)."""
         print(f"🤖 Loading YOLO model: {model_path}")
         self.model = YOLO(model_path)
 
@@ -227,46 +234,66 @@ class YOLOTracker:
         self.delta_t_max_threshold = thresholds.get('max_delta_t', 15.0)
         print(f"⚠️  Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
 
-        # Load reference loco configuration (future-proofing for Phase 5)
+        # Load reference loco configuration
         self.reference_locos = config.get('reference_locos', {})
         if self.reference_locos:
             print(f"🎯 Reference locos: {len(self.reference_locos)} consists configured")
 
-        # Consist 10 (Tracciato Interno)
-        self.c10_lead_pos = None
-        self.c10_rear_pos = None
+        # === PHASE 5: CONFIG-DRIVEN MULTI-CONSIST SUPPORT ===
+        # Load tracking assignments from gate_config.json
+        tracking_assignments = config.get('tracking_assignments', {})
 
-        # Consist 11 (Tracciato Esterno)
-        self.c11_lead_pos = None
-        self.c11_rear_pos = None
+        # Build consist_config (mapping consist_id → addresses + YOLO class IDs)
+        self.consist_config = {}
+        for consist_key, consist_info in tracking_assignments.items():
+            # Skip JSON comments (keys starting with "_")
+            if consist_key.startswith('_'):
+                continue
 
-        # Gate timing detection (Phase 4 - Consist 11)
-        self.c11_lead_gate1_timestamp = None
-        self.c11_lead_gate2_timestamp = None
-        self.c11_rear_gate1_timestamp = None
-        self.c11_rear_gate2_timestamp = None
+            consist_id = int(consist_key)  # "11" → 11 (simplified keys)
+            lead_addr = consist_info['lead_address']
+            rear_addr = consist_info['rear_address']  # Can be null for single locos
+            gate_ids = consist_info['gate_ids']
 
-        # Track if loco is currently inside gate (for edge detection)
-        self.c11_lead_in_gate1 = False
-        self.c11_lead_in_gate2 = False
-        self.c11_rear_in_gate1 = False
-        self.c11_rear_in_gate2 = False
+            self.consist_config[consist_id] = {
+                'lead_address': lead_addr,
+                'rear_address': rear_addr,
+                'gate_ids': gate_ids,
+                'lead_class_id': ADDRESS_TO_CLASS[lead_addr],
+                'rear_class_id': ADDRESS_TO_CLASS[rear_addr] if rear_addr else None
+            }
 
-        # Latest Δt value (cross-gate)
-        self.delta_t = None
-        self.delta_t_type = None
+        print(f"🚂 Loaded {len(self.consist_config)} consists from config:")
+        for cid, cinfo in self.consist_config.items():
+            gates_str = f"{cinfo['gate_ids']}" if cinfo['gate_ids'] else "[]"
+            print(f"   Consist {cid}: lead={cinfo['lead_address']}, rear={cinfo['rear_address']}, gates={gates_str}")
 
-        # Gate crossing statistics
-        self.gate_crossing_count = 0
+        # Initialize consist_data dict (tracking state for each consist)
+        self.consist_data = {}
+        for consist_id, consist_info in self.consist_config.items():
+            gate_ids = consist_info['gate_ids']
 
-        # Last Δt calculation time (to avoid calculating with stale timestamps)
-        self.last_delta_t_time = 0
-
-        # Spam reduction for ignored Δt warnings
-        self.last_ignored_delta_t1 = None
-        self.last_ignored_delta_t1_time = 0
-        self.last_ignored_delta_t2 = None
-        self.last_ignored_delta_t2_time = 0
+            self.consist_data[consist_id] = {
+                'lead_pos': None,
+                'rear_pos': None,
+                'gate_timestamps': {
+                    'lead': {gid: None for gid in gate_ids},
+                    'rear': {gid: None for gid in gate_ids}
+                },
+                'gate_states': {
+                    'lead': {gid: False for gid in gate_ids},
+                    'rear': {gid: False for gid in gate_ids}
+                },
+                'delta_t': None,
+                'delta_t_type': None,
+                'last_delta_t_time': 0,
+                'gate_crossing_count': 0,
+                # Spam reduction for ignored Δt warnings
+                'last_ignored_delta_t1': None,
+                'last_ignored_delta_t1_time': 0,
+                'last_ignored_delta_t2': None,
+                'last_ignored_delta_t2_time': 0
+            }
 
         print("✅ YOLO model loaded")
 
@@ -305,170 +332,211 @@ class YOLOTracker:
 
         return detections
 
-    def calculate_delta_t_centralized(self):
+    def calculate_delta_t_centralized(self, consist_id: int):
         """
-        Centralized Δt calculation with 2 independent cross-gate checks.
+        Centralized Δt calculation with 2 independent cross-gate checks (generic for any consist).
 
-        Called once per frame after all 4 detection points updated.
+        Args:
+            consist_id: Consist ID (10, 11, etc.)
+
+        Called once per frame after all gate detection points updated.
+
+        DUAL-GATE CROSS-GATE TIMING (2 gates per consist):
+        - Check 1: Δt₁ = lead@G1 - rear@G2 (cross-gate)
+        - Check 2: Δt₂ = lead@G2 - rear@G1 (cross-gate)
         """
+        consist_info = self.consist_config[consist_id]
+        cdata = self.consist_data[consist_id]
+        gate_ids = consist_info['gate_ids']
+        lead_addr = consist_info['lead_address']
+        rear_addr = consist_info['rear_address']
+
+        # Require exactly 2 gates for cross-gate timing
+        if len(gate_ids) != 2:
+            return  # Not configured for dual-gate timing
+
+        g1, g2 = gate_ids[0], gate_ids[1]
+
         # Check 1: Δt₁ = lead@G1 - rear@G2 (cross-gate timing)
-        if (self.c11_lead_gate1_timestamp is not None and
-            self.c11_rear_gate2_timestamp is not None):
+        lead_g1_ts = cdata['gate_timestamps']['lead'].get(g1)
+        rear_g2_ts = cdata['gate_timestamps']['rear'].get(g2)
 
-            max_t1 = max(self.c11_lead_gate1_timestamp, self.c11_rear_gate2_timestamp)
+        if lead_g1_ts is not None and rear_g2_ts is not None:
+            max_t1 = max(lead_g1_ts, rear_g2_ts)
 
             # Calculate only if BOTH timestamps are fresh (prevents mixing laps)
-            if (max_t1 > self.last_delta_t_time and
-                self.c11_lead_gate1_timestamp > self.last_delta_t_time and
-                self.c11_rear_gate2_timestamp > self.last_delta_t_time):
-                delta_t1 = self.c11_lead_gate1_timestamp - self.c11_rear_gate2_timestamp
+            if (max_t1 > cdata['last_delta_t_time'] and
+                lead_g1_ts > cdata['last_delta_t_time'] and
+                rear_g2_ts > cdata['last_delta_t_time']):
+                delta_t1 = lead_g1_ts - rear_g2_ts
 
                 # Sanity check: ignore impossible Δt values (outliers from video lag)
                 if abs(delta_t1) > self.delta_t_max_threshold:
                     # Throttle spam: only print if value changed significantly or 5s passed
                     current_time = time.time()
                     should_print = (
-                        self.last_ignored_delta_t1 is None or
-                        abs(delta_t1 - self.last_ignored_delta_t1) > 1.0 or
-                        (current_time - self.last_ignored_delta_t1_time) > 5.0
+                        cdata['last_ignored_delta_t1'] is None or
+                        abs(delta_t1 - cdata['last_ignored_delta_t1']) > 1.0 or
+                        (current_time - cdata['last_ignored_delta_t1_time']) > 5.0
                     )
                     if should_print:
-                        print(f"⚠️  Ignored Δt₁ = {delta_t1:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
-                        self.last_ignored_delta_t1 = delta_t1
-                        self.last_ignored_delta_t1_time = current_time
+                        print(f"⚠️  C{consist_id}: Ignored Δt₁ = {delta_t1:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
+                        cdata['last_ignored_delta_t1'] = delta_t1
+                        cdata['last_ignored_delta_t1_time'] = current_time
                 else:
-                    self.delta_t = delta_t1
-                    self.delta_t_type = "L7G1-L8G2"
-                    self.gate_crossing_count += 1
-                    self.last_delta_t_time = max_t1
-                    print(f"🚪 Cross-gate: L7G1-L8G2 = Δt = {self.delta_t:+.3f}s")
+                    cdata['delta_t'] = delta_t1
+                    cdata['delta_t_type'] = f"L{lead_addr}G{g1}-L{rear_addr}G{g2}"
+                    cdata['gate_crossing_count'] += 1
+                    cdata['last_delta_t_time'] = max_t1
+                    print(f"🚪 C{consist_id} Cross-gate: L{lead_addr}G{g1}-L{rear_addr}G{g2} = Δt = {cdata['delta_t']:+.3f}s")
                     return  # Calculated, done
 
         # Check 2: Δt₂ = lead@G2 - rear@G1 (cross-gate timing)
-        if (self.c11_lead_gate2_timestamp is not None and
-            self.c11_rear_gate1_timestamp is not None):
+        lead_g2_ts = cdata['gate_timestamps']['lead'].get(g2)
+        rear_g1_ts = cdata['gate_timestamps']['rear'].get(g1)
 
-            max_t2 = max(self.c11_lead_gate2_timestamp, self.c11_rear_gate1_timestamp)
+        if lead_g2_ts is not None and rear_g1_ts is not None:
+            max_t2 = max(lead_g2_ts, rear_g1_ts)
 
             # Calculate only if BOTH timestamps are fresh (prevents mixing laps)
-            if (max_t2 > self.last_delta_t_time and
-                self.c11_lead_gate2_timestamp > self.last_delta_t_time and
-                self.c11_rear_gate1_timestamp > self.last_delta_t_time):
-                delta_t2 = self.c11_lead_gate2_timestamp - self.c11_rear_gate1_timestamp
+            if (max_t2 > cdata['last_delta_t_time'] and
+                lead_g2_ts > cdata['last_delta_t_time'] and
+                rear_g1_ts > cdata['last_delta_t_time']):
+                delta_t2 = lead_g2_ts - rear_g1_ts
 
                 # Sanity check: ignore impossible Δt values (outliers from video lag)
                 if abs(delta_t2) > self.delta_t_max_threshold:
                     # Throttle spam: only print if value changed significantly or 5s passed
                     current_time = time.time()
                     should_print = (
-                        self.last_ignored_delta_t2 is None or
-                        abs(delta_t2 - self.last_ignored_delta_t2) > 1.0 or
-                        (current_time - self.last_ignored_delta_t2_time) > 5.0
+                        cdata['last_ignored_delta_t2'] is None or
+                        abs(delta_t2 - cdata['last_ignored_delta_t2']) > 1.0 or
+                        (current_time - cdata['last_ignored_delta_t2_time']) > 5.0
                     )
                     if should_print:
-                        print(f"⚠️  Ignored Δt₂ = {delta_t2:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
-                        self.last_ignored_delta_t2 = delta_t2
-                        self.last_ignored_delta_t2_time = current_time
+                        print(f"⚠️  C{consist_id}: Ignored Δt₂ = {delta_t2:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
+                        cdata['last_ignored_delta_t2'] = delta_t2
+                        cdata['last_ignored_delta_t2_time'] = current_time
                 else:
-                    self.delta_t = delta_t2
-                    self.delta_t_type = "L7G2-L8G1"
-                    self.gate_crossing_count += 1
-                    self.last_delta_t_time = max_t2
-                    print(f"🚪 Cross-gate: L7G2-L8G1 = Δt = {self.delta_t:+.3f}s")
+                    cdata['delta_t'] = delta_t2
+                    cdata['delta_t_type'] = f"L{lead_addr}G{g2}-L{rear_addr}G{g1}"
+                    cdata['gate_crossing_count'] += 1
+                    cdata['last_delta_t_time'] = max_t2
+                    print(f"🚪 C{consist_id} Cross-gate: L{lead_addr}G{g2}-L{rear_addr}G{g1} = Δt = {cdata['delta_t']:+.3f}s")
 
     def update(self, frame):
         """
-        Update tracking with new frame for BOTH consists.
+        Update tracking with new frame for ALL consists (config-driven).
 
         Returns:
             dict with tracking data (positions, delta_t, detections)
         """
         detections = self.detect_locomotives(frame)
 
-        # === CONSIST 10 (Tracciato Interno) ===
-        c10_lead_data = detections.get(0)
-        c10_rear_data = detections.get(1)
+        # Loop over all consists (config-driven)
+        for consist_id, consist_info in self.consist_config.items():
+            lead_class = consist_info['lead_class_id']
+            rear_class = consist_info['rear_class_id']
 
-        c10_lead_pos = c10_lead_data['pos'] if c10_lead_data else None
-        c10_rear_pos = c10_rear_data['pos'] if c10_rear_data else None
+            # Get detection data
+            lead_data = detections.get(lead_class)
+            rear_data = detections.get(rear_class)
 
-        if c10_lead_pos and c10_rear_pos:
-            self.c10_lead_pos = c10_lead_pos
-            self.c10_rear_pos = c10_rear_pos
+            lead_pos = lead_data['pos'] if lead_data else None
+            rear_pos = rear_data['pos'] if rear_data else None
 
-        # === CONSIST 11 (Tracciato Esterno) ===
-        c11_lead_data = detections.get(2)
-        c11_rear_data = detections.get(3)
+            # Update positions if both detected
+            if lead_pos and rear_pos:
+                self.consist_data[consist_id]['lead_pos'] = lead_pos
+                self.consist_data[consist_id]['rear_pos'] = rear_pos
 
-        c11_lead_pos = c11_lead_data['pos'] if c11_lead_data else None
-        c11_rear_pos = c11_rear_data['pos'] if c11_rear_data else None
+            # Gate timing detection (only if gates configured)
+            if consist_info['gate_ids']:
+                self._update_gate_timing(consist_id, lead_pos, rear_pos)
 
-        if c11_lead_pos and c11_rear_pos:
-            self.c11_lead_pos = c11_lead_pos
-            self.c11_rear_pos = c11_rear_pos
-
-        # === GATE TIMING DETECTION (Consist 11) ===
-        self._update_gate_timing(c11_lead_pos, c11_rear_pos)
-
-        return {
-            'c10': {'lead': c10_lead_pos, 'rear': c10_rear_pos},
-            'c11': {'lead': c11_lead_pos, 'rear': c11_rear_pos},
-            'delta_t': self.delta_t,
-            'delta_t_type': self.delta_t_type,
-            'gate_crossings': self.gate_crossing_count,
-            'detections': detections  # NEW: Full detection data for video overlay
+        # Build return dict with backward-compatible keys (c10, c11)
+        result = {
+            'detections': detections  # Full detection data for video overlay
         }
 
-    def _update_gate_timing(self, c11_lead_pos, c11_rear_pos):
-        """Update gate timing detection for Consist 11."""
-        if 1 not in self.gates or 2 not in self.gates:
-            return  # Gates not configured
+        # Add per-consist data
+        for consist_id in self.consist_data.keys():
+            cdata = self.consist_data[consist_id]
+            result[f'c{consist_id}'] = {
+                'lead': cdata['lead_pos'],
+                'rear': cdata['rear_pos']
+            }
+            result[f'c{consist_id}_delta_t'] = cdata['delta_t']
+            result[f'c{consist_id}_delta_t_type'] = cdata['delta_t_type']
+            result[f'c{consist_id}_gate_crossings'] = cdata['gate_crossing_count']
 
-        # Gate 1 (VICINO) - Lead loco (E656_239)
-        in_gate1 = is_point_in_gate(c11_lead_pos, self.gates[1])
-        if in_gate1 and not self.c11_lead_in_gate1:
-            # Rising edge: loco just entered gate
-            self.c11_lead_gate1_timestamp = time.time()
-            self.c11_lead_in_gate1 = True
-        elif not in_gate1:
-            self.c11_lead_in_gate1 = False
+        # Backward compatibility: delta_t = C11 Δt (for now)
+        if 11 in self.consist_data:
+            result['delta_t'] = self.consist_data[11]['delta_t']
+            result['delta_t_type'] = self.consist_data[11]['delta_t_type']
+            result['gate_crossings'] = self.consist_data[11]['gate_crossing_count']
 
-        # Gate 1 (VICINO) - Rear loco (E444_056)
-        in_gate1 = is_point_in_gate(c11_rear_pos, self.gates[1])
-        if in_gate1 and not self.c11_rear_in_gate1:
-            # Rising edge: loco just entered gate
-            self.c11_rear_gate1_timestamp = time.time()
-            self.c11_rear_in_gate1 = True
-        elif not in_gate1:
-            self.c11_rear_in_gate1 = False
+        return result
 
-        # Gate 2 (LONTANO) - Lead loco (E656_239)
-        in_gate2 = is_point_in_gate(c11_lead_pos, self.gates[2])
-        if in_gate2 and not self.c11_lead_in_gate2:
-            # Rising edge: loco just entered gate
-            self.c11_lead_gate2_timestamp = time.time()
-            self.c11_lead_in_gate2 = True
-        elif not in_gate2:
-            self.c11_lead_in_gate2 = False
+    def _update_gate_timing(self, consist_id: int, lead_pos, rear_pos):
+        """
+        Update gate timing detection for specified consist (generic method).
 
-        # Gate 2 (LONTANO) - Rear loco (E444_056)
-        in_gate2 = is_point_in_gate(c11_rear_pos, self.gates[2])
-        if in_gate2 and not self.c11_rear_in_gate2:
-            # Rising edge: loco just entered gate
-            self.c11_rear_gate2_timestamp = time.time()
-            self.c11_rear_in_gate2 = True
-        elif not in_gate2:
-            self.c11_rear_in_gate2 = False
+        Args:
+            consist_id: Consist ID (10, 11, etc.)
+            lead_pos: Lead locomotive position (x, y) or None
+            rear_pos: Rear locomotive position (x, y) or None
+        """
+        consist_info = self.consist_config[consist_id]
+        gate_ids = consist_info['gate_ids']
+        cdata = self.consist_data[consist_id]
 
-        # Centralized Δt calculation (called once per frame after all 4 detection points)
-        self.calculate_delta_t_centralized()
+        # Loop over all gates assigned to this consist
+        for gate_id in gate_ids:
+            if gate_id not in self.gates:
+                continue  # Gate not configured in gates array
 
-    def get_delta_t_status(self):
-        """Get Δt status: SYNCED | WARNING | CRITICAL"""
-        if self.delta_t is None:
+            gate = self.gates[gate_id]
+
+            # === LEAD LOCO ===
+            in_gate = is_point_in_gate(lead_pos, gate)
+            if in_gate and not cdata['gate_states']['lead'][gate_id]:
+                # Rising edge: loco just entered gate
+                cdata['gate_timestamps']['lead'][gate_id] = time.time()
+                cdata['gate_states']['lead'][gate_id] = True
+            elif not in_gate:
+                cdata['gate_states']['lead'][gate_id] = False
+
+            # === REAR LOCO ===
+            in_gate = is_point_in_gate(rear_pos, gate)
+            if in_gate and not cdata['gate_states']['rear'][gate_id]:
+                # Rising edge: loco just entered gate
+                cdata['gate_timestamps']['rear'][gate_id] = time.time()
+                cdata['gate_states']['rear'][gate_id] = True
+            elif not in_gate:
+                cdata['gate_states']['rear'][gate_id] = False
+
+        # Centralized Δt calculation (called once per frame after all gate detection points)
+        self.calculate_delta_t_centralized(consist_id)
+
+    def get_delta_t_status(self, consist_id: int):
+        """
+        Get Δt status: SYNCED | WARNING | CRITICAL for specified consist.
+
+        Args:
+            consist_id: Consist ID (10, 11, etc.)
+
+        Returns:
+            'SYNCED' | 'WARNING' | 'CRITICAL' | None
+        """
+        if consist_id not in self.consist_data:
             return None
 
-        dt_abs = abs(self.delta_t)
+        delta_t = self.consist_data[consist_id]['delta_t']
+        if delta_t is None:
+            return None
+
+        dt_abs = abs(delta_t)
         if dt_abs < self.threshold_normal:
             return 'SYNCED'
         elif dt_abs < self.threshold_warning:
@@ -552,64 +620,81 @@ class TrackingDaemon:
         return success
 
     async def broadcast_delta_t(self, tracking_data):
-        """Broadcast delta_t update to backend (only when changed)."""
-        if tracking_data['delta_t'] is None:
-            return
-
+        """Broadcast delta_t updates for ALL consists (multi-consist support)."""
         # Ensure connected before broadcasting
         if not await self.ensure_connected():
             return  # Not connected, skip broadcast
 
-        # Only broadcast if Δt has changed (new calculation)
-        current_delta_t = tracking_data['delta_t']
-        current_type = tracking_data['delta_t_type']
+        # Loop over all consists and broadcast if Δt changed
+        for consist_id, cdata in self.tracker.consist_data.items():
+            delta_t = cdata['delta_t']
+            if delta_t is None:
+                continue  # No Δt for this consist
 
-        if (current_delta_t == self.last_broadcasted_delta_t and
-            current_type == self.last_broadcasted_type):
-            return  # Same value, don't broadcast again
+            # Get delta_t_type from tracking_data (backward compatible)
+            current_type = tracking_data.get(f'c{consist_id}_delta_t_type', cdata['delta_t_type'])
 
-        # New Δt calculated, broadcast it
-        current_timestamp = time.time()
+            # Check if changed for this consist (need per-consist tracking)
+            consist_key = f'c{consist_id}'
+            if not hasattr(self, 'last_broadcasted_per_consist'):
+                self.last_broadcasted_per_consist = {}
 
-        # Calculate time_str (elapsed since PREVIOUS Δt)
-        if self.last_broadcasted_timestamp:
-            elapsed = current_timestamp - self.last_broadcasted_timestamp
-            if elapsed < 1:
-                time_str = "now"
-            elif elapsed < 60:
-                time_str = f"after {int(elapsed)}s"
+            if consist_key not in self.last_broadcasted_per_consist:
+                self.last_broadcasted_per_consist[consist_key] = {
+                    'delta_t': None,
+                    'type': None,
+                    'timestamp': None
+                }
+
+            last_broadcast = self.last_broadcasted_per_consist[consist_key]
+
+            if (delta_t == last_broadcast['delta_t'] and
+                current_type == last_broadcast['type']):
+                continue  # Same value, skip
+
+            # New Δt calculated, broadcast it
+            current_timestamp = time.time()
+
+            # Calculate time_str (elapsed since PREVIOUS Δt for this consist)
+            if last_broadcast['timestamp']:
+                elapsed = current_timestamp - last_broadcast['timestamp']
+                if elapsed < 1:
+                    time_str = "now"
+                elif elapsed < 60:
+                    time_str = f"after {int(elapsed)}s"
+                else:
+                    minutes = int(elapsed // 60)
+                    seconds = int(elapsed % 60)
+                    time_str = f"after {minutes}m {seconds}s"
             else:
-                minutes = int(elapsed // 60)
-                seconds = int(elapsed % 60)
-                time_str = f"after {minutes}m {seconds}s"
-        else:
-            # First Δt
-            time_str = "now"
+                # First Δt for this consist
+                time_str = "now"
 
-        # Update broadcast state
-        self.last_broadcasted_delta_t = current_delta_t
-        self.last_broadcasted_type = current_type
-        self.last_broadcasted_timestamp = current_timestamp
+            # Update broadcast state for this consist
+            last_broadcast['delta_t'] = delta_t
+            last_broadcast['type'] = current_type
+            last_broadcast['timestamp'] = current_timestamp
 
-        message = {
-            'type': 'delta_t_update',
-            'consist_address': 11,  # Consist 11 only for now
-            'delta_t': current_delta_t,
-            'gate_type': current_type,
-            'status': self.tracker.get_delta_t_status(),
-            'timestamp': current_timestamp,
-            'time_str': time_str,  # Pre-calculated elapsed time
-            'thresholds': {
-                'normal': self.tracker.threshold_normal,
-                'warning': self.tracker.threshold_warning
+            message = {
+                'type': 'delta_t_update',
+                'consist_address': consist_id,
+                'delta_t': delta_t,
+                'gate_type': current_type,
+                'status': self.tracker.get_delta_t_status(consist_id),
+                'timestamp': current_timestamp,
+                'time_str': time_str,  # Pre-calculated elapsed time
+                'thresholds': {
+                    'normal': self.tracker.threshold_normal,
+                    'warning': self.tracker.threshold_warning
+                }
             }
-        }
 
-        try:
-            await self.websocket.send(json.dumps(message))
-        except Exception as e:
-            print(f"⚠️  Backend disconnected: {e}")
-            self.websocket = None  # Mark as disconnected
+            try:
+                await self.websocket.send(json.dumps(message))
+            except Exception as e:
+                print(f"⚠️  Backend disconnected: {e}")
+                self.websocket = None  # Mark as disconnected
+                break  # Stop broadcasting if disconnected
 
     async def broadcast_positions(self, tracking_data):
         """Broadcast YOLO detection positions for video overlay (pallini)."""
@@ -824,9 +909,17 @@ class TrackingDaemon:
             print(f"\n📊 Session Summary:")
             print(f"   Duration: {duration:.1f}s")
             print(f"   Frames: {self.frame_count}")
-            print(f"   Gate crossings: {self.tracker.gate_crossing_count}")
-            if self.tracker.delta_t is not None:
-                print(f"   Last Δt: {self.tracker.delta_t:+.3f}s ({self.tracker.get_delta_t_status()})")
+
+            # Per-consist statistics
+            for consist_id, cdata in self.tracker.consist_data.items():
+                crossings = cdata['gate_crossing_count']
+                delta_t = cdata['delta_t']
+                if crossings > 0:
+                    print(f"   Consist {consist_id}:")
+                    print(f"     Gate crossings: {crossings}")
+                    if delta_t is not None:
+                        status = self.tracker.get_delta_t_status(consist_id)
+                        print(f"     Last Δt: {delta_t:+.3f}s ({status})")
 
         print("✅ Tracking daemon stopped")
 

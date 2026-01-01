@@ -36,7 +36,8 @@
     }
   ],
   "tracking_assignments": {
-    "consist_11": {
+    "_comment": "CONSIST DEFINITION: In this system, 'consist' means 1 or more locomotives controlled together. A single locomotive can be tracked as a 'consist of 1' (rear_address = null). This allows unified config/code for both traditional consists (lead + rear) and single locos. Gate tracking (Δt calculation) requires 2 locos AND 2 gates configured. Keys are consist/loco DCC addresses.",
+    "11": {
       "name": "Consist 11 - Tracciato Esterno (Ovale)",
       "gate_ids": [
         1,
@@ -44,14 +45,14 @@
       ],
       "lead_address": 7,
       "rear_address": 8,
-      "notes": "Dual-gate co-presence timing"
+      "notes": "Dual-gate co-presence timing. Traditional consist (2 locos)."
     },
-    "consist_10": {
+    "10": {
       "name": "Consist 10 - Tracciato Interno (Figura 8)",
       "gate_ids": [],
       "lead_address": 1,
       "rear_address": 5,
-      "notes": "Gates to be configured"
+      "notes": "Gates to be configured. Traditional consist (2 locos)."
     }
   },
   "timing_thresholds": {
