@@ -2,6 +2,12 @@
 Video Feed Module - MJPEG stream with gate overlay
 """
 import sys
+import os
+
+# Silence FFmpeg/H264 decoder warnings BEFORE importing cv2
+os.environ['OPENCV_FFMPEG_LOGLEVEL'] = '-8'  # Quiet mode
+os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
+
 import cv2
 import json
 import time
@@ -122,11 +128,13 @@ def draw_tracking_info(frame: np.ndarray, tracking_data: Optional[Dict]) -> np.n
     Returns:
         Frame with tracking info overlay
     """
-    # Panel background (semi-transparent) - ALWAYS show
-    panel_height = 150
-    panel_width = 300
+    # Panel background (semi-transparent, compact size)
+    panel_height = 110  # Ridotto da 150
+    panel_width = 250   # Ridotto da 300
     panel_x = 10
-    panel_y = 10
+    # Position panel at BOTTOM left
+    frame_height = frame.shape[0]
+    panel_y = frame_height - panel_height - 10
 
     overlay = frame.copy()
     cv2.rectangle(overlay, (panel_x, panel_y),
@@ -134,12 +142,12 @@ def draw_tracking_info(frame: np.ndarray, tracking_data: Optional[Dict]) -> np.n
                   (0, 0, 0), -1)
     frame = cv2.addWeighted(overlay, 0.6, frame, 0.4, 0)
 
-    # Draw text (white)
+    # Draw text (simple font for performance)
     text_color = (255, 255, 255)
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.5
-    line_height = 25
-    y = panel_y + 25
+    font = cv2.FONT_HERSHEY_PLAIN  # Simpler font (faster rendering)
+    font_scale = 1.1
+    line_height = 20  # Ridotto da 25
+    y = panel_y + 18
 
     # Consist info
     consist_address = tracking_data.get('consist_address', 11) if tracking_data else 11
@@ -172,14 +180,14 @@ def draw_tracking_info(frame: np.ndarray, tracking_data: Optional[Dict]) -> np.n
     else:
         cv2.putText(frame, "Delta t: Waiting...", (panel_x + 10, y),
                     font, font_scale, (128, 128, 128), 1)
-        y += line_height * 2
+        # y += line_height * 2  # Commented: not needed without timestamp
 
-    # Timestamp
-    timestamp = tracking_data.get('timestamp') if tracking_data else None
-    if timestamp:
-        time_str = time.strftime('%H:%M:%S', time.localtime(timestamp))
-        cv2.putText(frame, f"Updated: {time_str}", (panel_x + 10, y),
-                    font, font_scale, (180, 180, 180), 1)
+    # Timestamp - COMMENTED FOR PERFORMANCE (uncomment if needed)
+    # timestamp = tracking_data.get('timestamp') if tracking_data else None
+    # if timestamp:
+    #     time_str = time.strftime('%H:%M:%S', time.localtime(timestamp))
+    #     cv2.putText(frame, f"Updated: {time_str}", (panel_x + 10, y),
+    #                 font, font_scale, (180, 180, 180), 1)
 
     return frame
 
@@ -262,7 +270,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
     print("  ✓ Video stream opened")
 
     frame_count = 0
-    fps_target = 15  # Target FPS for stream
+    fps_target = 15  # Target FPS for stream (fluido per controllare loco)
     frame_delay = 1.0 / fps_target
 
     try:
@@ -289,16 +297,18 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
             #     except Exception as e:
             #         print(f"  ⚠️  Error getting YOLO detections: {e}")
 
-            # Draw tracking info panel (ALWAYS, even if no data yet)
-            tracking_data = None
-            if tracking_data_callback:
-                try:
-                    tracking_data = tracking_data_callback()
-                except Exception as e:
-                    print(f"  ⚠️  Error getting tracking data: {e}")
+            # === TRACKING INFO PANEL - COMMENTED (moved to HTML overlay for performance) ===
+            # Get tracking data
+            # tracking_data = None
+            # if tracking_data_callback:
+            #     try:
+            #         tracking_data = tracking_data_callback()
+            #     except Exception as e:
+            #         print(f"  ⚠️  Error getting tracking data: {e}")
 
-            # Draw panel (shows "Waiting..." if no data)
-            frame = draw_tracking_info(frame, tracking_data)
+            # Draw tracking info panel (ALWAYS redraw, no cache)
+            # frame = draw_tracking_info(frame, tracking_data)
+            # === END COMMENTED SECTION ===
 
             # Encode frame as JPEG
             ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])

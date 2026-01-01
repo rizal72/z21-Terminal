@@ -59,6 +59,11 @@
     "warning": 1.5,
     "notes": "Thresholds in seconds: |Δt| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL"
   },
+  "tracking_fps": {
+    "active": 30,
+    "idle": 1,
+    "notes": "YOLO tracking FPS: active when consists moving, idle when stopped"
+  },
   "reference_locos": {
     "11": {
       "reference": 8,

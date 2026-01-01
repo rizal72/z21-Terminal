@@ -832,7 +832,7 @@ function App() {
         )}
 
         {/* Video Feed Panel - Collapsible */}
-        <VideoFeedPanel apiUrl={API_URL} />
+        <VideoFeedPanel apiUrl={API_URL} consists={consists} />
 
         {/* Controllers grid - Dynamic and scalable */}
         <div className="controllers-grid grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-8">

@@ -866,18 +866,22 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                         z21_manager.consist_state[consist_address]['delta_t'] = delta_t
                         z21_manager.consist_state[consist_address]['delta_t_timestamp'] = timestamp
 
-                        # ⚡ AUTO-COMPENSATION: Trigger automatic speed adjustment if CRITICAL
+                        # ⚡ AUTO-COMPENSATION: Trigger for CRITICAL (compensation) or SYNCED (decay)
                         if consist_address in z21_manager.consist_state:
                             consist = z21_manager.consist_state[consist_address]
                             is_virtual = consist.get('virtual_mode', False)
+                            last_speed = consist.get('speed', 0)
+                            last_direction = consist.get('direction', 'forward') == 'forward'
 
-                            if is_virtual and abs(delta_t) > thresholds['warning']:
-                                # Re-apply last target speed with compensation
-                                last_speed = consist.get('speed', 0)
-                                last_direction = consist.get('direction', 'forward') == 'forward'
+                            # Trigger set_speed() for both CRITICAL and SYNCED zones (not WARNING)
+                            if is_virtual and last_speed > 0:
+                                is_critical = abs(delta_t) > thresholds['warning']  # > warning threshold
+                                is_synced = abs(delta_t) < thresholds['normal']      # < normal threshold
 
-                                if last_speed > 0:  # Only compensate if consist is moving
-                                    print(f"  ⚡ Auto-compensation triggered: |Δt| = {abs(delta_t):.3f}s > {thresholds['warning']}s")
+                                if is_critical or is_synced:
+                                    if is_critical:
+                                        print(f"  ⚡ Auto-compensation triggered: |Δt| = {abs(delta_t):.3f}s > {thresholds['warning']}s")
+                                    # Call set_speed with auto_compensation flag (handles both compensation and decay)
                                     z21_manager.set_speed(consist_address, last_speed, last_direction, is_auto_compensation=True)
 
                         # Broadcast to all frontend clients (include thresholds)

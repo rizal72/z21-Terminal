@@ -5,6 +5,12 @@ Runs YOLO inference and gate timing detection without GUI.
 Broadcasts delta_t updates to FastAPI backend via WebSocket.
 """
 import sys
+import os
+
+# Silence FFmpeg/H264 decoder warnings BEFORE importing cv2
+os.environ['OPENCV_FFMPEG_LOGLEVEL'] = '-8'  # Quiet mode
+os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
+
 import cv2
 import time
 import json
@@ -483,9 +489,21 @@ class TrackingDaemon:
         self.max_reconnect_delay = 30.0  # Max 30s
         self.last_reconnect_attempt = 0
 
+        # Load FPS settings from config
+        try:
+            with open(GATE_CONFIG_PATH, 'r') as f:
+                config = json.load(f)
+                fps_config = config.get('tracking_fps', {'active': 30, 'idle': 1})
+                self.fps_active = fps_config.get('active', 30)
+                self.fps_idle = fps_config.get('idle', 1)
+        except Exception as e:
+            print(f"⚠️  Error loading FPS config: {e}, using defaults")
+            self.fps_active = 30
+            self.fps_idle = 1
+
         # Dynamic FPS control
         self.consist_speeds = {}  # {consist_address: speed}
-        self.active_tracking = False  # True = 30 FPS, False = 5 FPS (Low-Power Mode)
+        self.active_tracking = False
         self.last_fps_mode = None  # Track mode changes for logging
 
     async def connect_backend(self):
@@ -626,7 +644,9 @@ class TrackingDaemon:
 
         if new_mode != self.active_tracking:
             self.active_tracking = new_mode
-            mode_name = "Active Tracking (30 FPS)" if new_mode else "Low-Power Mode (5 FPS)"
+            fps_active_str = f"{self.fps_active} FPS"
+            fps_idle_str = f"{self.fps_idle} FPS"
+            mode_name = f"Active Tracking ({fps_active_str})" if new_mode else f"Low-Power Mode ({fps_idle_str})"
             print(f"🔄 Switched to {mode_name}")
 
     async def listen_backend_messages(self):
@@ -677,8 +697,8 @@ class TrackingDaemon:
             print("❌ Failed to open video stream")
             return
 
-        print("✅ Tracking daemon started - Low-Power Mode (5 FPS)")
-        print("   (switches to Active Tracking 30 FPS when movement detected)")
+        print(f"✅ Tracking daemon started - Low-Power Mode ({self.fps_idle} FPS)")
+        print(f"   (switches to Active Tracking {self.fps_active} FPS when movement detected)")
 
         # Start backend message listener in parallel
         listener_task = asyncio.create_task(self.listen_backend_messages())
@@ -703,8 +723,8 @@ class TrackingDaemon:
                 if self.frame_count % 10 == 0:
                     await self.broadcast_positions(tracking_data)
 
-                # Dynamic FPS: 30 FPS active, 5 FPS idle
-                fps = 30 if self.active_tracking else 5
+                # Dynamic FPS from config
+                fps = self.fps_active if self.active_tracking else self.fps_idle
                 await asyncio.sleep(1.0 / fps)
 
         except KeyboardInterrupt:
@@ -742,14 +762,19 @@ class TrackingDaemon:
 
 
 # === MAIN ===
+shutdown_flag = False
+
 def signal_handler(sig, frame):
     """Handle SIGINT/SIGTERM for graceful shutdown."""
+    global shutdown_flag
     print("\n⚠️  Shutdown signal received")
-    sys.exit(0)
+    shutdown_flag = True
 
 
 async def main():
     """Main entry point."""
+    global shutdown_flag
+
     # Setup signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -762,7 +787,27 @@ async def main():
     """)
 
     daemon = TrackingDaemon()
-    await daemon.run()
+
+    # Run daemon in background task
+    daemon_task = asyncio.create_task(daemon.run())
+
+    # Wait for shutdown signal
+    try:
+        while not shutdown_flag:
+            await asyncio.sleep(0.1)
+    except asyncio.CancelledError:
+        pass
+
+    # Graceful shutdown: stop daemon and wait for cleanup
+    daemon.running = False
+    try:
+        await asyncio.wait_for(daemon_task, timeout=3.0)
+    except asyncio.TimeoutError:
+        daemon_task.cancel()
+        try:
+            await daemon_task
+        except asyncio.CancelledError:
+            pass
 
 
 if __name__ == '__main__':
