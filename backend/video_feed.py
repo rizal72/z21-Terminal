@@ -11,6 +11,7 @@ os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
 import cv2
 import json
 import time
+import asyncio
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -249,11 +250,12 @@ _last_delta_t_cache = {
 }
 
 
-def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=None):
+async def generate_video_frames(frame_queue, tracking_data_callback=None, yolo_detections_callback=None):
     """
-    Generator for MJPEG video stream with overlay
+    Async generator for MJPEG video stream with overlay (consumes frames from daemon queue)
 
     Args:
+        frame_queue: asyncio.Queue with frames from tracking daemon (eliminates dual VideoCapture)
         tracking_data_callback: Optional function to get latest tracking data
         yolo_detections_callback: Optional function to get latest YOLO detections
 
@@ -264,23 +266,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
     config = load_gate_config()
     gates = config.get('gates', [])
 
-    print(f"🎥 Opening video stream: {RTSP_URL}")
-    cap = cv2.VideoCapture(RTSP_URL)
-
-    if not cap.isOpened():
-        print("  ✗ Failed to open video stream")
-        # Return a black frame with error message
-        error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(error_frame, "Video stream unavailable", (100, 240),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        ret, buffer = cv2.imencode('.jpg', error_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        frame_bytes = buffer.tobytes()
-        while True:
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            time.sleep(1)
-
-    print("  ✓ Video stream opened")
+    print("🎥 Video feed: consuming frames from daemon queue (zero RTSP contention)")
 
     frame_count = 0
     fps_target = 15  # Target FPS for stream (fluido per controllare loco)
@@ -290,12 +276,19 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
         while True:
             start_time = time.time()
 
-            ret, frame = cap.read()
-            if not ret:
-                print("  ⚠️  Failed to read frame, reconnecting...")
-                cap.release()
-                time.sleep(2)
-                cap = cv2.VideoCapture(RTSP_URL)
+            # Get frame from daemon queue (non-blocking with timeout)
+            try:
+                frame = await asyncio.wait_for(frame_queue.get(), timeout=2.0)
+            except asyncio.TimeoutError:
+                # No frame available (daemon not running?), show waiting message
+                error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.putText(error_frame, "Waiting for tracking daemon...", (80, 240),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                ret, buffer = cv2.imencode('.jpg', error_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                frame_bytes = buffer.tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                await asyncio.sleep(1)
                 continue
 
             # Draw gate overlays
@@ -341,13 +334,12 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
             elapsed = time.time() - start_time
             sleep_time = frame_delay - elapsed
             if sleep_time > 0:
-                time.sleep(sleep_time)
+                await asyncio.sleep(sleep_time)
 
     except Exception as e:
         print(f"  ✗ Video stream error: {e}")
     finally:
-        cap.release()
-        print("  ✓ Video stream closed")
+        print("  ✓ Video feed consumer closed")
 
 
 if __name__ == '__main__':
