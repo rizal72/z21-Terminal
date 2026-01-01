@@ -13,6 +13,7 @@ from pathlib import Path
 from z21_manager import Z21Manager
 from roster_loader import load_consist_with_functions, load_all_locomotives
 from tracking_manager import TrackingManager
+import video_feed as video_feed_module
 from video_feed import generate_video_frames
 
 # Default constants (single source of truth)
@@ -605,6 +606,18 @@ async def reload_roster():
         }
 
 
+@app.post("/api/toggle-panel")
+async def toggle_panel():
+    """Toggle Δt panel visibility in video feed (press 'P' in UI)"""
+    video_feed_module.SHOW_DELTA_T_PANEL = not video_feed_module.SHOW_DELTA_T_PANEL
+    status = "visible" if video_feed_module.SHOW_DELTA_T_PANEL else "hidden"
+    print(f"  🎛️  Δt panel toggled: {status}")
+    return {
+        "status": "success",
+        "panel_visible": video_feed_module.SHOW_DELTA_T_PANEL
+    }
+
+
 @app.get("/api/video_feed")
 async def video_feed():
     """
@@ -619,8 +632,9 @@ async def video_feed():
         if z21_manager and 11 in z21_manager.consist_state:
             state = z21_manager.consist_state[11]
             delta_t = state.get('delta_t')
+
             if delta_t is not None:
-                # Calculate status based on dynamic thresholds from gate_config.json
+                # Valid delta_t: calculate status and update cache
                 abs_delta_t = abs(delta_t)
                 if abs_delta_t < timing_thresholds['normal']:
                     status = 'SYNCED'
@@ -629,12 +643,27 @@ async def video_feed():
                 else:
                     status = 'CRITICAL'
 
-                return {
+                tracking_data = {
                     'consist_address': 11,
                     'delta_t': delta_t,
                     'status': status,
                     'timestamp': state.get('delta_t_timestamp')
                 }
+
+                # Update cache for display (when loco stop, backend resets to None but we keep showing this)
+                video_feed_module._last_delta_t_cache.update(tracking_data)
+
+                return tracking_data
+            else:
+                # delta_t is None (loco stopped, backend reset for fresh start)
+                # Return cached value for display (matches React panel behavior)
+                if video_feed_module._last_delta_t_cache['delta_t'] is not None:
+                    return video_feed_module._last_delta_t_cache
+                else:
+                    # No cache yet (first run): show "Waiting..."
+                    return None
+
+        # No consist found: show "Waiting..."
         return None
 
     def get_yolo_detections():
@@ -927,13 +956,9 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         print(f"🎥 Tracking daemon disconnected")
         tracking_daemon_ws = None  # Clear reference
-        # Reset delta_t for all consists (user may have moved locos manually)
-        if z21_manager:
-            for consist in z21_manager.consist_state.values():
-                if 'delta_t' in consist:
-                    consist['delta_t'] = None
-                    consist['delta_t_timestamp'] = None
-            print(f"  🔄 Δt reset for all consists (tracking disconnected)")
+        # Note: consist_state['delta_t'] may be reset to None by z21_manager on stop (correct for logic)
+        # But video_feed cache keeps last value for display (matches React panel behavior)
+        print(f"  📊 Δt display: video cache preserves last value")
     except Exception as e:
         print(f"Tracking WebSocket error: {e}")
         tracking_daemon_ws = None  # Clear reference on error

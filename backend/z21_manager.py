@@ -214,7 +214,8 @@ class Z21Manager:
                                 consist['decay_applied'] = False  # Reset: new compensation allows new decay
                             else:
                                 speed_adjust = speed_adjust_target
-                                print(f"  🎚️ Compensation: Δt={delta_t:.3f}s (CRITICAL), speed up loco {adjust_addr} by {compensation} steps")
+                                # Yellow color for CRITICAL compensation
+                                print(f"\033[93m  🎚️ Compensation: Δt={delta_t:.3f}s (CRITICAL), speed up loco {adjust_addr} by {compensation} steps\033[0m")
                                 # Reset overflow counter (normal compensation, no overflow)
                                 if address in self.overflow_warnings:
                                     self.overflow_warnings[address] = 0
@@ -255,7 +256,8 @@ class Z21Manager:
                                 consist['speed_actual_adjust'] = speed_adjust
                             else:
                                 speed_adjust = speed_adjust_target
-                                print(f"  🎚️ Compensation: Δt={delta_t:.3f}s (CRITICAL), slow down loco {adjust_addr} by {compensation} steps")
+                                # Yellow color for CRITICAL compensation
+                                print(f"\033[93m  🎚️ Compensation: Δt={delta_t:.3f}s (CRITICAL), slow down loco {adjust_addr} by {compensation} steps\033[0m")
                                 # Reset overflow counter (normal compensation, no overflow)
                                 if address in self.overflow_warnings:
                                     self.overflow_warnings[address] = 0
@@ -282,12 +284,14 @@ class Z21Manager:
                                 # Was sped up, slow down toward target
                                 speed_adjust = max(speed, speed_adjust - decay)
                                 consist['compensation_accumulated'] -= decay
-                                print(f"  ⬇️  Decay: SYNCED (Δt={delta_t:.3f}s), reduce compensation by {decay} steps (accumulated: {accumulated} → {consist['compensation_accumulated']})")
+                                # Green color for decay (returning toward target)
+                                print(f"\033[92m  ⬇️  Decay: SYNCED (Δt={delta_t:.3f}s), reduce compensation by {decay} steps (accumulated: {accumulated} → {consist['compensation_accumulated']})\033[0m")
                             else:
                                 # Was slowed down, speed up toward target
                                 speed_adjust = min(speed, speed_adjust - decay)  # decay is negative here
                                 consist['compensation_accumulated'] -= decay
-                                print(f"  ⬆️  Decay: SYNCED (Δt={delta_t:.3f}s), reduce compensation by {abs(decay)} steps (accumulated: {accumulated} → {consist['compensation_accumulated']})")
+                                # Green color for decay (returning toward target)
+                                print(f"\033[92m  ⬆️  Decay: SYNCED (Δt={delta_t:.3f}s), reduce compensation by {abs(decay)} steps (accumulated: {accumulated} → {consist['compensation_accumulated']})\033[0m")
 
                             # Save decayed speed
                             consist['speed_actual_adjust'] = speed_adjust
@@ -307,7 +311,8 @@ class Z21Manager:
                         self.z21.set_loco_speed(loco_lead_addr, speed_reference, forward)
                         self.z21.set_loco_speed(loco_rear_addr, speed_adjust, forward)
 
-                    print(f"  🎯 Virtual Mode: loco {adjust_addr}={speed_adjust}, loco {reference_addr}={speed_reference}")
+                    # Red color for speed changes (easy to spot in logs)
+                    print(f"\033[91m  🎯 Virtual Mode: loco {adjust_addr}={speed_adjust}, loco {reference_addr}={speed_reference}\033[0m")
                 else:
                     # Normal DCC consist mode
                     self.z21.set_loco_speed(address, speed, forward)

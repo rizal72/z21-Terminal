@@ -236,6 +236,19 @@ def draw_locomotive_markers(frame: np.ndarray, detections: List[Dict]) -> np.nda
     return frame
 
 
+# Global toggle for Δt panel (can be toggled via API endpoint)
+SHOW_DELTA_T_PANEL = True
+
+# Cache last known Δt value (display only, NOT for compensation logic)
+# Matches React control panel behavior: keep last value visible even when backend resets to None
+_last_delta_t_cache = {
+    'consist_address': None,
+    'delta_t': None,
+    'status': None,
+    'timestamp': None
+}
+
+
 def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=None):
     """
     Generator for MJPEG video stream with overlay
@@ -297,18 +310,19 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
             #     except Exception as e:
             #         print(f"  ⚠️  Error getting YOLO detections: {e}")
 
-            # === TRACKING INFO PANEL - COMMENTED (moved to HTML overlay for performance) ===
-            # Get tracking data
-            # tracking_data = None
-            # if tracking_data_callback:
-            #     try:
-            #         tracking_data = tracking_data_callback()
-            #     except Exception as e:
-            #         print(f"  ⚠️  Error getting tracking data: {e}")
+            # === TRACKING INFO PANEL (toggle with SHOW_DELTA_T_PANEL global) ===
+            global SHOW_DELTA_T_PANEL
+            if SHOW_DELTA_T_PANEL:
+                # Get tracking data
+                tracking_data = None
+                if tracking_data_callback:
+                    try:
+                        tracking_data = tracking_data_callback()
+                    except Exception as e:
+                        print(f"  ⚠️  Error getting tracking data: {e}")
 
-            # Draw tracking info panel (ALWAYS redraw, no cache)
-            # frame = draw_tracking_info(frame, tracking_data)
-            # === END COMMENTED SECTION ===
+                # Draw tracking info panel
+                frame = draw_tracking_info(frame, tracking_data)
 
             # Encode frame as JPEG
             ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])

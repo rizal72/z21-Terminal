@@ -441,6 +441,19 @@ function App() {
         return;
       }
 
+      // P key to toggle Δt panel in video feed (allow even when dropdown focused)
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        fetch(`${API_URL}/api/toggle-panel`, { method: 'POST' })
+          .then(res => res.json())
+          .then(data => {
+            const status = data.panel_visible ? 'visible' : 'hidden';
+            console.log(`🎛️  Δt panel toggled: ${status}`);
+          })
+          .catch(err => console.error('Failed to toggle panel:', err));
+        return;
+      }
+
       // For other keys, don't handle if input/select/textarea is focused
       if (document.activeElement.tagName === 'INPUT' ||
           document.activeElement.tagName === 'TEXTAREA' ||
@@ -832,7 +845,7 @@ function App() {
         )}
 
         {/* Video Feed Panel - Collapsible */}
-        <VideoFeedPanel apiUrl={API_URL} consists={consists} />
+        <VideoFeedPanel apiUrl={API_URL} />
 
         {/* Controllers grid - Dynamic and scalable */}
         <div className="controllers-grid grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-8">
