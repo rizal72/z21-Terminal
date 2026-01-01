@@ -20,7 +20,7 @@ class Z21Manager:
     Manager per gestire connessioni Z21 e stato consist
     """
 
-    def __init__(self, z21_ip='192.168.1.111', verbose=False, reference_locos=None):
+    def __init__(self, z21_ip='192.168.1.111', verbose=False, reference_locos=None, timing_thresholds=None):
         """
         Inizializza Z21Manager
 
@@ -28,6 +28,7 @@ class Z21Manager:
             z21_ip (str): Indirizzo IP della Z21
             verbose (bool): Modalità verbose per debug
             reference_locos (dict): Reference loco strategy config from gate_config.json
+            timing_thresholds (dict): Timing thresholds config {'normal': 1.0, 'warning': 1.5}
         """
         self.z21_ip = z21_ip
         self.verbose = verbose
@@ -35,6 +36,7 @@ class Z21Manager:
         self.consist_state = {}  # {address: {'speed': 0, 'direction': 'forward', 'power': True, 'functions': {}}}
         self.persisted_state = self._load_persisted_state()  # Load virtual_mode from file
         self.reference_locos = reference_locos or {}  # Reference loco strategy from config
+        self.timing_thresholds = timing_thresholds or {'normal': 1.0, 'warning': 1.5}  # Timing thresholds from config
         self.overflow_warnings = {}  # Track overflow occurrences for CV adjustment warnings {address: count}
 
     def connect(self):
@@ -76,7 +78,9 @@ class Z21Manager:
             'virtual_mode': virtual_mode,  # Load from persisted state
             'delta_t': None,  # NEW: Latest Δt from tracking daemon (for display only)
             'delta_t_timestamp': None,  # NEW: When Δt was last updated
-            'speed_actual_adjust': 0  # NEW: Incremental compensated speed for adjust loco
+            'speed_actual_adjust': 0,  # NEW: Incremental compensated speed for adjust loco
+            'compensation_accumulated': 0,  # NEW: Tracks total compensation applied (signed integer)
+            'decay_applied': False  # NEW: One-shot decay flag (reset on new CRITICAL compensation)
         }
 
         if virtual_mode:
@@ -164,6 +168,8 @@ class Z21Manager:
                         speed_adjust = 0
                         speed_reference = 0
                         consist['speed_actual_adjust'] = 0  # Reset incremental speed
+                        consist['compensation_accumulated'] = 0  # Reset accumulated compensation
+                        consist['decay_applied'] = False  # Reset decay flag
                         # Reset delta_t (user may move locos manually while stopped)
                         consist['delta_t'] = None
                         consist['delta_t_timestamp'] = None
@@ -173,10 +179,12 @@ class Z21Manager:
                         speed_adjust = speed
                         speed_reference = speed
                         consist['speed_actual_adjust'] = speed  # Reset incremental speed
+                        consist['compensation_accumulated'] = 0  # Reset accumulated compensation
+                        consist['decay_applied'] = False  # Reset decay flag
                         print(f"  ⏪ REVERSE: no compensation (forward direction only)")
-                    # Bang-bang compensation: intervene only if |Δt| > 2.0s (CRITICAL)
-                    # Dead band < 2.0s avoids oscillations from YOLO detection noise
-                    elif is_auto_compensation and delta_t is not None and abs(delta_t) > 2.0:
+                    # Bang-bang compensation: intervene only if |Δt| > warning threshold (CRITICAL)
+                    # Dead band < warning avoids oscillations from YOLO detection noise
+                    elif is_auto_compensation and delta_t is not None and abs(delta_t) > self.timing_thresholds['warning']:
                         compensation = 3  # Fixed: 3 speed steps per intervention
 
                         if delta_t > 0:
@@ -200,12 +208,20 @@ class Z21Manager:
                                 # Persistent overflow warning every 5 occurrences
                                 if self.overflow_warnings[address] % 5 == 0:
                                     print(f"  ⚠️  PERSISTENT OVERFLOW ({self.overflow_warnings[address]}x): Consider increasing CV5 (Vmax) for loco {adjust_addr} via JMRI")
+
+                                # Track accumulated compensation
+                                consist['compensation_accumulated'] += compensation
+                                consist['decay_applied'] = False  # Reset: new compensation allows new decay
                             else:
                                 speed_adjust = speed_adjust_target
                                 print(f"  🎚️ Compensation: Δt={delta_t:.3f}s (CRITICAL), speed up loco {adjust_addr} by {compensation} steps")
                                 # Reset overflow counter (normal compensation, no overflow)
                                 if address in self.overflow_warnings:
                                     self.overflow_warnings[address] = 0
+
+                                # Track accumulated compensation
+                                consist['compensation_accumulated'] += compensation
+                                consist['decay_applied'] = False  # Reset: new compensation allows new decay
 
                             # Save new incremental speed
                             consist['speed_actual_adjust'] = speed_adjust
@@ -231,6 +247,10 @@ class Z21Manager:
                                 if self.overflow_warnings[address] % 5 == 0:
                                     print(f"  ⚠️  PERSISTENT OVERFLOW ({self.overflow_warnings[address]}x): Consider decreasing CV2 (Vstart) or CV5 (Vmax) for loco {adjust_addr} via JMRI")
 
+                                # Track accumulated compensation
+                                consist['compensation_accumulated'] -= compensation
+                                consist['decay_applied'] = False  # Reset: new compensation allows new decay
+
                                 # Save new incremental speed
                                 consist['speed_actual_adjust'] = speed_adjust
                             else:
@@ -240,10 +260,42 @@ class Z21Manager:
                                 if address in self.overflow_warnings:
                                     self.overflow_warnings[address] = 0
 
+                                # Track accumulated compensation
+                                consist['compensation_accumulated'] -= compensation
+                                consist['decay_applied'] = False  # Reset: new compensation allows new decay
+
                                 # Save new incremental speed
                                 consist['speed_actual_adjust'] = speed_adjust
+                    # SYNCED zone decay: one-shot decay (only once after each compensation cycle)
+                    elif is_auto_compensation and delta_t is not None and abs(delta_t) < self.timing_thresholds['normal']:
+                        accumulated = consist.get('compensation_accumulated', 0)
+                        decay_already_applied = consist.get('decay_applied', False)
+
+                        if accumulated != 0 and not decay_already_applied:  # Only decay once per compensation cycle
+                            # Calculate decay amount (half of accumulated, rounded)
+                            decay = round(accumulated / 2)
+                            if decay == 0:
+                                decay = 1 if accumulated > 0 else -1  # At least ±1 step
+
+                            # Apply decay: move speed_adjust back toward target
+                            if accumulated > 0:
+                                # Was sped up, slow down toward target
+                                speed_adjust = max(speed, speed_adjust - decay)
+                                consist['compensation_accumulated'] -= decay
+                                print(f"  ⬇️  Decay: SYNCED (Δt={delta_t:.3f}s), reduce compensation by {decay} steps (accumulated: {accumulated} → {consist['compensation_accumulated']})")
+                            else:
+                                # Was slowed down, speed up toward target
+                                speed_adjust = min(speed, speed_adjust - decay)  # decay is negative here
+                                consist['compensation_accumulated'] -= decay
+                                print(f"  ⬆️  Decay: SYNCED (Δt={delta_t:.3f}s), reduce compensation by {abs(decay)} steps (accumulated: {accumulated} → {consist['compensation_accumulated']})")
+
+                            # Save decayed speed
+                            consist['speed_actual_adjust'] = speed_adjust
+
+                            # Mark decay as applied (one-shot: no more decay until next CRITICAL)
+                            consist['decay_applied'] = True
                     else:
-                        # |Δt| < 2.0s: No compensation needed, reset overflow counter
+                        # WARNING zone (normal < |Δt| < warning): No action, reset overflow counter
                         if address in self.overflow_warnings:
                             self.overflow_warnings[address] = 0
 

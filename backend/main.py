@@ -16,7 +16,7 @@ from tracking_manager import TrackingManager
 from video_feed import generate_video_frames
 
 # Default constants (single source of truth)
-DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 2.0}
+DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}
 DEFAULT_CONTROLLER = {'id': None, 'type': None, 'address': None}
 
 # Configuration paths (all in project root)
@@ -246,7 +246,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize Z21 Manager
     print("🔌 Connecting to Z21...")
-    z21_manager = Z21Manager(z21_ip='192.168.1.111', verbose=False, reference_locos=reference_locos)
+    z21_manager = Z21Manager(z21_ip='192.168.1.111', verbose=False, reference_locos=reference_locos, timing_thresholds=timing_thresholds)
 
     if z21_manager.connect():
         print("  ✓ Connected to Z21 at 192.168.1.111")
@@ -266,6 +266,13 @@ async def lifespan(app: FastAPI):
             })
             in_consist_note = f" (in consist {data['in_consist']})" if data.get('in_consist') else ""
             print(f"  ✓ Initialized locomotive {address}{in_consist_note}")
+
+        # Initialize compensation variables for existing consists (backwards compatibility)
+        for consist_addr, consist in z21_manager.consist_state.items():
+            if 'compensation_accumulated' not in consist:
+                consist['compensation_accumulated'] = 0
+            if 'decay_applied' not in consist:
+                consist['decay_applied'] = False
 
         # Get initial track power state
         status = z21_manager.z21.get_status()
@@ -864,13 +871,13 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                             consist = z21_manager.consist_state[consist_address]
                             is_virtual = consist.get('virtual_mode', False)
 
-                            if is_virtual and abs(delta_t) > 2.0:
+                            if is_virtual and abs(delta_t) > thresholds['warning']:
                                 # Re-apply last target speed with compensation
                                 last_speed = consist.get('speed', 0)
                                 last_direction = consist.get('direction', 'forward') == 'forward'
 
                                 if last_speed > 0:  # Only compensate if consist is moving
-                                    print(f"  ⚡ Auto-compensation triggered: |Δt| = {abs(delta_t):.3f}s > 2.0s")
+                                    print(f"  ⚡ Auto-compensation triggered: |Δt| = {abs(delta_t):.3f}s > {thresholds['warning']}s")
                                     z21_manager.set_speed(consist_address, last_speed, last_direction, is_auto_compensation=True)
 
                         # Broadcast to all frontend clients (include thresholds)

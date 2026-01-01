@@ -56,7 +56,7 @@
   },
   "timing_thresholds": {
     "normal": 1.0,
-    "warning": 2.0,
+    "warning": 1.5,
     "notes": "Thresholds in seconds: |Δt| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL"
   },
   "reference_locos": {
