@@ -492,9 +492,6 @@ class TrackingDaemon:
         self.last_broadcasted_type = None
         self.last_broadcasted_timestamp = None  # Timestamp of previous Δt for time_str calculation
 
-        # Frame queue for video feed sharing (eliminates dual VideoCapture contention)
-        self.frame_queue = asyncio.Queue(maxsize=2)
-
         # Auto-reconnect state
         self.reconnect_delay = 2.0  # Start with 2s
         self.max_reconnect_delay = 30.0  # Max 30s
@@ -769,13 +766,6 @@ class TrackingDaemon:
 
                 # Update tracking
                 tracking_data = self.tracker.update(frame)
-
-                # Push frame to queue for video feed (non-blocking)
-                try:
-                    self.frame_queue.put_nowait(frame.copy())
-                except asyncio.QueueFull:
-                    # Queue full (video feed slower than daemon), skip frame (no lag)
-                    pass
 
                 # Broadcast updates
                 await self.broadcast_delta_t(tracking_data)

@@ -1,7 +1,7 @@
 """
 FastAPI backend per z21-Terminal Web Dashboard
 """
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any
@@ -622,34 +622,13 @@ async def toggle_panel():
 
 
 @app.get("/api/video_feed")
-async def video_feed(request: Request):
+async def video_feed():
     """
-    MJPEG video stream with gate overlay and tracking info (consumes frames from daemon queue)
+    MJPEG video stream with gate overlay and tracking info
 
     Returns:
         StreamingResponse: MJPEG stream
     """
-    # Get frame queue from tracking daemon (eliminates dual VideoCapture contention)
-    frame_queue = tracking_manager.daemon.frame_queue if tracking_manager and tracking_manager.daemon else None
-
-    if not frame_queue:
-        # Daemon not running, return error frame
-        async def error_stream():
-            error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            cv2.putText(error_frame, "Tracking daemon not running", (80, 240),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-            ret, buffer = cv2.imencode('.jpg', error_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            frame_bytes = buffer.tobytes()
-            while True:
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-                await asyncio.sleep(1)
-
-        return StreamingResponse(
-            error_stream(),
-            media_type="multipart/x-mixed-replace; boundary=frame"
-        )
-
     # Cache for time_str calculation (only recalculate when timestamp changes)
     _previous_timestamp = None  # Timestamp of PREVIOUS Δt
     _cached_time_str = ""
@@ -725,10 +704,8 @@ async def video_feed(request: Request):
 
     return StreamingResponse(
         generate_video_frames(
-            frame_queue=frame_queue,
             tracking_data_callback=get_tracking_data,
-            yolo_detections_callback=get_yolo_detections,
-            request=request
+            yolo_detections_callback=get_yolo_detections
         ),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )

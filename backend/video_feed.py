@@ -11,7 +11,6 @@ os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
 import cv2
 import json
 import time
-import asyncio
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -247,15 +246,13 @@ _last_delta_t_cache = {
 }
 
 
-async def generate_video_frames(frame_queue, tracking_data_callback=None, yolo_detections_callback=None, request=None):
+def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=None):
     """
-    Async generator for MJPEG video stream with overlay (consumes frames from daemon queue)
+    Generator for MJPEG video stream with overlay
 
     Args:
-        frame_queue: asyncio.Queue with frames from tracking daemon (eliminates dual VideoCapture)
         tracking_data_callback: Optional function to get latest tracking data
         yolo_detections_callback: Optional function to get latest YOLO detections
-        request: FastAPI Request object to detect client disconnection
 
     Yields:
         bytes: MJPEG frame data
@@ -263,11 +260,28 @@ async def generate_video_frames(frame_queue, tracking_data_callback=None, yolo_d
     # Load gate configuration
     config = load_gate_config()
     gates = config.get('gates', [])
+
+    # Load FPS from config (feature added in Phase 4 - keep it)
     fps_settings = config.get('tracking_fps', {})
     fps_target = fps_settings.get('video_feed', 15)  # Load from config, fallback to 15
 
-    print(f"🎥 Video feed: consuming frames from daemon queue (zero RTSP contention)")
-    print(f"   Target FPS: {fps_target}")
+    print(f"🎥 Opening video stream: {RTSP_URL}")
+    cap = cv2.VideoCapture(RTSP_URL)
+
+    if not cap.isOpened():
+        print("  ✗ Failed to open video stream")
+        # Return a black frame with error message
+        error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(error_frame, "Video stream unavailable", (100, 240),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        ret, buffer = cv2.imencode('.jpg', error_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        frame_bytes = buffer.tobytes()
+        while True:
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            time.sleep(1)
+
+    print("  ✓ Video stream opened")
 
     frame_count = 0
     frame_delay = 1.0 / fps_target
@@ -276,19 +290,12 @@ async def generate_video_frames(frame_queue, tracking_data_callback=None, yolo_d
         while True:
             start_time = time.time()
 
-            # Get frame from daemon queue (non-blocking with timeout)
-            try:
-                frame = await asyncio.wait_for(frame_queue.get(), timeout=2.0)
-            except asyncio.TimeoutError:
-                # No frame available (daemon not running?), show waiting message
-                error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                cv2.putText(error_frame, "Waiting for tracking daemon...", (80, 240),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-                ret, buffer = cv2.imencode('.jpg', error_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                frame_bytes = buffer.tobytes()
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-                await asyncio.sleep(1)
+            ret, frame = cap.read()
+            if not ret:
+                print("  ⚠️  Failed to read frame, reconnecting...")
+                cap.release()
+                time.sleep(2)
+                cap = cv2.VideoCapture(RTSP_URL)
                 continue
 
             # Draw gate overlays
@@ -334,16 +341,13 @@ async def generate_video_frames(frame_queue, tracking_data_callback=None, yolo_d
             elapsed = time.time() - start_time
             sleep_time = frame_delay - elapsed
             if sleep_time > 0:
-                await asyncio.sleep(sleep_time)
+                time.sleep(sleep_time)
 
-    except asyncio.CancelledError:
-        print("  🔌 Video feed cancelled (client disconnected)")
-    except (ConnectionError, ConnectionResetError, BrokenPipeError) as e:
-        print(f"  🔌 Client disconnected: {e}")
     except Exception as e:
         print(f"  ✗ Video stream error: {e}")
     finally:
-        print("  ✓ Video feed consumer closed")
+        cap.release()
+        print("  ✓ Video stream closed")
 
 
 if __name__ == '__main__':
