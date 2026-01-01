@@ -220,6 +220,10 @@ class YOLOTracker:
         self.threshold_warning = thresholds.get('warning', 2.0)
         print(f"⏱️  Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
 
+        # Load Δt sanity check threshold (ignore outliers from video lag)
+        self.delta_t_max_threshold = thresholds.get('max_delta_t', 15.0)
+        print(f"⚠️  Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
+
         # Load reference loco configuration (future-proofing for Phase 5)
         self.reference_locos = config.get('reference_locos', {})
         if self.reference_locos:
@@ -316,8 +320,8 @@ class YOLOTracker:
                 self.c11_rear_gate2_timestamp > self.last_delta_t_time):
                 delta_t1 = self.c11_lead_gate1_timestamp - self.c11_rear_gate2_timestamp
 
-                # Sanity check: ignore impossible Δt values (|Δt| > 20s)
-                if abs(delta_t1) > 20.0:
+                # Sanity check: ignore impossible Δt values (outliers from video lag)
+                if abs(delta_t1) > self.delta_t_max_threshold:
                     # Throttle spam: only print if value changed significantly or 5s passed
                     current_time = time.time()
                     should_print = (
@@ -326,7 +330,7 @@ class YOLOTracker:
                         (current_time - self.last_ignored_delta_t1_time) > 5.0
                     )
                     if should_print:
-                        print(f"⚠️  Ignored Δt₁ = {delta_t1:+.3f}s (|Δt| > 20s)")
+                        print(f"⚠️  Ignored Δt₁ = {delta_t1:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
                         self.last_ignored_delta_t1 = delta_t1
                         self.last_ignored_delta_t1_time = current_time
                 else:
@@ -349,8 +353,8 @@ class YOLOTracker:
                 self.c11_rear_gate1_timestamp > self.last_delta_t_time):
                 delta_t2 = self.c11_lead_gate2_timestamp - self.c11_rear_gate1_timestamp
 
-                # Sanity check: ignore impossible Δt values (|Δt| > 20s)
-                if abs(delta_t2) > 20.0:
+                # Sanity check: ignore impossible Δt values (outliers from video lag)
+                if abs(delta_t2) > self.delta_t_max_threshold:
                     # Throttle spam: only print if value changed significantly or 5s passed
                     current_time = time.time()
                     should_print = (
@@ -359,7 +363,7 @@ class YOLOTracker:
                         (current_time - self.last_ignored_delta_t2_time) > 5.0
                     )
                     if should_print:
-                        print(f"⚠️  Ignored Δt₂ = {delta_t2:+.3f}s (|Δt| > 20s)")
+                        print(f"⚠️  Ignored Δt₂ = {delta_t2:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
                         self.last_ignored_delta_t2 = delta_t2
                         self.last_ignored_delta_t2_time = current_time
                 else:
