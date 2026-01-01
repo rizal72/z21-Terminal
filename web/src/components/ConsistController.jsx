@@ -472,6 +472,7 @@ export default function ConsistController({
             deltaT={item.delta_t}
             deltaTTimestamp={item.delta_t_timestamp}
             timingThresholds={item.timing_thresholds}
+            virtualMode={item.virtual_mode}
           />
         </div>
       )}

@@ -1,4 +1,4 @@
-export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimestamp, timingThresholds }) {
+export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimestamp, timingThresholds, virtualMode }) {
   // Use dynamic thresholds from backend (or fallback to defaults)
   const thresholdNormal = timingThresholds?.normal || 1.0;
   const thresholdWarning = timingThresholds?.warning || 2.0;
@@ -90,6 +90,16 @@ export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimesta
           <p className={`text-xs font-sans ${statusInfo.color}`}>
             {statusInfo.message}
           </p>
+
+          {/* Speed Compensation Badge */}
+          <div className={`flex items-center gap-2 text-xs mt-3 pt-3 border-t border-control-grey`}>
+            <i className={`fa-solid fa-gauge-high ${
+              virtualMode ? 'text-signal-green' : 'text-track-steel'
+            }`}></i>
+            <span className={virtualMode ? 'text-signal-green' : 'text-track-steel'}>
+              Speed compensation {virtualMode ? 'enabled' : 'disabled'}
+            </span>
+          </div>
         </>
       ) : (
         <div className="text-center py-3">

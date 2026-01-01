@@ -17,7 +17,7 @@ export default function VideoFeedPanel({ apiUrl }) {
           </span>
         </div>
         <span className="text-sm text-track-steel font-sans">
-          YOLO Tracking + Gate Timing
+          YOLO Tracking<span className="hidden md:inline"> + Gate Timing</span>
         </span>
       </button>
 

@@ -26,12 +26,14 @@ GATE_CONFIG_PATH = project_root / 'gate_config.json'
 # Global instances
 z21_manager: Z21Manager = None
 tracking_manager: TrackingManager = None
+tracking_daemon_ws: WebSocket = None  # WebSocket connection to tracking daemon
 connected_clients: List[WebSocket] = []
 consist_data: Dict[int, Dict[str, Any]] = {}
 locomotive_data: Dict[int, Dict[str, Any]] = {}
 controllers_config: List[Dict[str, Any]] = []  # Shared controller configuration
 yolo_detections: Dict[str, Any] = {}  # Latest YOLO detections for video overlay
 timing_thresholds: Dict[str, float] = DEFAULT_TIMING_THRESHOLDS.copy()  # Dynamic thresholds from gate_config.json
+reference_locos: Dict[str, Dict[str, int]] = {}  # Reference loco strategy from gate_config.json
 
 
 polling_task = None
@@ -164,7 +166,7 @@ async def broadcast_controllers_update():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    global z21_manager, tracking_manager, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config, timing_thresholds
+    global z21_manager, tracking_manager, tracking_daemon_ws, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config, timing_thresholds, reference_locos
 
     print("🚂 z21-Terminal Backend Starting...")
 
@@ -185,6 +187,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"  ⚠️  Error loading gate_config.json: {e}, using defaults")
         timing_thresholds = DEFAULT_TIMING_THRESHOLDS.copy()
+
+    # Load reference loco configuration
+    print("🎯 Loading reference loco configuration...")
+    try:
+        with open(GATE_CONFIG_PATH, 'r') as f:
+            gate_config = json.load(f)
+            reference_locos = gate_config.get('reference_locos', {})
+            print(f"  ✓ Reference locos: {len(reference_locos)} consists configured")
+            for consist_addr, config in reference_locos.items():
+                print(f"    Consist {consist_addr}: reference={config['reference']}, adjust={config['adjust']}")
+    except Exception as e:
+        print(f"  ⚠️  Error loading reference locos: {e}")
+        reference_locos = {}
 
     # Load consist configuration from JMRI
     print("📋 Loading consists from JMRI...")
@@ -231,7 +246,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize Z21 Manager
     print("🔌 Connecting to Z21...")
-    z21_manager = Z21Manager(z21_ip='192.168.1.111', verbose=False)
+    z21_manager = Z21Manager(z21_ip='192.168.1.111', verbose=False, reference_locos=reference_locos)
 
     if z21_manager.connect():
         print("  ✓ Connected to Z21 at 192.168.1.111")
@@ -673,6 +688,18 @@ async def websocket_endpoint(websocket: WebSocket):
                         if tracking_manager and address in consist_data:
                             await tracking_manager.on_speed_change(address, speed)
 
+                        # Notify tracking daemon of speed change (for dynamic FPS)
+                        if tracking_daemon_ws and address in consist_data:
+                            try:
+                                await tracking_daemon_ws.send_json({
+                                    'type': 'consist_speed_update',
+                                    'consist_address': address,
+                                    'speed': speed
+                                })
+                            except Exception:
+                                # Daemon disconnected, will be cleared on next loop
+                                pass
+
                 elif message_type == 'set_direction':
                     address = data.get('address')
                     direction = data.get('direction', 'forward')
@@ -805,7 +832,10 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.websocket("/ws/tracking")
 async def websocket_tracking_endpoint(websocket: WebSocket):
     """WebSocket endpoint for tracking daemon connection"""
+    global tracking_daemon_ws
+
     await websocket.accept()
+    tracking_daemon_ws = websocket  # Save reference for bidirectional communication
 
     print(f"🎥 Tracking daemon connected")
 
@@ -828,6 +858,20 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                         # Update consist state with Δt data
                         z21_manager.consist_state[consist_address]['delta_t'] = delta_t
                         z21_manager.consist_state[consist_address]['delta_t_timestamp'] = timestamp
+
+                        # ⚡ AUTO-COMPENSATION: Trigger automatic speed adjustment if CRITICAL
+                        if consist_address in z21_manager.consist_state:
+                            consist = z21_manager.consist_state[consist_address]
+                            is_virtual = consist.get('virtual_mode', False)
+
+                            if is_virtual and abs(delta_t) > 2.0:
+                                # Re-apply last target speed with compensation
+                                last_speed = consist.get('speed', 0)
+                                last_direction = consist.get('direction', 'forward') == 'forward'
+
+                                if last_speed > 0:  # Only compensate if consist is moving
+                                    print(f"  ⚡ Auto-compensation triggered: |Δt| = {abs(delta_t):.3f}s > 2.0s")
+                                    z21_manager.set_speed(consist_address, last_speed, last_direction, is_auto_compensation=True)
 
                         # Broadcast to all frontend clients (include thresholds)
                         message = {
@@ -871,8 +915,17 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         print(f"🎥 Tracking daemon disconnected")
+        tracking_daemon_ws = None  # Clear reference
+        # Reset delta_t for all consists (user may have moved locos manually)
+        if z21_manager:
+            for consist in z21_manager.consist_state.values():
+                if 'delta_t' in consist:
+                    consist['delta_t'] = None
+                    consist['delta_t_timestamp'] = None
+            print(f"  🔄 Δt reset for all consists (tracking disconnected)")
     except Exception as e:
         print(f"Tracking WebSocket error: {e}")
+        tracking_daemon_ws = None  # Clear reference on error
 
 
 if __name__ == "__main__":

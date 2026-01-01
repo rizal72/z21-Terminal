@@ -24,65 +24,38 @@ class TrackingManager:
         self.z21_manager = z21_manager
         self.connected_clients = connected_clients_list
         self.tracking_process: Optional[subprocess.Popen] = None
-        self.stop_timer: Optional[asyncio.Task] = None
-        self.is_stopping = False
 
         # Path to tracking daemon script
         self.daemon_path = Path(__file__).parent / 'tracking_daemon.py'
 
-        print("🎯 TrackingManager initialized")
+        print("🎯 TrackingManager initialized (always-on mode with dynamic FPS)")
 
     def should_track(self) -> bool:
         """
         Check if tracking should be active
 
-        Conditions:
-        - At least 1 connected client (web dashboard open)
-        - At least 1 consist: speed > 0 AND virtual_mode = True
+        Daemon stays active as long as at least 1 client is connected.
+        FPS dynamically adjusts based on movement (handled by daemon).
 
         Returns:
             bool: True if tracking should be running
         """
-        # No clients connected → no tracking needed
-        if len(self.connected_clients) == 0:
-            return False
-
-        # Check if any consist is moving with Virtual Mode active
-        for consist_address, state in self.z21_manager.consist_state.items():
-            speed = state.get('speed', 0)
-            virtual_mode = state.get('virtual_mode', False)
-
-            # For MVP: always track if moving (virtual_mode not yet implemented)
-            # TODO Phase 4B: add virtual_mode check
-            if speed > 0:  # and virtual_mode:
-                return True
-
-        return False
+        # Daemon active whenever dashboard is open
+        return len(self.connected_clients) > 0
 
     async def on_speed_change(self, consist_address: int, new_speed: int):
         """
         Called when speed changes (from WebSocket handler)
 
+        No longer stops daemon on speed = 0. Daemon uses dynamic FPS instead.
+
         Args:
             consist_address: DCC address of consist
             new_speed: New speed value 0-126
         """
-        should_be_active = self.should_track()
-
-        if should_be_active and not self.tracking_process:
-            # Start tracking
+        # Start tracking if not already running (client connected but daemon not started yet)
+        if self.should_track() and not self.tracking_process:
             await self.start_tracking()
-
-            # Cancel stop timer if it was scheduled
-            if self.stop_timer:
-                self.stop_timer.cancel()
-                self.stop_timer = None
-                self.is_stopping = False
-                print("   ⏸️  Stop timer cancelled (movement resumed)")
-
-        elif not should_be_active and self.tracking_process and not self.is_stopping:
-            # Schedule stop with 10s cooldown
-            await self.schedule_stop()
 
     async def start_tracking(self):
         """Start tracking daemon subprocess"""
@@ -93,48 +66,17 @@ class TrackingManager:
         try:
             print("🚀 Starting tracking daemon...")
 
-            # Start daemon as subprocess
+            # Start daemon as subprocess (inherit stdout/stderr for visible logs)
             self.tracking_process = subprocess.Popen(
-                ['python3', str(self.daemon_path)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
+                ['python3', str(self.daemon_path)]
             )
 
             print(f"  ✓ Tracking daemon started (PID {self.tracking_process.pid})")
+            print(f"     Daemon logs will appear below:")
 
         except Exception as e:
             print(f"  ✗ Failed to start tracking daemon: {e}")
             self.tracking_process = None
-
-    async def schedule_stop(self):
-        """Schedule tracking stop with 10s cooldown"""
-        if self.is_stopping:
-            return
-
-        self.is_stopping = True
-        print("⏱️  Tracking stop scheduled (10s cooldown)...")
-
-        # Create stop timer task
-        self.stop_timer = asyncio.create_task(self._stop_after_cooldown())
-
-    async def _stop_after_cooldown(self):
-        """Internal: Stop tracking after cooldown period"""
-        try:
-            await asyncio.sleep(10)  # 10 second cooldown
-
-            # Check again if we should still stop
-            # (movement might have resumed during cooldown)
-            if not self.should_track():
-                await self.stop_tracking()
-            else:
-                print("   ⏸️  Stop cancelled (movement detected during cooldown)")
-                self.is_stopping = False
-
-        except asyncio.CancelledError:
-            # Timer was cancelled (movement resumed)
-            self.is_stopping = False
-            raise
 
     async def stop_tracking(self):
         """Stop tracking daemon"""
@@ -163,11 +105,7 @@ class TrackingManager:
 
         finally:
             self.tracking_process = None
-            self.is_stopping = False
-            self.stop_timer = None
-
-            # Reset gate timestamps (TODO: implement in Phase 4)
-            print("  ✓ Gate timestamps reset")
+            print("  ✓ Tracking daemon cleanup complete")
 
     async def on_client_connected(self):
         """Called when a client connects"""
@@ -189,14 +127,6 @@ class TrackingManager:
     async def shutdown(self):
         """Cleanup on backend shutdown"""
         print("🧹 TrackingManager shutting down...")
-
-        # Cancel stop timer
-        if self.stop_timer:
-            self.stop_timer.cancel()
-            try:
-                await self.stop_timer
-            except asyncio.CancelledError:
-                pass
 
         # Stop tracking daemon
         if self.tracking_process:

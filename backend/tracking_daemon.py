@@ -165,7 +165,36 @@ def is_point_in_gate(point, gate):
 
 # === YOLO TRACKER ===
 class YOLOTracker:
-    """YOLO-based locomotive tracker (headless, no GUI)."""
+    """
+    YOLO-based locomotive tracker with cross-gate timing detection.
+
+    NOMENCLATURE (CRITICAL):
+    - lead/rear = JMRI consist roles (NOT physical position!)
+      - lead: receives function commands (F0-F28)
+      - rear: "succube" loco (follows lead for movement)
+    - reference/adjust = Speed matching roles (gate_config.json)
+      - reference: stable decoder, NEVER modified
+      - adjust: unstable decoder, ALWAYS compensated
+
+    CONSIST 11 MAPPING:
+    - Lead JMRI (loco 7, E656_239) = Adjust (Hornby unstable)
+    - Rear JMRI (loco 8, E444_056) = Reference (ESU stable)
+
+    CROSS-GATE TIMING STRATEGY:
+    - 2 gates per consist (both locos pass through BOTH gates)
+    - Δt = timestamp_lead - timestamp_rear
+    - Δt > 0: lead passes first (adjust too fast) → slow down
+    - Δt < 0: rear passes first (adjust too slow) → speed up
+    - Cross-validation: |Δt₁ - Δt₂| < threshold confirms drift
+
+    FRESH TIMESTAMPS LOGIC:
+    - self.last_delta_t_time = max(timestamp1, timestamp2)
+    - Ensures BOTH timestamps are fresh (> last_delta_t_time)
+    - Prevents spurious Δt from stale timestamps
+
+    NOTE: Currently hardcoded for Consist 11 only.
+    Future refactoring (Phase 4C) will support multiple consists dynamically.
+    """
 
     def __init__(self, model_path: str):
         """Initialize tracker with YOLO model."""
@@ -184,6 +213,11 @@ class YOLOTracker:
         self.threshold_normal = thresholds.get('normal', 1.0)
         self.threshold_warning = thresholds.get('warning', 2.0)
         print(f"⏱️  Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
+
+        # Load reference loco configuration (future-proofing for Phase 5)
+        self.reference_locos = config.get('reference_locos', {})
+        if self.reference_locos:
+            print(f"🎯 Reference locos: {len(self.reference_locos)} consists configured")
 
         # Consist 10 (Tracciato Interno)
         self.c10_lead_pos = None
@@ -214,6 +248,12 @@ class YOLOTracker:
 
         # Last Δt calculation time (to avoid calculating with stale timestamps)
         self.last_delta_t_time = 0
+
+        # Spam reduction for ignored Δt warnings
+        self.last_ignored_delta_t1 = None
+        self.last_ignored_delta_t1_time = 0
+        self.last_ignored_delta_t2 = None
+        self.last_ignored_delta_t2_time = 0
 
         print("✅ YOLO model loaded")
 
@@ -251,6 +291,77 @@ class YOLOTracker:
                     }
 
         return detections
+
+    def calculate_delta_t_centralized(self):
+        """
+        Centralized Δt calculation with 2 independent cross-gate checks.
+
+        Called once per frame after all 4 detection points updated.
+        """
+        # Check 1: Δt₁ = lead@G1 - rear@G2 (cross-gate timing)
+        if (self.c11_lead_gate1_timestamp is not None and
+            self.c11_rear_gate2_timestamp is not None):
+
+            max_t1 = max(self.c11_lead_gate1_timestamp, self.c11_rear_gate2_timestamp)
+
+            # Calculate only if BOTH timestamps are fresh (prevents mixing laps)
+            if (max_t1 > self.last_delta_t_time and
+                self.c11_lead_gate1_timestamp > self.last_delta_t_time and
+                self.c11_rear_gate2_timestamp > self.last_delta_t_time):
+                delta_t1 = self.c11_lead_gate1_timestamp - self.c11_rear_gate2_timestamp
+
+                # Sanity check: ignore impossible Δt values (|Δt| > 20s)
+                if abs(delta_t1) > 20.0:
+                    # Throttle spam: only print if value changed significantly or 5s passed
+                    current_time = time.time()
+                    should_print = (
+                        self.last_ignored_delta_t1 is None or
+                        abs(delta_t1 - self.last_ignored_delta_t1) > 1.0 or
+                        (current_time - self.last_ignored_delta_t1_time) > 5.0
+                    )
+                    if should_print:
+                        print(f"⚠️  Ignored Δt₁ = {delta_t1:+.3f}s (|Δt| > 20s)")
+                        self.last_ignored_delta_t1 = delta_t1
+                        self.last_ignored_delta_t1_time = current_time
+                else:
+                    self.delta_t = delta_t1
+                    self.delta_t_type = "L7G1-L8G2"
+                    self.gate_crossing_count += 1
+                    self.last_delta_t_time = max_t1
+                    print(f"🚪 Cross-gate: L7G1-L8G2 = Δt = {self.delta_t:+.3f}s")
+                    return  # Calculated, done
+
+        # Check 2: Δt₂ = lead@G2 - rear@G1 (cross-gate timing)
+        if (self.c11_lead_gate2_timestamp is not None and
+            self.c11_rear_gate1_timestamp is not None):
+
+            max_t2 = max(self.c11_lead_gate2_timestamp, self.c11_rear_gate1_timestamp)
+
+            # Calculate only if BOTH timestamps are fresh (prevents mixing laps)
+            if (max_t2 > self.last_delta_t_time and
+                self.c11_lead_gate2_timestamp > self.last_delta_t_time and
+                self.c11_rear_gate1_timestamp > self.last_delta_t_time):
+                delta_t2 = self.c11_lead_gate2_timestamp - self.c11_rear_gate1_timestamp
+
+                # Sanity check: ignore impossible Δt values (|Δt| > 20s)
+                if abs(delta_t2) > 20.0:
+                    # Throttle spam: only print if value changed significantly or 5s passed
+                    current_time = time.time()
+                    should_print = (
+                        self.last_ignored_delta_t2 is None or
+                        abs(delta_t2 - self.last_ignored_delta_t2) > 1.0 or
+                        (current_time - self.last_ignored_delta_t2_time) > 5.0
+                    )
+                    if should_print:
+                        print(f"⚠️  Ignored Δt₂ = {delta_t2:+.3f}s (|Δt| > 20s)")
+                        self.last_ignored_delta_t2 = delta_t2
+                        self.last_ignored_delta_t2_time = current_time
+                else:
+                    self.delta_t = delta_t2
+                    self.delta_t_type = "L7G2-L8G1"
+                    self.gate_crossing_count += 1
+                    self.last_delta_t_time = max_t2
+                    print(f"🚪 Cross-gate: L7G2-L8G1 = Δt = {self.delta_t:+.3f}s")
 
     def update(self, frame):
         """
@@ -303,70 +414,41 @@ class YOLOTracker:
         # Gate 1 (VICINO) - Lead loco (E656_239)
         in_gate1 = is_point_in_gate(c11_lead_pos, self.gates[1])
         if in_gate1 and not self.c11_lead_in_gate1:
+            # Rising edge: loco just entered gate
             self.c11_lead_gate1_timestamp = time.time()
             self.c11_lead_in_gate1 = True
-
-            # Calculate cross-gate Δt: Loco7@G1 - Loco8@G2 (opposite sides)
-            if (self.c11_rear_gate2_timestamp is not None and
-                self.c11_rear_gate2_timestamp > self.last_delta_t_time):
-                self.delta_t = self.c11_lead_gate1_timestamp - self.c11_rear_gate2_timestamp
-                self.delta_t_type = "L7G1-L8G2"
-                self.gate_crossing_count += 1
-                self.last_delta_t_time = time.time()
-                print(f"🚪 Cross-gate: Loco7@G1 - Loco8@G2 = Δt = {self.delta_t:+.3f}s")
         elif not in_gate1:
             self.c11_lead_in_gate1 = False
 
         # Gate 1 (VICINO) - Rear loco (E444_056)
         in_gate1 = is_point_in_gate(c11_rear_pos, self.gates[1])
         if in_gate1 and not self.c11_rear_in_gate1:
+            # Rising edge: loco just entered gate
             self.c11_rear_gate1_timestamp = time.time()
             self.c11_rear_in_gate1 = True
-
-            # Calculate CROSS-GATE Δt: Loco7@G2 - Loco8@G1
-            if (self.c11_lead_gate2_timestamp is not None and
-                self.c11_lead_gate2_timestamp > self.last_delta_t_time):
-                self.delta_t = self.c11_lead_gate2_timestamp - self.c11_rear_gate1_timestamp
-                self.delta_t_type = "L7G2-L8G1"
-                self.gate_crossing_count += 1
-                self.last_delta_t_time = time.time()
-                print(f"🚪 Cross-gate: Loco7@G2 - Loco8@G1 = Δt = {self.delta_t:+.3f}s")
         elif not in_gate1:
             self.c11_rear_in_gate1 = False
 
         # Gate 2 (LONTANO) - Lead loco (E656_239)
         in_gate2 = is_point_in_gate(c11_lead_pos, self.gates[2])
         if in_gate2 and not self.c11_lead_in_gate2:
+            # Rising edge: loco just entered gate
             self.c11_lead_gate2_timestamp = time.time()
             self.c11_lead_in_gate2 = True
-
-            # Calculate CROSS-GATE Δt: Loco7@G2 - Loco8@G1
-            if (self.c11_rear_gate1_timestamp is not None and
-                self.c11_rear_gate1_timestamp > self.last_delta_t_time):
-                self.delta_t = self.c11_lead_gate2_timestamp - self.c11_rear_gate1_timestamp
-                self.delta_t_type = "L7G2-L8G1"
-                self.gate_crossing_count += 1
-                self.last_delta_t_time = time.time()
-                print(f"🚪 Cross-gate: Loco7@G2 - Loco8@G1 = Δt = {self.delta_t:+.3f}s")
         elif not in_gate2:
             self.c11_lead_in_gate2 = False
 
         # Gate 2 (LONTANO) - Rear loco (E444_056)
         in_gate2 = is_point_in_gate(c11_rear_pos, self.gates[2])
         if in_gate2 and not self.c11_rear_in_gate2:
+            # Rising edge: loco just entered gate
             self.c11_rear_gate2_timestamp = time.time()
             self.c11_rear_in_gate2 = True
-
-            # Calculate CROSS-GATE Δt: Loco7@G1 - Loco8@G2
-            if (self.c11_lead_gate1_timestamp is not None and
-                self.c11_lead_gate1_timestamp > self.last_delta_t_time):
-                self.delta_t = self.c11_lead_gate1_timestamp - self.c11_rear_gate2_timestamp
-                self.delta_t_type = "L7G1-L8G2"
-                self.gate_crossing_count += 1
-                self.last_delta_t_time = time.time()
-                print(f"🚪 Cross-gate: Loco7@G1 - Loco8@G2 = Δt = {self.delta_t:+.3f}s")
         elif not in_gate2:
             self.c11_rear_in_gate2 = False
+
+        # Centralized Δt calculation (called once per frame after all 4 detection points)
+        self.calculate_delta_t_centralized()
 
     def get_delta_t_status(self):
         """Get Δt status: SYNCED | WARNING | CRITICAL"""
@@ -400,6 +482,11 @@ class TrackingDaemon:
         self.reconnect_delay = 2.0  # Start with 2s
         self.max_reconnect_delay = 30.0  # Max 30s
         self.last_reconnect_attempt = 0
+
+        # Dynamic FPS control
+        self.consist_speeds = {}  # {consist_address: speed}
+        self.active_tracking = False  # True = 30 FPS, False = 5 FPS (Low-Power Mode)
+        self.last_fps_mode = None  # Track mode changes for logging
 
     async def connect_backend(self):
         """Connect to FastAPI backend via WebSocket."""
@@ -524,8 +611,58 @@ class TrackingDaemon:
             # Silent fail for positions (less critical than Δt)
             self.websocket = None  # Mark as disconnected
 
+    def update_consist_speed(self, consist_address: int, speed: int):
+        """
+        Update consist speed for FPS mode calculation
+
+        Args:
+            consist_address: DCC address
+            speed: Speed 0-126
+        """
+        self.consist_speeds[consist_address] = speed
+
+        # Check if we need to change FPS mode
+        new_mode = any(s > 0 for s in self.consist_speeds.values())
+
+        if new_mode != self.active_tracking:
+            self.active_tracking = new_mode
+            mode_name = "Active Tracking (30 FPS)" if new_mode else "Low-Power Mode (5 FPS)"
+            print(f"🔄 Switched to {mode_name}")
+
+    async def listen_backend_messages(self):
+        """Listen for incoming messages from backend (runs in parallel with tracking loop)"""
+        while self.running:
+            try:
+                # Ensure we're connected
+                await self.ensure_connected()
+
+                if not self.websocket:
+                    await asyncio.sleep(1)
+                    continue
+
+                # Listen for messages
+                try:
+                    message = await asyncio.wait_for(self.websocket.recv(), timeout=1.0)
+                    data = json.loads(message)
+
+                    if data.get('type') == 'consist_speed_update':
+                        consist_address = data.get('consist_address')
+                        speed = data.get('speed', 0)
+                        self.update_consist_speed(consist_address, speed)
+
+                except asyncio.TimeoutError:
+                    # Timeout is OK, just loop again
+                    continue
+                except websockets.exceptions.ConnectionClosed:
+                    self.websocket = None
+                    await asyncio.sleep(1)
+
+            except Exception as e:
+                # Don't crash the daemon on error, just log and retry
+                await asyncio.sleep(1)
+
     async def run(self):
-        """Main tracking loop."""
+        """Main tracking loop with dynamic FPS."""
         self.running = True
         self.start_time = time.time()
 
@@ -540,7 +677,11 @@ class TrackingDaemon:
             print("❌ Failed to open video stream")
             return
 
-        print("✅ Tracking daemon started (will auto-reconnect to backend if needed)")
+        print("✅ Tracking daemon started - Low-Power Mode (5 FPS)")
+        print("   (switches to Active Tracking 30 FPS when movement detected)")
+
+        # Start backend message listener in parallel
+        listener_task = asyncio.create_task(self.listen_backend_messages())
 
         try:
             while self.running:
@@ -562,14 +703,23 @@ class TrackingDaemon:
                 if self.frame_count % 10 == 0:
                     await self.broadcast_positions(tracking_data)
 
-                # Small delay to prevent CPU overload
-                await asyncio.sleep(0.033)  # ~30 FPS
+                # Dynamic FPS: 30 FPS active, 5 FPS idle
+                fps = 30 if self.active_tracking else 5
+                await asyncio.sleep(1.0 / fps)
 
         except KeyboardInterrupt:
             print("\n⚠️  Interrupted by user")
         except Exception as e:
             print(f"❌ Error in tracking loop: {e}")
         finally:
+            # Cancel listener task
+            if listener_task:
+                listener_task.cancel()
+                try:
+                    await listener_task
+                except asyncio.CancelledError:
+                    pass
+
             self.stop()
 
     def stop(self):

@@ -816,14 +816,14 @@ function App() {
       <main className="w-full lg:container lg:mx-auto px-2 sm:px-4 py-8">
         {/* Connection warning */}
         {!isConnected && (
-          <div className="mb-6 p-4 bg-signal-red/20 border border-signal-red/50 rounded-lg">
+          <div className="mb-6 p-4 bg-signal-red/20 border border-signal-red/50 rounded-lg overflow-hidden">
             <div className="flex items-center gap-3">
-              <i className="fa-solid fa-wifi text-2xl text-signal-red" style={{ transform: 'scaleX(-1)' }}></i>
-              <div>
+              <i className="fa-solid fa-wifi text-2xl text-signal-red flex-shrink-0" style={{ transform: 'scaleX(-1)' }}></i>
+              <div className="min-w-0 flex-1">
                 <div className="font-display font-semibold text-signal-red">
                   Backend Disconnected
                 </div>
-                <div className="text-sm text-white/70 mt-1">
+                <div className="hidden md:block text-sm text-white/70 mt-1 break-all">
                   Attempting to reconnect to WebSocket server at {WS_URL}
                 </div>
               </div>

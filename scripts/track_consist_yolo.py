@@ -445,7 +445,36 @@ def transform_to_corrected(point):
 
 
 class YOLOTracker:
-    """YOLO-based locomotive tracker."""
+    """
+    YOLO-based locomotive tracker with cross-gate timing detection.
+
+    NOMENCLATURE (CRITICAL):
+    - lead/rear = JMRI consist roles (NOT physical position!)
+      - lead: receives function commands (F0-F28)
+      - rear: "succube" loco (follows lead for movement)
+    - reference/adjust = Speed matching roles (gate_config.json)
+      - reference: stable decoder, NEVER modified
+      - adjust: unstable decoder, ALWAYS compensated
+
+    CONSIST 11 MAPPING:
+    - Lead JMRI (loco 7, E656_239) = Adjust (Hornby unstable)
+    - Rear JMRI (loco 8, E444_056) = Reference (ESU stable)
+
+    CROSS-GATE TIMING STRATEGY:
+    - 2 gates per consist (both locos pass through BOTH gates)
+    - Δt = timestamp_lead - timestamp_rear
+    - Δt > 0: lead passes first (adjust too fast) → slow down
+    - Δt < 0: rear passes first (adjust too slow) → speed up
+    - Cross-validation: |Δt₁ - Δt₂| < threshold confirms drift
+
+    FRESH TIMESTAMPS LOGIC:
+    - self.last_delta_t_time = max(timestamp1, timestamp2)
+    - Ensures BOTH timestamps are fresh (> last_delta_t_time)
+    - Prevents spurious Δt from stale timestamps
+
+    NOTE: Currently hardcoded for Consist 11 only.
+    Future refactoring (Phase 4C) will support multiple consists dynamically.
+    """
 
     def __init__(self, model_path: str):
         """Initialize tracker with YOLO model."""
@@ -464,6 +493,11 @@ class YOLOTracker:
         self.threshold_normal = thresholds.get('normal', 1.0)
         self.threshold_warning = thresholds.get('warning', 2.0)
         print(f"⏱️  Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
+
+        # Load reference loco configuration (future-proofing for Phase 5)
+        self.reference_locos = config.get('reference_locos', {})
+        if self.reference_locos:
+            print(f"🎯 Reference locos: {len(self.reference_locos)} consists configured")
 
         # Consist 10 (Tracciato Interno)
         self.c10_lead_pos = None
@@ -588,14 +622,21 @@ class YOLOTracker:
             self.c11_lead_gate1_timestamp = time.time()
             self.c11_lead_in_gate1 = True
             # Calculate CROSS-GATE Δt: Loco7@G1 - Loco8@G2
-            # Only if BOTH timestamps are fresh (after last Δt calculation)
+            # CRITICAL: Check BOTH timestamps are fresh (after last Δt calculation)
             if (self.c11_rear_gate2_timestamp is not None and
+                self.c11_lead_gate1_timestamp > self.last_delta_t_time and
                 self.c11_rear_gate2_timestamp > self.last_delta_t_time):
                 self.delta_t = self.c11_lead_gate1_timestamp - self.c11_rear_gate2_timestamp
-                self.delta_t_type = "L7G1-L8G2"
-                self.gate_crossing_count += 1
-                self.last_delta_t_time = time.time()
-                print(f"🚪 Cross-gate: Loco7@G1 - Loco8@G2 = Δt = {self.delta_t:+.3f}s")
+
+                # Sanity check: ignore impossible Δt values (|Δt| > 20s)
+                if abs(self.delta_t) > 20.0:
+                    print(f"⚠️  Ignored impossible Δt = {self.delta_t:+.3f}s (|Δt| > 20s)")
+                else:
+                    self.delta_t_type = "L7G1-L8G2"
+                    self.gate_crossing_count += 1
+                    # CRITICAL: Use MAX of both timestamps, not time.time()!
+                    self.last_delta_t_time = max(self.c11_lead_gate1_timestamp, self.c11_rear_gate2_timestamp)
+                    print(f"🚪 Cross-gate: Loco7@G1 - Loco8@G2 = Δt = {self.delta_t:+.3f}s")
         elif not in_gate1:
             self.c11_lead_in_gate1 = False
 
@@ -606,14 +647,21 @@ class YOLOTracker:
             self.c11_rear_gate1_timestamp = time.time()
             self.c11_rear_in_gate1 = True
             # Calculate CROSS-GATE Δt: Loco7@G2 - Loco8@G1
-            # Only if BOTH timestamps are fresh (after last Δt calculation)
+            # CRITICAL: Check BOTH timestamps are fresh (after last Δt calculation)
             if (self.c11_lead_gate2_timestamp is not None and
-                self.c11_lead_gate2_timestamp > self.last_delta_t_time):
+                self.c11_lead_gate2_timestamp > self.last_delta_t_time and
+                self.c11_rear_gate1_timestamp > self.last_delta_t_time):
                 self.delta_t = self.c11_lead_gate2_timestamp - self.c11_rear_gate1_timestamp
-                self.delta_t_type = "L7G2-L8G1"
-                self.gate_crossing_count += 1
-                self.last_delta_t_time = time.time()
-                print(f"🚪 Cross-gate: Loco7@G2 - Loco8@G1 = Δt = {self.delta_t:+.3f}s")
+
+                # Sanity check: ignore impossible Δt values (|Δt| > 20s)
+                if abs(self.delta_t) > 20.0:
+                    print(f"⚠️  Ignored impossible Δt = {self.delta_t:+.3f}s (|Δt| > 20s)")
+                else:
+                    self.delta_t_type = "L7G2-L8G1"
+                    self.gate_crossing_count += 1
+                    # CRITICAL: Use MAX of both timestamps, not time.time()!
+                    self.last_delta_t_time = max(self.c11_lead_gate2_timestamp, self.c11_rear_gate1_timestamp)
+                    print(f"🚪 Cross-gate: Loco7@G2 - Loco8@G1 = Δt = {self.delta_t:+.3f}s")
         elif not in_gate1:
             self.c11_rear_in_gate1 = False
 
@@ -624,14 +672,21 @@ class YOLOTracker:
             self.c11_lead_gate2_timestamp = time.time()
             self.c11_lead_in_gate2 = True
             # Calculate CROSS-GATE Δt: Loco7@G2 - Loco8@G1
-            # Only if BOTH timestamps are fresh (after last Δt calculation)
+            # CRITICAL: Check BOTH timestamps are fresh (after last Δt calculation)
             if (self.c11_rear_gate1_timestamp is not None and
+                self.c11_lead_gate2_timestamp > self.last_delta_t_time and
                 self.c11_rear_gate1_timestamp > self.last_delta_t_time):
                 self.delta_t = self.c11_lead_gate2_timestamp - self.c11_rear_gate1_timestamp
-                self.delta_t_type = "L7G2-L8G1"
-                self.gate_crossing_count += 1
-                self.last_delta_t_time = time.time()
-                print(f"🚪 Cross-gate: Loco7@G2 - Loco8@G1 = Δt = {self.delta_t:+.3f}s")
+
+                # Sanity check: ignore impossible Δt values (|Δt| > 20s)
+                if abs(self.delta_t) > 20.0:
+                    print(f"⚠️  Ignored impossible Δt = {self.delta_t:+.3f}s (|Δt| > 20s)")
+                else:
+                    self.delta_t_type = "L7G2-L8G1"
+                    self.gate_crossing_count += 1
+                    # CRITICAL: Use MAX of both timestamps, not time.time()!
+                    self.last_delta_t_time = max(self.c11_lead_gate2_timestamp, self.c11_rear_gate1_timestamp)
+                    print(f"🚪 Cross-gate: Loco7@G2 - Loco8@G1 = Δt = {self.delta_t:+.3f}s")
         elif not in_gate2:
             self.c11_lead_in_gate2 = False
 
@@ -642,14 +697,21 @@ class YOLOTracker:
             self.c11_rear_gate2_timestamp = time.time()
             self.c11_rear_in_gate2 = True
             # Calculate CROSS-GATE Δt: Loco7@G1 - Loco8@G2
-            # Only if BOTH timestamps are fresh (after last Δt calculation)
+            # CRITICAL: Check BOTH timestamps are fresh (after last Δt calculation)
             if (self.c11_lead_gate1_timestamp is not None and
-                self.c11_lead_gate1_timestamp > self.last_delta_t_time):
+                self.c11_lead_gate1_timestamp > self.last_delta_t_time and
+                self.c11_rear_gate2_timestamp > self.last_delta_t_time):
                 self.delta_t = self.c11_lead_gate1_timestamp - self.c11_rear_gate2_timestamp
-                self.delta_t_type = "L7G1-L8G2"
-                self.gate_crossing_count += 1
-                self.last_delta_t_time = time.time()
-                print(f"🚪 Cross-gate: Loco7@G1 - Loco8@G2 = Δt = {self.delta_t:+.3f}s")
+
+                # Sanity check: ignore impossible Δt values (|Δt| > 20s)
+                if abs(self.delta_t) > 20.0:
+                    print(f"⚠️  Ignored impossible Δt = {self.delta_t:+.3f}s (|Δt| > 20s)")
+                else:
+                    self.delta_t_type = "L7G1-L8G2"
+                    self.gate_crossing_count += 1
+                    # CRITICAL: Use MAX of both timestamps, not time.time()!
+                    self.last_delta_t_time = max(self.c11_lead_gate1_timestamp, self.c11_rear_gate2_timestamp)
+                    print(f"🚪 Cross-gate: Loco7@G1 - Loco8@G2 = Δt = {self.delta_t:+.3f}s")
         elif not in_gate2:
             self.c11_rear_in_gate2 = False
 
