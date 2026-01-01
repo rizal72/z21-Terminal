@@ -927,6 +927,18 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                         z21_manager.consist_state[consist_address]['delta_t'] = delta_t
                         z21_manager.consist_state[consist_address]['delta_t_timestamp'] = timestamp
 
+                        # Colored status log (only status word colored)
+                        if status == 'CRITICAL':
+                            colored_status = f"\033[91m{status}\033[0m"
+                        elif status == 'WARNING':
+                            colored_status = f"\033[93m{status}\033[0m"
+                        elif status == 'SYNCED':
+                            colored_status = f"\033[92m{status}\033[0m"
+                        else:
+                            colored_status = status
+
+                        print(f"  📊 Δt update: consist {consist_address} = {delta_t:.3f}s ({colored_status})")
+
                         # ⚡ AUTO-COMPENSATION: Trigger for CRITICAL (compensation) or SYNCED (decay)
                         if consist_address in z21_manager.consist_state:
                             consist = z21_manager.consist_state[consist_address]
@@ -967,16 +979,6 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                         for client in disconnected_clients:
                             if client in connected_clients:
                                 connected_clients.remove(client)
-
-                        # Status-only colored log (red/yellow/green)
-                        if status == 'CRITICAL':
-                            print(f"\033[91m{status}\033[0m")
-                        elif status == 'WARNING':
-                            print(f"\033[93m{status}\033[0m")
-                        elif status == 'SYNCED':
-                            print(f"\033[92m{status}\033[0m")
-                        else:
-                            print(status)
 
                 elif message_type == 'yolo_detections':
                     # YOLO detection positions for video overlay

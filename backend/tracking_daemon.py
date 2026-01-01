@@ -764,7 +764,13 @@ class TrackingDaemon:
 
                 self.frame_count += 1
 
-                # Update tracking
+                # Skip YOLO in idle mode (save CPU, keep VideoCapture alive)
+                if not self.active_tracking:
+                    # Idle: read frame to flush RTSP buffer, but skip YOLO + broadcast
+                    await asyncio.sleep(1.0 / self.fps_idle)
+                    continue
+
+                # Active: YOLO tracking + broadcast
                 tracking_data = self.tracker.update(frame)
 
                 # Broadcast updates
@@ -774,9 +780,8 @@ class TrackingDaemon:
                 if self.frame_count % 10 == 0:
                     await self.broadcast_positions(tracking_data)
 
-                # Dynamic FPS from config
-                fps = self.fps_active if self.active_tracking else self.fps_idle
-                await asyncio.sleep(1.0 / fps)
+                # Dynamic FPS (active mode)
+                await asyncio.sleep(1.0 / self.fps_active)
 
         except KeyboardInterrupt:
             print("\n⚠️  Interrupted by user")

@@ -1,7 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function VideoFeedPanel({ apiUrl }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [videoSrc, setVideoSrc] = useState(null);
+  const imgRef = useRef(null);
+
+  useEffect(() => {
+    if (isExpanded) {
+      // Open video: add timestamp to force new request
+      const timestamp = Date.now();
+      setVideoSrc(`${apiUrl}/api/video_feed?t=${timestamp}`);
+      console.log('📹 Video feed opened');
+    } else {
+      // Close video: clear src to abort HTTP request
+      setVideoSrc(null);
+      console.log('📹 Video feed closed');
+    }
+
+    // Cleanup on unmount or collapse
+    return () => {
+      if (imgRef.current) {
+        imgRef.current.src = '';  // Force abort HTTP connection
+      }
+    };
+  }, [isExpanded, apiUrl]);
 
   return (
     <div className="w-full mb-6">
@@ -22,10 +44,11 @@ export default function VideoFeedPanel({ apiUrl }) {
       </button>
 
       {/* Video Content (only rendered when expanded) */}
-      {isExpanded && (
+      {isExpanded && videoSrc && (
         <div className="mt-3 rounded-lg overflow-hidden bg-control-black border-2 border-control-grey">
           <img
-            src={`${apiUrl}/api/video_feed`}
+            ref={imgRef}
+            src={videoSrc}
             alt="Live YOLO tracking feed"
             className="w-full h-auto"
             style={{ maxHeight: '70vh', objectFit: 'contain' }}
