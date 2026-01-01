@@ -185,7 +185,7 @@ class Z21Manager:
                     # Bang-bang compensation: intervene only if |Δt| > warning threshold (CRITICAL)
                     # Dead band < warning avoids oscillations from YOLO detection noise
                     elif is_auto_compensation and delta_t is not None and abs(delta_t) > self.timing_thresholds['warning']:
-                        compensation = 3  # Fixed: 3 speed steps per intervention
+                        compensation = 2  # Fixed: 2 speed steps per intervention (even number for cleaner decay)
 
                         if delta_t > 0:
                             # Δt > 0: adjust loco passes AFTER (too slow) → SPEED UP
