@@ -24,9 +24,9 @@
         141,
         162
       ],
-      "width": 60,
+      "width": 80,
       "height": 60,
-      "angle": 0,
+      "angle": 150,
       "color": [
         255,
         165,
@@ -58,12 +58,13 @@
     "normal": 1.0,
     "warning": 1.5,
     "max_delta_t": 15.0,
-    "notes": "Thresholds in seconds: |Δt| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
+    "notes": "Thresholds in seconds: |\u0394t| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
   },
   "tracking_fps": {
     "active": 30,
     "idle": 1,
-    "notes": "YOLO tracking FPS: active when consists moving, idle when stopped"
+    "video_feed": 15,
+    "notes": "Tracking FPS (active/idle) and video feed stream FPS"
   },
   "reference_locos": {
     "11": {

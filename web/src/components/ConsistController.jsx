@@ -471,6 +471,7 @@ export default function ConsistController({
             consistAddress={selection.address}
             deltaT={item.delta_t}
             deltaTTimestamp={item.delta_t_timestamp}
+            deltaTTimeStr={item.delta_t_time_str}
             timingThresholds={item.timing_thresholds}
             virtualMode={item.virtual_mode}
           />

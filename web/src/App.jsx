@@ -255,6 +255,7 @@ function App() {
         const consistAddress = lastMessage.consist_address;
         const deltaT = lastMessage.delta_t;
         const timestamp = lastMessage.timestamp;
+        const timeStr = lastMessage.time_str; // Pre-calculated elapsed time
         const thresholds = lastMessage.thresholds; // NEW: dynamic thresholds from config
 
         // Update consist with delta_t data (only if changed)
@@ -275,6 +276,7 @@ function App() {
               ...currentConsist,
               delta_t: deltaT,
               delta_t_timestamp: timestamp,
+              delta_t_time_str: timeStr, // Pre-calculated elapsed time string
               timing_thresholds: thresholds // Store thresholds for DeltaTStatsPanel
             }
           };

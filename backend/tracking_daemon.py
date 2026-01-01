@@ -65,6 +65,9 @@ RTSP_URL = load_camera_config()
 # YOLO confidence threshold
 CONFIDENCE_THRESHOLD = 0.5
 
+# Idle mode cooldown (seconds to wait after movement stops before switching to low-power mode)
+IDLE_COOLDOWN_SECONDS = 10.0
+
 # Class mapping (YOLO model classes)
 CLASS_NAMES = {
     0: '1_Gr675_017',    # Consist 10 lead
@@ -487,6 +490,7 @@ class TrackingDaemon:
         self.start_time = None
         self.last_broadcasted_delta_t = None
         self.last_broadcasted_type = None
+        self.last_broadcasted_timestamp = None  # Timestamp of previous Δt for time_str calculation
 
         # Frame queue for video feed sharing (eliminates dual VideoCapture contention)
         self.frame_queue = asyncio.Queue(maxsize=2)
@@ -512,6 +516,7 @@ class TrackingDaemon:
         self.consist_speeds = {}  # {consist_address: speed}
         self.active_tracking = False
         self.last_fps_mode = None  # Track mode changes for logging
+        self.idle_timer_task = None  # Asyncio task for 10s cooldown timer
 
     async def connect_backend(self):
         """Connect to FastAPI backend via WebSocket."""
@@ -567,8 +572,27 @@ class TrackingDaemon:
             return  # Same value, don't broadcast again
 
         # New Δt calculated, broadcast it
+        current_timestamp = time.time()
+
+        # Calculate time_str (elapsed since PREVIOUS Δt)
+        if self.last_broadcasted_timestamp:
+            elapsed = current_timestamp - self.last_broadcasted_timestamp
+            if elapsed < 1:
+                time_str = "now"
+            elif elapsed < 60:
+                time_str = f"after {int(elapsed)}s"
+            else:
+                minutes = int(elapsed // 60)
+                seconds = int(elapsed % 60)
+                time_str = f"after {minutes}m {seconds}s"
+        else:
+            # First Δt
+            time_str = "now"
+
+        # Update broadcast state
         self.last_broadcasted_delta_t = current_delta_t
         self.last_broadcasted_type = current_type
+        self.last_broadcasted_timestamp = current_timestamp
 
         message = {
             'type': 'delta_t_update',
@@ -576,7 +600,8 @@ class TrackingDaemon:
             'delta_t': current_delta_t,
             'gate_type': current_type,
             'status': self.tracker.get_delta_t_status(),
-            'timestamp': time.time(),
+            'timestamp': current_timestamp,
+            'time_str': time_str,  # Pre-calculated elapsed time
             'thresholds': {
                 'normal': self.tracker.threshold_normal,
                 'warning': self.tracker.threshold_warning
@@ -636,9 +661,23 @@ class TrackingDaemon:
             # Silent fail for positions (less critical than Δt)
             self.websocket = None  # Mark as disconnected
 
+    async def _idle_timer(self):
+        """Timer che aspetta 10s prima di passare a idle mode"""
+        try:
+            await asyncio.sleep(IDLE_COOLDOWN_SECONDS)
+
+            # Dopo 10s, controlla se ancora tutto fermo
+            any_movement = any(s > 0 for s in self.consist_speeds.values())
+            if not any_movement and self.active_tracking:
+                self.active_tracking = False
+                print(f"🔄 Switched to Low-Power Mode ({self.fps_idle} FPS) (after {IDLE_COOLDOWN_SECONDS:.0f}s cooldown)")
+        except asyncio.CancelledError:
+            # Timer cancellato (movimento ripreso)
+            pass
+
     def update_consist_speed(self, consist_address: int, speed: int):
         """
-        Update consist speed for FPS mode calculation
+        Update consist speed for FPS mode calculation with cooldown
 
         Args:
             consist_address: DCC address
@@ -646,15 +685,23 @@ class TrackingDaemon:
         """
         self.consist_speeds[consist_address] = speed
 
-        # Check if we need to change FPS mode
-        new_mode = any(s > 0 for s in self.consist_speeds.values())
+        # Check if any consist is moving
+        any_movement = any(s > 0 for s in self.consist_speeds.values())
 
-        if new_mode != self.active_tracking:
-            self.active_tracking = new_mode
-            fps_active_str = f"{self.fps_active} FPS"
-            fps_idle_str = f"{self.fps_idle} FPS"
-            mode_name = f"Active Tracking ({fps_active_str})" if new_mode else f"Low-Power Mode ({fps_idle_str})"
-            print(f"🔄 Switched to {mode_name}")
+        if any_movement:
+            # Movement detected: cancella timer e passa subito ad active
+            if self.idle_timer_task:
+                self.idle_timer_task.cancel()
+                self.idle_timer_task = None
+
+            if not self.active_tracking:
+                self.active_tracking = True
+                print(f"🔄 Switched to Active Tracking ({self.fps_active} FPS)")
+        else:
+            # Tutto fermo: avvia timer 10s (se non già avviato)
+            if not self.idle_timer_task and self.active_tracking:
+                print(f"⏸️  All consists stopped - starting {IDLE_COOLDOWN_SECONDS:.0f}s cooldown timer...")
+                self.idle_timer_task = asyncio.create_task(self._idle_timer())
 
     async def listen_backend_messages(self):
         """Listen for incoming messages from backend (runs in parallel with tracking loop)"""
@@ -759,6 +806,11 @@ class TrackingDaemon:
     def stop(self):
         """Stop tracking and cleanup."""
         self.running = False
+
+        # Cancel idle timer if running
+        if self.idle_timer_task:
+            self.idle_timer_task.cancel()
+            self.idle_timer_task = None
 
         if self.cap:
             self.cap.release()

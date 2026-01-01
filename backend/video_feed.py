@@ -120,7 +120,7 @@ def draw_gates(frame: np.ndarray, gates: List[Dict]) -> np.ndarray:
 
 def draw_tracking_info(frame: np.ndarray, tracking_data: Optional[Dict]) -> np.ndarray:
     """
-    Draw tracking information panel (Δt stats, locomotive positions)
+    Draw tracking information panel (Δt stats, locomotive positions) - OPTIMIZED single-pass rendering
 
     Args:
         frame: Input frame
@@ -130,8 +130,8 @@ def draw_tracking_info(frame: np.ndarray, tracking_data: Optional[Dict]) -> np.n
         Frame with tracking info overlay
     """
     # Panel background (semi-transparent, compact size)
-    panel_height = 110  # Ridotto da 150
-    panel_width = 250   # Ridotto da 300
+    panel_height = 90   # Reduced from 110
+    panel_width = 250
     panel_x = 10
     # Position panel at BOTTOM left
     frame_height = frame.shape[0]
@@ -143,26 +143,25 @@ def draw_tracking_info(frame: np.ndarray, tracking_data: Optional[Dict]) -> np.n
                   (0, 0, 0), -1)
     frame = cv2.addWeighted(overlay, 0.6, frame, 0.4, 0)
 
-    # Draw text (simple font for performance)
-    text_color = (255, 255, 255)
-    font = cv2.FONT_HERSHEY_PLAIN  # Simpler font (faster rendering)
+    # Prepare all text lines in one pass (reduces overhead)
+    font = cv2.FONT_HERSHEY_PLAIN
     font_scale = 1.1
-    line_height = 20  # Ridotto da 25
+    line_height = 20
+    text_x = panel_x + 10
     y = panel_y + 18
+
+    # Build text lines list (text, color)
+    lines = []
 
     # Consist info
     consist_address = tracking_data.get('consist_address', 11) if tracking_data else 11
-    cv2.putText(frame, f"Consist {consist_address}", (panel_x + 10, y),
-                font, font_scale, text_color, 1)
-    y += line_height
+    lines.append((f"Consist {consist_address}", (255, 255, 255)))
 
     # Delta t
     delta_t = tracking_data.get('delta_t') if tracking_data else None
     if delta_t is not None:
         sign = '+' if delta_t >= 0 else ''
-        cv2.putText(frame, f"Delta t: {sign}{delta_t:.3f}s", (panel_x + 10, y),
-                    font, font_scale, text_color, 1)
-        y += line_height
+        lines.append((f"Dt: {sign}{delta_t:.3f}s", (255, 255, 255)))
 
         # Status (color-coded)
         status = tracking_data.get('status', 'UNKNOWN')
@@ -174,21 +173,19 @@ def draw_tracking_info(frame: np.ndarray, tracking_data: Optional[Dict]) -> np.n
             status_color = (0, 0, 255)  # Red
         else:
             status_color = (128, 128, 128)  # Gray
+        lines.append((f"{status}", status_color))
 
-        cv2.putText(frame, f"Status: {status}", (panel_x + 10, y),
-                    font, font_scale, status_color, 1)
-        y += line_height
+        # Elapsed time since last Δt (pre-calculated in callback, not every frame)
+        time_str = tracking_data.get('time_str', '') if tracking_data else ''
+        if time_str:
+            lines.append((time_str, (180, 180, 180)))
     else:
-        cv2.putText(frame, "Delta t: Waiting...", (panel_x + 10, y),
-                    font, font_scale, (128, 128, 128), 1)
-        # y += line_height * 2  # Commented: not needed without timestamp
+        lines.append(("Dt: Waiting...", (128, 128, 128)))
 
-    # Timestamp - COMMENTED FOR PERFORMANCE (uncomment if needed)
-    # timestamp = tracking_data.get('timestamp') if tracking_data else None
-    # if timestamp:
-    #     time_str = time.strftime('%H:%M:%S', time.localtime(timestamp))
-    #     cv2.putText(frame, f"Updated: {time_str}", (panel_x + 10, y),
-    #                 font, font_scale, (180, 180, 180), 1)
+    # Draw all lines (single loop, optimized)
+    for text, color in lines:
+        cv2.putText(frame, text, (text_x, y), font, font_scale, color, 1)
+        y += line_height
 
     return frame
 
@@ -250,7 +247,7 @@ _last_delta_t_cache = {
 }
 
 
-async def generate_video_frames(frame_queue, tracking_data_callback=None, yolo_detections_callback=None):
+async def generate_video_frames(frame_queue, tracking_data_callback=None, yolo_detections_callback=None, request=None):
     """
     Async generator for MJPEG video stream with overlay (consumes frames from daemon queue)
 
@@ -258,6 +255,7 @@ async def generate_video_frames(frame_queue, tracking_data_callback=None, yolo_d
         frame_queue: asyncio.Queue with frames from tracking daemon (eliminates dual VideoCapture)
         tracking_data_callback: Optional function to get latest tracking data
         yolo_detections_callback: Optional function to get latest YOLO detections
+        request: FastAPI Request object to detect client disconnection
 
     Yields:
         bytes: MJPEG frame data
@@ -265,11 +263,13 @@ async def generate_video_frames(frame_queue, tracking_data_callback=None, yolo_d
     # Load gate configuration
     config = load_gate_config()
     gates = config.get('gates', [])
+    fps_settings = config.get('tracking_fps', {})
+    fps_target = fps_settings.get('video_feed', 15)  # Load from config, fallback to 15
 
-    print("🎥 Video feed: consuming frames from daemon queue (zero RTSP contention)")
+    print(f"🎥 Video feed: consuming frames from daemon queue (zero RTSP contention)")
+    print(f"   Target FPS: {fps_target}")
 
     frame_count = 0
-    fps_target = 15  # Target FPS for stream (fluido per controllare loco)
     frame_delay = 1.0 / fps_target
 
     try:
@@ -336,6 +336,10 @@ async def generate_video_frames(frame_queue, tracking_data_callback=None, yolo_d
             if sleep_time > 0:
                 await asyncio.sleep(sleep_time)
 
+    except asyncio.CancelledError:
+        print("  🔌 Video feed cancelled (client disconnected)")
+    except (ConnectionError, ConnectionResetError, BrokenPipeError) as e:
+        print(f"  🔌 Client disconnected: {e}")
     except Exception as e:
         print(f"  ✗ Video stream error: {e}")
     finally:

@@ -1,4 +1,4 @@
-export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimestamp, timingThresholds, virtualMode }) {
+export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimestamp, deltaTTimeStr, timingThresholds, virtualMode }) {
   // Use dynamic thresholds from backend (or fallback to defaults)
   const thresholdNormal = timingThresholds?.normal || 1.0;
   const thresholdWarning = timingThresholds?.warning || 2.0;
@@ -42,11 +42,13 @@ export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimesta
 
   const statusInfo = getStatusInfo();
 
-  // Format timestamp
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // Format elapsed time between THIS Δt and PREVIOUS Δt (not "now - timestamp"!)
+  // NOTE: This should be pre-calculated by backend when Δt updates, not here
+  // For now, just display the timestamp as-is (backend should send 'time_str')
+  const formatElapsedTime = (timestamp) => {
+    // This function is DEPRECATED - backend should send pre-calculated 'time_str'
+    // Kept for backwards compatibility only
+    return '';  // Return empty, backend provides time_str
   };
 
   return (
@@ -56,9 +58,9 @@ export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimesta
         <h3 className="text-sm font-display font-semibold text-white">
           ⏱️ Gate Timing
         </h3>
-        {deltaTTimestamp && (
+        {deltaTTimeStr && (
           <span className="text-xs text-track-steel font-mono">
-            {formatTimestamp(deltaTTimestamp)}
+            {deltaTTimeStr}
           </span>
         )}
       </div>

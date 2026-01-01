@@ -1,12 +1,13 @@
 """
 FastAPI backend per z21-Terminal Web Dashboard
 """
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any
 import json
 import asyncio
+import time
 import cv2
 import numpy as np
 from contextlib import asynccontextmanager
@@ -621,7 +622,7 @@ async def toggle_panel():
 
 
 @app.get("/api/video_feed")
-async def video_feed():
+async def video_feed(request: Request):
     """
     MJPEG video stream with gate overlay and tracking info (consumes frames from daemon queue)
 
@@ -649,8 +650,14 @@ async def video_feed():
             media_type="multipart/x-mixed-replace; boundary=frame"
         )
 
+    # Cache for time_str calculation (only recalculate when timestamp changes)
+    _previous_timestamp = None  # Timestamp of PREVIOUS Δt
+    _cached_time_str = ""
+
     def get_tracking_data():
         """Callback to get latest tracking data for overlay"""
+        nonlocal _previous_timestamp, _cached_time_str
+
         # For now, return Consist 11 data if available
         if z21_manager and 11 in z21_manager.consist_state:
             state = z21_manager.consist_state[11]
@@ -666,11 +673,33 @@ async def video_feed():
                 else:
                     status = 'CRITICAL'
 
+                # Calculate elapsed time string ONLY when timestamp changes (not every frame)
+                current_timestamp = state.get('delta_t_timestamp')
+                if current_timestamp and current_timestamp != _previous_timestamp:
+                    # New Δt arrived: calculate difference from PREVIOUS Δt timestamp
+                    if _previous_timestamp:
+                        elapsed = current_timestamp - _previous_timestamp
+                        if elapsed < 1:
+                            _cached_time_str = "now"
+                        elif elapsed < 60:
+                            _cached_time_str = f"after {int(elapsed)}s"
+                        else:
+                            minutes = int(elapsed // 60)
+                            seconds = int(elapsed % 60)
+                            _cached_time_str = f"after {minutes}m {seconds}s"
+                    else:
+                        # First Δt: no previous to compare
+                        _cached_time_str = "now"
+
+                    # Update previous timestamp for next calculation
+                    _previous_timestamp = current_timestamp
+
                 tracking_data = {
                     'consist_address': 11,
                     'delta_t': delta_t,
                     'status': status,
-                    'timestamp': state.get('delta_t_timestamp')
+                    'timestamp': current_timestamp,
+                    'time_str': _cached_time_str  # Cached, recalculated only when timestamp changes
                 }
 
                 # Update cache for display (when loco stop, backend resets to None but we keep showing this)
@@ -698,7 +727,8 @@ async def video_feed():
         generate_video_frames(
             frame_queue=frame_queue,
             tracking_data_callback=get_tracking_data,
-            yolo_detections_callback=get_yolo_detections
+            yolo_detections_callback=get_yolo_detections,
+            request=request
         ),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
@@ -912,6 +942,7 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                     delta_t = data.get('delta_t')
                     status = data.get('status', 'UNKNOWN')
                     timestamp = data.get('timestamp')
+                    time_str = data.get('time_str', '')  # Pre-calculated elapsed time
                     thresholds = data.get('thresholds', timing_thresholds)  # From daemon or fallback to loaded
 
                     if z21_manager and consist_address in consist_data:
@@ -937,13 +968,14 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                                     # Call set_speed with auto_compensation flag (handles both compensation and decay)
                                     z21_manager.set_speed(consist_address, last_speed, last_direction, is_auto_compensation=True)
 
-                        # Broadcast to all frontend clients (include thresholds)
+                        # Broadcast to all frontend clients (include thresholds and time_str)
                         message = {
                             'type': 'delta_t_update',
                             'consist_address': consist_address,
                             'delta_t': delta_t,
                             'status': status,
                             'timestamp': timestamp,
+                            'time_str': time_str,  # Pre-calculated elapsed time
                             'thresholds': thresholds  # Dynamic thresholds from daemon
                         }
 
@@ -959,7 +991,15 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                             if client in connected_clients:
                                 connected_clients.remove(client)
 
-                        print(f"  📊 Δt update: consist {consist_address} = {delta_t:.3f}s ({status})")
+                        # Status-only colored log (red/yellow/green)
+                        if status == 'CRITICAL':
+                            print(f"\033[91m{status}\033[0m")
+                        elif status == 'WARNING':
+                            print(f"\033[93m{status}\033[0m")
+                        elif status == 'SYNCED':
+                            print(f"\033[92m{status}\033[0m")
+                        else:
+                            print(status)
 
                 elif message_type == 'yolo_detections':
                     # YOLO detection positions for video overlay
