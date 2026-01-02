@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 
 # Configuration paths (all in project root)
 project_root = Path(__file__).parent.parent  # z21-Terminal/ root
-GATE_CONFIG_PATH = project_root / 'gate_config.json'
+CONFIG_PATH = project_root / 'config.json'
 CAMERA_CONFIG_PATH = project_root / 'camera_config.json'
 
 
@@ -51,13 +51,13 @@ def load_camera_config() -> str:
 RTSP_URL = load_camera_config()
 
 
-def load_gate_config() -> Dict:
-    """Load gate configuration from JSON"""
+def load_config() -> Dict:
+    """Load system configuration from JSON"""
     try:
-        with open(GATE_CONFIG_PATH, 'r') as f:
+        with open(CONFIG_PATH, 'r') as f:
             return json.load(f)
     except Exception as e:
-        print(f"Error loading gate config: {e}")
+        print(f"Error loading config: {e}")
         return {'gates': []}
 
 
@@ -279,7 +279,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
         bytes: MJPEG frame data
     """
     # Load gate configuration
-    config = load_gate_config()
+    config = load_config()
     gates = config.get('gates', [])
 
     # Load FPS from config (feature added in Phase 4 - keep it)

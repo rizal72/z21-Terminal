@@ -26,7 +26,7 @@ DEFAULT_CONTROLLER = {'id': None, 'type': None, 'address': None}
 
 # Configuration paths (all in project root)
 project_root = Path(__file__).parent.parent  # z21-Terminal/ root
-GATE_CONFIG_PATH = project_root / 'gate_config.json'
+CONFIG_PATH = project_root / 'config.json'
 
 # Global instances
 z21_manager: Z21Manager = None
@@ -37,8 +37,8 @@ consist_data: Dict[int, Dict[str, Any]] = {}
 locomotive_data: Dict[int, Dict[str, Any]] = {}
 controllers_config: List[Dict[str, Any]] = []  # Shared controller configuration
 yolo_detections: Dict[str, Any] = {}  # Latest YOLO detections for video overlay
-timing_thresholds: Dict[str, float] = DEFAULT_TIMING_THRESHOLDS.copy()  # Dynamic thresholds from gate_config.json
-reference_locos: Dict[str, Dict[str, int]] = {}  # Reference loco strategy from gate_config.json
+timing_thresholds: Dict[str, float] = DEFAULT_TIMING_THRESHOLDS.copy()  # Dynamic thresholds from config.json
+reference_locos: Dict[str, Dict[str, int]] = {}  # Reference loco strategy from config.json
 tracked_consist_ids: List[int] = []  # Consist IDs with gate tracking configured (from tracking_assignments)
 
 
@@ -176,42 +176,42 @@ async def lifespan(app: FastAPI):
 
     print("🚂 z21-Terminal Backend Starting...")
 
-    # Load timing thresholds from gate_config.json
-    print("⏱️  Loading timing thresholds from gate_config.json...")
+    # Load timing thresholds from config.json
+    print("⏱️  Loading timing thresholds from config.json...")
     try:
-        with open(GATE_CONFIG_PATH, 'r') as f:
-            gate_config = json.load(f)
-            thresholds = gate_config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
+        with open(CONFIG_PATH, 'r') as f:
+            config = json.load(f)
+            thresholds = config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
             timing_thresholds = {
                 'normal': thresholds.get('normal', DEFAULT_TIMING_THRESHOLDS['normal']),
                 'warning': thresholds.get('warning', DEFAULT_TIMING_THRESHOLDS['warning'])
             }
             print(f"  ✓ Timing thresholds: SYNCED < {timing_thresholds['normal']}s, WARNING < {timing_thresholds['warning']}s")
     except FileNotFoundError:
-        print(f"  ⚠️  gate_config.json not found, using default thresholds ({DEFAULT_TIMING_THRESHOLDS['normal']}s/{DEFAULT_TIMING_THRESHOLDS['warning']}s)")
+        print(f"  ⚠️  config.json not found, using default thresholds ({DEFAULT_TIMING_THRESHOLDS['normal']}s/{DEFAULT_TIMING_THRESHOLDS['warning']}s)")
         timing_thresholds = DEFAULT_TIMING_THRESHOLDS.copy()
     except Exception as e:
-        print(f"  ⚠️  Error loading gate_config.json: {e}, using defaults")
+        print(f"  ⚠️  Error loading config.json: {e}, using defaults")
         timing_thresholds = DEFAULT_TIMING_THRESHOLDS.copy()
 
     # Load reference loco configuration
     print("🎯 Loading reference loco configuration...")
     try:
-        with open(GATE_CONFIG_PATH, 'r') as f:
-            gate_config = json.load(f)
-            reference_locos = gate_config.get('reference_locos', {})
+        with open(CONFIG_PATH, 'r') as f:
+            config = json.load(f)
+            reference_locos = config.get('reference_locos', {})
             print(f"  ✓ Reference locos: {len(reference_locos)} consists configured")
-            for consist_addr, config in reference_locos.items():
-                print(f"    Consist {consist_addr}: reference={config['reference']}, adjust={config['adjust']}")
+            for consist_addr, ref_config in reference_locos.items():
+                print(f"    Consist {consist_addr}: reference={ref_config['reference']}, adjust={ref_config['adjust']}")
     except Exception as e:
         print(f"  ⚠️  Error loading reference locos: {e}")
 
     # Load tracked consist IDs (only consists with gate tracking configured)
     print("📍 Loading tracked consist IDs...")
     try:
-        with open(GATE_CONFIG_PATH, 'r') as f:
-            gate_config = json.load(f)
-            tracking_assignments = gate_config.get('tracking_assignments', {})
+        with open(CONFIG_PATH, 'r') as f:
+            config = json.load(f)
+            tracking_assignments = config.get('tracking_assignments', {})
             # Filter only consist IDs with gate_ids configured
             for consist_key, consist_info in tracking_assignments.items():
                 if consist_key.startswith('_'):  # Skip comments

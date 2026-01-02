@@ -34,7 +34,7 @@ Marker Mode (for gate positioning):
     - R: Rotate counter-clockwise (15° steps)
     - ENTER: Save current gate (auto-generates ID, adds to config)
     - C: Clear current gate being positioned (unsaved)
-    - S: Save ALL gates to gate_config.json file
+    - S: Save ALL gates to config.json file
     - E: Export gates to console (JSON format)
 
 Requirements:
@@ -126,16 +126,16 @@ ROTATION_STEP = -15  # Degrees per R key press (counter-clockwise, negative for 
 GATE_COLOR = (0, 255, 255)  # Yellow
 GATE_SAVED_COLOR = (0, 255, 0)  # Green
 
-# Gate timing detection (Phase 4 - loaded from gate_config.json)
+# Gate timing detection (Phase 4 - loaded from config.json)
 # Consist 11: 2 shared gates - both locos cross both gates
 # Gates and timing thresholds loaded dynamically from JSON config
 
-# Gate configuration file (in project root)
-CONFIG_FILE = Path(__file__).parent.parent / "gate_config.json"
+# System configuration file (in project root)
+CONFIG_FILE = Path(__file__).parent.parent / "config.json"
 
 
-def load_gate_config():
-    """Load gate configuration from JSON file."""
+def load_config():
+    """Load system configuration from JSON file."""
     if not CONFIG_FILE.exists():
         print(f"⚠️  Config file not found: {CONFIG_FILE}")
         return {"gates": [], "tracking_assignments": {}, "timing_thresholds": {"normal": 1.0, "warning": 2.0}}
@@ -150,8 +150,8 @@ def load_gate_config():
         return {"gates": [], "tracking_assignments": {}, "timing_thresholds": {"normal": 1.0, "warning": 2.0}}
 
 
-def save_gate_config(config):
-    """Save gate configuration to JSON file."""
+def save_config(config):
+    """Save system configuration to JSON file."""
     try:
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=2)
@@ -177,7 +177,7 @@ class MarkerState:
         self.enabled = False
         self.current_gate = None  # Current gate being positioned/edited
         self.editing_gate_id = None  # ID of gate being edited (None if new gate)
-        self.config = load_gate_config()  # Load from JSON
+        self.config = load_config()  # Load from JSON
         # Mouse state for drag & drop
         self.dragging = False
         self.drag_gate_id = None
@@ -324,7 +324,7 @@ class MarkerState:
 
     def save_to_config(self):
         """Save all gates to JSON config file."""
-        if save_gate_config(self.config):
+        if save_config(self.config):
             print(f"💾 Saved {len(self.config['gates'])} gates to {CONFIG_FILE.name}")
             return True
         return False
@@ -482,7 +482,7 @@ class YOLOTracker:
         self.model = YOLO(model_path)
 
         # Load gates and thresholds from config
-        config = load_gate_config()
+        config = load_config()
         self.gates = {}
         for gate in config['gates']:
             self.gates[gate['id']] = gate_json_to_dict(gate)

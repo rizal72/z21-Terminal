@@ -115,5 +115,9 @@
       "adjust": 1,
       "notes": "To be confirmed: D645 014 (ESU) likely reference, Gr.675 017 (ESU LokSound) likely adjust"
     }
+  },
+  "debug": {
+    "enabled": false,
+    "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (✅🚪⏱️🎯🚂📹), gate crossing (🚦🚪), warnings (⚠️), mode changes (🔄⏸️). SUPPRESSED when false: YOLO pause/resume verbose (🔇🔊)"
   }
 }

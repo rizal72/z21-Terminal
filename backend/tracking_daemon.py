@@ -28,7 +28,7 @@ sys.path.insert(0, str(scripts_dir))
 # === CONFIGURATION ===
 project_root = Path(__file__).parent.parent  # z21-Terminal/ root
 MODEL_PATH = scripts_dir / 'models' / 'best.pt'  # Symlink to current model version
-GATE_CONFIG_PATH = project_root / 'gate_config.json'
+CONFIG_PATH = project_root / 'config.json'
 CAMERA_CONFIG_PATH = project_root / 'camera_config.json'
 BACKEND_WS_URL = "ws://localhost:8000/ws/tracking"  # WebSocket to FastAPI backend
 
@@ -84,18 +84,18 @@ ADDRESS_TO_CLASS = {
     8: 3   # E444 056 (Consist 11 REAR - reference loco)
 }
 
-# === GATE CONFIGURATION ===
-def load_gate_config():
-    """Load gate configuration from JSON file."""
+# === CONFIGURATION ===
+def load_config():
+    """Load system configuration from JSON file."""
     try:
-        with open(GATE_CONFIG_PATH, 'r') as f:
+        with open(CONFIG_PATH, 'r') as f:
             config = json.load(f)
         return config
     except FileNotFoundError:
-        print(f"⚠️  Gate config not found: {GATE_CONFIG_PATH}")
+        print(f"⚠️  Config not found: {CONFIG_PATH}")
         return {'gates': [], 'timing_thresholds': {'normal': 1.0, 'warning': 2.0}}
     except json.JSONDecodeError as e:
-        print(f"⚠️  Invalid JSON in gate config: {e}")
+        print(f"⚠️  Invalid JSON in config: {e}")
         return {'gates': [], 'timing_thresholds': {'normal': 1.0, 'warning': 2.0}}
 
 
@@ -189,7 +189,7 @@ class YOLOTracker:
     - lead/rear = JMRI consist roles (NOT physical position!)
       - lead: receives function commands (F0-F28)
       - rear: "succube" loco (follows lead for movement)
-    - reference/adjust = Speed matching roles (gate_config.json)
+    - reference/adjust = Speed matching roles (config.json)
       - reference: stable decoder, NEVER modified
       - adjust: unstable decoder, ALWAYS compensated
 
@@ -209,7 +209,7 @@ class YOLOTracker:
     - Ensures BOTH timestamps are fresh (> last_delta_t_time)
     - Prevents spurious Δt from stale timestamps
 
-    PHASE 5 COMPLETE: Generic multi-consist support (consists loaded from gate_config.json).
+    PHASE 5 COMPLETE: Generic multi-consist support (consists loaded from config.json).
     """
 
     def __init__(self, model_path: str):
@@ -218,7 +218,7 @@ class YOLOTracker:
         self.model = YOLO(model_path)
 
         # Load gates and thresholds from config
-        config = load_gate_config()
+        config = load_config()
         self.gates = {}
         for gate in config['gates']:
             self.gates[gate['id']] = gate_json_to_dict(gate)
@@ -579,17 +579,28 @@ class TrackingDaemon:
         self.max_reconnect_delay = 30.0  # Max 30s
         self.last_reconnect_attempt = 0
 
-        # Load FPS settings from config
+        # Load FPS settings and debug mode from config
         try:
-            with open(GATE_CONFIG_PATH, 'r') as f:
+            with open(CONFIG_PATH, 'r') as f:
                 config = json.load(f)
                 fps_config = config.get('tracking_fps', {'active': 30, 'idle': 1})
                 self.fps_active = fps_config.get('active', 30)
                 self.fps_idle = fps_config.get('idle', 1)
+
+                # Load debug mode (false = only startup + gate crossing logs)
+                debug_config = config.get('debug', {'enabled': False})
+                self.debug_enabled = debug_config.get('enabled', False)
         except Exception as e:
-            print(f"⚠️  Error loading FPS config: {e}, using defaults")
+            print(f"⚠️  Error loading config: {e}, using defaults")
             self.fps_active = 30
             self.fps_idle = 1
+            self.debug_enabled = False
+
+        # Log debug mode status
+        if self.debug_enabled:
+            print("🐛 Debug mode: ENABLED (verbose logging)")
+        else:
+            print("🔇 Debug mode: DISABLED (startup + gate crossing logs only)")
 
         # Dynamic FPS control
         self.consist_speeds = {}  # {consist_address: speed}
@@ -865,18 +876,20 @@ class TrackingDaemon:
 
                 # Skip YOLO in idle mode (save CPU, keep VideoCapture alive)
                 if not self.active_tracking:
-                    # Log only on state change (avoid spam)
+                    # Log only on state change (avoid spam) - verbose, only if debug enabled
                     if self.last_fps_mode != 'idle':
-                        print(f"🔇 YOLO tracking paused (idle @ {self.fps_idle} FPS, flushing RTSP buffer only)")
+                        if self.debug_enabled:
+                            print(f"🔇 YOLO tracking paused (idle @ {self.fps_idle} FPS, flushing RTSP buffer only)")
                         self.last_fps_mode = 'idle'
                     # Idle: read frame to flush RTSP buffer, but skip YOLO + broadcast
                     await asyncio.sleep(1.0 / self.fps_idle)
                     continue
 
                 # Active: YOLO tracking + broadcast
-                # Log only on state change (avoid spam)
+                # Log only on state change (avoid spam) - verbose, only if debug enabled
                 if self.last_fps_mode != 'active':
-                    print(f"🔊 YOLO tracking resumed (active @ {self.fps_active} FPS)")
+                    if self.debug_enabled:
+                        print(f"🔊 YOLO tracking resumed (active @ {self.fps_active} FPS)")
                     self.last_fps_mode = 'active'
 
                 tracking_data = self.tracker.update(frame)

@@ -27,7 +27,7 @@ class Z21Manager:
         Args:
             z21_ip (str): Indirizzo IP della Z21
             verbose (bool): Modalità verbose per debug
-            reference_locos (dict): Reference loco strategy config from gate_config.json
+            reference_locos (dict): Reference loco strategy config from config.json
             timing_thresholds (dict): Timing thresholds config {'normal': 1.0, 'warning': 1.5}
         """
         self.z21_ip = z21_ip
