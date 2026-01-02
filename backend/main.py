@@ -46,6 +46,7 @@ polling_task = None
 health_check_task = None
 last_track_power_state = True
 z21_online = False
+debug_enabled = False  # Debug mode flag (loaded from config.json)
 
 
 async def poll_track_power():
@@ -172,9 +173,18 @@ async def broadcast_controllers_update():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    global z21_manager, tracking_manager, tracking_daemon_ws, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config, timing_thresholds, reference_locos, tracked_consist_ids
+    global z21_manager, tracking_manager, tracking_daemon_ws, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config, timing_thresholds, reference_locos, tracked_consist_ids, debug_enabled
 
     print("🚂 z21-Terminal Backend Starting...")
+
+    # Load debug mode configuration FIRST
+    try:
+        with open(CONFIG_PATH, 'r') as f:
+            config = json.load(f)
+            debug_config = config.get('debug', {'enabled': False})
+            debug_enabled = debug_config.get('enabled', False)
+    except Exception:
+        debug_enabled = False
 
     # Load timing thresholds from config.json
     print("⏱️  Loading timing thresholds from config.json...")
@@ -186,7 +196,8 @@ async def lifespan(app: FastAPI):
                 'normal': thresholds.get('normal', DEFAULT_TIMING_THRESHOLDS['normal']),
                 'warning': thresholds.get('warning', DEFAULT_TIMING_THRESHOLDS['warning'])
             }
-            print(f"  ✓ Timing thresholds: SYNCED < {timing_thresholds['normal']}s, WARNING < {timing_thresholds['warning']}s")
+            if debug_enabled:
+                print(f"  ✓ Timing thresholds: SYNCED < {timing_thresholds['normal']}s, WARNING < {timing_thresholds['warning']}s")
     except FileNotFoundError:
         print(f"  ⚠️  config.json not found, using default thresholds ({DEFAULT_TIMING_THRESHOLDS['normal']}s/{DEFAULT_TIMING_THRESHOLDS['warning']}s)")
         timing_thresholds = DEFAULT_TIMING_THRESHOLDS.copy()
@@ -200,9 +211,10 @@ async def lifespan(app: FastAPI):
         with open(CONFIG_PATH, 'r') as f:
             config = json.load(f)
             reference_locos = config.get('reference_locos', {})
-            print(f"  ✓ Reference locos: {len(reference_locos)} consists configured")
-            for consist_addr, ref_config in reference_locos.items():
-                print(f"    Consist {consist_addr}: reference={ref_config['reference']}, adjust={ref_config['adjust']}")
+            if debug_enabled:
+                print(f"  ✓ Reference locos: {len(reference_locos)} consists configured")
+                for consist_addr, ref_config in reference_locos.items():
+                    print(f"    Consist {consist_addr}: reference={ref_config['reference']}, adjust={ref_config['adjust']}")
     except Exception as e:
         print(f"  ⚠️  Error loading reference locos: {e}")
 
@@ -221,7 +233,8 @@ async def lifespan(app: FastAPI):
                 if gate_ids:  # Only add if gates configured
                     tracked_consist_ids.append(consist_id)
             tracked_consist_ids.sort()
-            print(f"  ✓ Tracked consists: {tracked_consist_ids}")
+            if debug_enabled:
+                print(f"  ✓ Tracked consists: {tracked_consist_ids}")
     except Exception as e:
         print(f"  ⚠️  Error loading tracked consists: {e}")
         reference_locos = {}
@@ -233,13 +246,14 @@ async def lifespan(app: FastAPI):
     if not consist_data:
         print("⚠️  Warning: No consists loaded from JMRI")
     else:
-        for addr, data in consist_data.items():
-            locomotives = data.get('locomotives', [])
-            if locomotives:
-                names = ' + '.join([loco['name'] for loco in locomotives])
-                print(f"  ✓ Consist {addr}: {names} ({len(data['functions'])} functions)")
-            else:
-                print(f"  ✓ Consist {addr}: (empty) ({len(data['functions'])} functions)")
+        if debug_enabled:
+            for addr, data in consist_data.items():
+                locomotives = data.get('locomotives', [])
+                if locomotives:
+                    names = ' + '.join([loco['name'] for loco in locomotives])
+                    print(f"  ✓ Consist {addr}: {names} ({len(data['functions'])} functions)")
+                else:
+                    print(f"  ✓ Consist {addr}: (empty) ({len(data['functions'])} functions)")
 
     # Load all locomotives from JMRI
     print("📋 Loading all locomotives from JMRI...")
@@ -248,10 +262,11 @@ async def lifespan(app: FastAPI):
     if not locomotive_data:
         print("⚠️  Warning: No locomotives loaded from JMRI")
     else:
-        print(f"  ✓ Loaded {len(locomotive_data)} locomotives")
-        for addr, data in locomotive_data.items():
-            in_consist = f" (in consist {data['in_consist']})" if data['in_consist'] else ""
-            print(f"    Loco {addr}: {data['name']}{in_consist}")
+        if debug_enabled:
+            print(f"  ✓ Loaded {len(locomotive_data)} locomotives")
+            for addr, data in locomotive_data.items():
+                in_consist = f" (in consist {data['in_consist']})" if data['in_consist'] else ""
+                print(f"    Loco {addr}: {data['name']}{in_consist}")
 
     # Initialize default controllers configuration
     # Try to pre-select consist 10 and 11 if they exist, otherwise leave empty
@@ -260,26 +275,29 @@ async def lifespan(app: FastAPI):
     controller2 = {'id': 2, 'type': 'consist', 'address': 11} if 11 in consist_data else {**DEFAULT_CONTROLLER, 'id': 2}
     controllers_config = [controller1, controller2]
 
-    if controller1['type'] and controller2['type']:
-        print(f"  ✓ Initialized 2 controllers (consist {controller1['address']} + consist {controller2['address']})")
-    elif controller1['type']:
-        print(f"  ✓ Initialized 2 controllers (consist {controller1['address']} + empty)")
-    elif controller2['type']:
-        print(f"  ✓ Initialized 2 controllers (empty + consist {controller2['address']})")
-    else:
-        print("  ✓ Initialized 2 empty controllers")
+    if debug_enabled:
+        if controller1['type'] and controller2['type']:
+            print(f"  ✓ Initialized 2 controllers (consist {controller1['address']} + consist {controller2['address']})")
+        elif controller1['type']:
+            print(f"  ✓ Initialized 2 controllers (consist {controller1['address']} + empty)")
+        elif controller2['type']:
+            print(f"  ✓ Initialized 2 controllers (empty + consist {controller2['address']})")
+        else:
+            print("  ✓ Initialized 2 empty controllers")
 
     # Initialize Z21 Manager
     print("🔌 Connecting to Z21...")
-    z21_manager = Z21Manager(z21_ip='192.168.1.111', verbose=False, reference_locos=reference_locos, timing_thresholds=timing_thresholds)
+    z21_manager = Z21Manager(z21_ip='192.168.1.111', verbose=False, reference_locos=reference_locos, timing_thresholds=timing_thresholds, debug_enabled=debug_enabled)
 
     if z21_manager.connect():
-        print("  ✓ Connected to Z21 at 192.168.1.111")
+        if debug_enabled:
+            print("  ✓ Connected to Z21 at 192.168.1.111")
 
         # Initialize consist states in Z21 Manager
         for address, data in consist_data.items():
             z21_manager.initialize_consist(address, data)
-            print(f"  ✓ Initialized consist {address}")
+            if debug_enabled:
+                print(f"  ✓ Initialized consist {address}")
 
         # Initialize locomotive states in Z21 Manager
         # Initialize ALL locomotives (standalone + those in consist)
@@ -289,8 +307,9 @@ async def lifespan(app: FastAPI):
                 'locomotives': [{'address': address, 'name': data['name']}],  # Single loco array
                 'functions': data['functions']
             })
-            in_consist_note = f" (in consist {data['in_consist']})" if data.get('in_consist') else ""
-            print(f"  ✓ Initialized locomotive {address}{in_consist_note}")
+            if debug_enabled:
+                in_consist_note = f" (in consist {data['in_consist']})" if data.get('in_consist') else ""
+                print(f"  ✓ Initialized locomotive {address}{in_consist_note}")
 
         # Initialize compensation variables for existing consists (backwards compatibility)
         for consist_addr, consist in z21_manager.consist_state.items():
@@ -304,9 +323,11 @@ async def lifespan(app: FastAPI):
         status = z21_manager.z21.get_status()
         if status:
             last_track_power_state = not status.get('track_power_off', False)
-            print(f"  ✓ Initial track power: {'ON' if last_track_power_state else 'OFF'}")
+            if debug_enabled:
+                print(f"  ✓ Initial track power: {'ON' if last_track_power_state else 'OFF'}")
             z21_online = True
-            print(f"  ✓ Z21 connection: ONLINE")
+            if debug_enabled:
+                print(f"  ✓ Z21 connection: ONLINE")
 
         # Start background polling tasks
         polling_task = asyncio.create_task(poll_track_power())
@@ -315,7 +336,8 @@ async def lifespan(app: FastAPI):
         # Initialize Tracking Manager
         print("🎯 Initializing Tracking Manager...")
         tracking_manager = TrackingManager(z21_manager, connected_clients)
-        print("  ✓ Tracking Manager ready")
+        if debug_enabled:
+            print("  ✓ Tracking Manager ready")
 
     else:
         print("  ✗ Failed to connect to Z21")
@@ -472,12 +494,14 @@ async def reload_roster_data():
     if not consist_data:
         print("⚠️  Warning: No consists loaded from JMRI")
     else:
-        print(f"  ✓ Loaded {len(consist_data)} consists")
+        if debug_enabled:
+            print(f"  ✓ Loaded {len(consist_data)} consists")
 
     if not locomotive_data:
         print("⚠️  Warning: No locomotives loaded from JMRI")
     else:
-        print(f"  ✓ Loaded {len(locomotive_data)} locomotives")
+        if debug_enabled:
+            print(f"  ✓ Loaded {len(locomotive_data)} locomotives")
 
     if not z21_manager or not z21_manager.z21:
         print("  ✗ Z21 not connected, cannot reinitialize")
@@ -486,7 +510,8 @@ async def reload_roster_data():
     # Re-initialize consist states
     for address, data in consist_data.items():
         z21_manager.initialize_consist(address, data)
-        print(f"  ✓ Re-initialized consist {address}")
+        if debug_enabled:
+            print(f"  ✓ Re-initialized consist {address}")
 
     # Re-initialize locomotive states
     for address, data in locomotive_data.items():
@@ -494,12 +519,14 @@ async def reload_roster_data():
             'locomotives': [{'address': address, 'name': data['name']}],  # Single loco array
             'functions': data['functions']
         })
-        in_consist_note = f" (in consist {data['in_consist']})" if data.get('in_consist') else ""
-        print(f"  ✓ Re-initialized locomotive {address}{in_consist_note}")
+        if debug_enabled:
+            in_consist_note = f" (in consist {data['in_consist']})" if data.get('in_consist') else ""
+            print(f"  ✓ Re-initialized locomotive {address}{in_consist_note}")
 
     # Broadcast new state to all connected clients
     await broadcast_initial_state()
-    print("  ✓ Broadcasted new state to all clients")
+    if debug_enabled:
+        print("  ✓ Broadcasted new state to all clients")
 
     print("✅ Roster reload complete!\n")
     return True
@@ -751,7 +778,8 @@ async def websocket_endpoint(websocket: WebSocket):
             'trackPower': last_track_power_state,
             'z21Online': z21_online
         })
-        print(f"  ✓ Sent initial state (trackPower={last_track_power_state}, z21Online={z21_online})")
+        if debug_enabled:
+            print(f"  ✓ Sent initial state (trackPower={last_track_power_state}, z21Online={z21_online})")
 
         # Notify tracking manager of client connection
         if tracking_manager:
@@ -896,7 +924,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         if success:
                             # Broadcast updated state to all clients
                             await broadcast_state_update(consist_address)
-                            print(f"  ✓ Virtual Mode {'enabled' if enable else 'disabled'} for consist {consist_address}")
+                            if debug_enabled:
+                                print(f"  ✓ Virtual Mode {'enabled' if enable else 'disabled'} for consist {consist_address}")
                         else:
                             print(f"  ✗ Failed to toggle Virtual Mode for consist {consist_address}")
 
@@ -914,7 +943,8 @@ async def websocket_endpoint(websocket: WebSocket):
                             consist['auto_compensation_enabled'] = enable
                             # Broadcast updated state to all clients
                             await broadcast_state_update(consist_address)
-                            print(f"  ✓ Auto-compensation {'enabled' if enable else 'disabled'} for consist {consist_address}")
+                            if debug_enabled:
+                                print(f"  ✓ Auto-compensation {'enabled' if enable else 'disabled'} for consist {consist_address}")
                         else:
                             print(f"  ✗ Cannot toggle auto-compensation: consist {consist_address} not in Virtual Mode")
 

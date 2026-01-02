@@ -214,29 +214,45 @@ class YOLOTracker:
 
     def __init__(self, model_path: str):
         """Initialize tracker with YOLO model (config-driven multi-consist support)."""
-        print(f"🤖 Loading YOLO model: {model_path}")
+        # Load config first to get debug mode
+        config = load_config()
+
+        # Load debug mode FIRST
+        debug_config = config.get('debug', {'enabled': False})
+        self.debug_enabled = debug_config.get('enabled', False)
+
+        # Log debug mode status
+        if self.debug_enabled:
+            print("🐛 Debug mode: ENABLED (verbose logging)")
+        else:
+            print("🔇 Debug mode: DISABLED (only connections, Δt updates, and speed corrections)")
+
+        if self.debug_enabled:
+            print(f"🤖 Loading YOLO model: {model_path}")
         self.model = YOLO(model_path)
 
         # Load gates and thresholds from config
-        config = load_config()
         self.gates = {}
         for gate in config['gates']:
             self.gates[gate['id']] = gate_json_to_dict(gate)
-        print(f"🚪 Loaded {len(self.gates)} gates from config")
+        if self.debug_enabled:
+            print(f"🚪 Loaded {len(self.gates)} gates from config")
 
         # Load timing thresholds
         thresholds = config.get('timing_thresholds', {'normal': 1.0, 'warning': 2.0})
         self.threshold_normal = thresholds.get('normal', 1.0)
         self.threshold_warning = thresholds.get('warning', 2.0)
-        print(f"⏱️  Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
+        if self.debug_enabled:
+            print(f"⏱️  Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
 
         # Load Δt sanity check threshold (ignore outliers from video lag)
         self.delta_t_max_threshold = thresholds.get('max_delta_t', 15.0)
-        print(f"⚠️  Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
+        if self.debug_enabled:
+            print(f"⚠️  Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
 
         # Load reference loco configuration
         self.reference_locos = config.get('reference_locos', {})
-        if self.reference_locos:
+        if self.reference_locos and self.debug_enabled:
             print(f"🎯 Reference locos: {len(self.reference_locos)} consists configured")
 
         # === PHASE 5: CONFIG-DRIVEN MULTI-CONSIST SUPPORT ===
@@ -263,12 +279,13 @@ class YOLOTracker:
                 'rear_class_id': ADDRESS_TO_CLASS[rear_addr] if rear_addr else None
             }
 
-        print(f"🚂 Loaded {len(self.consist_config)} consists from config:")
-        for cid, cinfo in self.consist_config.items():
-            gates_str = f"{cinfo['gate_ids']}" if cinfo['gate_ids'] else "[]"
-            lead_class = cinfo['lead_class_id']
-            rear_class = cinfo['rear_class_id']
-            print(f"   Consist {cid}: lead={cinfo['lead_address']} (class {lead_class}), rear={cinfo['rear_address']} (class {rear_class}), gates={gates_str}")
+        if self.debug_enabled:
+            print(f"🚂 Loaded {len(self.consist_config)} consists from config:")
+            for cid, cinfo in self.consist_config.items():
+                gates_str = f"{cinfo['gate_ids']}" if cinfo['gate_ids'] else "[]"
+                lead_class = cinfo['lead_class_id']
+                rear_class = cinfo['rear_class_id']
+                print(f"   Consist {cid}: lead={cinfo['lead_address']} (class {lead_class}), rear={cinfo['rear_address']} (class {rear_class}), gates={gates_str}")
 
         # Initialize consist_data dict (tracking state for each consist)
         self.consist_data = {}
@@ -297,7 +314,8 @@ class YOLOTracker:
                 'last_ignored_delta_t2_time': 0
             }
 
-        print("✅ YOLO model loaded")
+        if self.debug_enabled:
+            print("✅ YOLO model loaded")
 
     def detect_locomotives(self, frame):
         """
@@ -511,7 +529,8 @@ class YOLOTracker:
                 lead_addr = consist_info['lead_address']
                 timestamp_str = time.strftime('%H:%M:%S', time.localtime(timestamp))
                 gate_center = (gate['center_x'], gate['center_y'])
-                print(f"🚦 C{consist_id}: Loco {lead_addr} (LEAD) passed G{gate_id} at {timestamp_str}.{int((timestamp % 1) * 1000):03d} | pos={lead_pos}, gate_center={gate_center}, gate_size={gate['width']}x{gate['height']}")
+                if self.debug_enabled:
+                    print(f"🚦 C{consist_id}: Loco {lead_addr} (LEAD) passed G{gate_id} at {timestamp_str}.{int((timestamp % 1) * 1000):03d} | pos={lead_pos}, gate_center={gate_center}, gate_size={gate['width']}x{gate['height']}")
             elif not in_gate:
                 cdata['gate_states']['lead'][gate_id] = False
 
@@ -526,7 +545,8 @@ class YOLOTracker:
                 rear_addr = consist_info['rear_address']
                 timestamp_str = time.strftime('%H:%M:%S', time.localtime(timestamp))
                 gate_center = (gate['center_x'], gate['center_y'])
-                print(f"🚦 C{consist_id}: Loco {rear_addr} (REAR) passed G{gate_id} at {timestamp_str}.{int((timestamp % 1) * 1000):03d} | pos={rear_pos}, gate_center={gate_center}, gate_size={gate['width']}x{gate['height']}")
+                if self.debug_enabled:
+                    print(f"🚦 C{consist_id}: Loco {rear_addr} (REAR) passed G{gate_id} at {timestamp_str}.{int((timestamp % 1) * 1000):03d} | pos={rear_pos}, gate_center={gate_center}, gate_size={gate['width']}x{gate['height']}")
             elif not in_gate:
                 cdata['gate_states']['rear'][gate_id] = False
 
@@ -579,28 +599,18 @@ class TrackingDaemon:
         self.max_reconnect_delay = 30.0  # Max 30s
         self.last_reconnect_attempt = 0
 
-        # Load FPS settings and debug mode from config
+        # Load FPS settings from config (debug mode already loaded in __init__)
         try:
             with open(CONFIG_PATH, 'r') as f:
                 config = json.load(f)
                 fps_config = config.get('tracking_fps', {'active': 30, 'idle': 1})
                 self.fps_active = fps_config.get('active', 30)
                 self.fps_idle = fps_config.get('idle', 1)
-
-                # Load debug mode (false = only startup + gate crossing logs)
-                debug_config = config.get('debug', {'enabled': False})
-                self.debug_enabled = debug_config.get('enabled', False)
         except Exception as e:
-            print(f"⚠️  Error loading config: {e}, using defaults")
+            if self.debug_enabled:
+                print(f"⚠️  Error loading config: {e}, using defaults")
             self.fps_active = 30
             self.fps_idle = 1
-            self.debug_enabled = False
-
-        # Log debug mode status
-        if self.debug_enabled:
-            print("🐛 Debug mode: ENABLED (verbose logging)")
-        else:
-            print("🔇 Debug mode: DISABLED (startup + gate crossing logs only)")
 
         # Dynamic FPS control
         self.consist_speeds = {}  # {consist_address: speed}
@@ -633,14 +643,16 @@ class TrackingDaemon:
 
         # Attempt reconnect
         self.last_reconnect_attempt = now
-        print(f"🔄 Attempting to reconnect to backend... (retry in {self.reconnect_delay:.1f}s if fails)")
+        if self.debug_enabled:
+            print(f"🔄 Attempting to reconnect to backend... (retry in {self.reconnect_delay:.1f}s if fails)")
 
         success = await self.connect_backend()
 
         if not success:
             # Exponential backoff
             self.reconnect_delay = min(self.reconnect_delay * 2, self.max_reconnect_delay)
-            print(f"⏳ Next retry in {self.reconnect_delay:.1f}s")
+            if self.debug_enabled:
+                print(f"⏳ Next retry in {self.reconnect_delay:.1f}s")
 
         return success
 
@@ -878,8 +890,7 @@ class TrackingDaemon:
                 if not self.active_tracking:
                     # Log only on state change (avoid spam) - verbose, only if debug enabled
                     if self.last_fps_mode != 'idle':
-                        if self.debug_enabled:
-                            print(f"🔇 YOLO tracking paused (idle @ {self.fps_idle} FPS, flushing RTSP buffer only)")
+                        print(f"🔇 YOLO tracking paused (idle @ {self.fps_idle} FPS, flushing RTSP buffer only)")
                         self.last_fps_mode = 'idle'
                     # Idle: read frame to flush RTSP buffer, but skip YOLO + broadcast
                     await asyncio.sleep(1.0 / self.fps_idle)
@@ -888,8 +899,7 @@ class TrackingDaemon:
                 # Active: YOLO tracking + broadcast
                 # Log only on state change (avoid spam) - verbose, only if debug enabled
                 if self.last_fps_mode != 'active':
-                    if self.debug_enabled:
-                        print(f"🔊 YOLO tracking resumed (active @ {self.fps_active} FPS)")
+                    print(f"🔊 YOLO tracking resumed (active @ {self.fps_active} FPS)")
                     self.last_fps_mode = 'active'
 
                 tracking_data = self.tracker.update(frame)
@@ -931,7 +941,7 @@ class TrackingDaemon:
         if self.cap:
             self.cap.release()
 
-        if self.start_time:
+        if self.start_time and self.debug_enabled:
             duration = time.time() - self.start_time
             print(f"\n📊 Session Summary:")
             print(f"   Duration: {duration:.1f}s")
@@ -948,7 +958,8 @@ class TrackingDaemon:
                         status = self.tracker.get_delta_t_status(consist_id)
                         print(f"     Last Δt: {delta_t:+.3f}s ({status})")
 
-        print("✅ Tracking daemon stopped")
+        if self.debug_enabled:
+            print("✅ Tracking daemon stopped")
 
 
 # === MAIN ===

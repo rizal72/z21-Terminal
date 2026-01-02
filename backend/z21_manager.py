@@ -20,7 +20,7 @@ class Z21Manager:
     Manager per gestire connessioni Z21 e stato consist
     """
 
-    def __init__(self, z21_ip='192.168.1.111', verbose=False, reference_locos=None, timing_thresholds=None):
+    def __init__(self, z21_ip='192.168.1.111', verbose=False, reference_locos=None, timing_thresholds=None, debug_enabled=False):
         """
         Inizializza Z21Manager
 
@@ -29,9 +29,11 @@ class Z21Manager:
             verbose (bool): Modalità verbose per debug
             reference_locos (dict): Reference loco strategy config from config.json
             timing_thresholds (dict): Timing thresholds config {'normal': 1.0, 'warning': 1.5}
+            debug_enabled (bool): Debug mode for verbose logging
         """
         self.z21_ip = z21_ip
         self.verbose = verbose
+        self.debug_enabled = debug_enabled
         self.z21 = None
         self.consist_state = {}  # {address: {'speed': 0, 'direction': 'forward', 'power': True, 'functions': {}}}
         self.persisted_state = self._load_persisted_state()  # Load virtual_mode from file
@@ -86,7 +88,8 @@ class Z21Manager:
         }
 
         if virtual_mode:
-            print(f"  ✓ Consist {address}: Restored Virtual Mode from saved state")
+            if self.debug_enabled:
+                print(f"  ✓ Consist {address}: Restored Virtual Mode from saved state")
 
         # Initialize function states
         for fn in data.get('functions', []):
@@ -104,9 +107,11 @@ class Z21Manager:
                         for fn_num, fn_state in loco_info['functions'].items():
                             if fn_num in self.consist_state[address]['functions']:
                                 self.consist_state[address]['functions'][fn_num] = fn_state
-                        print(f"  ✓ Synced functions for consist {address} from lead loco {lead_addr}")
+                        if self.debug_enabled:
+                            print(f"  ✓ Synced functions for consist {address} from lead loco {lead_addr}")
                 except Exception as e:
-                    print(f"  ⚠️  Could not sync functions for consist {address}: {e}")
+                    if self.debug_enabled:
+                        print(f"  ⚠️  Could not sync functions for consist {address}: {e}")
 
     def get_consist_state(self, address):
         """Get current state of a consist"""
@@ -152,7 +157,7 @@ class Z21Manager:
                         # Fallback: default to adjusting lead (rear as reference)
                         adjust_addr = loco_lead_addr
                         reference_addr = loco_rear_addr
-                        if self.verbose:
+                        if self.verbose and self.debug_enabled:
                             print(f"  ⚠️  No reference config for consist {address}, using default (adjust lead)")
 
                     # User command: reset speed_actual_adjust to target
@@ -183,7 +188,8 @@ class Z21Manager:
                         consist['speed_actual_adjust'] = speed  # Reset incremental speed
                         consist['compensation_accumulated'] = 0  # Reset accumulated compensation
                         consist['decay_applied'] = False  # Reset decay flag
-                        print(f"  ⏪ REVERSE: no compensation (forward direction only)")
+                        if self.debug_enabled:
+                            print(f"  ⏪ REVERSE: no compensation (forward direction only)")
                     # Bang-bang compensation: intervene only if |Δt| > warning threshold (CRITICAL)
                     # Dead band < warning avoids oscillations from YOLO detection noise
                     elif is_auto_compensation and delta_t is not None and abs(delta_t) > self.timing_thresholds['warning']:
@@ -357,11 +363,13 @@ class Z21Manager:
                     if function_number == 0:
                         target_addresses = [loco['address'] for loco in locomotives]
                         loco_addrs = ', '.join(map(str, target_addresses))
-                        print(f"   → Consist {address}: F0 to all locos ({loco_addrs})")
+                        if self.debug_enabled:
+                            print(f"   → Consist {address}: F0 to all locos ({loco_addrs})")
                     else:
                         # Other functions only to lead (sound decoder)
                         target_addresses = [locomotives[0]['address']]
-                        print(f"   → Consist {address}: F{function_number} to lead ({target_addresses[0]})")
+                        if self.debug_enabled:
+                            print(f"   → Consist {address}: F{function_number} to lead ({target_addresses[0]})")
                 else:
                     # Fallback: treat as single locomotive
                     target_addresses = [address]
@@ -522,9 +530,10 @@ class Z21Manager:
         lead_addr = locomotives[0]['address']
         rear_addr = locomotives[1]['address']
 
-        print(f"⚙️  Enabling Virtual Mode for consist {consist_address}...")
-        print(f"   → Writing CV19=0 to loco {lead_addr} (lead)")
-        print(f"   → Writing CV19=0 to loco {rear_addr} (rear)")
+        if self.debug_enabled:
+            print(f"⚙️  Enabling Virtual Mode for consist {consist_address}...")
+            print(f"   → Writing CV19=0 to loco {lead_addr} (lead)")
+            print(f"   → Writing CV19=0 to loco {rear_addr} (rear)")
 
         # Write CV19=0 to free from consist (operations mode)
         success_lead = self.z21.write_cv_ops_mode(lead_addr, 19, 0)
@@ -534,7 +543,8 @@ class Z21Manager:
             consist['virtual_mode'] = True
             consist['auto_compensation_enabled'] = True  # Auto-enable compensation with Virtual Mode
             self._save_persisted_state()  # Persist to file
-            print(f"  ✓ Virtual Mode enabled for consist {consist_address} (auto-compensation ON)")
+            if self.debug_enabled:
+                print(f"  ✓ Virtual Mode enabled for consist {consist_address} (auto-compensation ON)")
             return True
         else:
             error_locos = []
@@ -542,7 +552,8 @@ class Z21Manager:
                 error_locos.append(f"lead {lead_addr}")
             if not success_rear:
                 error_locos.append(f"rear {rear_addr}")
-            print(f"  ✗ Failed to enable Virtual Mode: CV write failed for {', '.join(error_locos)}")
+            if self.debug_enabled:
+                print(f"  ✗ Failed to enable Virtual Mode: CV write failed for {', '.join(error_locos)}")
             return False
 
     def disable_virtual_mode(self, consist_address):
@@ -571,9 +582,10 @@ class Z21Manager:
         lead_addr = locomotives[0]['address']
         rear_addr = locomotives[1]['address']
 
-        print(f"⚙️  Disabling Virtual Mode for consist {consist_address}...")
-        print(f"   → Writing CV19={consist_address} to loco {lead_addr} (lead)")
-        print(f"   → Writing CV19={consist_address} to loco {rear_addr} (rear)")
+        if self.debug_enabled:
+            print(f"⚙️  Disabling Virtual Mode for consist {consist_address}...")
+            print(f"   → Writing CV19={consist_address} to loco {lead_addr} (lead)")
+            print(f"   → Writing CV19={consist_address} to loco {rear_addr} (rear)")
 
         # Restore CV19 to consist address (operations mode)
         success_lead = self.z21.write_cv_ops_mode(lead_addr, 19, consist_address)
@@ -583,7 +595,8 @@ class Z21Manager:
             consist['virtual_mode'] = False
             consist['auto_compensation_enabled'] = False  # Auto-disable compensation with DCC Mode
             self._save_persisted_state()  # Persist to file
-            print(f"  ✓ Virtual Mode disabled for consist {consist_address} (auto-compensation OFF)")
+            if self.debug_enabled:
+                print(f"  ✓ Virtual Mode disabled for consist {consist_address} (auto-compensation OFF)")
             return True
         else:
             error_locos = []
@@ -591,7 +604,8 @@ class Z21Manager:
                 error_locos.append(f"lead {lead_addr}")
             if not success_rear:
                 error_locos.append(f"rear {rear_addr}")
-            print(f"  ✗ Failed to disable Virtual Mode: CV write failed for {', '.join(error_locos)}")
+            if self.debug_enabled:
+                print(f"  ✗ Failed to disable Virtual Mode: CV write failed for {', '.join(error_locos)}")
             return False
 
     def _load_persisted_state(self):
@@ -607,11 +621,12 @@ class Z21Manager:
                             # Default: ON if virtual_mode, OFF otherwise
                             consist_data['auto_compensation_enabled'] = consist_data.get('virtual_mode', False)
 
-                    if self.verbose:
+                    if self.debug_enabled:
                         print(f"  ✓ Loaded persisted state: {state}")
                     return state
         except Exception as e:
-            print(f"  ⚠️  Failed to load persisted state: {e}")
+            if self.debug_enabled:
+                print(f"  ⚠️  Failed to load persisted state: {e}")
         return {}
 
     def _save_persisted_state(self):
@@ -629,10 +644,11 @@ class Z21Manager:
             with open(CONSIST_STATE_FILE, 'w') as f:
                 json.dump(state, f, indent=2)
 
-            if self.verbose:
+            if self.debug_enabled:
                 print(f"  ✓ Saved persisted state: {state}")
         except Exception as e:
-            print(f"  ⚠️  Failed to save persisted state: {e}")
+            if self.debug_enabled:
+                print(f"  ⚠️  Failed to save persisted state: {e}")
 
 
 if __name__ == '__main__':
