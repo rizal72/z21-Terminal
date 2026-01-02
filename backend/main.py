@@ -179,7 +179,7 @@ async def lifespan(app: FastAPI):
 
     # Load debug mode configuration FIRST
     try:
-        with open(CONFIG_PATH, 'r') as f:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
             debug_config = config.get('debug', {'enabled': False})
             debug_enabled = debug_config.get('enabled', False)
@@ -189,7 +189,7 @@ async def lifespan(app: FastAPI):
     # Load timing thresholds from config.json
     print("⏱️  Loading timing thresholds from config.json...")
     try:
-        with open(CONFIG_PATH, 'r') as f:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
             thresholds = config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
             timing_thresholds = {
@@ -208,7 +208,7 @@ async def lifespan(app: FastAPI):
     # Load reference loco configuration
     print("🎯 Loading reference loco configuration...")
     try:
-        with open(CONFIG_PATH, 'r') as f:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
             reference_locos = config.get('reference_locos', {})
             if debug_enabled:
@@ -221,7 +221,7 @@ async def lifespan(app: FastAPI):
     # Load tracked consist IDs (only consists with gate tracking configured)
     print("📍 Loading tracked consist IDs...")
     try:
-        with open(CONFIG_PATH, 'r') as f:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
             tracking_assignments = config.get('tracking_assignments', {})
             # Filter only consist IDs with gate_ids configured

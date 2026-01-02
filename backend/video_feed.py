@@ -54,7 +54,7 @@ RTSP_URL = load_camera_config()
 def load_config() -> Dict:
     """Load system configuration from JSON"""
     try:
-        with open(CONFIG_PATH, 'r') as f:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading config: {e}")
