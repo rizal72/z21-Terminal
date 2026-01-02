@@ -38,6 +38,7 @@ controllers_config: List[Dict[str, Any]] = []  # Shared controller configuration
 yolo_detections: Dict[str, Any] = {}  # Latest YOLO detections for video overlay
 timing_thresholds: Dict[str, float] = DEFAULT_TIMING_THRESHOLDS.copy()  # Dynamic thresholds from gate_config.json
 reference_locos: Dict[str, Dict[str, int]] = {}  # Reference loco strategy from gate_config.json
+tracked_consist_ids: List[int] = []  # Consist IDs with gate tracking configured (from tracking_assignments)
 
 
 polling_task = None
@@ -170,7 +171,7 @@ async def broadcast_controllers_update():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    global z21_manager, tracking_manager, tracking_daemon_ws, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config, timing_thresholds, reference_locos
+    global z21_manager, tracking_manager, tracking_daemon_ws, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config, timing_thresholds, reference_locos, tracked_consist_ids
 
     print("🚂 z21-Terminal Backend Starting...")
 
@@ -203,6 +204,25 @@ async def lifespan(app: FastAPI):
                 print(f"    Consist {consist_addr}: reference={config['reference']}, adjust={config['adjust']}")
     except Exception as e:
         print(f"  ⚠️  Error loading reference locos: {e}")
+
+    # Load tracked consist IDs (only consists with gate tracking configured)
+    print("📍 Loading tracked consist IDs...")
+    try:
+        with open(GATE_CONFIG_PATH, 'r') as f:
+            gate_config = json.load(f)
+            tracking_assignments = gate_config.get('tracking_assignments', {})
+            # Filter only consist IDs with gate_ids configured
+            for consist_key, consist_info in tracking_assignments.items():
+                if consist_key.startswith('_'):  # Skip comments
+                    continue
+                consist_id = int(consist_key)
+                gate_ids = consist_info.get('gate_ids', [])
+                if gate_ids:  # Only add if gates configured
+                    tracked_consist_ids.append(consist_id)
+            tracked_consist_ids.sort()
+            print(f"  ✓ Tracked consists: {tracked_consist_ids}")
+    except Exception as e:
+        print(f"  ⚠️  Error loading tracked consists: {e}")
         reference_locos = {}
 
     # Load consist configuration from JMRI
@@ -629,18 +649,29 @@ async def video_feed():
     Returns:
         StreamingResponse: MJPEG stream
     """
-    # Cache for time_str calculation (only recalculate when timestamp changes)
-    _previous_timestamp = None  # Timestamp of PREVIOUS Δt
-    _cached_time_str = ""
+    # Cache for time_str calculation (per-consist, only recalculate when timestamp changes)
+    _timestamp_cache = {}  # consist_id → {'previous': timestamp, 'time_str': str}
 
     def get_tracking_data():
-        """Callback to get latest tracking data for overlay"""
-        nonlocal _previous_timestamp, _cached_time_str
+        """Callback to get latest tracking data for overlay - MULTI-CONSIST"""
+        nonlocal _timestamp_cache
 
-        # For now, return Consist 11 data if available
-        if z21_manager and 11 in z21_manager.consist_state:
-            state = z21_manager.consist_state[11]
+        if not z21_manager:
+            return {}
+
+        all_tracking_data = {}
+
+        # Loop ONLY over tracked consists (those with gate_ids configured)
+        for consist_id in tracked_consist_ids:
+            if consist_id not in z21_manager.consist_state:
+                continue
+
+            state = z21_manager.consist_state[consist_id]
             delta_t = state.get('delta_t')
+
+            # Initialize cache for this consist if not exists
+            if consist_id not in _timestamp_cache:
+                _timestamp_cache[consist_id] = {'previous': None, 'time_str': ""}
 
             if delta_t is not None:
                 # Valid delta_t: calculate status and update cache
@@ -654,48 +685,43 @@ async def video_feed():
 
                 # Calculate elapsed time string ONLY when timestamp changes (not every frame)
                 current_timestamp = state.get('delta_t_timestamp')
-                if current_timestamp and current_timestamp != _previous_timestamp:
+                if current_timestamp and current_timestamp != _timestamp_cache[consist_id]['previous']:
                     # New Δt arrived: calculate difference from PREVIOUS Δt timestamp
-                    if _previous_timestamp:
-                        elapsed = current_timestamp - _previous_timestamp
+                    if _timestamp_cache[consist_id]['previous']:
+                        elapsed = current_timestamp - _timestamp_cache[consist_id]['previous']
                         if elapsed < 1:
-                            _cached_time_str = "now"
+                            _timestamp_cache[consist_id]['time_str'] = "now"
                         elif elapsed < 60:
-                            _cached_time_str = f"after {int(elapsed)}s"
+                            _timestamp_cache[consist_id]['time_str'] = f"after {int(elapsed)}s"
                         else:
                             minutes = int(elapsed // 60)
                             seconds = int(elapsed % 60)
-                            _cached_time_str = f"after {minutes}m {seconds}s"
+                            _timestamp_cache[consist_id]['time_str'] = f"after {minutes}m {seconds}s"
                     else:
                         # First Δt: no previous to compare
-                        _cached_time_str = "now"
+                        _timestamp_cache[consist_id]['time_str'] = "now"
 
                     # Update previous timestamp for next calculation
-                    _previous_timestamp = current_timestamp
+                    _timestamp_cache[consist_id]['previous'] = current_timestamp
 
-                tracking_data = {
-                    'consist_address': 11,
+                all_tracking_data[consist_id] = {
+                    'consist_address': consist_id,
                     'delta_t': delta_t,
                     'status': status,
                     'timestamp': current_timestamp,
-                    'time_str': _cached_time_str  # Cached, recalculated only when timestamp changes
+                    'time_str': _timestamp_cache[consist_id]['time_str']
+                }
+            else:
+                # No delta_t yet: still show panel with "Waiting..."
+                all_tracking_data[consist_id] = {
+                    'consist_address': consist_id,
+                    'delta_t': None,
+                    'status': None,
+                    'timestamp': None,
+                    'time_str': ""
                 }
 
-                # Update cache for display (when loco stop, backend resets to None but we keep showing this)
-                video_feed_module._last_delta_t_cache.update(tracking_data)
-
-                return tracking_data
-            else:
-                # delta_t is None (loco stopped, backend reset for fresh start)
-                # Return cached value for display (matches React panel behavior)
-                if video_feed_module._last_delta_t_cache['delta_t'] is not None:
-                    return video_feed_module._last_delta_t_cache
-                else:
-                    # No cache yet (first run): show "Waiting..."
-                    return None
-
-        # No consist found: show "Waiting..."
-        return None
+        return all_tracking_data
 
     def get_yolo_detections():
         """Callback to get latest YOLO detections for locomotive markers"""

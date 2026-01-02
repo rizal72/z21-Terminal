@@ -78,7 +78,9 @@ def draw_gates(frame: np.ndarray, gates: List[Dict]) -> np.ndarray:
         width = gate.get('width', 100)
         height = gate.get('height', 100)
         angle = gate.get('angle', 0)
-        color = tuple(gate.get('color', [255, 255, 0]))  # BGR format
+        # Convert RGB (from JSON) to BGR (for OpenCV)
+        color_rgb = gate.get('color', [255, 255, 0])
+        color = (color_rgb[2], color_rgb[1], color_rgb[0])  # RGB → BGR
 
         # Calculate rectangle corners
         cx, cy = center
@@ -117,74 +119,102 @@ def draw_gates(frame: np.ndarray, gates: List[Dict]) -> np.ndarray:
     return frame
 
 
-def draw_tracking_info(frame: np.ndarray, tracking_data: Optional[Dict]) -> np.ndarray:
+def draw_tracking_info(frame: np.ndarray, tracking_data: Optional[Dict[int, Dict]]) -> np.ndarray:
     """
-    Draw tracking information panel (Δt stats, locomotive positions) - OPTIMIZED single-pass rendering
+    Draw tracking information panels for ALL consists - MULTI-CONSIST support
 
     Args:
         frame: Input frame
-        tracking_data: Dict with tracking info (delta_t, status, etc.)
+        tracking_data: Dict of consist_id → tracking info (delta_t, status, etc.)
 
     Returns:
-        Frame with tracking info overlay
+        Frame with tracking info overlays (one panel per consist, stacked vertically)
     """
-    # Panel background (semi-transparent, compact size)
-    panel_height = 90   # Reduced from 110
-    panel_width = 250
+    if not tracking_data:
+        # No tracking data: show "Waiting..." message
+        panel_height = 60
+        panel_width = 220
+        panel_x = 10
+        frame_height = frame.shape[0]
+        panel_y = frame_height - panel_height - 10
+
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (panel_x, panel_y),
+                      (panel_x + panel_width, panel_y + panel_height),
+                      (0, 0, 0), -1)
+        frame = cv2.addWeighted(overlay, 0.6, frame, 0.4, 0)
+
+        font = cv2.FONT_HERSHEY_PLAIN
+        font_scale = 1.1
+        text_x = panel_x + 10
+        y = panel_y + 18
+        cv2.putText(frame, "Tracking: Waiting...", (text_x, y), font, font_scale, (128, 128, 128), 1)
+        return frame
+
+    # Panel dimensions (compact for multi-consist)
+    panel_height = 75  # Compact height per consist
+    panel_width = 220
     panel_x = 10
-    # Position panel at BOTTOM left
+    panel_gap = 5  # Gap between panels
     frame_height = frame.shape[0]
-    panel_y = frame_height - panel_height - 10
 
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (panel_x, panel_y),
-                  (panel_x + panel_width, panel_y + panel_height),
-                  (0, 0, 0), -1)
-    frame = cv2.addWeighted(overlay, 0.6, frame, 0.4, 0)
-
-    # Prepare all text lines in one pass (reduces overhead)
+    # Font settings
     font = cv2.FONT_HERSHEY_PLAIN
-    font_scale = 1.1
-    line_height = 20
-    text_x = panel_x + 10
-    y = panel_y + 18
+    font_scale = 1.0
+    line_height = 18
 
-    # Build text lines list (text, color)
-    lines = []
+    # Sort consist IDs for consistent display order
+    sorted_consist_ids = sorted(tracking_data.keys())
 
-    # Consist info
-    consist_address = tracking_data.get('consist_address', 11) if tracking_data else 11
-    lines.append((f"Consist {consist_address}", (255, 255, 255)))
+    # Draw panels from BOTTOM to TOP
+    for i, consist_id in enumerate(sorted_consist_ids):
+        data = tracking_data[consist_id]
 
-    # Delta t
-    delta_t = tracking_data.get('delta_t') if tracking_data else None
-    if delta_t is not None:
-        sign = '+' if delta_t >= 0 else ''
-        lines.append((f"Dt: {sign}{delta_t:.3f}s", (255, 255, 255)))
+        # Calculate panel Y position (stack from bottom)
+        panel_y = frame_height - (i + 1) * (panel_height + panel_gap) - 10
 
-        # Status (color-coded)
-        status = tracking_data.get('status', 'UNKNOWN')
-        if status == 'SYNCED':
-            status_color = (0, 255, 0)  # Green
-        elif status == 'WARNING':
-            status_color = (0, 255, 255)  # Yellow
-        elif status == 'CRITICAL':
-            status_color = (0, 0, 255)  # Red
-        else:
-            status_color = (128, 128, 128)  # Gray
-        lines.append((f"{status}", status_color))
+        # Draw panel background (semi-transparent black)
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (panel_x, panel_y),
+                      (panel_x + panel_width, panel_y + panel_height),
+                      (0, 0, 0), -1)
+        frame = cv2.addWeighted(overlay, 0.6, frame, 0.4, 0)
 
-        # Elapsed time since last Δt (pre-calculated in callback, not every frame)
-        time_str = tracking_data.get('time_str', '') if tracking_data else ''
-        if time_str:
-            lines.append((time_str, (180, 180, 180)))
-    else:
-        lines.append(("Dt: Waiting...", (128, 128, 128)))
+        # Text starting position
+        text_x = panel_x + 10
+        y = panel_y + 16
 
-    # Draw all lines (single loop, optimized)
-    for text, color in lines:
-        cv2.putText(frame, text, (text_x, y), font, font_scale, color, 1)
+        # Line 1: Consist ID
+        cv2.putText(frame, f"Consist {consist_id}", (text_x, y), font, font_scale, (255, 255, 255), 1)
         y += line_height
+
+        # Line 2: Delta t
+        delta_t = data.get('delta_t')
+        if delta_t is not None:
+            sign = '+' if delta_t >= 0 else ''
+            cv2.putText(frame, f"Dt: {sign}{delta_t:.3f}s", (text_x, y), font, font_scale, (255, 255, 255), 1)
+            y += line_height
+
+            # Line 3: Status (color-coded)
+            status = data.get('status', 'UNKNOWN')
+            if status == 'SYNCED':
+                status_color = (0, 255, 0)  # Green (BGR)
+            elif status == 'WARNING':
+                status_color = (0, 255, 255)  # Yellow (BGR)
+            elif status == 'CRITICAL':
+                status_color = (0, 0, 255)  # Red (BGR)
+            else:
+                status_color = (128, 128, 128)  # Gray (BGR)
+            cv2.putText(frame, f"{status}", (text_x, y), font, font_scale, status_color, 1)
+            y += line_height
+
+            # Line 4: Time string (if available)
+            time_str = data.get('time_str', '')
+            if time_str:
+                cv2.putText(frame, time_str, (text_x, y), font, font_scale, (180, 180, 180), 1)
+        else:
+            # No delta_t available yet
+            cv2.putText(frame, "Dt: Waiting...", (text_x, y), font, font_scale, (128, 128, 128), 1)
 
     return frame
 
@@ -235,15 +265,6 @@ def draw_locomotive_markers(frame: np.ndarray, detections: List[Dict]) -> np.nda
 
 # Global toggle for Δt panel (can be toggled via API endpoint)
 SHOW_DELTA_T_PANEL = True
-
-# Cache last known Δt value (display only, NOT for compensation logic)
-# Matches React control panel behavior: keep last value visible even when backend resets to None
-_last_delta_t_cache = {
-    'consist_address': None,
-    'delta_t': None,
-    'status': None,
-    'timestamp': None
-}
 
 
 def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=None):
@@ -300,6 +321,29 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
 
             # Draw gate overlays
             frame = draw_gates(frame, gates)
+
+            # Draw keyboard hint (top right, semi-transparent)
+            hint_text = "P: Toggle Panel"
+            font = cv2.FONT_HERSHEY_PLAIN
+            font_scale = 0.9
+            thickness = 1
+            (text_width, text_height), baseline = cv2.getTextSize(hint_text, font, font_scale, thickness)
+
+            # Position: top right with 10px padding
+            hint_x = frame.shape[1] - text_width - 10
+            hint_y = text_height + 10
+
+            # Draw semi-transparent background
+            padding = 4
+            overlay = frame.copy()
+            cv2.rectangle(overlay,
+                         (hint_x - padding, hint_y - text_height - padding),
+                         (hint_x + text_width + padding, hint_y + baseline + padding),
+                         (0, 0, 0), -1)
+            frame = cv2.addWeighted(overlay, 0.5, frame, 0.5, 0)
+
+            # Draw text
+            cv2.putText(frame, hint_text, (hint_x, hint_y), font, font_scale, (180, 180, 180), thickness)
 
             # Draw locomotive markers (pallini YOLO) - DISABLED: RTSP delay too high
             # if yolo_detections_callback:

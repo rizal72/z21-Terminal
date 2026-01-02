@@ -76,12 +76,12 @@ CLASS_NAMES = {
     3: '8_E444_056'      # Consist 11 rear
 }
 
-# Reverse mapping: DCC address → YOLO class ID
+# Reverse mapping: DCC address → YOLO class ID (matches JMRI consist definition)
 ADDRESS_TO_CLASS = {
-    1: 0,  # Consist 10 lead
-    5: 1,  # Consist 10 rear
-    7: 2,  # Consist 11 lead
-    8: 3   # Consist 11 rear
+    1: 0,  # Gr.675 017 (Consist 10 LEAD - sound loco)
+    5: 1,  # D645 014 (Consist 10 REAR - reference loco)
+    7: 2,  # E656 239 (Consist 11 LEAD - sound loco)
+    8: 3   # E444 056 (Consist 11 REAR - reference loco)
 }
 
 # === GATE CONFIGURATION ===
@@ -266,7 +266,9 @@ class YOLOTracker:
         print(f"🚂 Loaded {len(self.consist_config)} consists from config:")
         for cid, cinfo in self.consist_config.items():
             gates_str = f"{cinfo['gate_ids']}" if cinfo['gate_ids'] else "[]"
-            print(f"   Consist {cid}: lead={cinfo['lead_address']}, rear={cinfo['rear_address']}, gates={gates_str}")
+            lead_class = cinfo['lead_class_id']
+            rear_class = cinfo['rear_class_id']
+            print(f"   Consist {cid}: lead={cinfo['lead_address']} (class {lead_class}), rear={cinfo['rear_address']} (class {rear_class}), gates={gates_str}")
 
         # Initialize consist_data dict (tracking state for each consist)
         self.consist_data = {}
@@ -502,8 +504,14 @@ class YOLOTracker:
             in_gate = is_point_in_gate(lead_pos, gate)
             if in_gate and not cdata['gate_states']['lead'][gate_id]:
                 # Rising edge: loco just entered gate
-                cdata['gate_timestamps']['lead'][gate_id] = time.time()
+                timestamp = time.time()
+                cdata['gate_timestamps']['lead'][gate_id] = timestamp
                 cdata['gate_states']['lead'][gate_id] = True
+                # IMMEDIATE LOG: show lead loco passing gate WITH COORDINATES
+                lead_addr = consist_info['lead_address']
+                timestamp_str = time.strftime('%H:%M:%S', time.localtime(timestamp))
+                gate_center = (gate['center_x'], gate['center_y'])
+                print(f"🚦 C{consist_id}: Loco {lead_addr} (LEAD) passed G{gate_id} at {timestamp_str}.{int((timestamp % 1) * 1000):03d} | pos={lead_pos}, gate_center={gate_center}, gate_size={gate['width']}x{gate['height']}")
             elif not in_gate:
                 cdata['gate_states']['lead'][gate_id] = False
 
@@ -511,8 +519,14 @@ class YOLOTracker:
             in_gate = is_point_in_gate(rear_pos, gate)
             if in_gate and not cdata['gate_states']['rear'][gate_id]:
                 # Rising edge: loco just entered gate
-                cdata['gate_timestamps']['rear'][gate_id] = time.time()
+                timestamp = time.time()
+                cdata['gate_timestamps']['rear'][gate_id] = timestamp
                 cdata['gate_states']['rear'][gate_id] = True
+                # IMMEDIATE LOG: show rear loco passing gate WITH COORDINATES
+                rear_addr = consist_info['rear_address']
+                timestamp_str = time.strftime('%H:%M:%S', time.localtime(timestamp))
+                gate_center = (gate['center_x'], gate['center_y'])
+                print(f"🚦 C{consist_id}: Loco {rear_addr} (REAR) passed G{gate_id} at {timestamp_str}.{int((timestamp % 1) * 1000):03d} | pos={rear_pos}, gate_center={gate_center}, gate_size={gate['width']}x{gate['height']}")
             elif not in_gate:
                 cdata['gate_states']['rear'][gate_id] = False
 

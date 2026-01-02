@@ -15,7 +15,7 @@
         255,
         0
       ],
-      "notes": "Gate vicino alla camera - bottom right"
+      "notes": "Consist 11 - GIALLO (RGB) - Gate vicino alla camera"
     },
     {
       "id": 2,
@@ -32,11 +32,45 @@
         165,
         0
       ],
-      "notes": "Gate lontano dalla camera - top left"
+      "notes": "Consist 11 - ARANCIONE (RGB) - Gate lontano dalla camera"
+    },
+    {
+      "id": 3,
+      "name": "Gate 3",
+      "center": [
+        1119,
+        183
+      ],
+      "width": 100,
+      "height": 100,
+      "angle": 0,
+      "color": [
+        0,
+        255,
+        255
+      ],
+      "notes": "Consist 10 - CIANO CHIARO (RGB)"
+    },
+    {
+      "id": 4,
+      "name": "Gate 4",
+      "center": [
+        92,
+        326
+      ],
+      "width": 70,
+      "height": 70,
+      "angle": 315,
+      "color": [
+        0,
+        180,
+        200
+      ],
+      "notes": "Consist 10 - CIANO SCURO (RGB)"
     }
   ],
   "tracking_assignments": {
-    "_comment": "CONSIST DEFINITION: In this system, 'consist' means 1 or more locomotives controlled together. A single locomotive can be tracked as a 'consist of 1' (rear_address = null). This allows unified config/code for both traditional consists (lead + rear) and single locos. Gate tracking (Δt calculation) requires 2 locos AND 2 gates configured. Keys are consist/loco DCC addresses.",
+    "_comment": "CONSIST DEFINITION: In this system, 'consist' means 1 or more locomotives controlled together. A single locomotive can be tracked as a 'consist of 1' (rear_address = null). This allows unified config/code for both traditional consists (lead + rear) and single locos. Gate tracking (\u0394t calculation) requires 2 locos AND 2 gates configured. Keys are consist/loco DCC addresses.",
     "11": {
       "name": "Consist 11 - Tracciato Esterno (Ovale)",
       "gate_ids": [
@@ -49,10 +83,13 @@
     },
     "10": {
       "name": "Consist 10 - Tracciato Interno (Figura 8)",
-      "gate_ids": [],
+      "gate_ids": [
+        3,
+        4
+      ],
       "lead_address": 1,
       "rear_address": 5,
-      "notes": "Gates to be configured. Traditional consist (2 locos)."
+      "notes": "Dual-gate co-presence timing. Traditional consist (2 locos). Lead=1 (sound, Gr.675), Rear=5 (reference, D645)."
     }
   },
   "timing_thresholds": {

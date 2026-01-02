@@ -135,8 +135,19 @@ export default function ConsistController({
         return;
       }
 
+      // D = Toggle direction
+      if (e.key === 'd' || e.key === 'D') {
+        e.preventDefault();
+        if (!isLocoInConsist) {
+          const newDirection = direction === 'forward' ? 'reverse' : 'forward';
+          setDirection(newDirection);
+          if (onDirectionChange) {
+            onDirectionChange(selection.address, newDirection);
+          }
+        }
+      }
       // Backslash = 0%
-      if (e.key === '\\' || e.key === '|') {  // | is Shift+\
+      else if (e.key === '\\' || e.key === '|') {  // | is Shift+\
         e.preventDefault();
         setSpeedPercent(0);
       }
@@ -156,7 +167,7 @@ export default function ConsistController({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [trackPower, isLocoInConsist, selection?.address, direction, onSpeedChange, isActive]);
+  }, [trackPower, isLocoInConsist, selection?.address, direction, onSpeedChange, onDirectionChange, isActive]);
 
   const toggleDirection = () => {
     if (isLocoInConsist) return; // Disabled for locos in consist
@@ -459,7 +470,7 @@ export default function ConsistController({
           {isLocoInConsist ? (
             <span className="text-signal-amber">Speed control disabled (loco in consist)</span>
           ) : (
-            <div>Speed: \=0% • 1,2,3..0=10-100% → <span className="text-signal-amber">{isActive ? 'This' : '(click to activate)'}</span> | +Shift → <span className="text-signal-amber">All</span></div>
+            <div>D=Dir • \=0% • 1,2,3..0=10-100% → <span className="text-signal-amber">{isActive ? 'This' : '(click to activate)'}</span> | +Shift → <span className="text-signal-amber">All</span></div>
           )}
         </div>
       </div>
