@@ -38,11 +38,11 @@
       "id": 3,
       "name": "Gate 3",
       "center": [
-        1119,
-        183
+        929,
+        33
       ],
-      "width": 100,
-      "height": 100,
+      "width": 70,
+      "height": 70,
       "angle": 0,
       "color": [
         0,
@@ -118,6 +118,6 @@
   },
   "debug": {
     "enabled": false,
-    "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (✅🚪⏱️🎯🚂📹), gate crossing (🚦🚪), warnings (⚠️), mode changes (🔄⏸️). SUPPRESSED when false: YOLO pause/resume verbose (🔇🔊)"
+    "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (\u2705\ud83d\udeaa\u23f1\ufe0f\ud83c\udfaf\ud83d\ude82\ud83d\udcf9), gate crossing (\ud83d\udea6\ud83d\udeaa), warnings (\u26a0\ufe0f), mode changes (\ud83d\udd04\u23f8\ufe0f). SUPPRESSED when false: YOLO pause/resume verbose (\ud83d\udd07\ud83d\udd0a)"
   }
 }
