@@ -177,8 +177,16 @@ def load_config():
 
 
 def save_config(config):
-    """Save system configuration to JSON file."""
+    """Save system configuration to JSON file (with automatic backup)."""
     try:
+        # Create backup before overwriting
+        if CONFIG_FILE.exists():
+            import shutil
+            backup_file = CONFIG_FILE.with_suffix('.json.backup')
+            shutil.copy2(CONFIG_FILE, backup_file)
+            print(f"💾 Backup created: {backup_file.name}")
+
+        # Save new config
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=2)
         print(f"✅ Config saved: {len(config.get('gates', []))} gates")
