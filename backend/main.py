@@ -4,6 +4,7 @@ FastAPI backend per z21-Terminal Web Dashboard
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from typing import List, Dict, Any
 import json
 import asyncio
@@ -504,9 +505,9 @@ async def reload_roster_data():
     return True
 
 
-@app.get("/")
-async def root():
-    """API root"""
+@app.get("/api/status")
+async def api_status():
+    """API status endpoint"""
     return {
         "name": "z21-Terminal Backend",
         "version": "1.0.0",
@@ -1033,6 +1034,26 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"Tracking WebSocket error: {e}")
         tracking_daemon_ws = None  # Clear reference on error
+
+
+# ========================================
+# Conditional Frontend Production Serving
+# ========================================
+# Serve frontend production build (web/dist/) if it exists.
+# Development mode: dist/ doesn't exist → use Vite dev server (port 5173)
+# Production mode: dist/ exists → FastAPI serves everything on port 8000
+
+frontend_dist = Path(__file__).parent.parent / "web" / "dist"
+if frontend_dist.exists() and frontend_dist.is_dir():
+    # Production mode: serve static files
+    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+    print(f"✅ Production mode: Serving frontend from {frontend_dist}")
+    print(f"   Access dashboard at: http://localhost:8000")
+else:
+    print(f"⚠️  Development mode: Frontend dist not found")
+    print(f"   Expected: {frontend_dist}")
+    print(f"   Use Vite dev server: cd web && npm run dev")
+    print(f"   Access dashboard at: http://localhost:5173")
 
 
 if __name__ == "__main__":
