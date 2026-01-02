@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-YOLO-based tracking for BOTH consists:
+YOLO-based tracking for multiple consists (config-driven).
+
+Dynamically tracks N consists based on config.json:
     - Consist 10 (Tracciato Interno): Gr.675 017 + D645 014
     - Consist 11 (Tracciato Esterno): E656 239 + E444 056
+    - Additional consists can be added via config
 
 Uses custom trained YOLOv8 model for real-time locomotive detection.
 
@@ -67,18 +70,41 @@ STREAM = "stream2"  # 720P stream (better for real-time)
 CONFIDENCE_THRESHOLD = 0.6  # Minimum confidence for detection
 DISTANCE_HISTORY_SIZE = 10000  # Number of distance measurements to store (large for baseline testing)
 
+# Config paths
+SCRIPT_DIR = Path(__file__).parent
+PROJECT_ROOT = SCRIPT_DIR.parent
+CONFIG_PATH = PROJECT_ROOT / 'config.json'
+
+# === CONFIGURATION ===
+def load_config():
+    """Load system configuration from JSON file."""
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        return config
+    except FileNotFoundError:
+        print(f"⚠️  Config not found: {CONFIG_PATH}")
+        return {'gates': [], 'timing_thresholds': {'normal': 1.0, 'warning': 1.5}, 'tracking_assignments': {}}
+    except json.JSONDecodeError as e:
+        print(f"⚠️  Invalid JSON in config: {e}")
+        return {'gates': [], 'timing_thresholds': {'normal': 1.0, 'warning': 1.5}, 'tracking_assignments': {}}
+
 # Class IDs (from Roboflow training - BiancAlice v3)
 # Roboflow orders alphabetically by class name
+# NOTE: These are YOLO class IDs, not DCC addresses!
 CLASS_NAMES = {
-    0: "1_Gr675_017",   # Consist 10 lead
-    1: "5_D645_014",    # Consist 10 rear
-    2: "7_E656_239",    # Consist 11 lead
-    3: "8_E444_056"     # Consist 11 rear
+    0: "1_Gr675_017",   # DCC address 1 (Consist 10 lead)
+    1: "5_D645_014",    # DCC address 5 (Consist 10 rear)
+    2: "7_E656_239",    # DCC address 7 (Consist 11 lead)
+    3: "8_E444_056"     # DCC address 8 (Consist 11 rear)
 }
 
-# Consist groupings
-CONSIST_10 = [0, 1]  # Gr675 + D645
-CONSIST_11 = [2, 3]  # E656 + E444
+# Build mapping: DCC address → YOLO class ID (reverse lookup)
+# This allows config.json to reference DCC addresses (7, 8) and map to YOLO classes (2, 3)
+DCC_TO_YOLO_CLASS = {}
+for yolo_class_id, class_name in CLASS_NAMES.items():
+    dcc_address = int(class_name.split('_')[0])  # Extract "7" from "7_E656_239"
+    DCC_TO_YOLO_CLASS[dcc_address] = yolo_class_id
 
 # Perspective correction settings (calibrated 2025-12-30)
 # Used ONLY for accurate distance calculations (6px/cm uniform scale)
@@ -498,128 +524,164 @@ class YOLOTracker:
         self.delta_t_max_threshold = thresholds.get('max_delta_t', 15.0)
         print(f"⚠️  Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
 
-        # Load reference loco configuration (future-proofing for Phase 5)
-        self.reference_locos = config.get('reference_locos', {})
-        if self.reference_locos:
-            print(f"🎯 Reference locos: {len(self.reference_locos)} consists configured")
+        # === PHASE 5: CONFIG-DRIVEN MULTI-CONSIST SUPPORT ===
+        # Load tracking assignments from config.json
+        tracking_assignments = config.get('tracking_assignments', {})
 
-        # Consist 10 (Tracciato Interno)
-        self.c10_lead_pos = None
-        self.c10_rear_pos = None
-        self.c10_visible_together_count = 0
+        # Build consist_config (mapping consist_id → addresses + YOLO class IDs + gates)
+        self.consist_config = {}
+        for consist_key, consist_info in tracking_assignments.items():
+            # Skip JSON comments (keys starting with "_")
+            if consist_key.startswith('_'):
+                continue
 
-        # Consist 11 (Tracciato Esterno)
-        self.c11_lead_pos = None
-        self.c11_rear_pos = None
-        self.c11_visible_together_count = 0
+            consist_id = int(consist_key)  # "11" → 11
+            lead_addr = consist_info['lead_address']
+            rear_addr = consist_info.get('rear_address')  # Can be null for single locos
+            gate_ids = consist_info.get('gate_ids', [])
 
-        # Gate timing detection (Phase 4 - Consist 11 only for now)
-        # CRITICAL: Locomotives travel in OPPOSITE directions on oval track!
-        # When loco7 is at G1, loco8 is at G2 (and vice versa)
-        # So we calculate CROSS-GATE Δt, not same-gate
+            # Map DCC addresses to YOLO class IDs
+            lead_yolo_class = DCC_TO_YOLO_CLASS.get(lead_addr)
+            rear_yolo_class = DCC_TO_YOLO_CLASS.get(rear_addr) if rear_addr else None
 
-        # Track last timestamp for each loco crossing each gate
-        self.c11_lead_gate1_timestamp = None
-        self.c11_lead_gate2_timestamp = None
-        self.c11_rear_gate1_timestamp = None
-        self.c11_rear_gate2_timestamp = None
+            if lead_yolo_class is None:
+                print(f"⚠️  Warning: Lead address {lead_addr} not found in YOLO model classes")
+                continue
 
-        # Track if loco is currently inside gate (for edge detection)
-        self.c11_lead_in_gate1 = False
-        self.c11_lead_in_gate2 = False
-        self.c11_rear_in_gate1 = False
-        self.c11_rear_in_gate2 = False
+            self.consist_config[consist_id] = {
+                'lead_address': lead_addr,
+                'rear_address': rear_addr,
+                'lead_yolo_class': lead_yolo_class,
+                'rear_yolo_class': rear_yolo_class,
+                'gate_ids': gate_ids,
+                'name': consist_info.get('name', f'Consist {consist_id}')
+            }
 
-        # Latest Δt value (cross-gate)
-        self.delta_t = None  # Δt = loco7_gate1 - loco8_gate2 OR loco7_gate2 - loco8_gate1
-        self.delta_t_type = None  # "L7G1-L8G2" or "L7G2-L8G1"
+        print(f"🚂 Loaded {len(self.consist_config)} consists from config:")
+        for consist_id, cfg in self.consist_config.items():
+            gates_str = f" → gates {cfg['gate_ids']}" if cfg['gate_ids'] else ""
+            print(f"   Consist {consist_id}: lead={cfg['lead_address']}, rear={cfg['rear_address']}{gates_str}")
 
-        # Gate crossing statistics
-        self.gate_crossing_count = 0  # Total number of Δt calculations
+        # Initialize consist_data (dynamic state for all consists)
+        self.consist_data = {}
+        for consist_id in self.consist_config.keys():
+            gate_ids = self.consist_config[consist_id]['gate_ids']
 
-        # Last Δt calculation time (to avoid calculating with stale timestamps)
-        self.last_delta_t_time = 0  # Initialize to 0 (epoch start)
+            # Initialize gate timing state (2 gates per consist)
+            gate_state = {}
+            for gate_id in gate_ids:
+                gate_state[gate_id] = {
+                    'lead_timestamp': None,
+                    'rear_timestamp': None,
+                    'lead_in_gate': False,
+                    'rear_in_gate': False
+                }
 
-        # Spam reduction for ignored Δt warnings (throttle console spam)
-        # delta_t1 = L7G1-L8G2 cross-gate calculation (lines 633, 708)
-        # delta_t2 = L7G2-L8G1 cross-gate calculation (lines 658, 683)
-        self.last_ignored_delta_t1 = None
-        self.last_ignored_delta_t1_time = 0
-        self.last_ignored_delta_t2 = None
-        self.last_ignored_delta_t2_time = 0
+            self.consist_data[consist_id] = {
+                'lead_pos': None,
+                'rear_pos': None,
+                'lead_conf': None,
+                'rear_conf': None,
+                'visible_together_count': 0,
+                'gate_state': gate_state,  # Per-gate timing state
+                'delta_t': None,           # Latest Δt value
+                'delta_t_type': None,      # e.g. "L7G1-L8G2"
+                'gate_crossing_count': 0,  # Total Δt calculations for this consist
+                'last_delta_t_time': 0,    # Last Δt calc time (fresh timestamps check)
+                # Spam reduction for ignored Δt warnings
+                'last_ignored_delta_t1': None,
+                'last_ignored_delta_t1_time': 0,
+                'last_ignored_delta_t2': None,
+                'last_ignored_delta_t2_time': 0
+            }
 
-        print("✅ YOLO model loaded")
+        print("✅ YOLO model loaded (multi-consist tracking ready)")
 
     def calculate_delta_t_centralized(self):
         """
-        Centralized Δt calculation with 2 independent cross-gate checks.
+        Centralized Δt calculation for ALL consists with 2 cross-gate checks each.
 
-        Called once per frame after all 4 detection points updated.
+        Called once per frame after all gate detection points updated.
+        Iterates over all consists with 2+ gates configured.
         """
-        # Check 1: Δt₁ = lead@G1 - rear@G2 (cross-gate timing)
-        if (self.c11_lead_gate1_timestamp is not None and
-            self.c11_rear_gate2_timestamp is not None):
+        for consist_id, consist in self.consist_data.items():
+            gate_ids = self.consist_config[consist_id]['gate_ids']
 
-            max_t1 = max(self.c11_lead_gate1_timestamp, self.c11_rear_gate2_timestamp)
+            # Skip consists without 2 gates configured
+            if len(gate_ids) < 2:
+                continue
 
-            # Calculate only if BOTH timestamps are fresh (prevents mixing laps)
-            if (max_t1 > self.last_delta_t_time and
-                self.c11_lead_gate1_timestamp > self.last_delta_t_time and
-                self.c11_rear_gate2_timestamp > self.last_delta_t_time):
-                delta_t1 = self.c11_lead_gate1_timestamp - self.c11_rear_gate2_timestamp
+            gate1_id, gate2_id = gate_ids[0], gate_ids[1]
+            gate1_state = consist['gate_state'][gate1_id]
+            gate2_state = consist['gate_state'][gate2_id]
 
-                # Sanity check: ignore impossible Δt values (outliers from video lag)
-                if abs(delta_t1) > self.delta_t_max_threshold:
-                    # Throttle spam: only print if value changed significantly or 5s passed
-                    current_time = time.time()
-                    should_print = (
-                        self.last_ignored_delta_t1 is None or
-                        abs(delta_t1 - self.last_ignored_delta_t1) > 1.0 or
-                        (current_time - self.last_ignored_delta_t1_time) > 5.0
-                    )
-                    if should_print:
-                        print(f"⚠️  Ignored Δt₁ = {delta_t1:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
-                        self.last_ignored_delta_t1 = delta_t1
-                        self.last_ignored_delta_t1_time = current_time
-                else:
-                    self.delta_t = delta_t1
-                    self.delta_t_type = "L7G1-L8G2"
-                    self.gate_crossing_count += 1
-                    self.last_delta_t_time = max_t1
-                    print(f"🚪 Cross-gate: L7G1-L8G2 = Δt = {self.delta_t:+.3f}s")
-                    return  # Calculated, done
+            lead_addr = self.consist_config[consist_id]['lead_address']
+            rear_addr = self.consist_config[consist_id]['rear_address']
 
-        # Check 2: Δt₂ = lead@G2 - rear@G1 (cross-gate timing)
-        if (self.c11_lead_gate2_timestamp is not None and
-            self.c11_rear_gate1_timestamp is not None):
+            # Check 1: Δt₁ = lead@G1 - rear@G2 (cross-gate timing)
+            if (gate1_state['lead_timestamp'] is not None and
+                gate2_state['rear_timestamp'] is not None):
 
-            max_t2 = max(self.c11_lead_gate2_timestamp, self.c11_rear_gate1_timestamp)
+                max_t1 = max(gate1_state['lead_timestamp'], gate2_state['rear_timestamp'])
 
-            # Calculate only if BOTH timestamps are fresh (prevents mixing laps)
-            if (max_t2 > self.last_delta_t_time and
-                self.c11_lead_gate2_timestamp > self.last_delta_t_time and
-                self.c11_rear_gate1_timestamp > self.last_delta_t_time):
-                delta_t2 = self.c11_lead_gate2_timestamp - self.c11_rear_gate1_timestamp
+                # Calculate only if BOTH timestamps are fresh (prevents mixing laps)
+                if (max_t1 > consist['last_delta_t_time'] and
+                    gate1_state['lead_timestamp'] > consist['last_delta_t_time'] and
+                    gate2_state['rear_timestamp'] > consist['last_delta_t_time']):
+                    delta_t1 = gate1_state['lead_timestamp'] - gate2_state['rear_timestamp']
 
-                # Sanity check: ignore impossible Δt values (outliers from video lag)
-                if abs(delta_t2) > self.delta_t_max_threshold:
-                    # Throttle spam: only print if value changed significantly or 5s passed
-                    current_time = time.time()
-                    should_print = (
-                        self.last_ignored_delta_t2 is None or
-                        abs(delta_t2 - self.last_ignored_delta_t2) > 1.0 or
-                        (current_time - self.last_ignored_delta_t2_time) > 5.0
-                    )
-                    if should_print:
-                        print(f"⚠️  Ignored Δt₂ = {delta_t2:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
-                        self.last_ignored_delta_t2 = delta_t2
-                        self.last_ignored_delta_t2_time = current_time
-                else:
-                    self.delta_t = delta_t2
-                    self.delta_t_type = "L7G2-L8G1"
-                    self.gate_crossing_count += 1
-                    self.last_delta_t_time = max_t2
-                    print(f"🚪 Cross-gate: L7G2-L8G1 = Δt = {self.delta_t:+.3f}s")
+                    # Sanity check: ignore impossible Δt values (outliers from video lag)
+                    if abs(delta_t1) > self.delta_t_max_threshold:
+                        # Throttle spam: only print if value changed significantly or 5s passed
+                        current_time = time.time()
+                        should_print = (
+                            consist['last_ignored_delta_t1'] is None or
+                            abs(delta_t1 - consist['last_ignored_delta_t1']) > 1.0 or
+                            (current_time - consist['last_ignored_delta_t1_time']) > 5.0
+                        )
+                        if should_print:
+                            print(f"⚠️  C{consist_id} Ignored Δt₁ = {delta_t1:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
+                            consist['last_ignored_delta_t1'] = delta_t1
+                            consist['last_ignored_delta_t1_time'] = current_time
+                    else:
+                        consist['delta_t'] = delta_t1
+                        consist['delta_t_type'] = f"L{lead_addr}G{gate1_id}-L{rear_addr}G{gate2_id}"
+                        consist['gate_crossing_count'] += 1
+                        consist['last_delta_t_time'] = max_t1
+                        print(f"🚪 C{consist_id} Cross-gate: {consist['delta_t_type']} = Δt = {consist['delta_t']:+.3f}s")
+                        continue  # Calculated, move to next consist
+
+            # Check 2: Δt₂ = lead@G2 - rear@G1 (cross-gate timing)
+            if (gate2_state['lead_timestamp'] is not None and
+                gate1_state['rear_timestamp'] is not None):
+
+                max_t2 = max(gate2_state['lead_timestamp'], gate1_state['rear_timestamp'])
+
+                # Calculate only if BOTH timestamps are fresh (prevents mixing laps)
+                if (max_t2 > consist['last_delta_t_time'] and
+                    gate2_state['lead_timestamp'] > consist['last_delta_t_time'] and
+                    gate1_state['rear_timestamp'] > consist['last_delta_t_time']):
+                    delta_t2 = gate2_state['lead_timestamp'] - gate1_state['rear_timestamp']
+
+                    # Sanity check: ignore impossible Δt values (outliers from video lag)
+                    if abs(delta_t2) > self.delta_t_max_threshold:
+                        # Throttle spam: only print if value changed significantly or 5s passed
+                        current_time = time.time()
+                        should_print = (
+                            consist['last_ignored_delta_t2'] is None or
+                            abs(delta_t2 - consist['last_ignored_delta_t2']) > 1.0 or
+                            (current_time - consist['last_ignored_delta_t2_time']) > 5.0
+                        )
+                        if should_print:
+                            print(f"⚠️  C{consist_id} Ignored Δt₂ = {delta_t2:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
+                            consist['last_ignored_delta_t2'] = delta_t2
+                            consist['last_ignored_delta_t2_time'] = current_time
+                    else:
+                        consist['delta_t'] = delta_t2
+                        consist['delta_t_type'] = f"L{lead_addr}G{gate2_id}-L{rear_addr}G{gate1_id}"
+                        consist['gate_crossing_count'] += 1
+                        consist['last_delta_t_time'] = max_t2
+                        print(f"🚪 C{consist_id} Cross-gate: {consist['delta_t_type']} = Δt = {consist['delta_t']:+.3f}s")
 
     def detect_locomotives(self, frame):
         """
@@ -655,132 +717,128 @@ class YOLOTracker:
 
     def update(self, frame):
         """
-        Update tracking with new frame for BOTH consists.
+        Update tracking with new frame for ALL consists dynamically.
 
         Returns:
             Dictionary with consist data and shared detection info
         """
         detections, results = self.detect_locomotives(frame)
 
-        # === CONSIST 10 (Tracciato Interno) ===
-        c10_lead_data = detections.get(0)  # Gr675_017 (class 0)
-        c10_rear_data = detections.get(1)  # D645_014 (class 1)
+        # === DYNAMIC CONSIST TRACKING ===
+        # Iterate over all configured consists
+        for consist_id, consist in self.consist_data.items():
+            config = self.consist_config[consist_id]
 
-        c10_lead_pos = c10_lead_data[0] if c10_lead_data else None
-        c10_lead_conf = c10_lead_data[1] if c10_lead_data else 0.0
+            # Get YOLO class IDs from config
+            lead_yolo_class = config['lead_yolo_class']
+            rear_yolo_class = config['rear_yolo_class']
 
-        c10_rear_pos = c10_rear_data[0] if c10_rear_data else None
-        c10_rear_conf = c10_rear_data[1] if c10_rear_data else 0.0
+            # Get lead detection
+            lead_data = detections.get(lead_yolo_class)
+            consist['lead_pos'] = lead_data[0] if lead_data else None
+            consist['lead_conf'] = lead_data[1] if lead_data else 0.0
 
-        # Track visibility (both locomotives visible together)
-        if c10_lead_pos and c10_rear_pos:
-            self.c10_lead_pos = c10_lead_pos
-            self.c10_rear_pos = c10_rear_pos
-            self.c10_visible_together_count += 1
+            # Get rear detection (if consist has rear locomotive)
+            if rear_yolo_class is not None:
+                rear_data = detections.get(rear_yolo_class)
+                consist['rear_pos'] = rear_data[0] if rear_data else None
+                consist['rear_conf'] = rear_data[1] if rear_data else 0.0
+            else:
+                # Single locomotive (no rear)
+                consist['rear_pos'] = None
+                consist['rear_conf'] = 0.0
 
-        # === CONSIST 11 (Tracciato Esterno) ===
-        c11_lead_data = detections.get(2)  # E656_239 (class 2)
-        c11_rear_data = detections.get(3)  # E444_056 (class 3)
+            # Track visibility (both locomotives visible together)
+            if consist['lead_pos'] and consist['rear_pos']:
+                consist['visible_together_count'] += 1
 
-        c11_lead_pos = c11_lead_data[0] if c11_lead_data else None
-        c11_lead_conf = c11_lead_data[1] if c11_lead_data else 0.0
+            # === GATE TIMING DETECTION ===
+            # Only if consist has 2+ gates configured
+            gate_ids = config['gate_ids']
+            if len(gate_ids) >= 2:
+                # Iterate over all gates for this consist
+                for gate_id in gate_ids:
+                    gate_state = consist['gate_state'][gate_id]
+                    gate = self.gates.get(gate_id)
 
-        c11_rear_pos = c11_rear_data[0] if c11_rear_data else None
-        c11_rear_conf = c11_rear_data[1] if c11_rear_data else 0.0
+                    if gate is None:
+                        continue
 
-        # Track visibility (both locomotives visible together)
-        if c11_lead_pos and c11_rear_pos:
-            self.c11_lead_pos = c11_lead_pos
-            self.c11_rear_pos = c11_rear_pos
-            self.c11_visible_together_count += 1
+                    # Lead locomotive gate detection (rising edge)
+                    lead_in_gate = is_point_in_gate(consist['lead_pos'], gate)
+                    if lead_in_gate and not gate_state['lead_in_gate']:
+                        # Rising edge: loco just entered gate
+                        gate_state['lead_timestamp'] = time.time()
+                        gate_state['lead_in_gate'] = True
+                    elif not lead_in_gate:
+                        gate_state['lead_in_gate'] = False
 
-        # === GATE TIMING DETECTION (Phase 4 - Consist 11) ===
-        # CRITICAL: Locomotives travel in OPPOSITE directions!
-        # When Loco7 is at G1, Loco8 is at G2 (cross-gate timing)
+                    # Rear locomotive gate detection (rising edge)
+                    if consist['rear_pos'] is not None:
+                        rear_in_gate = is_point_in_gate(consist['rear_pos'], gate)
+                        if rear_in_gate and not gate_state['rear_in_gate']:
+                            # Rising edge: loco just entered gate
+                            gate_state['rear_timestamp'] = time.time()
+                            gate_state['rear_in_gate'] = True
+                        elif not rear_in_gate:
+                            gate_state['rear_in_gate'] = False
 
-        # Gate 1 (VICINO) - Lead loco (E656_239)
-        in_gate1 = is_point_in_gate(c11_lead_pos, self.gates[1])
-        if in_gate1 and not self.c11_lead_in_gate1:
-            # Rising edge: loco just entered gate
-            self.c11_lead_gate1_timestamp = time.time()
-            self.c11_lead_in_gate1 = True
-        elif not in_gate1:
-            self.c11_lead_in_gate1 = False
-
-        # Gate 1 (VICINO) - Rear loco (E444_056)
-        in_gate1 = is_point_in_gate(c11_rear_pos, self.gates[1])
-        if in_gate1 and not self.c11_rear_in_gate1:
-            # Rising edge: loco just entered gate
-            self.c11_rear_gate1_timestamp = time.time()
-            self.c11_rear_in_gate1 = True
-        elif not in_gate1:
-            self.c11_rear_in_gate1 = False
-
-        # Gate 2 (LONTANO) - Lead loco (E656_239)
-        in_gate2 = is_point_in_gate(c11_lead_pos, self.gates[2])
-        if in_gate2 and not self.c11_lead_in_gate2:
-            # Rising edge: loco just entered gate
-            self.c11_lead_gate2_timestamp = time.time()
-            self.c11_lead_in_gate2 = True
-        elif not in_gate2:
-            self.c11_lead_in_gate2 = False
-
-        # Gate 2 (LONTANO) - Rear loco (E444_056)
-        in_gate2 = is_point_in_gate(c11_rear_pos, self.gates[2])
-        if in_gate2 and not self.c11_rear_in_gate2:
-            # Rising edge: loco just entered gate
-            self.c11_rear_gate2_timestamp = time.time()
-            self.c11_rear_in_gate2 = True
-        elif not in_gate2:
-            self.c11_rear_in_gate2 = False
-
-        # Centralized Δt calculation (called once per frame after all 4 detection points)
+        # Centralized Δt calculation (called once per frame after all gate detection points)
         self.calculate_delta_t_centralized()
 
+        # Build return dictionary with all consist data
+        consist_results = {}
+        for consist_id, consist in self.consist_data.items():
+            consist_results[consist_id] = {
+                'lead_pos': consist['lead_pos'],
+                'rear_pos': consist['rear_pos'],
+                'lead_conf': consist['lead_conf'],
+                'rear_conf': consist['rear_conf'],
+                'delta_t': consist['delta_t'],
+                'delta_t_type': consist['delta_t_type']
+            }
+
         return {
-            'c10': {'lead_pos': c10_lead_pos, 'rear_pos': c10_rear_pos,
-                    'lead_conf': c10_lead_conf, 'rear_conf': c10_rear_conf},
-            'c11': {'lead_pos': c11_lead_pos, 'rear_pos': c11_rear_pos,
-                    'lead_conf': c11_lead_conf, 'rear_conf': c11_rear_conf},
+            'consist_data': consist_results,
             'detections': detections,
             'results': results
         }
 
-    def get_visibility_stats(self, consist, total_frames):
-        """Get visibility statistics for specified consist."""
-        count = self.c11_visible_together_count if consist == 'c11' else self.c10_visible_together_count
-        percentage = (count / total_frames * 100) if total_frames > 0 else 0
-        return count, percentage
+    def get_visibility_stats(self, consist_id, total_frames):
+        """Get visibility statistics for specified consist ID."""
+        if consist_id in self.consist_data:
+            count = self.consist_data[consist_id]['visible_together_count']
+            percentage = (count / total_frames * 100) if total_frames > 0 else 0
+            return count, percentage
+        return 0, 0.0
 
 
 def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total_frames=0, marker_state=None):
-    """Draw tracking overlay on frame for BOTH consists."""
+    """Draw tracking overlay on frame for ALL consists dynamically."""
 
-    c10 = track_data['c10']
-    c11 = track_data['c11']
+    consist_data = track_data['consist_data']
     all_detections = track_data['detections']
     results = track_data['results']
 
-    # Draw markers for BOTH consists (always visible - just colored dots)
-    # Consist 10 (yellow/orange)
-    if c10['lead_pos']:
-        cv2.circle(frame, c10['lead_pos'], 10, (255, 255, 0), -1)  # Yellow
+    # Define colors for up to 4 consists (can be extended)
+    CONSIST_COLORS = {
+        10: {'lead': (255, 255, 0), 'rear': (255, 128, 0), 'line': (255, 200, 0)},  # Yellow/Orange
+        11: {'lead': (0, 255, 0), 'rear': (0, 0, 255), 'line': (255, 255, 0)},      # Green/Red
+        # Add more colors for additional consists if needed
+    }
 
-    if c10['rear_pos']:
-        cv2.circle(frame, c10['rear_pos'], 10, (255, 128, 0), -1)  # Orange
+    # Draw markers for ALL consists (always visible - just colored dots)
+    for consist_id, consist in consist_data.items():
+        colors = CONSIST_COLORS.get(consist_id, {'lead': (255, 255, 255), 'rear': (128, 128, 128), 'line': (200, 200, 200)})
 
-    if c10['lead_pos'] and c10['rear_pos']:
-        cv2.line(frame, c10['lead_pos'], c10['rear_pos'], (255, 200, 0), 2)
+        if consist['lead_pos']:
+            cv2.circle(frame, consist['lead_pos'], 10, colors['lead'], -1)
 
-    # Consist 11 (green/red)
-    if c11['lead_pos']:
-        cv2.circle(frame, c11['lead_pos'], 10, (0, 255, 0), -1)  # Green
+        if consist['rear_pos']:
+            cv2.circle(frame, consist['rear_pos'], 10, colors['rear'], -1)
 
-    if c11['rear_pos']:
-        cv2.circle(frame, c11['rear_pos'], 10, (0, 0, 255), -1)  # Red (readable on black)
-
-    if c11['lead_pos'] and c11['rear_pos']:
-        cv2.line(frame, c11['lead_pos'], c11['rear_pos'], (255, 255, 0), 2)
+        if consist['lead_pos'] and consist['rear_pos']:
+            cv2.line(frame, consist['lead_pos'], consist['rear_pos'], colors['line'], 2)
 
     # Draw gate markers (always visible, even if panels hidden)
     if marker_state:
@@ -846,28 +904,34 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
     if not show_panels:
         return
 
-    # Draw timing gates (visible only when panels ON)
-    # Gate 1 (VICINO - bottom right)
-    gate1 = tracker.gates[1]
-    gate1_points = get_rotated_rect_points(
-        gate1['center_x'], gate1['center_y'],
-        gate1['width'], gate1['height'],
-        gate1['angle']
-    )
-    cv2.polylines(frame, [gate1_points], True, (255, 255, 0), 2)  # Cyan
-    cv2.putText(frame, "G1", (gate1['center_x'] - 10, gate1['center_y'] + 5),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+    # Draw timing gates dynamically (visible only when panels ON)
+    # Collect all gate IDs from all consists
+    all_gate_ids = set()
+    for config in tracker.consist_config.values():
+        all_gate_ids.update(config['gate_ids'])
 
-    # Gate 2 (LONTANO - top left)
-    gate2 = tracker.gates[2]
-    gate2_points = get_rotated_rect_points(
-        gate2['center_x'], gate2['center_y'],
-        gate2['width'], gate2['height'],
-        gate2['angle']
-    )
-    cv2.polylines(frame, [gate2_points], True, (255, 128, 0), 2)  # Orange/cyan
-    cv2.putText(frame, "G2", (gate2['center_x'] - 10, gate2['center_y'] + 5),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 128, 0), 2)
+    # Gate colors (cycling through colors for different gates)
+    GATE_COLORS = [
+        (255, 255, 0),   # Yellow (Gate 1)
+        (255, 128, 0),   # Orange (Gate 2)
+        (0, 255, 255),   # Cyan (Gate 3)
+        (255, 0, 255),   # Magenta (Gate 4)
+    ]
+
+    for gate_id in sorted(all_gate_ids):
+        if gate_id not in tracker.gates:
+            continue
+
+        gate = tracker.gates[gate_id]
+        gate_points = get_rotated_rect_points(
+            gate['center_x'], gate['center_y'],
+            gate['width'], gate['height'],
+            gate['angle']
+        )
+        color = GATE_COLORS[(gate_id - 1) % len(GATE_COLORS)]
+        cv2.polylines(frame, [gate_points], True, color, 2)
+        cv2.putText(frame, f"G{gate_id}", (gate['center_x'] - 10, gate['center_y'] + 5),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
     # All panels below (can be toggled with P key)
     # Info panel with background
@@ -878,42 +942,50 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
     cv2.putText(frame, info_text, (10, 25),
                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-    # Co-Visibility Stats Panel
+    # Co-Visibility Stats Panel (dynamic for all consists)
     overlay = frame.copy()
-    cv2.rectangle(overlay, (5, 40), (550, 110), (0, 0, 0), -1)
+    panel_height = 40 + 25 * len(consist_data) + 10
+    cv2.rectangle(overlay, (5, 40), (550, panel_height), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
     cv2.putText(frame, "Co-Visibility (Lead + Rear together):", (10, 60),
                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-    # Consist 10 stats
-    c10_count, c10_pct = tracker.get_visibility_stats('c10', total_frames)
-    c10_status = "YES" if (c10['lead_pos'] and c10['rear_pos']) else "NO"
-    cv2.putText(frame, f"C10: {c10_status}  {c10_count} frames ({c10_pct:.1f}%)", (20, 85),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 200, 0), 1)
+    # Dynamic consist stats (iterate over all consists)
+    y_pos = 85
+    for consist_id in sorted(consist_data.keys()):
+        consist = consist_data[consist_id]
+        consist_state = tracker.consist_data[consist_id]
 
-    # Consist 11 stats
-    c11_count, c11_pct = tracker.get_visibility_stats('c11', total_frames)
-    c11_status = "YES" if (c11['lead_pos'] and c11['rear_pos']) else "NO"
-    cv2.putText(frame, f"C11: {c11_status}  {c11_count} frames ({c11_pct:.1f}%)", (280, 85),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
+        count = consist_state['visible_together_count']
+        pct = (count / total_frames * 100) if total_frames > 0 else 0
+        status = "YES" if (consist['lead_pos'] and consist['rear_pos']) else "NO"
 
-    # Controls
+        colors = CONSIST_COLORS.get(consist_id, {'line': (255, 255, 255)})
+        cv2.putText(frame, f"C{consist_id}: {status}  {count} frames ({pct:.1f}%)", (20, y_pos),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.45, colors['line'], 1)
+        y_pos += 25
+
+    # Controls (position dynamically after visibility panel)
+    controls_y = panel_height + 10
     overlay = frame.copy()
-    cv2.rectangle(overlay, (5, 125), (550, 155), (0, 0, 0), -1)
+    cv2.rectangle(overlay, (5, controls_y), (550, controls_y + 30), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
-    cv2.putText(frame, "Q=Quit | R=Reset | D=Debug | P=Panel | S=Save | SPACE=Pause", (10, 145),
+    cv2.putText(frame, "Q=Quit | R=Reset | D=Debug | P=Panel | S=Save | SPACE=Pause", (10, controls_y + 20),
                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-    # All Locomotives Detected Panel
+    # All Locomotives Detected Panel (position dynamically)
+    locos_y = controls_y + 40
+    num_classes = len(CLASS_NAMES)
+    locos_height = locos_y + 20 + (num_classes * 20) + 10
     overlay = frame.copy()
-    cv2.rectangle(overlay, (5, 160), (450, 280), (0, 0, 0), -1)
+    cv2.rectangle(overlay, (5, locos_y), (450, locos_height), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
-    cv2.putText(frame, "All Locomotives Detected:", (10, 180),
+    cv2.putText(frame, "All Locomotives Detected:", (10, locos_y + 20),
                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-    # Show detection status for all 4 classes
-    y_pos = 200
-    for class_id in range(4):
+    # Show detection status for all YOLO classes
+    y_pos = locos_y + 40
+    for class_id in sorted(CLASS_NAMES.keys()):
         class_name = CLASS_NAMES.get(class_id, f"Class_{class_id}")
         detected = class_id in all_detections if all_detections else False
 
@@ -937,57 +1009,86 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
         y_pos += 20
 
-    # Gate Timing Panel (Consist 11) - Cross-gate detection
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (5, 285), (450, 390), (0, 0, 0), -1)
-    cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
-    cv2.putText(frame, "Gate Timing (Consist 11 - Cross-gate):", (10, 305),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+    # Gate Timing Panels (dynamic for all consists with 2+ gates)
+    gate_timing_y = locos_height + 10
+    y_offset = gate_timing_y
 
-    # Last timestamps
-    cv2.putText(frame, "Last crossing timestamps:", (15, 325),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+    for consist_id in sorted(consist_data.keys()):
+        config = tracker.consist_config[consist_id]
+        consist_state = tracker.consist_data[consist_id]
+        gate_ids = config['gate_ids']
 
-    # Loco 7 timestamps (both gates)
-    l7g1_str = "---"
-    l7g2_str = "---"
-    if tracker.c11_lead_gate1_timestamp:
-        l7g1_str = time.strftime("%H:%M:%S", time.localtime(tracker.c11_lead_gate1_timestamp))
-    if tracker.c11_lead_gate2_timestamp:
-        l7g2_str = time.strftime("%H:%M:%S", time.localtime(tracker.c11_lead_gate2_timestamp))
+        # Skip consists without 2 gates configured
+        if len(gate_ids) < 2:
+            continue
 
-    cv2.putText(frame, f"Loco 7: G1={l7g1_str}  G2={l7g2_str}", (25, 345),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 255, 0), 1)
+        # Calculate panel height (header + timestamps + delta_t)
+        panel_height_gate = 20 + 20 + (len(gate_ids) * 20) + 20 + 10
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (5, y_offset), (450, y_offset + panel_height_gate), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
 
-    # Loco 8 timestamps (both gates)
-    l8g1_str = "---"
-    l8g2_str = "---"
-    if tracker.c11_rear_gate1_timestamp:
-        l8g1_str = time.strftime("%H:%M:%S", time.localtime(tracker.c11_rear_gate1_timestamp))
-    if tracker.c11_rear_gate2_timestamp:
-        l8g2_str = time.strftime("%H:%M:%S", time.localtime(tracker.c11_rear_gate2_timestamp))
+        # Panel title
+        cv2.putText(frame, f"Gate Timing (Consist {consist_id} - Cross-gate):", (10, y_offset + 20),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-    cv2.putText(frame, f"Loco 8: G1={l8g1_str}  G2={l8g2_str}", (25, 365),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)  # Red (readable on black)
+        # Last crossing timestamps header
+        cv2.putText(frame, "Last crossing timestamps:", (15, y_offset + 40),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
 
-    # Cross-gate Δt (single value)
-    if tracker.delta_t is not None:
-        dt_abs = abs(tracker.delta_t)
-        if dt_abs < tracker.threshold_normal:
-            color = (0, 255, 0)  # Green
-            status = "SYNCED"
-        elif dt_abs < tracker.threshold_warning:
-            color = (0, 255, 255)  # Yellow
-            status = "WARNING"
+        # Show timestamps for lead and rear at each gate
+        lead_addr = config['lead_address']
+        rear_addr = config['rear_address']
+        colors_consist = CONSIST_COLORS.get(consist_id, {'lead': (255, 255, 255), 'rear': (128, 128, 128)})
+
+        y_timestamp = y_offset + 60
+
+        # Lead loco timestamps (all gates)
+        gate_timestamps_lead = []
+        for gate_id in gate_ids:
+            ts = consist_state['gate_state'][gate_id]['lead_timestamp']
+            ts_str = time.strftime("%H:%M:%S", time.localtime(ts)) if ts else "---"
+            gate_timestamps_lead.append(f"G{gate_id}={ts_str}")
+
+        lead_line = f"Loco {lead_addr}: " + "  ".join(gate_timestamps_lead)
+        cv2.putText(frame, lead_line, (25, y_timestamp),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.35, colors_consist['lead'], 1)
+        y_timestamp += 20
+
+        # Rear loco timestamps (all gates)
+        if rear_addr:
+            gate_timestamps_rear = []
+            for gate_id in gate_ids:
+                ts = consist_state['gate_state'][gate_id]['rear_timestamp']
+                ts_str = time.strftime("%H:%M:%S", time.localtime(ts)) if ts else "---"
+                gate_timestamps_rear.append(f"G{gate_id}={ts_str}")
+
+            rear_line = f"Loco {rear_addr}: " + "  ".join(gate_timestamps_rear)
+            cv2.putText(frame, rear_line, (25, y_timestamp),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.35, colors_consist['rear'], 1)
+            y_timestamp += 20
+
+        # Cross-gate Δt
+        delta_t = consist_state['delta_t']
+        if delta_t is not None:
+            dt_abs = abs(delta_t)
+            if dt_abs < tracker.threshold_normal:
+                color = (0, 255, 0)  # Green
+                status = "SYNCED"
+            elif dt_abs < tracker.threshold_warning:
+                color = (0, 255, 255)  # Yellow
+                status = "WARNING"
+            else:
+                color = (0, 0, 255)  # Red
+                status = "CRITICAL"
+
+            cv2.putText(frame, f"Dt (cross-gate) = {delta_t:+.3f}s  {status}", (15, y_timestamp),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
         else:
-            color = (0, 0, 255)  # Red
-            status = "CRITICAL"
+            cv2.putText(frame, "Dt (cross-gate) = --- (waiting for crossing)", (15, y_timestamp),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
-        cv2.putText(frame, f"Dt (cross-gate) = {tracker.delta_t:+.3f}s  {status}", (15, 385),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
-    else:
-        cv2.putText(frame, "Dt (cross-gate) = --- (waiting for crossing)", (15, 385),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)  # White
+        y_offset += panel_height_gate + 10
 
     # Debug view - draw all bounding boxes
     if debug_view and results:
@@ -1249,12 +1350,12 @@ def track_consist(model_path: str):
                 angle = marker_state.current_gate['angle']
                 print(f"🔄 Rotated: {angle}°")
             else:
-                # Otherwise: reset tracking counters
+                # Otherwise: reset tracking counters for ALL consists
                 print("🔄 Reset tracking counters (visibility + gate crossings)")
-                tracker.c10_visible_together_count = 0
-                tracker.c11_visible_together_count = 0
-                tracker.gate_crossing_count = 0  # Reset gate crossing count
-                tracker.last_delta_t_time = 0  # Reset last Δt time
+                for consist_id, consist in tracker.consist_data.items():
+                    consist['visible_together_count'] = 0
+                    consist['gate_crossing_count'] = 0
+                    consist['last_delta_t_time'] = 0
                 frame_count = 0  # Reset frame count too
         elif key == ord('d') or key == ord('D'):
             debug_view = not debug_view
@@ -1336,32 +1437,46 @@ def track_consist(model_path: str):
     print(f"🎞️  Frames processed: {frame_count}")
     print()
 
-    # Gate timing statistics (Consist 11)
-    print("🚪 GATE TIMING DETECTION (Consist 11 - Cross-Gate)")
+    # Gate timing statistics (dynamic for all consists with 2+ gates)
+    print("🚪 GATE TIMING DETECTION")
     print("-" * 60)
-    print(f"   Gate crossings detected: {tracker.gate_crossing_count}")
 
-    if tracker.delta_t is not None:
-        # Calculate status based on thresholds
-        dt_abs = abs(tracker.delta_t)
-        if dt_abs < tracker.threshold_normal:
-            status = "🟢 SYNCED"
-        elif dt_abs < tracker.threshold_warning:
-            status = "🟡 WARNING"
-        else:
-            status = "🔴 CRITICAL DESYNC"
+    for consist_id in sorted(tracker.consist_data.keys()):
+        config = tracker.consist_config[consist_id]
+        consist = tracker.consist_data[consist_id]
+        gate_ids = config['gate_ids']
 
-        print(f"   Last Δt measured: {tracker.delta_t:+.3f}s  {status}")
-        print(f"   Crossing type: {tracker.delta_t_type}")
-        print()
-        print("   Δt Interpretation:")
-        if tracker.delta_t > 0:
-            print("   → Loco 7 (E656_239) passing first - running faster")
+        # Skip consists without 2 gates configured
+        if len(gate_ids) < 2:
+            continue
+
+        print(f"\nConsist {consist_id} - {config['name']} (Cross-Gate):")
+        print(f"   Gate crossings detected: {consist['gate_crossing_count']}")
+
+        delta_t = consist['delta_t']
+        if delta_t is not None:
+            # Calculate status based on thresholds
+            dt_abs = abs(delta_t)
+            if dt_abs < tracker.threshold_normal:
+                status = "🟢 SYNCED"
+            elif dt_abs < tracker.threshold_warning:
+                status = "🟡 WARNING"
+            else:
+                status = "🔴 CRITICAL DESYNC"
+
+            print(f"   Last Δt measured: {delta_t:+.3f}s  {status}")
+            print(f"   Crossing type: {consist['delta_t_type']}")
+            print()
+            print("   Δt Interpretation:")
+            lead_addr = config['lead_address']
+            rear_addr = config['rear_address']
+            if delta_t > 0:
+                print(f"   → Loco {lead_addr} (lead) passing first - running faster")
+            else:
+                print(f"   → Loco {rear_addr} (rear) passing first - lead running slower")
         else:
-            print("   → Loco 8 (E444_056) passing first - Loco 7 running slower")
-    else:
-        print("   Last Δt: --- (no crossing detected)")
-        print("   ⚠️  Locomotives not detected passing through gates")
+            print("   Last Δt: --- (no crossing detected)")
+            print("   ⚠️  Locomotives not detected passing through gates")
 
     print()
     print("   Thresholds:")
@@ -1370,20 +1485,20 @@ def track_consist(model_path: str):
     print(f"   🔴 |Δt| > {tracker.threshold_warning}s = CRITICAL")
     print()
 
-    # Co-visibility statistics (secondary)
+    # Co-visibility statistics (dynamic for all consists)
     print("👁️  CO-VISIBILITY STATISTICS")
     print("-" * 60)
-    c10_count, c10_pct = tracker.get_visibility_stats('c10', frame_count)
-    c11_count, c11_pct = tracker.get_visibility_stats('c11', frame_count)
-    print(f"   Consist 10 (Interno): {c10_count} frames ({c10_pct:.1f}%) - {c10_count} co-detections")
-    print(f"   Consist 11 (Esterno): {c11_count} frames ({c11_pct:.1f}%) - {c11_count} co-detections")
+    for consist_id in sorted(tracker.consist_data.keys()):
+        config = tracker.consist_config[consist_id]
+        count, pct = tracker.get_visibility_stats(consist_id, frame_count)
+        print(f"   Consist {consist_id} ({config['name']}): {count} frames ({pct:.1f}%) - {count} co-detections")
     print()
     print("="*60)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="YOLO-based tracking for BOTH Consist 10 and Consist 11"
+        description="YOLO-based tracking for multiple consists (config-driven)"
     )
     parser.add_argument(
         "--model",

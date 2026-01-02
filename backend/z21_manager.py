@@ -530,10 +530,10 @@ class Z21Manager:
         lead_addr = locomotives[0]['address']
         rear_addr = locomotives[1]['address']
 
-        if self.debug_enabled:
-            print(f"⚙️  Enabling Virtual Mode for consist {consist_address}...")
-            print(f"   → Writing CV19=0 to loco {lead_addr} (lead)")
-            print(f"   → Writing CV19=0 to loco {rear_addr} (rear)")
+        # Always log Virtual Mode toggle (critical operation)
+        print(f"⚙️  Enabling Virtual Mode for consist {consist_address}...")
+        print(f"   → Writing CV19=0 to loco {lead_addr} (lead)")
+        print(f"   → Writing CV19=0 to loco {rear_addr} (rear)")
 
         # Write CV19=0 to free from consist (operations mode)
         success_lead = self.z21.write_cv_ops_mode(lead_addr, 19, 0)
@@ -543,8 +543,7 @@ class Z21Manager:
             consist['virtual_mode'] = True
             consist['auto_compensation_enabled'] = True  # Auto-enable compensation with Virtual Mode
             self._save_persisted_state()  # Persist to file
-            if self.debug_enabled:
-                print(f"  ✓ Virtual Mode enabled for consist {consist_address} (auto-compensation ON)")
+            print(f"  ✓ Virtual Mode enabled for consist {consist_address} (auto-compensation ON)")
             return True
         else:
             error_locos = []
@@ -552,8 +551,7 @@ class Z21Manager:
                 error_locos.append(f"lead {lead_addr}")
             if not success_rear:
                 error_locos.append(f"rear {rear_addr}")
-            if self.debug_enabled:
-                print(f"  ✗ Failed to enable Virtual Mode: CV write failed for {', '.join(error_locos)}")
+            print(f"  ✗ Failed to enable Virtual Mode: CV write failed for {', '.join(error_locos)}")
             return False
 
     def disable_virtual_mode(self, consist_address):
@@ -582,10 +580,10 @@ class Z21Manager:
         lead_addr = locomotives[0]['address']
         rear_addr = locomotives[1]['address']
 
-        if self.debug_enabled:
-            print(f"⚙️  Disabling Virtual Mode for consist {consist_address}...")
-            print(f"   → Writing CV19={consist_address} to loco {lead_addr} (lead)")
-            print(f"   → Writing CV19={consist_address} to loco {rear_addr} (rear)")
+        # Always log Virtual Mode toggle (critical operation)
+        print(f"⚙️  Disabling Virtual Mode for consist {consist_address}...")
+        print(f"   → Writing CV19={consist_address} to loco {lead_addr} (lead)")
+        print(f"   → Writing CV19={consist_address} to loco {rear_addr} (rear)")
 
         # Restore CV19 to consist address (operations mode)
         success_lead = self.z21.write_cv_ops_mode(lead_addr, 19, consist_address)
@@ -595,8 +593,7 @@ class Z21Manager:
             consist['virtual_mode'] = False
             consist['auto_compensation_enabled'] = False  # Auto-disable compensation with DCC Mode
             self._save_persisted_state()  # Persist to file
-            if self.debug_enabled:
-                print(f"  ✓ Virtual Mode disabled for consist {consist_address} (auto-compensation OFF)")
+            print(f"  ✓ Virtual Mode disabled for consist {consist_address} (auto-compensation OFF)")
             return True
         else:
             error_locos = []
@@ -604,8 +601,7 @@ class Z21Manager:
                 error_locos.append(f"lead {lead_addr}")
             if not success_rear:
                 error_locos.append(f"rear {rear_addr}")
-            if self.debug_enabled:
-                print(f"  ✗ Failed to disable Virtual Mode: CV write failed for {', '.join(error_locos)}")
+            print(f"  ✗ Failed to disable Virtual Mode: CV write failed for {', '.join(error_locos)}")
             return False
 
     def _load_persisted_state(self):
