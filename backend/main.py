@@ -635,10 +635,12 @@ async def video_feed():
     """
     # Cache for time_str calculation (per-consist, only recalculate when timestamp changes)
     _timestamp_cache = {}  # consist_id → {'previous': timestamp, 'time_str': str}
+    # Cache for last valid delta_t (preserve when locos stop)
+    _last_valid_delta_t = {}  # consist_id → {'delta_t': float, 'status': str, 'timestamp': float, 'time_str': str}
 
     def get_tracking_data():
         """Callback to get latest tracking data for overlay - MULTI-CONSIST"""
-        nonlocal _timestamp_cache
+        nonlocal _timestamp_cache, _last_valid_delta_t
 
         if not z21_manager:
             return {}
@@ -695,15 +697,24 @@ async def video_feed():
                     'timestamp': current_timestamp,
                     'time_str': _timestamp_cache[consist_id]['time_str']
                 }
+
+                # Update cache for display (when loco stops, backend resets to None but we keep showing this)
+                _last_valid_delta_t[consist_id] = all_tracking_data[consist_id].copy()
             else:
-                # No delta_t yet: still show panel with "Waiting..."
-                all_tracking_data[consist_id] = {
-                    'consist_address': consist_id,
-                    'delta_t': None,
-                    'status': None,
-                    'timestamp': None,
-                    'time_str': ""
-                }
+                # delta_t is None (loco stopped, backend reset for fresh start)
+                # Return cached value for display (matches React panel behavior)
+                if consist_id in _last_valid_delta_t and _last_valid_delta_t[consist_id]['delta_t'] is not None:
+                    # Use cached value: preserves last valid Δt on display
+                    all_tracking_data[consist_id] = _last_valid_delta_t[consist_id].copy()
+                else:
+                    # No cache yet (first run): show "Waiting..."
+                    all_tracking_data[consist_id] = {
+                        'consist_address': consist_id,
+                        'delta_t': None,
+                        'status': None,
+                        'timestamp': None,
+                        'time_str': ""
+                    }
 
         return all_tracking_data
 
