@@ -537,7 +537,8 @@ def build_consist_response(address, data, state):
         'rear_name': rear_name,
         'functions': data['functions'],
         # Spread ALL state fields automatically (speed, direction, power, virtual_mode, etc.)
-        **{k: v for k, v in state.items() if k not in ['address', 'locomotives']},
+        # CRITICAL: Exclude 'functions' from spread to avoid overwriting function definitions with states
+        **{k: v for k, v in state.items() if k not in ['address', 'locomotives', 'functions']},
         # Rename 'functions' state dict to 'functionStates' for clarity
         'functionStates': state.get('functions', {})
     }

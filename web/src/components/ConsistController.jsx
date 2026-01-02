@@ -561,17 +561,19 @@ export default function ConsistController({
               {item.virtual_mode ? 'CV19=0' : `CV19=${selection.address}`}
             </div>
           </button>
-          <div className="mt-2 text-xs text-track-steel font-sans flex items-center justify-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1">
-              <span className={item.virtual_mode ? "text-signal-green" : "text-track-steel"}>●</span>
-              <span>{item.virtual_mode ? 'Locomotives freed from consist • Individual speed control possible' : 'Standard DCC consist • Locomotives synchronized via CV19'}</span>
+          <div className="mt-2 text-xs text-track-steel font-sans flex items-center justify-between gap-3">
+            {/* Left: status text (compresses if needed) */}
+            <div className="flex items-center gap-1 min-w-0 flex-1">
+              <span className={item.virtual_mode ? "text-signal-green flex-shrink-0" : "text-track-steel flex-shrink-0"}>●</span>
+              <span className="truncate">{item.virtual_mode ? 'Locomotives freed from consist • Individual speed control possible' : 'Standard DCC consist • Locomotives synchronized via CV19'}</span>
             </div>
+            {/* Right: auto-comp switch (aligned under CV19=0, never wraps) */}
             {item.virtual_mode && (
-              <div className="flex items-center gap-2 ml-2">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <i className={`fa-solid fa-gauge-high ${
                   item.auto_compensation_enabled ? 'text-signal-green' : 'text-track-steel'
                 }`}></i>
-                <span className="text-xs">Auto-Comp</span>
+                <span className="text-xs whitespace-nowrap">Auto-Sync</span>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
