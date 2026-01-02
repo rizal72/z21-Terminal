@@ -297,6 +297,7 @@ async def lifespan(app: FastAPI):
                 consist['compensation_accumulated'] = 0
             if 'decay_applied' not in consist:
                 consist['decay_applied'] = False
+            # auto_compensation_enabled is now handled in z21_manager._load_persisted_state()
 
         # Get initial track power state
         status = z21_manager.z21.get_status()
@@ -392,6 +393,7 @@ async def broadcast_state_update(address: int):
             'functions': function_definitions,  # Function definitions (array)
             'functionStates': state.get('functions', {}),  # Function states (object)
             'virtual_mode': state.get('virtual_mode', False),  # NEW: Virtual Mode status
+            'auto_compensation_enabled': state.get('auto_compensation_enabled', False),  # NEW: Auto-compensation flag
             'delta_t': state.get('delta_t'),  # NEW: Latest Δt from tracking (or None)
             'delta_t_timestamp': state.get('delta_t_timestamp')  # NEW: Timestamp
         }
@@ -435,9 +437,10 @@ async def broadcast_initial_state():
             'power': state.get('power', True),
             'functions': data.get('functions', []),
             'functionStates': state.get('functions', {}),
-            'virtual_mode': state.get('virtual_mode', False),  # NEW
-            'delta_t': state.get('delta_t'),  # NEW
-            'delta_t_timestamp': state.get('delta_t_timestamp')  # NEW
+            'virtual_mode': state.get('virtual_mode', False),
+            'auto_compensation_enabled': state.get('auto_compensation_enabled', False),
+            'delta_t': state.get('delta_t'),
+            'delta_t_timestamp': state.get('delta_t_timestamp')
         }
 
     # Build locomotives state
@@ -562,7 +565,8 @@ async def get_consists():
             'power': state.get('power', True),
             'functions': data['functions'],
             'functionStates': state.get('functions', {}),  # Actual function states from Z21
-            'virtual_mode': state.get('virtual_mode', False),  # NEW
+            'virtual_mode': state.get('virtual_mode', False),
+            'auto_compensation_enabled': state.get('auto_compensation_enabled', False),  # NEW
             'delta_t': state.get('delta_t'),  # NEW
             'delta_t_timestamp': state.get('delta_t_timestamp')  # NEW
         }
@@ -905,6 +909,24 @@ async def websocket_endpoint(websocket: WebSocket):
                         else:
                             print(f"  ✗ Failed to toggle Virtual Mode for consist {consist_address}")
 
+                elif message_type == 'toggle_auto_compensation':
+                    # Toggle Auto-Compensation (only allowed in Virtual Mode)
+                    consist_address = data.get('address')
+                    enable = data.get('enable', False)
+
+                    if z21_manager and consist_address in z21_manager.consist_state:
+                        consist = z21_manager.consist_state[consist_address]
+                        is_virtual = consist.get('virtual_mode', False)
+
+                        if is_virtual:
+                            # Only allow toggle if in Virtual Mode
+                            consist['auto_compensation_enabled'] = enable
+                            # Broadcast updated state to all clients
+                            await broadcast_state_update(consist_address)
+                            print(f"  ✓ Auto-compensation {'enabled' if enable else 'disabled'} for consist {consist_address}")
+                        else:
+                            print(f"  ✗ Cannot toggle auto-compensation: consist {consist_address} not in Virtual Mode")
+
             except json.JSONDecodeError:
                 print("Invalid JSON received")
                 continue
@@ -969,11 +991,13 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                         if consist_address in z21_manager.consist_state:
                             consist = z21_manager.consist_state[consist_address]
                             is_virtual = consist.get('virtual_mode', False)
+                            auto_comp_enabled = consist.get('auto_compensation_enabled', False)
                             last_speed = consist.get('speed', 0)
                             last_direction = consist.get('direction', 'forward') == 'forward'
 
                             # Trigger set_speed() for both CRITICAL and SYNCED zones (not WARNING)
-                            if is_virtual and last_speed > 0:
+                            # Only if Virtual Mode AND auto-compensation enabled
+                            if is_virtual and auto_comp_enabled and last_speed > 0:
                                 is_critical = abs(delta_t) > thresholds['warning']  # > warning threshold
                                 is_synced = abs(delta_t) < thresholds['normal']      # < normal threshold
 

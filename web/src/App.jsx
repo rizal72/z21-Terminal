@@ -675,6 +675,31 @@ function App() {
     });
   };
 
+  const handleToggleAutoCompensation = (consistAddress, enable) => {
+    console.log('toggleAutoCompensation:', { consistAddress, enable });
+
+    // Send to backend
+    sendMessage({
+      type: 'toggle_auto_compensation',
+      address: consistAddress,
+      enable
+    });
+
+    // Optimistic update - backend will broadcast confirmation
+    setConsists(prev => {
+      const currentConsist = prev[consistAddress];
+      if (!currentConsist) return prev;
+
+      return {
+        ...prev,
+        [consistAddress]: {
+          ...currentConsist,
+          auto_compensation_enabled: enable
+        }
+      };
+    });
+  };
+
   return (
     <div className="min-h-screen bg-control-black grain-overlay">
       {/* Header */}
@@ -878,6 +903,7 @@ function App() {
                   onDirectionChange={handleDirectionChange}
                   onFunctionToggle={handleFunctionToggle}
                   onToggleVirtualMode={handleToggleVirtualMode}
+                  onToggleAutoCompensation={handleToggleAutoCompensation}
                 />
               </div>
             );

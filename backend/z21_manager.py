@@ -64,9 +64,10 @@ class Z21Manager:
             address (int): DCC address del consist
             data (dict): Dati consist con array locomotives
         """
-        # Load virtual_mode from persisted state if available
+        # Load virtual_mode and auto_compensation_enabled from persisted state if available
         persisted = self.persisted_state.get(str(address), {})
         virtual_mode = persisted.get('virtual_mode', False)
+        auto_compensation_enabled = persisted.get('auto_compensation_enabled', virtual_mode)  # Default to virtual_mode if not saved
 
         self.consist_state[address] = {
             'address': address,
@@ -76,6 +77,7 @@ class Z21Manager:
             'power': True,
             'functions': {},  # {0: False, 1: False, ...}
             'virtual_mode': virtual_mode,  # Load from persisted state
+            'auto_compensation_enabled': auto_compensation_enabled,  # Load from persisted state (or default to virtual_mode)
             'delta_t': None,  # NEW: Latest Δt from tracking daemon (for display only)
             'delta_t_timestamp': None,  # NEW: When Δt was last updated
             'speed_actual_adjust': 0,  # NEW: Incremental compensated speed for adjust loco
@@ -530,8 +532,9 @@ class Z21Manager:
 
         if success_lead and success_rear:
             consist['virtual_mode'] = True
+            consist['auto_compensation_enabled'] = True  # Auto-enable compensation with Virtual Mode
             self._save_persisted_state()  # Persist to file
-            print(f"  ✓ Virtual Mode enabled for consist {consist_address}")
+            print(f"  ✓ Virtual Mode enabled for consist {consist_address} (auto-compensation ON)")
             return True
         else:
             error_locos = []
@@ -578,8 +581,9 @@ class Z21Manager:
 
         if success_lead and success_rear:
             consist['virtual_mode'] = False
+            consist['auto_compensation_enabled'] = False  # Auto-disable compensation with DCC Mode
             self._save_persisted_state()  # Persist to file
-            print(f"  ✓ Virtual Mode disabled for consist {consist_address}")
+            print(f"  ✓ Virtual Mode disabled for consist {consist_address} (auto-compensation OFF)")
             return True
         else:
             error_locos = []
@@ -596,6 +600,13 @@ class Z21Manager:
             if CONSIST_STATE_FILE.exists():
                 with open(CONSIST_STATE_FILE, 'r') as f:
                     state = json.load(f)
+
+                    # Backwards compatibility: add auto_compensation_enabled if missing
+                    for address, consist_data in state.items():
+                        if 'auto_compensation_enabled' not in consist_data:
+                            # Default: ON if virtual_mode, OFF otherwise
+                            consist_data['auto_compensation_enabled'] = consist_data.get('virtual_mode', False)
+
                     if self.verbose:
                         print(f"  ✓ Loaded persisted state: {state}")
                     return state
@@ -604,14 +615,15 @@ class Z21Manager:
         return {}
 
     def _save_persisted_state(self):
-        """Save virtual_mode state to JSON file"""
+        """Save virtual_mode and auto_compensation_enabled state to JSON file"""
         try:
             state = {}
             for address, consist in self.consist_state.items():
                 if 'locomotives' in consist and len(consist.get('locomotives', [])) >= 2:
-                    # Only save virtual_mode for consists (not single locos)
+                    # Save both virtual_mode and auto_compensation_enabled for consists
                     state[str(address)] = {
-                        'virtual_mode': consist.get('virtual_mode', False)
+                        'virtual_mode': consist.get('virtual_mode', False),
+                        'auto_compensation_enabled': consist.get('auto_compensation_enabled', False)
                     }
 
             with open(CONSIST_STATE_FILE, 'w') as f:

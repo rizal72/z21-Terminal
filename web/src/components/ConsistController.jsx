@@ -15,7 +15,8 @@ export default function ConsistController({
   onSpeedChange,
   onDirectionChange,
   onFunctionToggle,
-  onToggleVirtualMode
+  onToggleVirtualMode,
+  onToggleAutoCompensation
 }) {
   const [speed, setSpeed] = useState(0);
   const [direction, setDirection] = useState('forward');
@@ -560,15 +561,34 @@ export default function ConsistController({
               {item.virtual_mode ? 'CV19=0' : `CV19=${selection.address}`}
             </div>
           </button>
-          <div className="mt-2 text-xs text-track-steel font-sans text-center">
-            {item.virtual_mode ? (
-              <>
-                <span className="text-signal-green">●</span> Locomotives freed from consist • Individual speed control possible
-              </>
-            ) : (
-              <>
-                <span className="text-track-steel">●</span> Standard DCC consist • Locomotives synchronized via CV19
-              </>
+          <div className="mt-2 text-xs text-track-steel font-sans flex items-center justify-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1">
+              <span className={item.virtual_mode ? "text-signal-green" : "text-track-steel"}>●</span>
+              <span>{item.virtual_mode ? 'Locomotives freed from consist • Individual speed control possible' : 'Standard DCC consist • Locomotives synchronized via CV19'}</span>
+            </div>
+            {item.virtual_mode && (
+              <div className="flex items-center gap-2 ml-2">
+                <i className={`fa-solid fa-gauge-high ${
+                  item.auto_compensation_enabled ? 'text-signal-green' : 'text-track-steel'
+                }`}></i>
+                <span className="text-xs">Auto-Comp</span>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={item.auto_compensation_enabled || false}
+                    onChange={(e) => {
+                      if (onToggleAutoCompensation) {
+                        onToggleAutoCompensation(selection.address, e.target.checked);
+                      }
+                    }}
+                    disabled={!item.virtual_mode}
+                    className="sr-only peer"
+                  />
+                  <div className={`w-9 h-5 bg-control-grey rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-control-grey after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-signal-green ${
+                    !item.virtual_mode ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}></div>
+                </label>
+              </div>
             )}
           </div>
         </div>
