@@ -22,23 +22,23 @@ Usage:
 
 Controls:
     - Q: Quit
-    - R: Reset distance history (both consists)
-    - D: Toggle debug view (show bounding boxes with confidence)
-    - P: Toggle ALL panels (clean video, markers only, calculation continues)
-    - S: Save current frame as snapshot
     - SPACE: Pause/Resume video
+    - D: Toggle debug view (show bounding boxes with confidence)
+    - P: Toggle info panels (clean view, gates+markers only)
+    - Y: Toggle YOLO inference (disable = pause video for fast gate editing)
+    - M: Toggle Marker Mode (gate positioning/editing)
+    - S: Save gate positions to config.json (Marker Mode only)
+    - R: Reset distance history (both consists)
 
-Marker Mode (for gate positioning):
-    - M: Toggle marker mode ON/OFF
-    - CLICK: Place new gate OR start dragging existing gate
-    - DRAG: Move gate (click + hold on gate, drag with mouse, release)
-    - Arrow UP/DOWN: Increase/decrease height (+/- 10px)
-    - Arrow LEFT/RIGHT: Decrease/increase width (+/- 10px)
-    - R: Rotate counter-clockwise (15° steps)
-    - ENTER: Save current gate (auto-generates ID, adds to config)
-    - C: Clear current gate being positioned (unsaved)
-    - S: Save ALL gates to config.json file
-    - E: Export gates to console (JSON format)
+Marker Mode (M key):
+    - Click: Place new gate OR select existing gate
+    - Drag: Move gate (click+hold on gate, drag, release)
+    - Arrow ↑↓: Increase/decrease height (±10px)
+    - Arrow ←→: Decrease/increase width (±10px)
+    - Q/E: Rotate gate (±10°)
+    - ENTER: Commit gate changes
+    - BACKSPACE: Delete selected gate
+    - S: Save ALL gates to config.json
 
 Requirements:
     - Trained YOLOv8 model (best.pt) with all 4 locomotive classes
@@ -821,8 +821,114 @@ class YOLOTracker:
         return 0, 0.0
 
 
-def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total_frames=0, marker_state=None):
+def draw_gates_overlay(frame, tracker):
+    """Draw timing gates on frame (ALWAYS visible, independent from tracking)."""
+    # Collect all gate IDs from all consists
+    all_gate_ids = set()
+    for config in tracker.consist_config.values():
+        all_gate_ids.update(config['gate_ids'])
+
+    # Gate colors (cycling through colors for different gates)
+    GATE_COLORS = [
+        (255, 255, 0),   # Yellow (Gate 1)
+        (255, 128, 0),   # Orange (Gate 2)
+        (0, 255, 255),   # Cyan (Gate 3)
+        (255, 0, 255),   # Magenta (Gate 4)
+    ]
+
+    for gate_id in sorted(all_gate_ids):
+        if gate_id not in tracker.gates:
+            continue
+
+        gate = tracker.gates[gate_id]
+        gate_points = get_rotated_rect_points(
+            gate['center_x'], gate['center_y'],
+            gate['width'], gate['height'],
+            gate['angle']
+        )
+        color = GATE_COLORS[(gate_id - 1) % len(GATE_COLORS)]
+        cv2.polylines(frame, [gate_points], True, color, 2)
+        cv2.putText(frame, f"G{gate_id}", (gate['center_x'] - 10, gate['center_y'] + 5),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+    return frame
+
+
+def draw_marker_mode_overlay(frame, marker_state):
+    """Draw Marker Mode overlay (ALWAYS visible when marker_state.enabled, independent from tracking)."""
+    if not marker_state:
+        return frame
+
+    # Colors for marker mode
+    GATE_COLOR = (0, 255, 255)  # Cyan for current gate being edited
+    GATE_SAVED_COLOR = (0, 255, 0)  # Green for saved gates
+
+    # Draw saved gates (green) - skip the one being edited
+    for gate in marker_state.config['gates']:
+        # Skip gate if it's currently being edited
+        if marker_state.editing_gate_id == gate['id']:
+            continue
+
+        cx, cy = gate['center'][0], gate['center'][1]
+        w, h = gate['width'], gate['height']
+        angle = gate['angle']
+
+        # Get rotated rectangle points
+        points = get_rotated_rect_points(cx, cy, w, h, angle)
+        cv2.polylines(frame, [points], True, GATE_SAVED_COLOR, 2)
+
+        # Draw center crosshair
+        cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_SAVED_COLOR, 1)
+        cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_SAVED_COLOR, 1)
+
+        # Draw gate ID label
+        label = f"G{gate['id']}"
+        cv2.putText(frame, label, (cx - 15, cy - h//2 - 5),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, GATE_SAVED_COLOR, 1)
+
+    # Draw current gate being positioned (yellow)
+    if marker_state.current_gate:
+        gate = marker_state.current_gate
+        cx, cy = gate['center_x'], gate['center_y']
+        w, h = gate['width'], gate['height']
+        angle = gate['angle']
+
+        # Get rotated rectangle points
+        points = get_rotated_rect_points(cx, cy, w, h, angle)
+        cv2.polylines(frame, [points], True, GATE_COLOR, 2)
+
+        # Draw center crosshair
+        cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_COLOR, 1)
+        cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_COLOR, 1)
+
+        # Show dimensions and angle
+        dim_text = f"{w}x{h}px @ {angle}deg"
+        cv2.putText(frame, dim_text, (cx - 60, cy - h//2 - 15),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, GATE_COLOR, 2)
+
+    # Show marker mode indicator
+    if marker_state.enabled:
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (5, frame.shape[0] - 90), (380, frame.shape[0] - 5), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+        cv2.putText(frame, "MARKER MODE (M to exit)", (15, frame.shape[0] - 75),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        cv2.putText(frame, "CLICK/DRAG: move | UP/DOWN: height | LEFT/RIGHT: width", (15, frame.shape[0] - 53),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        cv2.putText(frame, "ENTER: save | S: save all | C: clear", (15, frame.shape[0] - 33),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        cv2.putText(frame, "Q/E: rotate | BACKSPACE: delete", (15, frame.shape[0] - 13),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+
+    return frame
+
+
+def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total_frames=0, marker_state=None, tracking_enabled=True):
     """Draw tracking overlay on frame for ALL consists dynamically."""
+
+    # If tracking disabled, skip all detection overlays (gates are drawn separately)
+    if not tracking_enabled or track_data is None:
+        return frame
 
     consist_data = track_data['consist_data']
     all_detections = track_data['detections']
@@ -893,73 +999,37 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
             cv2.putText(frame, dim_text, (cx - 60, cy - h//2 - 15),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, GATE_COLOR, 2)
 
-        # Show marker mode indicator
-        if marker_state.enabled:
-            overlay = frame.copy()
-            cv2.rectangle(overlay, (5, frame.shape[0] - 90), (380, frame.shape[0] - 5), (0, 0, 0), -1)
-            cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
-            cv2.putText(frame, "MARKER MODE (M to exit)", (15, frame.shape[0] - 75),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-            cv2.putText(frame, "CLICK/DRAG: move | UP/DOWN: height | LEFT/RIGHT: width", (15, frame.shape[0] - 53),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-            cv2.putText(frame, "ENTER: save | S: save all | C: clear", (15, frame.shape[0] - 33),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-            cv2.putText(frame, "E: export gates to console", (15, frame.shape[0] - 13),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-
     # Early return if panels hidden (P key pressed) - calculation continues in background
     # Gate markers also hidden when panels are off
     if not show_panels:
         return
 
-    # Draw timing gates dynamically (visible only when panels ON)
-    # Collect all gate IDs from all consists
-    all_gate_ids = set()
-    for config in tracker.consist_config.values():
-        all_gate_ids.update(config['gate_ids'])
-
-    # Gate colors (cycling through colors for different gates)
-    GATE_COLORS = [
-        (255, 255, 0),   # Yellow (Gate 1)
-        (255, 128, 0),   # Orange (Gate 2)
-        (0, 255, 255),   # Cyan (Gate 3)
-        (255, 0, 255),   # Magenta (Gate 4)
-    ]
-
-    for gate_id in sorted(all_gate_ids):
-        if gate_id not in tracker.gates:
-            continue
-
-        gate = tracker.gates[gate_id]
-        gate_points = get_rotated_rect_points(
-            gate['center_x'], gate['center_y'],
-            gate['width'], gate['height'],
-            gate['angle']
-        )
-        color = GATE_COLORS[(gate_id - 1) % len(GATE_COLORS)]
-        cv2.polylines(frame, [gate_points], True, color, 2)
-        cv2.putText(frame, f"G{gate_id}", (gate['center_x'] - 10, gate['center_y'] + 5),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
     # All panels below (can be toggled with P key)
+    # Controls panel (IN CIMA - always first)
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (5, 5), (800, 35), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
+    cv2.putText(frame, "Q=Quit | SPACE=Pause | D=Debug | P=Panel | Y=YOLO | M=Marker | S=Save | E=Export | R=Reset", (10, 25),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
     # Info panel with background
     overlay = frame.copy()
     info_text = "Dual Consist YOLO Tracking"
-    cv2.rectangle(overlay, (5, 5), (400, 35), (0, 0, 0), -1)
+    cv2.rectangle(overlay, (5, 45), (400, 75), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
-    cv2.putText(frame, info_text, (10, 25),
+    cv2.putText(frame, info_text, (10, 65),
                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
     # Co-Visibility Stats Panel (dynamic for all consists)
     overlay = frame.copy()
-    panel_height = 40 + 25 * len(consist_data) + 10
-    cv2.rectangle(overlay, (5, 40), (550, panel_height), (0, 0, 0), -1)
+    panel_height = 80 + 25 * len(consist_data) + 10
+    cv2.rectangle(overlay, (5, 80), (550, panel_height), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
-    cv2.putText(frame, "Co-Visibility (Lead + Rear together):", (10, 60),
+    cv2.putText(frame, "Co-Visibility (Lead + Rear together):", (10, 100),
                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
     # Dynamic consist stats (iterate over all consists)
-    y_pos = 85
+    y_pos = 125
     for consist_id in sorted(consist_data.keys()):
         consist = consist_data[consist_id]
         consist_state = tracker.consist_data[consist_id]
@@ -973,16 +1043,8 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, colors['line'], 1)
         y_pos += 25
 
-    # Controls (position dynamically after visibility panel)
-    controls_y = panel_height + 10
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (5, controls_y), (550, controls_y + 30), (0, 0, 0), -1)
-    cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
-    cv2.putText(frame, "Q=Quit | R=Reset | D=Debug | P=Panel | S=Save | SPACE=Pause", (10, controls_y + 20),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-
-    # All Locomotives Detected Panel (position dynamically)
-    locos_y = controls_y + 40
+    # All Locomotives Detected Panel (position dynamically after co-visibility panel)
+    locos_y = panel_height + 10
     num_classes = len(CLASS_NAMES)
     locos_height = locos_y + 20 + (num_classes * 20) + 10
     overlay = frame.copy()
@@ -1116,65 +1178,6 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
             cv2.putText(frame, label, (int(x1), int(y1) - 10),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-    # Draw gate markers (always visible, even if panels hidden)
-    if marker_state:
-        # Draw saved gates (green) - skip the one being edited
-        for gate in marker_state.config['gates']:
-            # Skip gate if it's currently being edited
-            if marker_state.editing_gate_id == gate['id']:
-                continue
-
-            cx, cy = gate['center'][0], gate['center'][1]
-            w, h = gate['width'], gate['height']
-            angle = gate['angle']
-
-            # Get rotated rectangle points
-            points = get_rotated_rect_points(cx, cy, w, h, angle)
-            cv2.polylines(frame, [points], True, GATE_SAVED_COLOR, 2)
-
-            # Draw center crosshair
-            cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_SAVED_COLOR, 1)
-            cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_SAVED_COLOR, 1)
-
-            # Draw gate ID label
-            label = f"G{gate['id']}"
-            cv2.putText(frame, label, (cx - 15, cy - h//2 - 5),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, GATE_SAVED_COLOR, 1)
-
-        # Draw current gate being positioned (yellow)
-        if marker_state.current_gate:
-            gate = marker_state.current_gate
-            cx, cy = gate['center_x'], gate['center_y']
-            w, h = gate['width'], gate['height']
-            angle = gate['angle']
-
-            # Get rotated rectangle points
-            points = get_rotated_rect_points(cx, cy, w, h, angle)
-            cv2.polylines(frame, [points], True, GATE_COLOR, 2)
-
-            # Draw center crosshair
-            cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_COLOR, 1)
-            cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_COLOR, 1)
-
-            # Show dimensions and angle
-            dim_text = f"{w}x{h}px @ {angle}deg"
-            cv2.putText(frame, dim_text, (cx - 60, cy - h//2 - 15),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, GATE_COLOR, 2)
-
-        # Show marker mode indicator
-        if marker_state.enabled:
-            overlay = frame.copy()
-            cv2.rectangle(overlay, (5, frame.shape[0] - 90), (380, frame.shape[0] - 5), (0, 0, 0), -1)
-            cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
-            cv2.putText(frame, "MARKER MODE (M to exit)", (15, frame.shape[0] - 75),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-            cv2.putText(frame, "CLICK/DRAG: move | UP/DOWN: height | LEFT/RIGHT: width", (15, frame.shape[0] - 53),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-            cv2.putText(frame, "ENTER: save | S: save all | C: clear", (15, frame.shape[0] - 33),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-            cv2.putText(frame, "E: export gates to console", (15, frame.shape[0] - 13),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-
 
 def track_consist(model_path: str):
     """Main tracking loop."""
@@ -1260,6 +1263,7 @@ def track_consist(model_path: str):
     paused = False
     debug_view = False
     show_panels = True
+    tracking_enabled = True  # Toggle YOLO tracking overlay (Y key)
     frame_count = 0
     frame_clean = None  # Clean copy of frame for redrawing when paused
     frame_display = None  # Display frame with overlay
@@ -1287,9 +1291,11 @@ def track_consist(model_path: str):
 
             frame_count += 1
 
-            # Track BOTH consists
-            track_data = tracker.update(frame)
-            all_detections = track_data['detections']
+            # Track BOTH consists (skip YOLO inference if tracking disabled for faster editing)
+            if tracking_enabled:
+                track_data = tracker.update(frame)
+                all_detections = track_data['detections']
+            # else: keep last track_data (or empty if none)
 
             # Log detection state changes (immediate) - COMMENTED OUT for cleaner logs
             current_detection_state = {}
@@ -1339,10 +1345,20 @@ def track_consist(model_path: str):
                 print()
 
         # Draw overlay and display (ALWAYS, even when paused)
-        if frame_clean is not None and track_data is not None:
+        if frame_clean is not None:
             # Use a fresh copy of the clean frame to redraw overlay
             frame_display = frame_clean.copy()
-            draw_overlay(frame_display, tracker, track_data, debug_view, show_panels, frame_count, marker_state)
+
+            # Draw gates ALWAYS (independent from tracking state)
+            draw_gates_overlay(frame_display, tracker)
+
+            # Draw Marker Mode overlay ALWAYS (independent from tracking state)
+            draw_marker_mode_overlay(frame_display, marker_state)
+
+            # Draw tracking overlay only if tracking enabled and data available
+            if tracking_enabled and track_data is not None:
+                draw_overlay(frame_display, tracker, track_data, debug_view, show_panels, frame_count, marker_state, tracking_enabled)
+
             cv2.imshow(window_name, frame_display)
 
         # Handle keyboard
@@ -1371,6 +1387,11 @@ def track_consist(model_path: str):
         elif key == ord('p') or key == ord('P'):
             show_panels = not show_panels
             print(f"📋 All panels: {'ON' if show_panels else 'OFF (markers only)'}")
+        elif key == ord('y') or key == ord('Y'):
+            tracking_enabled = not tracking_enabled
+            # When YOLO disabled, pause video for fast gate editing
+            paused = not tracking_enabled
+            print(f"🎯 YOLO Inference: {'ON' if tracking_enabled else 'OFF (fast editing mode - video paused)'}")
         elif key == ord('s') or key == ord('S'):
             # In marker mode, S = save ALL gates to JSON config
             if marker_state.enabled:
