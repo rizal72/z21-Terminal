@@ -585,6 +585,7 @@ class TrackingDaemon:
 
     def __init__(self):
         self.tracker = YOLOTracker(str(MODEL_PATH))
+        self.debug_enabled = self.tracker.debug_enabled  # Copy from tracker
         self.cap = None
         self.websocket = None
         self.running = False
@@ -599,7 +600,7 @@ class TrackingDaemon:
         self.max_reconnect_delay = 30.0  # Max 30s
         self.last_reconnect_attempt = 0
 
-        # Load FPS settings from config (debug mode already loaded in __init__)
+        # Load FPS settings from config (debug mode already loaded in tracker)
         try:
             with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                 config = json.load(f)
