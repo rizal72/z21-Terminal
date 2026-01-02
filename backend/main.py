@@ -415,33 +415,11 @@ async def broadcast_state_update(address: int):
 
 async def broadcast_initial_state():
     """Broadcast complete initial state to all connected clients"""
-    # Build consists state
+    # Build consists state using helper function (DRY principle)
     consists_state = {}
     for address, data in consist_data.items():
         state = z21_manager.get_consist_state(address) if z21_manager else {}
-        locomotives = data.get('locomotives', [])
-        # Build names for display
-        lead_name = locomotives[0]['name'] if locomotives else ''
-        rear_names = [loco['name'] for loco in locomotives[1:]] if len(locomotives) > 1 else []
-        rear_name = ' + '.join(rear_names) if rear_names else None
-
-        consists_state[address] = {
-            'address': address,
-            'type': 'consist',
-            'trackName': 'INTERNAL TRACK' if address == 10 else 'EXTERNAL TRACK',
-            'locomotives': locomotives,  # Array: [lead, rear1, rear2, ...]
-            'lead_name': lead_name,  # For display convenience
-            'rear_name': rear_name,  # For display convenience (None if solo)
-            'speed': state.get('speed', 0),
-            'direction': state.get('direction', 'forward'),
-            'power': state.get('power', True),
-            'functions': data.get('functions', []),
-            'functionStates': state.get('functions', {}),
-            'virtual_mode': state.get('virtual_mode', False),
-            'auto_compensation_enabled': state.get('auto_compensation_enabled', False),
-            'delta_t': state.get('delta_t'),
-            'delta_t_timestamp': state.get('delta_t_timestamp')
-        }
+        consists_state[address] = build_consist_response(address, data, state)
 
     # Build locomotives state
     locomotives_state = {}
@@ -539,38 +517,38 @@ async def root():
     }
 
 
+def build_consist_response(address, data, state):
+    """
+    Single source of truth for consist response structure.
+    Use this for ALL WebSocket/API responses to avoid duplication.
+    """
+    locomotives = data.get('locomotives', [])
+    lead_name = locomotives[0]['name'] if locomotives else ''
+    rear_names = [loco['name'] for loco in locomotives[1:]] if len(locomotives) > 1 else []
+    rear_name = ' + '.join(rear_names) if rear_names else None
+
+    return {
+        'address': address,
+        'type': 'consist',
+        'trackName': 'INTERNAL TRACK' if address == 10 else 'EXTERNAL TRACK',
+        'locomotives': locomotives,
+        'lead_name': lead_name,
+        'rear_name': rear_name,
+        'functions': data['functions'],
+        # Spread ALL state fields automatically (speed, direction, power, virtual_mode, etc.)
+        **{k: v for k, v in state.items() if k not in ['address', 'locomotives']},
+        # Rename 'functions' state dict to 'functionStates' for clarity
+        'functionStates': state.get('functions', {})
+    }
+
+
 @app.get("/api/consists")
 async def get_consists():
     """Get all consists configuration"""
     result = {}
-
     for address, data in consist_data.items():
         state = z21_manager.get_consist_state(address) if z21_manager else {}
-
-        locomotives = data.get('locomotives', [])
-        # Build names for display
-        lead_name = locomotives[0]['name'] if locomotives else ''
-        rear_names = [loco['name'] for loco in locomotives[1:]] if len(locomotives) > 1 else []
-        rear_name = ' + '.join(rear_names) if rear_names else None
-
-        result[address] = {
-            'address': address,
-            'type': 'consist',
-            'trackName': 'INTERNAL TRACK' if address == 10 else 'EXTERNAL TRACK',
-            'locomotives': locomotives,  # Array: [lead, rear1, rear2, ...]
-            'lead_name': lead_name,  # For display convenience
-            'rear_name': rear_name,  # For display convenience (None if solo)
-            'speed': state.get('speed', 0),
-            'direction': state.get('direction', 'forward'),
-            'power': state.get('power', True),
-            'functions': data['functions'],
-            'functionStates': state.get('functions', {}),  # Actual function states from Z21
-            'virtual_mode': state.get('virtual_mode', False),
-            'auto_compensation_enabled': state.get('auto_compensation_enabled', False),  # NEW
-            'delta_t': state.get('delta_t'),  # NEW
-            'delta_t_timestamp': state.get('delta_t_timestamp')  # NEW
-        }
-
+        result[address] = build_consist_response(address, data, state)
     return result
 
 
