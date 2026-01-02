@@ -88,7 +88,7 @@ ADDRESS_TO_CLASS = {
 def load_config():
     """Load system configuration from JSON file."""
     try:
-        with open(CONFIG_PATH, 'r') as f:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
         return config
     except FileNotFoundError:
@@ -601,7 +601,7 @@ class TrackingDaemon:
 
         # Load FPS settings from config (debug mode already loaded in __init__)
         try:
-            with open(CONFIG_PATH, 'r') as f:
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                 config = json.load(f)
                 fps_config = config.get('tracking_fps', {'active': 30, 'idle': 1})
                 self.fps_active = fps_config.get('active', 30)
