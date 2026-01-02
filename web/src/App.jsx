@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import ConsistController from './components/ConsistController';
+import VideoFeedPanel from './components/VideoFeedPanel';
 import { useWebSocket } from './hooks/useWebSocket';
 
 // Mock data for development - will be replaced with real data from backend
@@ -249,6 +250,37 @@ function App() {
             }
           };
         });
+      } else if (lastMessage.type === 'delta_t_update') {
+        // Delta T update from tracking daemon
+        const consistAddress = lastMessage.consist_address;
+        const deltaT = lastMessage.delta_t;
+        const timestamp = lastMessage.timestamp;
+        const timeStr = lastMessage.time_str; // Pre-calculated elapsed time
+        const thresholds = lastMessage.thresholds; // NEW: dynamic thresholds from config
+
+        // Update consist with delta_t data (only if changed)
+        setConsists(prev => {
+          const currentConsist = prev[consistAddress];
+          if (!currentConsist) {
+            return prev; // Consist not found
+          }
+
+          // Check if delta_t actually changed (prevent unnecessary re-renders)
+          if (currentConsist.delta_t === deltaT) {
+            return prev; // Same value, don't update
+          }
+
+          return {
+            ...prev,
+            [consistAddress]: {
+              ...currentConsist,
+              delta_t: deltaT,
+              delta_t_timestamp: timestamp,
+              delta_t_time_str: timeStr, // Pre-calculated elapsed time string
+              timing_thresholds: thresholds // Store thresholds for DeltaTStatsPanel
+            }
+          };
+        });
       }
     }
   }, [lastMessage]);
@@ -408,6 +440,19 @@ function App() {
         const currentIndex = controllers.findIndex(c => c.id === activeControllerId);
         const nextIndex = (currentIndex + 1) % controllers.length;
         setActiveControllerId(controllers[nextIndex].id);
+        return;
+      }
+
+      // P key to toggle Δt panel in video feed (allow even when dropdown focused)
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        fetch(`${API_URL}/api/toggle-panel`, { method: 'POST' })
+          .then(res => res.json())
+          .then(data => {
+            const status = data.panel_visible ? 'visible' : 'hidden';
+            console.log(`🎛️  Δt panel toggled: ${status}`);
+          })
+          .catch(err => console.error('Failed to toggle panel:', err));
         return;
       }
 
@@ -604,6 +649,57 @@ function App() {
     return controller ? { type: controller.type, address: controller.address } : null;
   };
 
+  // Virtual Mode toggle handler
+  const handleToggleVirtualMode = (consistAddress, enable) => {
+    console.log('toggleVirtualMode:', { consistAddress, enable });
+
+    // Send to backend
+    sendMessage({
+      type: 'toggle_virtual_mode',
+      address: consistAddress,
+      enable
+    });
+
+    // Optimistic update - backend will broadcast confirmation
+    setConsists(prev => {
+      const currentConsist = prev[consistAddress];
+      if (!currentConsist) return prev;
+
+      return {
+        ...prev,
+        [consistAddress]: {
+          ...currentConsist,
+          virtual_mode: enable
+        }
+      };
+    });
+  };
+
+  const handleToggleAutoCompensation = (consistAddress, enable) => {
+    console.log('toggleAutoCompensation:', { consistAddress, enable });
+
+    // Send to backend
+    sendMessage({
+      type: 'toggle_auto_compensation',
+      address: consistAddress,
+      enable
+    });
+
+    // Optimistic update - backend will broadcast confirmation
+    setConsists(prev => {
+      const currentConsist = prev[consistAddress];
+      if (!currentConsist) return prev;
+
+      return {
+        ...prev,
+        [consistAddress]: {
+          ...currentConsist,
+          auto_compensation_enabled: enable
+        }
+      };
+    });
+  };
+
   return (
     <div className="min-h-screen bg-control-black grain-overlay">
       {/* Header */}
@@ -760,20 +856,23 @@ function App() {
       <main className="w-full lg:container lg:mx-auto px-2 sm:px-4 py-8">
         {/* Connection warning */}
         {!isConnected && (
-          <div className="mb-6 p-4 bg-signal-red/20 border border-signal-red/50 rounded-lg">
+          <div className="mb-6 p-4 bg-signal-red/20 border border-signal-red/50 rounded-lg overflow-hidden">
             <div className="flex items-center gap-3">
-              <i className="fa-solid fa-wifi text-2xl text-signal-red" style={{ transform: 'scaleX(-1)' }}></i>
-              <div>
+              <i className="fa-solid fa-wifi text-2xl text-signal-red flex-shrink-0" style={{ transform: 'scaleX(-1)' }}></i>
+              <div className="min-w-0 flex-1">
                 <div className="font-display font-semibold text-signal-red">
                   Backend Disconnected
                 </div>
-                <div className="text-sm text-white/70 mt-1">
+                <div className="hidden md:block text-sm text-white/70 mt-1 break-all">
                   Attempting to reconnect to WebSocket server at {WS_URL}
                 </div>
               </div>
             </div>
           </div>
         )}
+
+        {/* Video Feed Panel - Collapsible */}
+        <VideoFeedPanel apiUrl={API_URL} />
 
         {/* Controllers grid - Dynamic and scalable */}
         <div className="controllers-grid grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-8">
@@ -803,6 +902,8 @@ function App() {
                   onSpeedChange={handleSpeedChange}
                   onDirectionChange={handleDirectionChange}
                   onFunctionToggle={handleFunctionToggle}
+                  onToggleVirtualMode={handleToggleVirtualMode}
+                  onToggleAutoCompensation={handleToggleAutoCompensation}
                 />
               </div>
             );

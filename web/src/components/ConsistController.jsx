@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import DeltaTStatsPanel from './DeltaTStatsPanel';
 
 export default function ConsistController({
   item,
@@ -13,7 +14,9 @@ export default function ConsistController({
   onFocus,
   onSpeedChange,
   onDirectionChange,
-  onFunctionToggle
+  onFunctionToggle,
+  onToggleVirtualMode,
+  onToggleAutoCompensation
 }) {
   const [speed, setSpeed] = useState(0);
   const [direction, setDirection] = useState('forward');
@@ -133,8 +136,19 @@ export default function ConsistController({
         return;
       }
 
+      // D = Toggle direction
+      if (e.key === 'd' || e.key === 'D') {
+        e.preventDefault();
+        if (!isLocoInConsist) {
+          const newDirection = direction === 'forward' ? 'reverse' : 'forward';
+          setDirection(newDirection);
+          if (onDirectionChange) {
+            onDirectionChange(selection.address, newDirection);
+          }
+        }
+      }
       // Backslash = 0%
-      if (e.key === '\\' || e.key === '|') {  // | is Shift+\
+      else if (e.key === '\\' || e.key === '|') {  // | is Shift+\
         e.preventDefault();
         setSpeedPercent(0);
       }
@@ -154,7 +168,7 @@ export default function ConsistController({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [trackPower, isLocoInConsist, selection?.address, direction, onSpeedChange, isActive]);
+  }, [trackPower, isLocoInConsist, selection?.address, direction, onSpeedChange, onDirectionChange, isActive]);
 
   const toggleDirection = () => {
     if (isLocoInConsist) return; // Disabled for locos in consist
@@ -457,10 +471,24 @@ export default function ConsistController({
           {isLocoInConsist ? (
             <span className="text-signal-amber">Speed control disabled (loco in consist)</span>
           ) : (
-            <div>Speed: \=0% • 1,2,3..0=10-100% → <span className="text-signal-amber">{isActive ? 'This' : '(click to activate)'}</span> | +Shift → <span className="text-signal-amber">All</span></div>
+            <div>D=Dir • \=0% • 1,2,3..0=10-100% → <span className="text-signal-amber">{isActive ? 'This' : '(click to activate)'}</span> | +Shift → <span className="text-signal-amber">All</span></div>
           )}
         </div>
       </div>
+
+      {/* Delta T Stats Panel - Only for consists */}
+      {selection.type === 'consist' && item.delta_t !== undefined && (
+        <div className="mb-6">
+          <DeltaTStatsPanel
+            consistAddress={selection.address}
+            deltaT={item.delta_t}
+            deltaTTimestamp={item.delta_t_timestamp}
+            deltaTTimeStr={item.delta_t_time_str}
+            timingThresholds={item.timing_thresholds}
+            virtualMode={item.virtual_mode}
+          />
+        </div>
+      )}
 
       {/* Stop and Direction controls */}
       <div className="mb-8 grid grid-cols-2 gap-2 md:gap-4">
@@ -501,6 +529,72 @@ export default function ConsistController({
           </span>
         </button>
       </div>
+
+      {/* Virtual Mode Toggle - Only for consists */}
+      {selection.type === 'consist' && (
+        <div className="mb-8">
+          <button
+            onClick={() => {
+              if (onToggleVirtualMode) {
+                onToggleVirtualMode(selection.address, !item.virtual_mode);
+              }
+            }}
+            disabled={!trackPower}
+            className={`w-full control-panel py-4 px-6 flex items-center justify-between hover:border-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation ${
+              item.virtual_mode ? 'border-signal-green' : ''
+            }`}
+            title={item.virtual_mode ? 'Virtual Mode Active - CV19=0' : 'DCC Consist Mode - CV19=consist_address'}
+          >
+            <div className="flex items-center gap-3">
+              <i className={`fa-solid ${item.virtual_mode ? 'fa-gears' : 'fa-link'} text-xl`}
+                style={{ color: item.virtual_mode ? '#06d6a0' : '#64748b' }}
+              ></i>
+              <span className="font-display font-semibold uppercase text-sm">
+                {item.virtual_mode ? 'Virtual Consist Mode' : 'DCC Consist Mode'}
+              </span>
+            </div>
+            <div className={`px-3 py-1 rounded-full text-xs font-mono ${
+              item.virtual_mode
+                ? 'bg-signal-green/20 text-signal-green'
+                : 'bg-control-grey text-track-steel'
+            }`}>
+              {item.virtual_mode ? 'CV19=0' : `CV19=${selection.address}`}
+            </div>
+          </button>
+          <div className="mt-2 text-xs text-track-steel font-sans flex items-center justify-between gap-3">
+            {/* Left: status text (compresses if needed) */}
+            <div className="flex items-center gap-1 min-w-0 flex-1">
+              <span className={item.virtual_mode ? "text-signal-green flex-shrink-0" : "text-track-steel flex-shrink-0"}>●</span>
+              <span className="truncate">{item.virtual_mode ? 'Locomotives freed from consist • Individual speed control possible' : 'Standard DCC consist • Locomotives synchronized via CV19'}</span>
+            </div>
+            {/* Right: auto-comp switch (aligned under CV19=0, never wraps) */}
+            {item.virtual_mode && (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <i className={`fa-solid fa-gauge-high ${
+                  item.auto_compensation_enabled ? 'text-signal-green' : 'text-track-steel'
+                }`}></i>
+                <span className="text-xs whitespace-nowrap">Auto-Sync</span>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={item.auto_compensation_enabled || false}
+                    onChange={(e) => {
+                      if (onToggleAutoCompensation) {
+                        onToggleAutoCompensation(selection.address, e.target.checked);
+                      }
+                    }}
+                    disabled={!item.virtual_mode}
+                    className="sr-only peer"
+                  />
+                  <div className={`w-9 h-5 bg-control-grey rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-control-grey after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-signal-green ${
+                    !item.virtual_mode ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}></div>
+                </label>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Functions grid */}
       {Array.isArray(item.functions) && item.functions.length > 0 ? (
