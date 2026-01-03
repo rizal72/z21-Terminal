@@ -708,7 +708,7 @@ function App() {
     <div className="min-h-screen bg-control-black grain-overlay">
       {/* Header */}
       <header className="border-b border-control-grey bg-control-dark/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="w-full lg:container lg:mx-auto px-4 py-2 md:px-4 lg:py-4">
+        <div className="w-full lg:container lg:mx-auto px-2 sm:px-4 py-2 lg:py-4">
           <div className="flex items-center gap-4">
             {/* Left: Logo + Hamburger (mobile) or Full Title (desktop) */}
             <div className="flex-shrink-0 flex items-center gap-2 md:gap-3">
