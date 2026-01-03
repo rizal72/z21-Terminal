@@ -238,9 +238,103 @@ def load_all_locomotives():
     return locomotives
 
 
+def load_consists_from_config(config_path):
+    """
+    Carica consist da config.json invece che da JMRI
+
+    Args:
+        config_path: Path to config.json
+
+    Returns:
+        dict: Same structure as load_consist_with_functions()
+        {
+            10: {
+                'address': 10,
+                'locomotives': [
+                    {'address': 1, 'name': 'Gr.675 017'},  # First = lead
+                    {'address': 5, 'name': 'D645 014'}     # Rest = rear
+                ],
+                'functions': [...]
+            },
+            ...
+        }
+    """
+    import json
+
+    result = {}
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        consists = config.get('consists', {})
+
+        # Load all locomotives to get names
+        all_locos = load_all_locomotives()
+
+        for consist_addr_str, assignment in consists.items():
+
+            try:
+                consist_addr = int(consist_addr_str)
+            except ValueError:
+                continue
+
+            lead_address = assignment.get('lead_address')
+            rear_address = assignment.get('rear_address')
+
+            if not lead_address or not rear_address:
+                continue
+
+            # Build locomotives array [lead, rear]
+            locomotives = []
+
+            # Lead locomotive
+            lead_loco = all_locos.get(lead_address)
+            if lead_loco:
+                locomotives.append({
+                    'address': lead_address,
+                    'name': lead_loco['name']
+                })
+            else:
+                locomotives.append({
+                    'address': lead_address,
+                    'name': f'Loco {lead_address}'
+                })
+
+            # Rear locomotive
+            rear_loco = all_locos.get(rear_address)
+            if rear_loco:
+                locomotives.append({
+                    'address': rear_address,
+                    'name': rear_loco['name']
+                })
+            else:
+                locomotives.append({
+                    'address': rear_address,
+                    'name': f'Loco {rear_address}'
+                })
+
+            # Load functions from lead locomotive
+            functions = load_functions_from_roster(lead_address)
+
+            result[consist_addr] = {
+                'address': consist_addr,
+                'locomotives': locomotives,
+                'functions': functions,
+                'speed': 0,
+                'direction': 'forward',
+                'power': True
+            }
+
+    except Exception as e:
+        print(f"Error loading consists from config: {e}")
+
+    return result
+
+
 def load_consist_with_functions():
     """
-    Carica consist con funzioni delle locomotive lead
+    Carica consist con funzioni delle locomotive lead (from JMRI)
 
     Returns:
         dict: {

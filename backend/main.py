@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from z21_manager import Z21Manager
-from roster_loader import load_consist_with_functions, load_all_locomotives
+from roster_loader import load_consist_with_functions, load_all_locomotives, load_consists_from_config
 from tracking_manager import TrackingManager
 import video_feed as video_feed_module
 from video_feed import generate_video_frames
@@ -191,7 +191,8 @@ async def lifespan(app: FastAPI):
     try:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            thresholds = config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
+            tracking_config = config.get('tracking', {})
+            thresholds = tracking_config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
             timing_thresholds = {
                 'normal': thresholds.get('normal', DEFAULT_TIMING_THRESHOLDS['normal']),
                 'warning': thresholds.get('warning', DEFAULT_TIMING_THRESHOLDS['warning'])
@@ -205,12 +206,21 @@ async def lifespan(app: FastAPI):
         print(f"  ⚠️  Error loading config.json: {e}, using defaults")
         timing_thresholds = DEFAULT_TIMING_THRESHOLDS.copy()
 
-    # Load reference loco configuration
+    # Load reference loco configuration (from consists)
     print("🎯 Loading reference loco configuration...")
     try:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            reference_locos = config.get('reference_locos', {})
+            consists = config.get('consists', {})
+            # Extract reference info from each consist
+            reference_locos = {}
+            for consist_addr, consist_info in consists.items():
+                if 'reference' in consist_info:
+                    ref = consist_info['reference']
+                    reference_locos[consist_addr] = {
+                        'reference': ref.get('loco'),
+                        'adjust': ref.get('adjust')
+                    }
             if debug_enabled:
                 print(f"  ✓ Reference locos: {len(reference_locos)} consists configured")
                 for consist_addr, ref_config in reference_locos.items():
@@ -223,11 +233,9 @@ async def lifespan(app: FastAPI):
     try:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            tracking_assignments = config.get('tracking_assignments', {})
+            consists = config.get('consists', {})
             # Filter only consist IDs with gate_ids configured
-            for consist_key, consist_info in tracking_assignments.items():
-                if consist_key.startswith('_'):  # Skip comments
-                    continue
+            for consist_key, consist_info in consists.items():
                 consist_id = int(consist_key)
                 gate_ids = consist_info.get('gate_ids', [])
                 if gate_ids:  # Only add if gates configured
@@ -239,21 +247,60 @@ async def lifespan(app: FastAPI):
         print(f"  ⚠️  Error loading tracked consists: {e}")
         reference_locos = {}
 
-    # Load consist configuration from JMRI
-    print("📋 Loading consists from JMRI...")
-    consist_data = load_consist_with_functions()
+    # Load consist configuration
+    # Priority: config.json consists → JMRI (bootstrap only)
+    consists = config.get('consists', {})
 
-    if not consist_data:
-        print("⚠️  Warning: No consists loaded from JMRI")
-    else:
-        if debug_enabled:
+    if consists:
+        # Load from config.json (source of truth)
+        print("📋 Loading consists from config.json (source of truth)...")
+        consist_data = load_consists_from_config(CONFIG_PATH)
+        if debug_enabled and consist_data:
             for addr, data in consist_data.items():
                 locomotives = data.get('locomotives', [])
                 if locomotives:
                     names = ' + '.join([loco['name'] for loco in locomotives])
                     print(f"  ✓ Consist {addr}: {names} ({len(data['functions'])} functions)")
-                else:
-                    print(f"  ✓ Consist {addr}: (empty) ({len(data['functions'])} functions)")
+    else:
+        # Bootstrap from JMRI (one-time only, then save to config.json)
+        print("📋 Bootstrapping consists from JMRI (first run)...")
+        consist_data = load_consist_with_functions()
+
+        if not consist_data:
+            print("⚠️  Warning: No consists loaded from JMRI")
+        else:
+            if debug_enabled:
+                for addr, data in consist_data.items():
+                    locomotives = data.get('locomotives', [])
+                    if locomotives:
+                        names = ' + '.join([loco['name'] for loco in locomotives])
+                        print(f"  ✓ Consist {addr}: {names} ({len(data['functions'])} functions)")
+                    else:
+                        print(f"  ✓ Consist {addr}: (empty) ({len(data['functions'])} functions)")
+
+            # Save to config.json for future use
+            print("💾 Saving consists to config.json for future use...")
+            if 'consists' not in config:
+                config['consists'] = {}
+
+            for consist_addr, consist_info in consist_data.items():
+                locomotives = consist_info.get('locomotives', [])
+                if len(locomotives) >= 2:
+                    config['consists'][str(consist_addr)] = {
+                        'name': f"Consist {consist_addr}",
+                        'lead_address': locomotives[0]['address'],
+                        'rear_address': locomotives[1]['address'],
+                        'gate_ids': [],  # Empty by default, user can configure in UI
+                        'virtual_mode': False,
+                        'auto_compensation_enabled': False,
+                        'notes': ''
+                    }
+
+            # Save updated config
+            with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+
+            print(f"  ✓ Saved {len(consist_data)} consists to config.json")
 
     # Load all locomotives from JMRI
     print("📋 Loading all locomotives from JMRI...")
@@ -287,7 +334,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize Z21 Manager
     print("🔌 Connecting to Z21...")
-    z21_manager = Z21Manager(z21_ip='192.168.1.111', verbose=False, reference_locos=reference_locos, timing_thresholds=timing_thresholds, debug_enabled=debug_enabled)
+    z21_manager = Z21Manager(z21_ip='192.168.1.111', verbose=False, reference_locos=reference_locos, timing_thresholds=timing_thresholds, debug_enabled=debug_enabled, config_path=CONFIG_PATH)
 
     if z21_manager.connect():
         if debug_enabled:
@@ -483,19 +530,36 @@ async def broadcast_initial_state():
 
 
 async def reload_roster_data():
-    """Reload roster and consists from JMRI XML files and reinitialize Z21 Manager"""
+    """Reload roster and consists from config.json (and locomotives from JMRI)"""
     global consist_data, locomotive_data
 
-    print("\n🔄 Reloading roster from JMRI...")
+    print("\n🔄 Reloading roster...")
 
-    # Load data from XML
-    consist_data, locomotive_data = load_consist_with_functions(), load_all_locomotives()
+    # Load config to check consists
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"⚠️  Error loading config: {e}")
+        return False
 
-    if not consist_data:
-        print("⚠️  Warning: No consists loaded from JMRI")
+    # Load consists from config.json (source of truth)
+    consists = config.get('consists', {})
+
+    if consists:
+        print("📋 Loading consists from config.json...")
+        consist_data = load_consists_from_config(CONFIG_PATH)
+        if debug_enabled and consist_data:
+            print(f"  ✓ Loaded {len(consist_data)} consists from config.json")
     else:
-        if debug_enabled:
-            print(f"  ✓ Loaded {len(consist_data)} consists")
+        print("⚠️  No consists in config.json, trying JMRI bootstrap...")
+        consist_data = load_consist_with_functions()
+        if debug_enabled and consist_data:
+            print(f"  ✓ Loaded {len(consist_data)} consists from JMRI")
+
+    # Always load locomotives from JMRI (names, functions)
+    print("📋 Loading locomotives from JMRI...")
+    locomotive_data = load_all_locomotives()
 
     if not locomotive_data:
         print("⚠️  Warning: No locomotives loaded from JMRI")
@@ -555,6 +619,17 @@ def build_consist_response(address, data, state):
     rear_names = [loco['name'] for loco in locomotives[1:]] if len(locomotives) > 1 else []
     rear_name = ' + '.join(rear_names) if rear_names else None
 
+    # Load gate_ids from config consists
+    gate_ids = []
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            consists = config.get('consists', {})
+            consist_info = consists.get(str(address), {})
+            gate_ids = consist_info.get('gate_ids', [])
+    except Exception:
+        pass  # If config load fails, gate_ids stays empty
+
     return {
         'address': address,
         'type': 'consist',
@@ -563,6 +638,7 @@ def build_consist_response(address, data, state):
         'lead_name': lead_name,
         'rear_name': rear_name,
         'functions': data['functions'],
+        'gate_ids': gate_ids,  # Include gate_ids for frontend
         # Spread ALL state fields automatically (speed, direction, power, virtual_mode, etc.)
         # CRITICAL: Exclude 'functions' from spread to avoid overwriting function definitions with states
         **{k: v for k, v in state.items() if k not in ['address', 'locomotives', 'functions']},
@@ -573,12 +649,278 @@ def build_consist_response(address, data, state):
 
 @app.get("/api/consists")
 async def get_consists():
-    """Get all consists configuration"""
-    result = {}
+    """Get all consists configuration and available gates"""
+    # Load config to get gates
+    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+
+    consists_result = {}
     for address, data in consist_data.items():
         state = z21_manager.get_consist_state(address) if z21_manager else {}
-        result[address] = build_consist_response(address, data, state)
-    return result
+        consists_result[address] = build_consist_response(address, data, state)
+
+    # Get consists configuration
+    consists_config = config.get("consists", {})
+
+    # Extract reference_locos from consists for backward compatibility
+    reference_locos = {}
+    for consist_addr, consist_info in consists_config.items():
+        if 'reference' in consist_info:
+            ref = consist_info['reference']
+            reference_locos[consist_addr] = {
+                'reference': ref.get('loco'),
+                'adjust': ref.get('adjust')
+            }
+
+    return {
+        "consists": consists_result,
+        "gates": config.get("gates", []),
+        "tracking_assignments": consists_config,  # For frontend compatibility (renamed but same structure)
+        "reference_locos": reference_locos
+    }
+
+
+@app.post("/api/consists")
+async def create_consist(request: dict):
+    """Create a new consist in config.json"""
+    global consist_data
+
+    try:
+        consist_address = str(request.get("address"))
+        lead_address = request.get("lead_address")
+        rear_address = request.get("rear_address")
+        gate_ids = request.get("gate_ids", [])
+        reference_loco = request.get("reference_loco", "rear")  # "lead" or "rear"
+        virtual_mode = request.get("virtual_mode", True)  # Default: Virtual Mode (safe)
+
+        if not consist_address or not lead_address or not rear_address:
+            return {"success": False, "error": "Missing required fields"}
+
+        # Load config
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        # Check if consist already exists
+        if consist_address in config.get("consists", {}):
+            return {"success": False, "error": f"Consist {consist_address} already exists"}
+
+        # Add to consists
+        if "consists" not in config:
+            config["consists"] = {}
+
+        config["consists"][consist_address] = {
+            "name": f"Consist {consist_address}",
+            "lead_address": lead_address,
+            "rear_address": rear_address,
+            "gate_ids": gate_ids,
+            "virtual_mode": virtual_mode,
+            "auto_compensation_enabled": False,
+            "reference": {
+                "loco": rear_address if reference_loco == "rear" else lead_address,
+                "adjust": lead_address if reference_loco == "rear" else rear_address,
+                "notes": ""
+            },
+            "notes": ""
+        }
+
+        # Save config
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+
+        # Write CV19 based on mode
+        if z21_manager and z21_manager.z21:
+            consist_addr_int = int(consist_address)
+
+            if virtual_mode:
+                # Virtual Mode: write CV19=0 (disable hardware consist)
+                print(f"⚙️  Creating consist {consist_address} in Virtual Mode - writing CV19=0")
+                cv_value = 0
+            else:
+                # DCC Mode: write CV19=consist_address (enable hardware consist)
+                print(f"⚙️  Creating consist {consist_address} in DCC Mode - writing CV19={consist_addr_int}")
+                cv_value = consist_addr_int
+
+            success_lead = z21_manager.z21.write_cv_ops_mode(lead_address, 19, cv_value)
+            success_rear = z21_manager.z21.write_cv_ops_mode(rear_address, 19, cv_value)
+
+            if not (success_lead and success_rear):
+                mode_str = "Virtual" if virtual_mode else "DCC"
+                return {"success": False, "error": f"Consist created in config but failed to write CV19 to locomotives ({mode_str} Mode)"}
+
+        mode_str = "Virtual" if virtual_mode else "DCC"
+
+        # Reload consist_data from updated config before broadcasting
+        consist_data = load_consists_from_config(CONFIG_PATH)
+
+        # Broadcast updated state to all connected clients (refresh dropdowns)
+        await broadcast_initial_state()
+
+        return {"success": True, "message": f"Consist {consist_address} created in {mode_str} Mode (CV19 written)"}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.put("/api/consists/{address}")
+async def update_consist(address: str, request: dict):
+    """Update an existing consist in config.json"""
+    global consist_data
+
+    try:
+        # Load config
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        # Check if consist exists
+        if address not in config.get("consists", {}):
+            return {"success": False, "error": f"Consist {address} not found"}
+
+        # Update consists fields
+        consist = config["consists"][address]
+        old_virtual_mode = consist.get("virtual_mode", True)
+
+        if "lead_address" in request:
+            consist["lead_address"] = request["lead_address"]
+        if "rear_address" in request:
+            consist["rear_address"] = request["rear_address"]
+        if "gate_ids" in request:
+            consist["gate_ids"] = request["gate_ids"]
+
+        # Handle virtual_mode change (if present in request)
+        virtual_mode_changed = False
+        new_virtual_mode = old_virtual_mode
+        if "virtual_mode" in request:
+            new_virtual_mode = request["virtual_mode"]
+            if new_virtual_mode != old_virtual_mode:
+                virtual_mode_changed = True
+                consist["virtual_mode"] = new_virtual_mode
+
+        # Update reference if reference_loco specified
+        if "reference_loco" in request:
+            if "reference" not in consist:
+                consist["reference"] = {}
+
+            lead_address = consist["lead_address"]
+            rear_address = consist["rear_address"]
+
+            if request["reference_loco"] == "lead":
+                consist["reference"]["loco"] = lead_address
+                consist["reference"]["adjust"] = rear_address
+            else:  # rear
+                consist["reference"]["loco"] = rear_address
+                consist["reference"]["adjust"] = lead_address
+
+        # Save config
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+
+        # If virtual_mode changed, write CV19 accordingly
+        if virtual_mode_changed and z21_manager and z21_manager.z21:
+            consist_addr_int = int(address)
+            lead_address = consist["lead_address"]
+            rear_address = consist["rear_address"]
+
+            if new_virtual_mode:
+                # Switched to Virtual Mode: write CV19=0
+                print(f"⚙️  Switching consist {address} to Virtual Mode - writing CV19=0")
+                cv_value = 0
+            else:
+                # Switched to DCC Mode: write CV19=consist_address
+                print(f"⚙️  Switching consist {address} to DCC Mode - writing CV19={consist_addr_int}")
+                cv_value = consist_addr_int
+
+            success_lead = z21_manager.z21.write_cv_ops_mode(lead_address, 19, cv_value)
+            success_rear = z21_manager.z21.write_cv_ops_mode(rear_address, 19, cv_value)
+
+            if not (success_lead and success_rear):
+                mode_str = "Virtual" if new_virtual_mode else "DCC"
+                return {"success": False, "error": f"Consist updated in config but failed to write CV19 ({mode_str} Mode)"}
+
+            mode_str = "Virtual" if new_virtual_mode else "DCC"
+
+            # Reload consist_data from updated config before broadcasting
+            consist_data = load_consists_from_config(CONFIG_PATH)
+
+            # Broadcast updated state to all connected clients (refresh dropdowns)
+            await broadcast_initial_state()
+
+            return {"success": True, "message": f"Consist {address} updated and switched to {mode_str} Mode (CV19 written)"}
+
+        # Reload consist_data from updated config before broadcasting
+        consist_data = load_consists_from_config(CONFIG_PATH)
+
+        # Broadcast updated state to all connected clients (refresh dropdowns)
+        await broadcast_initial_state()
+
+        return {"success": True, "message": f"Consist {address} updated"}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.delete("/api/consists/{address}")
+async def delete_consist(address: str):
+    """
+    Delete a consist from config.json
+    If consist is in DCC mode (virtual_mode=false), writes CV19=0 first
+    """
+    global consist_data
+
+    try:
+        # Load config
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        # Check if consist exists
+        if address not in config.get("consists", {}):
+            return {"success": False, "error": f"Consist {address} not found"}
+
+        consist_config = config["consists"][address]
+
+        # If consist is in DCC mode (virtual_mode=false), disable consist on locomotives first
+        virtual_mode = consist_config.get("virtual_mode", False)
+        if not virtual_mode and z21_manager:
+            # Write CV19=0 to both locomotives to disable DCC consist
+            print(f"⚠️  Consist {address} is in DCC mode - writing CV19=0 to disable consist on locomotives")
+            consist_address_int = int(address)
+            # Use enable_virtual_mode() which writes CV19=0 (disables consist)
+            # disable_virtual_mode() would write CV19=consist_address (restores consist)
+            z21_manager.enable_virtual_mode(consist_address_int)
+
+        # Delete from consists
+        del config["consists"][address]
+
+        # Save config
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+
+        # Reload consist_data from updated config before broadcasting
+        consist_data = load_consists_from_config(CONFIG_PATH)
+
+        # Broadcast updated state to all connected clients (refresh dropdowns)
+        await broadcast_initial_state()
+
+        return {"success": True, "message": f"Consist {address} deleted"}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/restart-daemon")
+async def restart_tracking_daemon():
+    """Restart tracking daemon to reload config changes"""
+    try:
+        global tracking_manager
+        if tracking_manager:
+            # Stop current daemon
+            await tracking_manager.stop()
+            # Start with reloaded config
+            await tracking_manager.start()
+            return {"success": True, "message": "Tracking daemon restarted"}
+        else:
+            return {"success": False, "error": "Tracking manager not initialized"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @app.get("/api/locomotives")
@@ -608,8 +950,11 @@ async def get_locomotives():
 @app.get("/api/roster")
 async def get_full_roster():
     """Get full roster: consists + locomotives"""
+    consists_data = await get_consists()
+    # Extract only the consists dict (backward compatibility)
+    # get_consists() now returns {consists: {...}, gates: [...], ...}
     return {
-        'consists': await get_consists(),
+        'consists': consists_data.get('consists', {}),
         'locomotives': await get_locomotives()
     }
 

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import ConsistController from './components/ConsistController';
 import VideoFeedPanel from './components/VideoFeedPanel';
+import MobileMenu from './components/MobileMenu';
+import ConsistManagerModal from './components/ConsistManagerModal';
 import { useWebSocket } from './hooks/useWebSocket';
 
 // Mock data for development - will be replaced with real data from backend
@@ -49,6 +51,8 @@ function App() {
   const [reloadingRoster, setReloadingRoster] = useState(false);
   const [reloadSuccess, setReloadSuccess] = useState(false);
   const [wakeLockActive, setWakeLockActive] = useState(false); // Wake Lock status
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // Mobile hamburger menu
+  const [consistManagerOpen, setConsistManagerOpen] = useState(false); // Consist Manager modal (Phase 6B)
 
   // Dynamic controllers array (scalable UI with focus management)
   const [controllers, setControllers] = useState([
@@ -706,13 +710,22 @@ function App() {
       <header className="border-b border-control-grey bg-control-dark/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="w-full lg:container lg:mx-auto px-4 py-2 md:px-4 lg:py-4">
           <div className="flex items-center gap-4">
-            {/* Left: Logo + Title */}
+            {/* Left: Logo + Hamburger (mobile) or Full Title (desktop) */}
             <div className="flex-shrink-0 flex items-center gap-2 md:gap-3">
               {/* Train icon logo - always visible */}
               <i className="fa-solid fa-train text-signal-amber text-2xl md:text-3xl lg:text-4xl" style={{ filter: 'drop-shadow(0 0 8px rgba(255, 149, 0, 0.6))' }}></i>
 
-              {/* Landscape/Tablet/Desktop: titolo completo */}
-              <div className="hidden landscape:block md:block">
+              {/* Mobile: Hamburger */}
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                className="md:hidden px-2 py-2 text-track-steel hover:text-signal-amber transition-colors"
+                title="Open menu"
+              >
+                <i className="fa-solid fa-bars text-xl"></i>
+              </button>
+
+              {/* Desktop/Tablet: Full title */}
+              <div className="hidden md:block">
                 <h1 className="text-2xl lg:text-3xl font-display font-bold text-signal-amber text-shadow-glow">
                   z21 Terminal
                 </h1>
@@ -722,58 +735,49 @@ function App() {
               </div>
             </div>
 
-            {/* Reload Roster Button */}
-            <button
+            {/* Desktop only: Inline actions */}
+            <div className="hidden md:flex items-center gap-3">
+              {/* Reload Roster Button */}
+              <button
               onClick={handleReloadRoster}
               disabled={reloadingRoster || !isConnected}
-              className={`px-2 md:px-4 py-2 bg-control-dark border rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`px-2 py-2 md:px-3 bg-control-dark border rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                 reloadSuccess
                   ? 'border-signal-green text-signal-green'
                   : 'border-control-grey text-track-steel hover:border-signal-amber hover:text-signal-amber'
               }`}
               title="Reload roster from JMRI XML files"
             >
-              <div className="flex items-center gap-2">
-                <i className={`fa-solid ${
-                  reloadingRoster ? 'fa-spinner fa-spin' :
-                  reloadSuccess ? 'fa-check' :
-                  'fa-rotate-right'
-                } text-base md:text-lg`}></i>
-                <span className="hidden lg:inline text-xs font-mono uppercase tracking-wider">
-                  {reloadingRoster ? 'Reloading...' : reloadSuccess ? 'Reloaded!' : 'Reload'}
-                </span>
-              </div>
+              <i className={`fa-solid ${
+                reloadingRoster ? 'fa-spinner fa-spin' :
+                reloadSuccess ? 'fa-check' :
+                'fa-rotate-right'
+              } text-base md:text-lg`}></i>
             </button>
 
-            {/* Keep Screen Awake Button (iOS/Android) - only on mobile/tablet */}
-            {'wakeLock' in navigator && (
+              {/* Add Controller Button - desktop only */}
               <button
-                onClick={wakeLockActive ? releaseWakeLock : requestWakeLock}
-                className={`lg:hidden px-2 md:px-4 py-2 bg-control-dark border rounded transition-all duration-200 ${
-                  wakeLockActive
-                    ? 'border-signal-green text-signal-green'
-                    : 'border-control-grey text-track-steel hover:border-signal-amber hover:text-signal-amber'
-                }`}
-                title={wakeLockActive ? 'Screen will stay awake - click to release' : 'Click to keep screen awake (prevent sleep)'}
+                onClick={addController}
+                disabled={!isConnected}
+                className="px-2 py-2 md:px-3 bg-control-dark border border-control-grey rounded hover:border-signal-amber hover:text-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Add controller panel"
               >
-                <div className="flex items-center gap-2">
-                  <i className={`fa-solid fa-moon text-base md:text-lg ${wakeLockActive ? 'text-signal-green' : ''}`}></i>
-                </div>
+                <i className="fa-solid fa-plus text-base md:text-lg"></i>
               </button>
-            )}
+
+              {/* Consist Manager Button - desktop only (Phase 6B) */}
+              <button
+                onClick={() => setConsistManagerOpen(true)}
+                disabled={!isConnected}
+                className="px-2 py-2 md:px-3 bg-control-dark border border-control-grey rounded hover:border-signal-amber hover:text-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Manage consists"
+              >
+                <i className="fa-solid fa-gears text-base md:text-lg"></i>
+              </button>
+            </div>
 
             {/* Spacer */}
             <div className="flex-grow"></div>
-
-            {/* Add Controller Button - compact on mobile */}
-            <button
-              onClick={addController}
-              disabled={!isConnected}
-              className="px-2 py-2 md:px-3 bg-control-dark border border-control-grey rounded hover:border-signal-amber hover:text-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Add controller panel"
-            >
-              <i className="fa-solid fa-plus text-base md:text-lg"></i>
-            </button>
 
             {/* Right: Emergency + Status Icons */}
             <div className="flex items-center gap-2 md:gap-2 lg:gap-3">
@@ -811,11 +815,11 @@ function App() {
 
               {/* Track Power Status */}
               <div
-                className="md:flex md:items-center md:gap-2 md:px-2 md:py-2 md:bg-control-dark/30 md:rounded cursor-default"
+                className="flex items-center gap-2 cursor-default"
                 title={`Track Power: ${trackPower ? 'ON' : 'OFF'}`}
               >
                 <i className={`fa-solid fa-bolt text-lg md:text-xl ${trackPower ? 'text-signal-green' : 'text-signal-red'}`}></i>
-                <div className="hidden md:block text-xs font-mono w-7">
+                <div className="hidden md:block text-xs font-mono w-4">
                   <div className={trackPower ? 'text-signal-green' : 'text-signal-red'}>
                     {trackPower ? 'ON' : 'OFF'}
                   </div>
@@ -824,7 +828,7 @@ function App() {
 
               {/* WebSocket Status */}
               <div
-                className="md:flex md:items-center md:gap-2 md:px-2 md:px-3 md:py-2 md:bg-control-dark/30 md:rounded cursor-default"
+                className="flex items-center gap-2 cursor-default"
                 title={`WebSocket Connection: ${isConnected ? 'Connected' : 'Disconnected'}`}
               >
                 <i className={`fa-solid fa-wifi text-lg md:text-xl ${isConnected ? 'text-signal-green' : 'text-signal-red'}`}></i>
@@ -837,7 +841,7 @@ function App() {
 
               {/* Z21 Status */}
               <div
-                className="md:flex md:items-center md:gap-2 md:px-2 md:px-3 md:py-2 md:bg-control-dark/30 md:rounded cursor-default"
+                className="flex items-center gap-2 cursor-default"
                 title={`Z21 Device: ${z21Online ? 'Online' : 'Offline'}`}
               >
                 <i className={`fa-solid fa-server text-lg md:text-xl ${z21Online ? 'text-signal-green' : 'text-signal-red'}`}></i>
@@ -851,6 +855,42 @@ function App() {
           </div>
         </div>
       </header>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <MobileMenu
+          onClose={() => setMobileMenuOpen(false)}
+          onConsistManager={() => {
+            setMobileMenuOpen(false);
+            setConsistManagerOpen(true);
+          }}
+          onAddController={() => {
+            setMobileMenuOpen(false);
+            addController();
+          }}
+          onReloadRoster={() => {
+            setMobileMenuOpen(false);
+            handleReloadRoster();
+          }}
+          onWakeLock={() => {
+            setMobileMenuOpen(false);
+            if (wakeLockActive) {
+              releaseWakeLock();
+            } else {
+              requestWakeLock();
+            }
+          }}
+          wakeLockActive={wakeLockActive}
+          reloadingRoster={reloadingRoster}
+        />
+      )}
+
+      {/* Consist Manager Modal (Phase 6B) */}
+      {consistManagerOpen && (
+        <ConsistManagerModal
+          onClose={() => setConsistManagerOpen(false)}
+        />
+      )}
 
       {/* Main content */}
       <main className="w-full lg:container lg:mx-auto px-2 sm:px-4 py-8">
@@ -910,12 +950,44 @@ function App() {
           })}
         </div>
 
-        {/* Info footer */}
+        {/* Info footer - shows active controllers */}
         <div className="text-center text-track-steel text-sm font-mono">
-          <div className="flex items-center justify-center gap-8">
-            <div>Consist 10: Gr.675 017 + D645 014</div>
-            <div className="w-px h-4 bg-control-grey"></div>
-            <div>Consist 11: E656 239 + D445 1140</div>
+          <div className="flex items-center justify-center gap-8 flex-wrap">
+            {controllers.map((controller, index) => {
+              const { type, address } = controller;
+              const items = [];
+
+              // Add separator
+              if (index > 0) {
+                items.push(
+                  <div key={`sep-${controller.id}`} className="w-px h-4 bg-control-grey"></div>
+                );
+              }
+
+              // Build display text
+              let displayText = '';
+
+              if (!type || !address) {
+                displayText = `Controller ${controller.id}: Empty`;
+              } else if (type === 'consist') {
+                const consist = consists[address];
+                if (consist && consist.locomotives && consist.locomotives.length >= 2) {
+                  const names = consist.locomotives.map(l => l.name).join(' + ');
+                  displayText = `Consist ${address}: ${names}`;
+                } else {
+                  displayText = `Consist ${address}`;
+                }
+              } else if (type === 'locomotive') {
+                const loco = locomotives[address];
+                displayText = loco ? `Loco ${address}: ${loco.name}` : `Loco ${address}`;
+              }
+
+              items.push(
+                <div key={controller.id}>{displayText}</div>
+              );
+
+              return items;
+            })}
           </div>
           <div className="mt-2 text-xs text-white/30">
             BiancAlice Railway Layout • Z21 White Edition

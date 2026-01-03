@@ -93,10 +93,10 @@ def load_config():
         return config
     except FileNotFoundError:
         print(f"⚠️  Config not found: {CONFIG_PATH}")
-        return {'gates': [], 'timing_thresholds': {'normal': 1.0, 'warning': 2.0}}
+        return {'gates': [], 'tracking': {'timing_thresholds': {'normal': 1.0, 'warning': 2.0}}}
     except json.JSONDecodeError as e:
         print(f"⚠️  Invalid JSON in config: {e}")
-        return {'gates': [], 'timing_thresholds': {'normal': 1.0, 'warning': 2.0}}
+        return {'gates': [], 'tracking': {'timing_thresholds': {'normal': 1.0, 'warning': 2.0}}}
 
 
 def gate_json_to_dict(gate_json):
@@ -239,7 +239,8 @@ class YOLOTracker:
             print(f"🚪 Loaded {len(self.gates)} gates from config")
 
         # Load timing thresholds
-        thresholds = config.get('timing_thresholds', {'normal': 1.0, 'warning': 2.0})
+        tracking_config = config.get('tracking', {})
+        thresholds = tracking_config.get('timing_thresholds', {'normal': 1.0, 'warning': 2.0})
         self.threshold_normal = thresholds.get('normal', 1.0)
         self.threshold_warning = thresholds.get('warning', 2.0)
         if self.debug_enabled:
@@ -250,26 +251,48 @@ class YOLOTracker:
         if self.debug_enabled:
             print(f"⚠️  Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
 
-        # Load reference loco configuration
-        self.reference_locos = config.get('reference_locos', {})
+        # Load reference loco configuration (from consists)
+        consists = config.get('consists', {})
+        self.reference_locos = {}
+        for consist_addr, consist_info in consists.items():
+            if 'reference' in consist_info:
+                ref = consist_info['reference']
+                self.reference_locos[consist_addr] = {
+                    'reference': ref.get('loco'),
+                    'adjust': ref.get('adjust')
+                }
         if self.reference_locos and self.debug_enabled:
             print(f"🎯 Reference locos: {len(self.reference_locos)} consists configured")
 
         # === PHASE 5: CONFIG-DRIVEN MULTI-CONSIST SUPPORT ===
-        # Load tracking assignments from gate_config.json
-        tracking_assignments = config.get('tracking_assignments', {})
+        # Load consists from config.json
+        consists = config.get('consists', {})
 
         # Build consist_config (mapping consist_id → addresses + YOLO class IDs)
         self.consist_config = {}
-        for consist_key, consist_info in tracking_assignments.items():
-            # Skip JSON comments (keys starting with "_")
-            if consist_key.startswith('_'):
-                continue
+        for consist_key, consist_info in consists.items():
 
             consist_id = int(consist_key)  # "11" → 11 (simplified keys)
             lead_addr = consist_info['lead_address']
             rear_addr = consist_info['rear_address']  # Can be null for single locos
             gate_ids = consist_info['gate_ids']
+
+            # Skip consists without tracking (no gates configured)
+            # These are software-only consists that don't require YOLO training
+            if not gate_ids or len(gate_ids) == 0:
+                if self.debug_enabled:
+                    print(f"⏭️  Skipping consist {consist_id} (no gates - tracking disabled)")
+                continue
+
+            # Verify locomotives are in YOLO training set
+            if lead_addr not in ADDRESS_TO_CLASS:
+                print(f"⚠️  Skipping consist {consist_id}: lead loco {lead_addr} not in YOLO training set")
+                print(f"    Trained locomotives: {list(ADDRESS_TO_CLASS.keys())}")
+                continue
+            if rear_addr and rear_addr not in ADDRESS_TO_CLASS:
+                print(f"⚠️  Skipping consist {consist_id}: rear loco {rear_addr} not in YOLO training set")
+                print(f"    Trained locomotives: {list(ADDRESS_TO_CLASS.keys())}")
+                continue
 
             self.consist_config[consist_id] = {
                 'lead_address': lead_addr,
@@ -604,7 +627,8 @@ class TrackingDaemon:
         try:
             with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-                fps_config = config.get('tracking_fps', {'active': 30, 'idle': 1})
+                tracking_config = config.get('tracking', {})
+                fps_config = tracking_config.get('fps', {'active': 30, 'idle': 1})
                 self.fps_active = fps_config.get('active', 30)
                 self.fps_idle = fps_config.get('idle', 1)
         except Exception as e:

@@ -283,7 +283,8 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
     gates = config.get('gates', [])
 
     # Load FPS from config (feature added in Phase 4 - keep it)
-    fps_settings = config.get('tracking_fps', {})
+    tracking_config = config.get('tracking', {})
+    fps_settings = tracking_config.get('fps', {})
     fps_target = fps_settings.get('video_feed', 15)  # Load from config, fallback to 15
 
     print(f"🎥 Opening video stream: {RTSP_URL}")
