@@ -10,6 +10,20 @@ export default defineConfig({
       'mbp16diriccardo.tail9350d7.ts.net',
       'mbp16diriccardo',
       '.ts.net', // Allows all Tailscale domains
-    ]
+    ],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      },
+      '/ws': {
+        target: 'ws://localhost:8000',
+        ws: true
+      },
+      '/video-feed': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      }
+    }
   }
 })

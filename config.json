@@ -79,6 +79,8 @@
       ],
       "lead_address": 7,
       "rear_address": 8,
+      "virtual_mode": true,
+      "auto_compensation_enabled": true,
       "notes": "Dual-gate co-presence timing. Traditional consist (2 locos)."
     },
     "10": {
@@ -89,6 +91,8 @@
       ],
       "lead_address": 1,
       "rear_address": 5,
+      "virtual_mode": true,
+      "auto_compensation_enabled": true,
       "notes": "Dual-gate co-presence timing. Traditional consist (2 locos). Lead=1 (sound, Gr.675), Rear=5 (reference, D645)."
     }
   },
@@ -117,7 +121,7 @@
     }
   },
   "debug": {
-    "enabled": false,
+    "enabled": true,
     "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (\u2705\ud83d\udeaa\u23f1\ufe0f\ud83c\udfaf\ud83d\ude82\ud83d\udcf9), gate crossing (\ud83d\udea6\ud83d\udeaa), warnings (\u26a0\ufe0f), mode changes (\ud83d\udd04\u23f8\ufe0f). SUPPRESSED when false: YOLO pause/resume verbose (\ud83d\udd07\ud83d\udd0a)"
   }
 }

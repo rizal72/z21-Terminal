@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from z21_manager import Z21Manager
-from roster_loader import load_consist_with_functions, load_all_locomotives
+from roster_loader import load_consist_with_functions, load_all_locomotives, load_consists_from_config
 from tracking_manager import TrackingManager
 import video_feed as video_feed_module
 from video_feed import generate_video_frames
@@ -239,21 +239,58 @@ async def lifespan(app: FastAPI):
         print(f"  ⚠️  Error loading tracked consists: {e}")
         reference_locos = {}
 
-    # Load consist configuration from JMRI
-    print("📋 Loading consists from JMRI...")
-    consist_data = load_consist_with_functions()
+    # Load consist configuration
+    # Priority: config.json tracking_assignments → JMRI (bootstrap only)
+    tracking_assignments = config.get('tracking_assignments', {})
+    # Filter out _comment field to check if we have real consists
+    real_consists = {k: v for k, v in tracking_assignments.items() if k != '_comment'}
 
-    if not consist_data:
-        print("⚠️  Warning: No consists loaded from JMRI")
-    else:
-        if debug_enabled:
+    if real_consists:
+        # Load from config.json (source of truth)
+        print("📋 Loading consists from config.json (source of truth)...")
+        consist_data = load_consists_from_config(CONFIG_PATH)
+        if debug_enabled and consist_data:
             for addr, data in consist_data.items():
                 locomotives = data.get('locomotives', [])
                 if locomotives:
                     names = ' + '.join([loco['name'] for loco in locomotives])
                     print(f"  ✓ Consist {addr}: {names} ({len(data['functions'])} functions)")
-                else:
-                    print(f"  ✓ Consist {addr}: (empty) ({len(data['functions'])} functions)")
+    else:
+        # Bootstrap from JMRI (one-time only, then save to config.json)
+        print("📋 Bootstrapping consists from JMRI (first run)...")
+        consist_data = load_consist_with_functions()
+
+        if not consist_data:
+            print("⚠️  Warning: No consists loaded from JMRI")
+        else:
+            if debug_enabled:
+                for addr, data in consist_data.items():
+                    locomotives = data.get('locomotives', [])
+                    if locomotives:
+                        names = ' + '.join([loco['name'] for loco in locomotives])
+                        print(f"  ✓ Consist {addr}: {names} ({len(data['functions'])} functions)")
+                    else:
+                        print(f"  ✓ Consist {addr}: (empty) ({len(data['functions'])} functions)")
+
+            # Save to config.json for future use
+            print("💾 Saving consists to config.json for future use...")
+            if 'tracking_assignments' not in config:
+                config['tracking_assignments'] = {}
+
+            for consist_addr, consist_info in consist_data.items():
+                locomotives = consist_info.get('locomotives', [])
+                if len(locomotives) >= 2:
+                    config['tracking_assignments'][str(consist_addr)] = {
+                        'lead_address': locomotives[0]['address'],
+                        'rear_address': locomotives[1]['address'],
+                        'gate_ids': []  # Empty by default, user can configure in UI
+                    }
+
+            # Save updated config
+            with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+
+            print(f"  ✓ Saved {len(consist_data)} consists to config.json")
 
     # Load all locomotives from JMRI
     print("📋 Loading all locomotives from JMRI...")
@@ -287,7 +324,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize Z21 Manager
     print("🔌 Connecting to Z21...")
-    z21_manager = Z21Manager(z21_ip='192.168.1.111', verbose=False, reference_locos=reference_locos, timing_thresholds=timing_thresholds, debug_enabled=debug_enabled)
+    z21_manager = Z21Manager(z21_ip='192.168.1.111', verbose=False, reference_locos=reference_locos, timing_thresholds=timing_thresholds, debug_enabled=debug_enabled, config_path=CONFIG_PATH)
 
     if z21_manager.connect():
         if debug_enabled:
@@ -483,19 +520,37 @@ async def broadcast_initial_state():
 
 
 async def reload_roster_data():
-    """Reload roster and consists from JMRI XML files and reinitialize Z21 Manager"""
+    """Reload roster and consists from config.json (and locomotives from JMRI)"""
     global consist_data, locomotive_data
 
-    print("\n🔄 Reloading roster from JMRI...")
+    print("\n🔄 Reloading roster...")
 
-    # Load data from XML
-    consist_data, locomotive_data = load_consist_with_functions(), load_all_locomotives()
+    # Load config to check tracking_assignments
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"⚠️  Error loading config: {e}")
+        return False
 
-    if not consist_data:
-        print("⚠️  Warning: No consists loaded from JMRI")
+    # Load consists from config.json (source of truth)
+    tracking_assignments = config.get('tracking_assignments', {})
+    real_consists = {k: v for k, v in tracking_assignments.items() if k != '_comment'}
+
+    if real_consists:
+        print("📋 Loading consists from config.json...")
+        consist_data = load_consists_from_config(CONFIG_PATH)
+        if debug_enabled and consist_data:
+            print(f"  ✓ Loaded {len(consist_data)} consists from config.json")
     else:
-        if debug_enabled:
-            print(f"  ✓ Loaded {len(consist_data)} consists")
+        print("⚠️  No consists in config.json, trying JMRI bootstrap...")
+        consist_data = load_consist_with_functions()
+        if debug_enabled and consist_data:
+            print(f"  ✓ Loaded {len(consist_data)} consists from JMRI")
+
+    # Always load locomotives from JMRI (names, functions)
+    print("📋 Loading locomotives from JMRI...")
+    locomotive_data = load_all_locomotives()
 
     if not locomotive_data:
         print("⚠️  Warning: No locomotives loaded from JMRI")
@@ -555,6 +610,17 @@ def build_consist_response(address, data, state):
     rear_names = [loco['name'] for loco in locomotives[1:]] if len(locomotives) > 1 else []
     rear_name = ' + '.join(rear_names) if rear_names else None
 
+    # Load gate_ids from config tracking_assignments
+    gate_ids = []
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            tracking_assignments = config.get('tracking_assignments', {})
+            consist_assignment = tracking_assignments.get(str(address), {})
+            gate_ids = consist_assignment.get('gate_ids', [])
+    except Exception:
+        pass  # If config load fails, gate_ids stays empty
+
     return {
         'address': address,
         'type': 'consist',
@@ -563,6 +629,7 @@ def build_consist_response(address, data, state):
         'lead_name': lead_name,
         'rear_name': rear_name,
         'functions': data['functions'],
+        'gate_ids': gate_ids,  # Include gate_ids for frontend
         # Spread ALL state fields automatically (speed, direction, power, virtual_mode, etc.)
         # CRITICAL: Exclude 'functions' from spread to avoid overwriting function definitions with states
         **{k: v for k, v in state.items() if k not in ['address', 'locomotives', 'functions']},
@@ -573,12 +640,190 @@ def build_consist_response(address, data, state):
 
 @app.get("/api/consists")
 async def get_consists():
-    """Get all consists configuration"""
-    result = {}
+    """Get all consists configuration and available gates"""
+    # Load config to get gates
+    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+
+    consists_result = {}
     for address, data in consist_data.items():
         state = z21_manager.get_consist_state(address) if z21_manager else {}
-        result[address] = build_consist_response(address, data, state)
-    return result
+        consists_result[address] = build_consist_response(address, data, state)
+
+    # Get tracking_assignments and remove _comment (causes JSON parsing issues in frontend)
+    tracking_assignments = config.get("tracking_assignments", {})
+    if "_comment" in tracking_assignments:
+        tracking_assignments = {k: v for k, v in tracking_assignments.items() if k != "_comment"}
+
+    return {
+        "consists": consists_result,
+        "gates": config.get("gates", []),
+        "tracking_assignments": tracking_assignments,
+        "reference_locos": config.get("reference_locos", {})
+    }
+
+
+@app.post("/api/consists")
+async def create_consist(request: dict):
+    """Create a new consist in config.json"""
+    try:
+        consist_address = str(request.get("address"))
+        lead_address = request.get("lead_address")
+        rear_address = request.get("rear_address")
+        gate_ids = request.get("gate_ids", [])
+        reference_loco = request.get("reference_loco", "rear")  # "lead" or "rear"
+
+        if not consist_address or not lead_address or not rear_address:
+            return {"success": False, "error": "Missing required fields"}
+
+        # Load config
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        # Check if consist already exists
+        if consist_address in config.get("tracking_assignments", {}):
+            return {"success": False, "error": f"Consist {consist_address} already exists"}
+
+        # Add to tracking_assignments
+        if "tracking_assignments" not in config:
+            config["tracking_assignments"] = {}
+
+        config["tracking_assignments"][consist_address] = {
+            "lead_address": lead_address,
+            "rear_address": rear_address,
+            "gate_ids": gate_ids,
+            "virtual_mode": False,  # New consists start in DCC mode
+            "auto_compensation_enabled": False
+        }
+
+        # Add to reference_locos
+        if "reference_locos" not in config:
+            config["reference_locos"] = {}
+
+        if reference_loco == "lead":
+            config["reference_locos"][consist_address] = {
+                "reference": lead_address,
+                "adjust": rear_address
+            }
+        else:  # default: rear is reference
+            config["reference_locos"][consist_address] = {
+                "reference": rear_address,
+                "adjust": lead_address
+            }
+
+        # Save config
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+
+        # Write CV19 to both locomotives (make it a physical DCC consist)
+        if z21_manager and z21_manager.z21:
+            consist_addr_int = int(consist_address)
+            success_lead = z21_manager.z21.write_cv_ops_mode(lead_address, 19, consist_addr_int)
+            success_rear = z21_manager.z21.write_cv_ops_mode(rear_address, 19, consist_addr_int)
+
+            if not (success_lead and success_rear):
+                return {"success": False, "error": "Consist created in config but failed to write CV19 to locomotives"}
+
+        return {"success": True, "message": f"Consist {consist_address} created (CV19 written)"}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.put("/api/consists/{address}")
+async def update_consist(address: str, request: dict):
+    """Update an existing consist in config.json"""
+    try:
+        # Load config
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        # Check if consist exists
+        if address not in config.get("tracking_assignments", {}):
+            return {"success": False, "error": f"Consist {address} not found"}
+
+        # Update tracking_assignments fields
+        consist = config["tracking_assignments"][address]
+        if "lead_address" in request:
+            consist["lead_address"] = request["lead_address"]
+        if "rear_address" in request:
+            consist["rear_address"] = request["rear_address"]
+        if "gate_ids" in request:
+            consist["gate_ids"] = request["gate_ids"]
+
+        # Update reference_locos if reference_loco specified
+        if "reference_loco" in request:
+            if "reference_locos" not in config:
+                config["reference_locos"] = {}
+
+            lead_address = consist["lead_address"]
+            rear_address = consist["rear_address"]
+
+            if request["reference_loco"] == "lead":
+                config["reference_locos"][address] = {
+                    "reference": lead_address,
+                    "adjust": rear_address
+                }
+            else:  # rear
+                config["reference_locos"][address] = {
+                    "reference": rear_address,
+                    "adjust": lead_address
+                }
+
+        # Save config
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+
+        return {"success": True, "message": f"Consist {address} updated"}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.delete("/api/consists/{address}")
+async def delete_consist(address: str):
+    """Delete a consist from config.json"""
+    try:
+        # Load config
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        # Check if consist exists
+        if address not in config.get("tracking_assignments", {}):
+            return {"success": False, "error": f"Consist {address} not found"}
+
+        # Delete from tracking_assignments
+        del config["tracking_assignments"][address]
+
+        # Delete from reference_locos if exists
+        if "reference_locos" in config and address in config["reference_locos"]:
+            del config["reference_locos"][address]
+
+        # Save config
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+
+        return {"success": True, "message": f"Consist {address} deleted"}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/restart-daemon")
+async def restart_tracking_daemon():
+    """Restart tracking daemon to reload config changes"""
+    try:
+        global tracking_manager
+        if tracking_manager:
+            # Stop current daemon
+            await tracking_manager.stop()
+            # Start with reloaded config
+            await tracking_manager.start()
+            return {"success": True, "message": "Tracking daemon restarted"}
+        else:
+            return {"success": False, "error": "Tracking manager not initialized"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @app.get("/api/locomotives")
@@ -608,8 +853,11 @@ async def get_locomotives():
 @app.get("/api/roster")
 async def get_full_roster():
     """Get full roster: consists + locomotives"""
+    consists_data = await get_consists()
+    # Extract only the consists dict (backward compatibility)
+    # get_consists() now returns {consists: {...}, gates: [...], ...}
     return {
-        'consists': await get_consists(),
+        'consists': consists_data.get('consists', {}),
         'locomotives': await get_locomotives()
     }
 

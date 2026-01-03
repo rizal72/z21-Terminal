@@ -253,34 +253,23 @@ export default function ConsistController({
               Controller #{controllerNumber}
             </label>
             <div className="flex items-center gap-2 overflow-hidden">
-              <div className="relative flex-1 min-w-0">
-                <select
-                  value=""
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      const [type, address] = e.target.value.split('-');
-                      onSelectionChange({ type, address: parseInt(address) });
-                    }
-                  }}
-                  className="w-full max-w-full bg-control-dark border border-control-grey rounded px-3 py-2 pr-8 text-white font-mono text-sm focus:border-signal-amber focus:outline-none overflow-hidden text-ellipsis appearance-none"
-                  style={{
-                    width: '100%',
-                    WebkitAppearance: 'none',
-                    MozAppearance: 'none'
-                  }}
-                >
-                  <option value="">-- Select Locomotive or Consist --</option>
-                  {rosterOptions.map((option) => (
-                    <option key={`${option.type}-${option.address}`} value={`${option.type}-${option.address}`}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                {/* Custom dropdown arrow */}
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-track-steel">
-                  <i className="fa-solid fa-chevron-down text-xs"></i>
-                </div>
-              </div>
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const [type, address] = e.target.value.split('-');
+                    onSelectionChange({ type, address: parseInt(address) });
+                  }
+                }}
+                className="flex-1 min-w-0 max-w-full bg-control-dark border border-control-grey rounded px-3 py-2 text-white font-mono text-sm focus:border-signal-amber focus:outline-none overflow-hidden text-ellipsis"
+              >
+                <option value="">-- Select Locomotive or Consist --</option>
+                {rosterOptions.map((option) => (
+                  <option key={`${option.type}-${option.address}`} value={`${option.type}-${option.address}`}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -332,31 +321,20 @@ export default function ConsistController({
             Controller #{controllerNumber}
           </label>
           <div className="flex items-center gap-2 overflow-hidden">
-            <div className="relative flex-1 min-w-0">
-              <select
-                value={`${selection.type}-${selection.address}`}
-                onChange={(e) => {
-                  const [type, address] = e.target.value.split('-');
-                  onSelectionChange({ type, address: parseInt(address) });
-                }}
-                className="w-full max-w-full bg-control-dark border border-control-grey rounded px-3 py-2 pr-8 text-white font-mono text-sm focus:border-signal-amber focus:outline-none overflow-hidden text-ellipsis appearance-none"
-                style={{
-                  width: '100%',
-                  WebkitAppearance: 'none',
-                  MozAppearance: 'none'
-                }}
-              >
-                {rosterOptions.map((option) => (
-                  <option key={`${option.type}-${option.address}`} value={`${option.type}-${option.address}`}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              {/* Custom dropdown arrow */}
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-track-steel">
-                <i className="fa-solid fa-chevron-down text-xs"></i>
-              </div>
-            </div>
+            <select
+              value={`${selection.type}-${selection.address}`}
+              onChange={(e) => {
+                const [type, address] = e.target.value.split('-');
+                onSelectionChange({ type, address: parseInt(address) });
+              }}
+              className="flex-1 min-w-0 max-w-full bg-control-dark border border-control-grey rounded px-3 py-2 text-white font-mono text-sm focus:border-signal-amber focus:outline-none overflow-hidden text-ellipsis"
+            >
+              {rosterOptions.map((option) => (
+                <option key={`${option.type}-${option.address}`} value={`${option.type}-${option.address}`}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
             {/* Train icon indicator */}
             <div className="flex items-center justify-center w-10 h-10 bg-control-dark border border-control-grey rounded flex-shrink-0">
               <div className="relative">
@@ -568,7 +546,8 @@ export default function ConsistController({
               <span className="truncate">{item.virtual_mode ? 'Locomotives freed from consist • Individual speed control possible' : 'Standard DCC consist • Locomotives synchronized via CV19'}</span>
             </div>
             {/* Right: auto-comp switch (aligned under CV19=0, never wraps) */}
-            {item.virtual_mode && (
+            {/* Only show Auto-Sync if Virtual Mode AND gates configured */}
+            {item.virtual_mode && item.gate_ids && item.gate_ids.length > 0 && (
               <div className="flex items-center gap-2 flex-shrink-0">
                 <i className={`fa-solid fa-gauge-high ${
                   item.auto_compensation_enabled ? 'text-signal-green' : 'text-track-steel'

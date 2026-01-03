@@ -1,5 +1,15 @@
 """
 Z21Manager - Wrapper per la libreria z21.py con gestione stato consist
+
+TODO REFACTOR (Future):
+Split config.json into 2 files:
+- config.json: Static configuration (gates, thresholds, camera, reference_locos)
+  -> Safe for manual editing, version controlled
+- data.json: Runtime state (virtual_mode, auto_compensation_enabled, positions)
+  -> App-managed only, NOT manually edited
+
+Currently consolidated in config.json for simplicity but growing too large.
+Risk: user manual edits can break runtime state.
 """
 import sys
 import json
@@ -11,7 +21,7 @@ sys.path.insert(0, str(scripts_dir))
 
 from z21 import Z21
 
-# Path to persist virtual mode state
+# Path to persist virtual mode state (will be migrated to config.json)
 CONSIST_STATE_FILE = Path(__file__).parent / 'consist_state.json'
 
 
@@ -20,7 +30,7 @@ class Z21Manager:
     Manager per gestire connessioni Z21 e stato consist
     """
 
-    def __init__(self, z21_ip='192.168.1.111', verbose=False, reference_locos=None, timing_thresholds=None, debug_enabled=False):
+    def __init__(self, z21_ip='192.168.1.111', verbose=False, reference_locos=None, timing_thresholds=None, debug_enabled=False, config_path=None):
         """
         Inizializza Z21Manager
 
@@ -30,11 +40,13 @@ class Z21Manager:
             reference_locos (dict): Reference loco strategy config from config.json
             timing_thresholds (dict): Timing thresholds config {'normal': 1.0, 'warning': 1.5}
             debug_enabled (bool): Debug mode for verbose logging
+            config_path (Path): Path to config.json for persisting virtual_mode state
         """
         self.z21_ip = z21_ip
         self.verbose = verbose
         self.debug_enabled = debug_enabled
         self.z21 = None
+        self.config_path = config_path or (Path(__file__).parent.parent / 'config.json')
         self.consist_state = {}  # {address: {'speed': 0, 'direction': 'forward', 'power': True, 'functions': {}}}
         self.persisted_state = self._load_persisted_state()  # Load virtual_mode from file
         self.reference_locos = reference_locos or {}  # Reference loco strategy from config
@@ -605,43 +617,79 @@ class Z21Manager:
             return False
 
     def _load_persisted_state(self):
-        """Load persisted virtual_mode state from JSON file"""
+        """Load persisted virtual_mode state from config.json tracking_assignments"""
         try:
+            # Try loading from config.json first (new consolidated approach)
+            if self.config_path.exists():
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    tracking_assignments = config.get('tracking_assignments', {})
+
+                    # Extract virtual_mode and auto_compensation_enabled from each consist
+                    state = {}
+                    for consist_id, assignment in tracking_assignments.items():
+                        if consist_id.startswith('_'):
+                            continue
+
+                        virtual_mode = assignment.get('virtual_mode', False)
+                        auto_compensation = assignment.get('auto_compensation_enabled', virtual_mode)
+
+                        state[consist_id] = {
+                            'virtual_mode': virtual_mode,
+                            'auto_compensation_enabled': auto_compensation
+                        }
+
+                    if self.debug_enabled and state:
+                        print(f"  ✓ Loaded persisted state from config.json: {state}")
+                    return state
+
+            # Fallback: try old consist_state.json for migration
             if CONSIST_STATE_FILE.exists():
                 with open(CONSIST_STATE_FILE, 'r') as f:
                     state = json.load(f)
-
-                    # Backwards compatibility: add auto_compensation_enabled if missing
-                    for address, consist_data in state.items():
-                        if 'auto_compensation_enabled' not in consist_data:
-                            # Default: ON if virtual_mode, OFF otherwise
-                            consist_data['auto_compensation_enabled'] = consist_data.get('virtual_mode', False)
-
                     if self.debug_enabled:
-                        print(f"  ✓ Loaded persisted state: {state}")
+                        print(f"  ⚠️  Migrating state from old consist_state.json: {state}")
+                    # Will be saved to config.json on first _save_persisted_state() call
                     return state
+
         except Exception as e:
             if self.debug_enabled:
                 print(f"  ⚠️  Failed to load persisted state: {e}")
         return {}
 
     def _save_persisted_state(self):
-        """Save virtual_mode and auto_compensation_enabled state to JSON file"""
+        """Save virtual_mode and auto_compensation_enabled state to config.json tracking_assignments"""
         try:
-            state = {}
+            # Load current config.json
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+
+            tracking_assignments = config.get('tracking_assignments', {})
+
+            # Update virtual_mode and auto_compensation_enabled for each consist
             for address, consist in self.consist_state.items():
                 if 'locomotives' in consist and len(consist.get('locomotives', [])) >= 2:
-                    # Save both virtual_mode and auto_compensation_enabled for consists
-                    state[str(address)] = {
-                        'virtual_mode': consist.get('virtual_mode', False),
-                        'auto_compensation_enabled': consist.get('auto_compensation_enabled', False)
-                    }
+                    consist_id = str(address)
 
-            with open(CONSIST_STATE_FILE, 'w') as f:
-                json.dump(state, f, indent=2)
+                    # Skip if not in tracking_assignments (shouldn't happen)
+                    if consist_id not in tracking_assignments:
+                        continue
+
+                    # Update fields in tracking_assignments
+                    tracking_assignments[consist_id]['virtual_mode'] = consist.get('virtual_mode', False)
+                    tracking_assignments[consist_id]['auto_compensation_enabled'] = consist.get('auto_compensation_enabled', False)
+
+            # Write back to config.json
+            config['tracking_assignments'] = tracking_assignments
+
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
 
             if self.debug_enabled:
-                print(f"  ✓ Saved persisted state: {state}")
+                saved_state = {k: {'virtual_mode': v.get('virtual_mode'), 'auto_compensation_enabled': v.get('auto_compensation_enabled')}
+                               for k, v in tracking_assignments.items() if not k.startswith('_')}
+                print(f"  ✓ Saved persisted state to config.json: {saved_state}")
+
         except Exception as e:
             if self.debug_enabled:
                 print(f"  ⚠️  Failed to save persisted state: {e}")
