@@ -267,15 +267,12 @@ def load_consists_from_config(config_path):
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
 
-        tracking_assignments = config.get('tracking_assignments', {})
+        consists = config.get('consists', {})
 
         # Load all locomotives to get names
         all_locos = load_all_locomotives()
 
-        for consist_addr_str, assignment in tracking_assignments.items():
-            # Skip _comment field
-            if consist_addr_str == '_comment':
-                continue
+        for consist_addr_str, assignment in consists.items():
 
             try:
                 consist_addr = int(consist_addr_str)

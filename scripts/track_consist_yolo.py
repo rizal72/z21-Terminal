@@ -84,10 +84,10 @@ def load_config():
         return config
     except FileNotFoundError:
         print(f"⚠️  Config not found: {CONFIG_PATH}")
-        return {'gates': [], 'timing_thresholds': {'normal': 1.0, 'warning': 1.5}, 'tracking_assignments': {}}
+        return {'gates': [], 'tracking': {'timing_thresholds': {'normal': 1.0, 'warning': 1.5}}, 'consists': {}}
     except json.JSONDecodeError as e:
         print(f"⚠️  Invalid JSON in config: {e}")
-        return {'gates': [], 'timing_thresholds': {'normal': 1.0, 'warning': 1.5}, 'tracking_assignments': {}}
+        return {'gates': [], 'tracking': {'timing_thresholds': {'normal': 1.0, 'warning': 1.5}}, 'consists': {}}
 
 # Class IDs (from Roboflow training - BiancAlice v3)
 # Roboflow orders alphabetically by class name
@@ -164,7 +164,7 @@ def load_config():
     """Load system configuration from JSON file."""
     if not CONFIG_FILE.exists():
         print(f"⚠️  Config file not found: {CONFIG_FILE}")
-        return {"gates": [], "tracking_assignments": {}, "timing_thresholds": {"normal": 1.0, "warning": 2.0}}
+        return {"gates": [], "consists": {}, "tracking": {"timing_thresholds": {"normal": 1.0, "warning": 2.0}}}
 
     try:
         with open(CONFIG_FILE, 'r') as f:
@@ -173,7 +173,7 @@ def load_config():
         return config
     except Exception as e:
         print(f"❌ Error loading config: {e}")
-        return {"gates": [], "tracking_assignments": {}, "timing_thresholds": {"normal": 1.0, "warning": 2.0}}
+        return {"gates": [], "consists": {}, "tracking": {"timing_thresholds": {"normal": 1.0, "warning": 2.0}}}
 
 
 def save_config(config):
@@ -523,7 +523,8 @@ class YOLOTracker:
         print(f"🚪 Loaded {len(self.gates)} gates from config")
 
         # Load timing thresholds
-        thresholds = config.get('timing_thresholds', {'normal': 1.0, 'warning': 2.0})
+        tracking_config = config.get('tracking', {})
+        thresholds = tracking_config.get('timing_thresholds', {'normal': 1.0, 'warning': 2.0})
         self.threshold_normal = thresholds.get('normal', 1.0)
         self.threshold_warning = thresholds.get('warning', 2.0)
         print(f"⏱️  Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
@@ -533,15 +534,12 @@ class YOLOTracker:
         print(f"⚠️  Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
 
         # === PHASE 5: CONFIG-DRIVEN MULTI-CONSIST SUPPORT ===
-        # Load tracking assignments from config.json
-        tracking_assignments = config.get('tracking_assignments', {})
+        # Load consists from config.json
+        consists = config.get('consists', {})
 
         # Build consist_config (mapping consist_id → addresses + YOLO class IDs + gates)
         self.consist_config = {}
-        for consist_key, consist_info in tracking_assignments.items():
-            # Skip JSON comments (keys starting with "_")
-            if consist_key.startswith('_'):
-                continue
+        for consist_key, consist_info in consists.items():
 
             consist_id = int(consist_key)  # "11" → 11
             lead_addr = consist_info['lead_address']

@@ -191,7 +191,8 @@ async def lifespan(app: FastAPI):
     try:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            thresholds = config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
+            tracking_config = config.get('tracking', {})
+            thresholds = tracking_config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
             timing_thresholds = {
                 'normal': thresholds.get('normal', DEFAULT_TIMING_THRESHOLDS['normal']),
                 'warning': thresholds.get('warning', DEFAULT_TIMING_THRESHOLDS['warning'])
@@ -205,12 +206,21 @@ async def lifespan(app: FastAPI):
         print(f"  ⚠️  Error loading config.json: {e}, using defaults")
         timing_thresholds = DEFAULT_TIMING_THRESHOLDS.copy()
 
-    # Load reference loco configuration
+    # Load reference loco configuration (from consists)
     print("🎯 Loading reference loco configuration...")
     try:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            reference_locos = config.get('reference_locos', {})
+            consists = config.get('consists', {})
+            # Extract reference info from each consist
+            reference_locos = {}
+            for consist_addr, consist_info in consists.items():
+                if 'reference' in consist_info:
+                    ref = consist_info['reference']
+                    reference_locos[consist_addr] = {
+                        'reference': ref.get('loco'),
+                        'adjust': ref.get('adjust')
+                    }
             if debug_enabled:
                 print(f"  ✓ Reference locos: {len(reference_locos)} consists configured")
                 for consist_addr, ref_config in reference_locos.items():
@@ -223,11 +233,9 @@ async def lifespan(app: FastAPI):
     try:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            tracking_assignments = config.get('tracking_assignments', {})
+            consists = config.get('consists', {})
             # Filter only consist IDs with gate_ids configured
-            for consist_key, consist_info in tracking_assignments.items():
-                if consist_key.startswith('_'):  # Skip comments
-                    continue
+            for consist_key, consist_info in consists.items():
                 consist_id = int(consist_key)
                 gate_ids = consist_info.get('gate_ids', [])
                 if gate_ids:  # Only add if gates configured
@@ -240,12 +248,10 @@ async def lifespan(app: FastAPI):
         reference_locos = {}
 
     # Load consist configuration
-    # Priority: config.json tracking_assignments → JMRI (bootstrap only)
-    tracking_assignments = config.get('tracking_assignments', {})
-    # Filter out _comment field to check if we have real consists
-    real_consists = {k: v for k, v in tracking_assignments.items() if k != '_comment'}
+    # Priority: config.json consists → JMRI (bootstrap only)
+    consists = config.get('consists', {})
 
-    if real_consists:
+    if consists:
         # Load from config.json (source of truth)
         print("📋 Loading consists from config.json (source of truth)...")
         consist_data = load_consists_from_config(CONFIG_PATH)
@@ -274,16 +280,20 @@ async def lifespan(app: FastAPI):
 
             # Save to config.json for future use
             print("💾 Saving consists to config.json for future use...")
-            if 'tracking_assignments' not in config:
-                config['tracking_assignments'] = {}
+            if 'consists' not in config:
+                config['consists'] = {}
 
             for consist_addr, consist_info in consist_data.items():
                 locomotives = consist_info.get('locomotives', [])
                 if len(locomotives) >= 2:
-                    config['tracking_assignments'][str(consist_addr)] = {
+                    config['consists'][str(consist_addr)] = {
+                        'name': f"Consist {consist_addr}",
                         'lead_address': locomotives[0]['address'],
                         'rear_address': locomotives[1]['address'],
-                        'gate_ids': []  # Empty by default, user can configure in UI
+                        'gate_ids': [],  # Empty by default, user can configure in UI
+                        'virtual_mode': False,
+                        'auto_compensation_enabled': False,
+                        'notes': ''
                     }
 
             # Save updated config
@@ -525,7 +535,7 @@ async def reload_roster_data():
 
     print("\n🔄 Reloading roster...")
 
-    # Load config to check tracking_assignments
+    # Load config to check consists
     try:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
@@ -534,10 +544,9 @@ async def reload_roster_data():
         return False
 
     # Load consists from config.json (source of truth)
-    tracking_assignments = config.get('tracking_assignments', {})
-    real_consists = {k: v for k, v in tracking_assignments.items() if k != '_comment'}
+    consists = config.get('consists', {})
 
-    if real_consists:
+    if consists:
         print("📋 Loading consists from config.json...")
         consist_data = load_consists_from_config(CONFIG_PATH)
         if debug_enabled and consist_data:
@@ -610,14 +619,14 @@ def build_consist_response(address, data, state):
     rear_names = [loco['name'] for loco in locomotives[1:]] if len(locomotives) > 1 else []
     rear_name = ' + '.join(rear_names) if rear_names else None
 
-    # Load gate_ids from config tracking_assignments
+    # Load gate_ids from config consists
     gate_ids = []
     try:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            tracking_assignments = config.get('tracking_assignments', {})
-            consist_assignment = tracking_assignments.get(str(address), {})
-            gate_ids = consist_assignment.get('gate_ids', [])
+            consists = config.get('consists', {})
+            consist_info = consists.get(str(address), {})
+            gate_ids = consist_info.get('gate_ids', [])
     except Exception:
         pass  # If config load fails, gate_ids stays empty
 
@@ -650,16 +659,24 @@ async def get_consists():
         state = z21_manager.get_consist_state(address) if z21_manager else {}
         consists_result[address] = build_consist_response(address, data, state)
 
-    # Get tracking_assignments and remove _comment (causes JSON parsing issues in frontend)
-    tracking_assignments = config.get("tracking_assignments", {})
-    if "_comment" in tracking_assignments:
-        tracking_assignments = {k: v for k, v in tracking_assignments.items() if k != "_comment"}
+    # Get consists configuration
+    consists_config = config.get("consists", {})
+
+    # Extract reference_locos from consists for backward compatibility
+    reference_locos = {}
+    for consist_addr, consist_info in consists_config.items():
+        if 'reference' in consist_info:
+            ref = consist_info['reference']
+            reference_locos[consist_addr] = {
+                'reference': ref.get('loco'),
+                'adjust': ref.get('adjust')
+            }
 
     return {
         "consists": consists_result,
         "gates": config.get("gates", []),
-        "tracking_assignments": tracking_assignments,
-        "reference_locos": config.get("reference_locos", {})
+        "tracking_assignments": consists_config,  # For frontend compatibility (renamed but same structure)
+        "reference_locos": reference_locos
     }
 
 
@@ -681,35 +698,27 @@ async def create_consist(request: dict):
             config = json.load(f)
 
         # Check if consist already exists
-        if consist_address in config.get("tracking_assignments", {}):
+        if consist_address in config.get("consists", {}):
             return {"success": False, "error": f"Consist {consist_address} already exists"}
 
-        # Add to tracking_assignments
-        if "tracking_assignments" not in config:
-            config["tracking_assignments"] = {}
+        # Add to consists
+        if "consists" not in config:
+            config["consists"] = {}
 
-        config["tracking_assignments"][consist_address] = {
+        config["consists"][consist_address] = {
+            "name": f"Consist {consist_address}",
             "lead_address": lead_address,
             "rear_address": rear_address,
             "gate_ids": gate_ids,
             "virtual_mode": False,  # New consists start in DCC mode
-            "auto_compensation_enabled": False
+            "auto_compensation_enabled": False,
+            "reference": {
+                "loco": rear_address if reference_loco == "rear" else lead_address,
+                "adjust": lead_address if reference_loco == "rear" else rear_address,
+                "notes": ""
+            },
+            "notes": ""
         }
-
-        # Add to reference_locos
-        if "reference_locos" not in config:
-            config["reference_locos"] = {}
-
-        if reference_loco == "lead":
-            config["reference_locos"][consist_address] = {
-                "reference": lead_address,
-                "adjust": rear_address
-            }
-        else:  # default: rear is reference
-            config["reference_locos"][consist_address] = {
-                "reference": rear_address,
-                "adjust": lead_address
-            }
 
         # Save config
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
@@ -739,11 +748,11 @@ async def update_consist(address: str, request: dict):
             config = json.load(f)
 
         # Check if consist exists
-        if address not in config.get("tracking_assignments", {}):
+        if address not in config.get("consists", {}):
             return {"success": False, "error": f"Consist {address} not found"}
 
-        # Update tracking_assignments fields
-        consist = config["tracking_assignments"][address]
+        # Update consists fields
+        consist = config["consists"][address]
         if "lead_address" in request:
             consist["lead_address"] = request["lead_address"]
         if "rear_address" in request:
@@ -751,24 +760,20 @@ async def update_consist(address: str, request: dict):
         if "gate_ids" in request:
             consist["gate_ids"] = request["gate_ids"]
 
-        # Update reference_locos if reference_loco specified
+        # Update reference if reference_loco specified
         if "reference_loco" in request:
-            if "reference_locos" not in config:
-                config["reference_locos"] = {}
+            if "reference" not in consist:
+                consist["reference"] = {}
 
             lead_address = consist["lead_address"]
             rear_address = consist["rear_address"]
 
             if request["reference_loco"] == "lead":
-                config["reference_locos"][address] = {
-                    "reference": lead_address,
-                    "adjust": rear_address
-                }
+                consist["reference"]["loco"] = lead_address
+                consist["reference"]["adjust"] = rear_address
             else:  # rear
-                config["reference_locos"][address] = {
-                    "reference": rear_address,
-                    "adjust": lead_address
-                }
+                consist["reference"]["loco"] = rear_address
+                consist["reference"]["adjust"] = lead_address
 
         # Save config
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
@@ -789,15 +794,11 @@ async def delete_consist(address: str):
             config = json.load(f)
 
         # Check if consist exists
-        if address not in config.get("tracking_assignments", {}):
+        if address not in config.get("consists", {}):
             return {"success": False, "error": f"Consist {address} not found"}
 
-        # Delete from tracking_assignments
-        del config["tracking_assignments"][address]
-
-        # Delete from reference_locos if exists
-        if "reference_locos" in config and address in config["reference_locos"]:
-            del config["reference_locos"][address]
+        # Delete from consists
+        del config["consists"][address]
 
         # Save config
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:

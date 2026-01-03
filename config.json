@@ -1,127 +1,95 @@
 {
+  "debug": {
+    "enabled": true,
+    "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (✅🚪⏱️🎯🚂📹), gate crossing (🚦🚪), warnings (⚠️), mode changes (🔄⏸️). SUPPRESSED when false: YOLO pause/resume verbose (🔇🔊)"
+  },
+
+  "consists": {
+    "10": {
+      "name": "Consist 10 - Tracciato Interno (Figura 8)",
+      "lead_address": 1,
+      "rear_address": 5,
+      "gate_ids": [3, 4],
+      "virtual_mode": true,
+      "auto_compensation_enabled": true,
+      "reference": {
+        "loco": 5,
+        "adjust": 1,
+        "notes": "D645 014 (ESU) likely reference, Gr.675 017 (ESU LokSound) likely adjust"
+      },
+      "notes": "Dual-gate co-presence timing. Traditional consist (2 locos). Lead=1 (sound, Gr.675), Rear=5 (reference, D645)."
+    },
+    "11": {
+      "name": "Consist 11 - Tracciato Esterno (Ovale)",
+      "lead_address": 7,
+      "rear_address": 8,
+      "gate_ids": [1, 2],
+      "virtual_mode": true,
+      "auto_compensation_enabled": true,
+      "reference": {
+        "loco": 8,
+        "adjust": 7,
+        "notes": "Loco 8 (E444_056, ESU) stable reference - NEVER touch. Loco 7 (E656_239, Hornby) always adjust"
+      },
+      "notes": "Dual-gate co-presence timing. Traditional consist (2 locos)."
+    }
+  },
+
   "gates": [
     {
       "id": 1,
       "name": "Bottom Right (vicino)",
-      "center": [
-        1227,
-        213
-      ],
+      "center": [1227, 213],
       "width": 100,
       "height": 100,
       "angle": 0,
-      "color": [
-        255,
-        255,
-        0
-      ],
+      "color": [255, 255, 0],
       "notes": "Consist 11 - GIALLO (RGB) - Gate vicino alla camera"
     },
     {
       "id": 2,
       "name": "Top Left (lontano)",
-      "center": [
-        141,
-        162
-      ],
+      "center": [141, 162],
       "width": 80,
       "height": 60,
       "angle": 150,
-      "color": [
-        255,
-        165,
-        0
-      ],
+      "color": [255, 165, 0],
       "notes": "Consist 11 - ARANCIONE (RGB) - Gate lontano dalla camera"
     },
     {
       "id": 3,
       "name": "Gate 3",
-      "center": [
-        929,
-        33
-      ],
+      "center": [929, 33],
       "width": 70,
       "height": 70,
       "angle": 0,
-      "color": [
-        0,
-        255,
-        255
-      ],
+      "color": [0, 255, 255],
       "notes": "Consist 10 - CIANO CHIARO (RGB)"
     },
     {
       "id": 4,
       "name": "Gate 4",
-      "center": [
-        92,
-        326
-      ],
+      "center": [92, 326],
       "width": 70,
       "height": 70,
       "angle": 315,
-      "color": [
-        0,
-        180,
-        200
-      ],
+      "color": [0, 180, 200],
       "notes": "Consist 10 - CIANO SCURO (RGB)"
     }
   ],
-  "tracking_assignments": {
-    "_comment": "CONSIST DEFINITION: In this system, 'consist' means 1 or more locomotives controlled together. A single locomotive can be tracked as a 'consist of 1' (rear_address = null). This allows unified config/code for both traditional consists (lead + rear) and single locos. Gate tracking (\u0394t calculation) requires 2 locos AND 2 gates configured. Keys are consist/loco DCC addresses.",
-    "11": {
-      "name": "Consist 11 - Tracciato Esterno (Ovale)",
-      "gate_ids": [
-        1,
-        2
-      ],
-      "lead_address": 7,
-      "rear_address": 8,
-      "virtual_mode": true,
-      "auto_compensation_enabled": true,
-      "notes": "Dual-gate co-presence timing. Traditional consist (2 locos)."
+
+  "tracking": {
+    "fps": {
+      "active": 30,
+      "idle": 1,
+      "video_feed": 15,
+      "notes": "Tracking FPS (active/idle) and video feed stream FPS"
     },
-    "10": {
-      "name": "Consist 10 - Tracciato Interno (Figura 8)",
-      "gate_ids": [
-        3,
-        4
-      ],
-      "lead_address": 1,
-      "rear_address": 5,
-      "virtual_mode": true,
-      "auto_compensation_enabled": true,
-      "notes": "Dual-gate co-presence timing. Traditional consist (2 locos). Lead=1 (sound, Gr.675), Rear=5 (reference, D645)."
+    "timing_thresholds": {
+      "normal": 1.0,
+      "warning": 1.5,
+      "max_delta_t": 15.0,
+      "notes": "Thresholds in seconds: |Δt| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
     }
-  },
-  "timing_thresholds": {
-    "normal": 1.0,
-    "warning": 1.5,
-    "max_delta_t": 15.0,
-    "notes": "Thresholds in seconds: |\u0394t| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
-  },
-  "tracking_fps": {
-    "active": 30,
-    "idle": 1,
-    "video_feed": 15,
-    "notes": "Tracking FPS (active/idle) and video feed stream FPS"
-  },
-  "reference_locos": {
-    "11": {
-      "reference": 8,
-      "adjust": 7,
-      "notes": "Loco 8 (E444_056, ESU) stable reference - NEVER touch. Loco 7 (E656_239, Hornby) always adjust"
-    },
-    "10": {
-      "reference": 5,
-      "adjust": 1,
-      "notes": "To be confirmed: D645 014 (ESU) likely reference, Gr.675 017 (ESU LokSound) likely adjust"
-    }
-  },
-  "debug": {
-    "enabled": true,
-    "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (\u2705\ud83d\udeaa\u23f1\ufe0f\ud83c\udfaf\ud83d\ude82\ud83d\udcf9), gate crossing (\ud83d\udea6\ud83d\udeaa), warnings (\u26a0\ufe0f), mode changes (\ud83d\udd04\u23f8\ufe0f). SUPPRESSED when false: YOLO pause/resume verbose (\ud83d\udd07\ud83d\udd0a)"
   }
 }
