@@ -11,6 +11,7 @@ export default function ConsistManagerModal({ onClose }) {
   const [showForm, setShowForm] = useState(false);
   const [editingConsist, setEditingConsist] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // {address, isDccMode}
 
   // Load consists and locomotives on mount
   useEffect(() => {
@@ -64,6 +65,7 @@ export default function ConsistManagerModal({ onClose }) {
   const handleEdit = (consistAddress) => {
     const assignment = trackingAssignments[consistAddress];
     const refLoco = referenceLocos[consistAddress];
+    const consistData = consists[consistAddress];
 
     if (assignment) {
       // Determine which is reference: "lead" or "rear"
@@ -79,16 +81,29 @@ export default function ConsistManagerModal({ onClose }) {
         lead_address: assignment.lead_address,
         rear_address: assignment.rear_address,
         gate_ids: assignment.gate_ids || [],
-        reference_loco: referenceLoco
+        reference_loco: referenceLoco,
+        virtual_mode: consistData?.virtual_mode !== undefined ? consistData.virtual_mode : true
       });
       setShowForm(true);
     }
   };
 
-  const handleDelete = async (consistAddress) => {
-    if (!confirm(`Delete consist ${consistAddress}? This will remove it from tracking.`)) {
-      return;
-    }
+  const handleDelete = (consistAddress) => {
+    // Check if consist is in DCC mode (virtual_mode=false)
+    const consistData = consists[consistAddress];
+    const isDccMode = consistData && !consistData.virtual_mode;
+
+    // Show confirmation modal
+    setDeleteConfirm({
+      address: consistAddress,
+      isDccMode
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+
+    const consistAddress = deleteConfirm.address;
 
     try {
       const response = await fetch(`/api/consists/${consistAddress}`, {
@@ -103,13 +118,22 @@ export default function ConsistManagerModal({ onClose }) {
 
         // Reload data
         await loadData();
+
+        // Close confirm modal
+        setDeleteConfirm(null);
       } else {
         alert(`Failed to delete consist: ${result.error}`);
+        setDeleteConfirm(null);
       }
     } catch (error) {
       console.error('Failed to delete consist:', error);
       alert('Failed to delete consist');
+      setDeleteConfirm(null);
     }
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirm(null);
   };
 
   const handleFormSubmit = async (formData) => {
@@ -228,6 +252,67 @@ export default function ConsistManagerModal({ onClose }) {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/80 z-[100]"
+            onClick={cancelDelete}
+          />
+
+          {/* Confirmation Dialog */}
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-md bg-control-dark border-2 border-signal-red rounded-lg z-[110] p-6">
+            <div className="text-center">
+              {/* Warning Icon */}
+              <i className="fa-solid fa-triangle-exclamation text-5xl text-signal-red mb-4"></i>
+
+              {/* Title */}
+              <h3 className="text-xl font-display font-semibold text-white mb-3">
+                Delete Consist {deleteConfirm.address}?
+              </h3>
+
+              {/* Message */}
+              <div className="text-track-steel mb-6 space-y-2">
+                {deleteConfirm.isDccMode ? (
+                  <>
+                    <p className="text-signal-amber font-semibold">
+                      ⚠️ This consist is in DCC Mode
+                    </p>
+                    <p>
+                      Deleting will write <span className="text-white font-mono">CV19=0</span> to both locomotives to disable the hardware consist.
+                    </p>
+                  </>
+                ) : (
+                  <p>
+                    This will permanently remove the consist from your configuration.
+                  </p>
+                )}
+                <p className="text-sm">
+                  This action cannot be undone.
+                </p>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={cancelDelete}
+                  className="px-6 py-2 bg-control-black border border-control-grey rounded text-track-steel hover:border-signal-amber hover:text-signal-amber transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="px-6 py-2 bg-signal-red border border-signal-red rounded text-white hover:bg-signal-red/80 transition-all font-semibold"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }

@@ -8,7 +8,8 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
     lead_address: consist?.lead_address || '',
     rear_address: consist?.rear_address || '',
     gate_ids: consist?.gate_ids || [],
-    reference_loco: consist?.reference_loco || 'rear'  // default: rear is reference
+    reference_loco: consist?.reference_loco || 'rear',  // default: rear is reference
+    virtual_mode: consist?.virtual_mode !== undefined ? consist.virtual_mode : true  // default: Virtual Mode
   });
 
   const [errors, setErrors] = useState({});
@@ -82,7 +83,8 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
       lead_address: parseInt(formData.lead_address),
       rear_address: parseInt(formData.rear_address),
       gate_ids: formData.gate_ids,
-      reference_loco: formData.reference_loco
+      reference_loco: formData.reference_loco,
+      virtual_mode: formData.virtual_mode
     });
   };
 
@@ -208,6 +210,64 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
             </div>
           </label>
         </div>
+      </div>
+
+      {/* Consist Mode */}
+      <div>
+        <label className="block text-sm font-medium text-white mb-2">
+          Consist Mode
+        </label>
+        <p className="text-xs text-track-steel mb-3">
+          Choose how the consist will be controlled
+        </p>
+        <div className="space-y-2">
+          <label className="flex items-center gap-3 p-3 bg-control-black rounded hover:bg-control-grey cursor-pointer transition-colors border-2 border-transparent has-[:checked]:border-signal-green">
+            <input
+              type="radio"
+              name="virtual_mode"
+              value="true"
+              checked={formData.virtual_mode === true}
+              onChange={() => handleChange('virtual_mode', true)}
+            />
+            <div className="flex-1">
+              <div className="text-white font-medium flex items-center gap-2">
+                <i className="fa-solid fa-gears text-signal-green"></i>
+                Virtual Mode (Default)
+              </div>
+              <div className="text-track-steel text-xs mt-1">
+                Software consist control • CV19=0 • Safe default
+              </div>
+            </div>
+          </label>
+          <label className="flex items-center gap-3 p-3 bg-control-black rounded hover:bg-control-grey cursor-pointer transition-colors border-2 border-transparent has-[:checked]:border-signal-amber">
+            <input
+              type="radio"
+              name="virtual_mode"
+              value="false"
+              checked={formData.virtual_mode === false}
+              onChange={() => handleChange('virtual_mode', false)}
+            />
+            <div className="flex-1">
+              <div className="text-white font-medium flex items-center gap-2">
+                <i className="fa-solid fa-link text-signal-amber"></i>
+                DCC Mode
+              </div>
+              <div className="text-track-steel text-xs mt-1">
+                Hardware consist • CV19=consist_address • Writes CV to locomotives
+              </div>
+            </div>
+          </label>
+        </div>
+        {!formData.virtual_mode && (
+          <div className="mt-3 p-3 bg-signal-amber/10 border border-signal-amber/30 rounded">
+            <div className="flex items-start gap-2 text-signal-amber text-xs">
+              <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
+              <div>
+                <span className="font-semibold">Warning:</span> {isEdit ? 'Switching to' : 'Creating in'} DCC Mode will write <span className="font-mono">CV19={formData.address || 'consist_address'}</span> to both locomotives.
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Gate Assignments */}

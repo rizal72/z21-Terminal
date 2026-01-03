@@ -741,23 +741,18 @@ function App() {
               <button
               onClick={handleReloadRoster}
               disabled={reloadingRoster || !isConnected}
-              className={`px-2 md:px-4 py-2 bg-control-dark border rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`px-2 py-2 md:px-3 bg-control-dark border rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                 reloadSuccess
                   ? 'border-signal-green text-signal-green'
                   : 'border-control-grey text-track-steel hover:border-signal-amber hover:text-signal-amber'
               }`}
               title="Reload roster from JMRI XML files"
             >
-              <div className="flex items-center gap-2">
-                <i className={`fa-solid ${
-                  reloadingRoster ? 'fa-spinner fa-spin' :
-                  reloadSuccess ? 'fa-check' :
-                  'fa-rotate-right'
-                } text-base md:text-lg`}></i>
-                <span className="hidden lg:inline text-xs font-mono uppercase tracking-wider">
-                  {reloadingRoster ? 'Reloading...' : reloadSuccess ? 'Reloaded!' : 'Reload'}
-                </span>
-              </div>
+              <i className={`fa-solid ${
+                reloadingRoster ? 'fa-spinner fa-spin' :
+                reloadSuccess ? 'fa-check' :
+                'fa-rotate-right'
+              } text-base md:text-lg`}></i>
             </button>
 
               {/* Add Controller Button - desktop only */}
@@ -820,11 +815,11 @@ function App() {
 
               {/* Track Power Status */}
               <div
-                className="md:flex md:items-center md:gap-2 md:px-2 md:py-2 md:bg-control-dark/30 md:rounded cursor-default"
+                className="flex items-center gap-2 cursor-default"
                 title={`Track Power: ${trackPower ? 'ON' : 'OFF'}`}
               >
                 <i className={`fa-solid fa-bolt text-lg md:text-xl ${trackPower ? 'text-signal-green' : 'text-signal-red'}`}></i>
-                <div className="hidden md:block text-xs font-mono w-7">
+                <div className="hidden md:block text-xs font-mono w-4">
                   <div className={trackPower ? 'text-signal-green' : 'text-signal-red'}>
                     {trackPower ? 'ON' : 'OFF'}
                   </div>
@@ -833,7 +828,7 @@ function App() {
 
               {/* WebSocket Status */}
               <div
-                className="md:flex md:items-center md:gap-2 md:px-2 md:px-3 md:py-2 md:bg-control-dark/30 md:rounded cursor-default"
+                className="flex items-center gap-2 cursor-default"
                 title={`WebSocket Connection: ${isConnected ? 'Connected' : 'Disconnected'}`}
               >
                 <i className={`fa-solid fa-wifi text-lg md:text-xl ${isConnected ? 'text-signal-green' : 'text-signal-red'}`}></i>
@@ -846,7 +841,7 @@ function App() {
 
               {/* Z21 Status */}
               <div
-                className="md:flex md:items-center md:gap-2 md:px-2 md:px-3 md:py-2 md:bg-control-dark/30 md:rounded cursor-default"
+                className="flex items-center gap-2 cursor-default"
                 title={`Z21 Device: ${z21Online ? 'Online' : 'Offline'}`}
               >
                 <i className={`fa-solid fa-server text-lg md:text-xl ${z21Online ? 'text-signal-green' : 'text-signal-red'}`}></i>

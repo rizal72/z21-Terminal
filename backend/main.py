@@ -683,12 +683,15 @@ async def get_consists():
 @app.post("/api/consists")
 async def create_consist(request: dict):
     """Create a new consist in config.json"""
+    global consist_data
+
     try:
         consist_address = str(request.get("address"))
         lead_address = request.get("lead_address")
         rear_address = request.get("rear_address")
         gate_ids = request.get("gate_ids", [])
         reference_loco = request.get("reference_loco", "rear")  # "lead" or "rear"
+        virtual_mode = request.get("virtual_mode", True)  # Default: Virtual Mode (safe)
 
         if not consist_address or not lead_address or not rear_address:
             return {"success": False, "error": "Missing required fields"}
@@ -710,7 +713,7 @@ async def create_consist(request: dict):
             "lead_address": lead_address,
             "rear_address": rear_address,
             "gate_ids": gate_ids,
-            "virtual_mode": False,  # New consists start in DCC mode
+            "virtual_mode": virtual_mode,
             "auto_compensation_enabled": False,
             "reference": {
                 "loco": rear_address if reference_loco == "rear" else lead_address,
@@ -724,16 +727,35 @@ async def create_consist(request: dict):
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
 
-        # Write CV19 to both locomotives (make it a physical DCC consist)
+        # Write CV19 based on mode
         if z21_manager and z21_manager.z21:
             consist_addr_int = int(consist_address)
-            success_lead = z21_manager.z21.write_cv_ops_mode(lead_address, 19, consist_addr_int)
-            success_rear = z21_manager.z21.write_cv_ops_mode(rear_address, 19, consist_addr_int)
+
+            if virtual_mode:
+                # Virtual Mode: write CV19=0 (disable hardware consist)
+                print(f"⚙️  Creating consist {consist_address} in Virtual Mode - writing CV19=0")
+                cv_value = 0
+            else:
+                # DCC Mode: write CV19=consist_address (enable hardware consist)
+                print(f"⚙️  Creating consist {consist_address} in DCC Mode - writing CV19={consist_addr_int}")
+                cv_value = consist_addr_int
+
+            success_lead = z21_manager.z21.write_cv_ops_mode(lead_address, 19, cv_value)
+            success_rear = z21_manager.z21.write_cv_ops_mode(rear_address, 19, cv_value)
 
             if not (success_lead and success_rear):
-                return {"success": False, "error": "Consist created in config but failed to write CV19 to locomotives"}
+                mode_str = "Virtual" if virtual_mode else "DCC"
+                return {"success": False, "error": f"Consist created in config but failed to write CV19 to locomotives ({mode_str} Mode)"}
 
-        return {"success": True, "message": f"Consist {consist_address} created (CV19 written)"}
+        mode_str = "Virtual" if virtual_mode else "DCC"
+
+        # Reload consist_data from updated config before broadcasting
+        consist_data = load_consists_from_config(CONFIG_PATH)
+
+        # Broadcast updated state to all connected clients (refresh dropdowns)
+        await broadcast_initial_state()
+
+        return {"success": True, "message": f"Consist {consist_address} created in {mode_str} Mode (CV19 written)"}
 
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -742,6 +764,8 @@ async def create_consist(request: dict):
 @app.put("/api/consists/{address}")
 async def update_consist(address: str, request: dict):
     """Update an existing consist in config.json"""
+    global consist_data
+
     try:
         # Load config
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
@@ -753,12 +777,23 @@ async def update_consist(address: str, request: dict):
 
         # Update consists fields
         consist = config["consists"][address]
+        old_virtual_mode = consist.get("virtual_mode", True)
+
         if "lead_address" in request:
             consist["lead_address"] = request["lead_address"]
         if "rear_address" in request:
             consist["rear_address"] = request["rear_address"]
         if "gate_ids" in request:
             consist["gate_ids"] = request["gate_ids"]
+
+        # Handle virtual_mode change (if present in request)
+        virtual_mode_changed = False
+        new_virtual_mode = old_virtual_mode
+        if "virtual_mode" in request:
+            new_virtual_mode = request["virtual_mode"]
+            if new_virtual_mode != old_virtual_mode:
+                virtual_mode_changed = True
+                consist["virtual_mode"] = new_virtual_mode
 
         # Update reference if reference_loco specified
         if "reference_loco" in request:
@@ -779,6 +814,44 @@ async def update_consist(address: str, request: dict):
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
 
+        # If virtual_mode changed, write CV19 accordingly
+        if virtual_mode_changed and z21_manager and z21_manager.z21:
+            consist_addr_int = int(address)
+            lead_address = consist["lead_address"]
+            rear_address = consist["rear_address"]
+
+            if new_virtual_mode:
+                # Switched to Virtual Mode: write CV19=0
+                print(f"⚙️  Switching consist {address} to Virtual Mode - writing CV19=0")
+                cv_value = 0
+            else:
+                # Switched to DCC Mode: write CV19=consist_address
+                print(f"⚙️  Switching consist {address} to DCC Mode - writing CV19={consist_addr_int}")
+                cv_value = consist_addr_int
+
+            success_lead = z21_manager.z21.write_cv_ops_mode(lead_address, 19, cv_value)
+            success_rear = z21_manager.z21.write_cv_ops_mode(rear_address, 19, cv_value)
+
+            if not (success_lead and success_rear):
+                mode_str = "Virtual" if new_virtual_mode else "DCC"
+                return {"success": False, "error": f"Consist updated in config but failed to write CV19 ({mode_str} Mode)"}
+
+            mode_str = "Virtual" if new_virtual_mode else "DCC"
+
+            # Reload consist_data from updated config before broadcasting
+            consist_data = load_consists_from_config(CONFIG_PATH)
+
+            # Broadcast updated state to all connected clients (refresh dropdowns)
+            await broadcast_initial_state()
+
+            return {"success": True, "message": f"Consist {address} updated and switched to {mode_str} Mode (CV19 written)"}
+
+        # Reload consist_data from updated config before broadcasting
+        consist_data = load_consists_from_config(CONFIG_PATH)
+
+        # Broadcast updated state to all connected clients (refresh dropdowns)
+        await broadcast_initial_state()
+
         return {"success": True, "message": f"Consist {address} updated"}
 
     except Exception as e:
@@ -787,7 +860,12 @@ async def update_consist(address: str, request: dict):
 
 @app.delete("/api/consists/{address}")
 async def delete_consist(address: str):
-    """Delete a consist from config.json"""
+    """
+    Delete a consist from config.json
+    If consist is in DCC mode (virtual_mode=false), writes CV19=0 first
+    """
+    global consist_data
+
     try:
         # Load config
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
@@ -797,12 +875,30 @@ async def delete_consist(address: str):
         if address not in config.get("consists", {}):
             return {"success": False, "error": f"Consist {address} not found"}
 
+        consist_config = config["consists"][address]
+
+        # If consist is in DCC mode (virtual_mode=false), disable consist on locomotives first
+        virtual_mode = consist_config.get("virtual_mode", False)
+        if not virtual_mode and z21_manager:
+            # Write CV19=0 to both locomotives to disable DCC consist
+            print(f"⚠️  Consist {address} is in DCC mode - writing CV19=0 to disable consist on locomotives")
+            consist_address_int = int(address)
+            # Use enable_virtual_mode() which writes CV19=0 (disables consist)
+            # disable_virtual_mode() would write CV19=consist_address (restores consist)
+            z21_manager.enable_virtual_mode(consist_address_int)
+
         # Delete from consists
         del config["consists"][address]
 
         # Save config
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
+
+        # Reload consist_data from updated config before broadcasting
+        consist_data = load_consists_from_config(CONFIG_PATH)
+
+        # Broadcast updated state to all connected clients (refresh dropdowns)
+        await broadcast_initial_state()
 
         return {"success": True, "message": f"Consist {address} deleted"}
 

@@ -277,6 +277,23 @@ class YOLOTracker:
             rear_addr = consist_info['rear_address']  # Can be null for single locos
             gate_ids = consist_info['gate_ids']
 
+            # Skip consists without tracking (no gates configured)
+            # These are software-only consists that don't require YOLO training
+            if not gate_ids or len(gate_ids) == 0:
+                if self.debug_enabled:
+                    print(f"⏭️  Skipping consist {consist_id} (no gates - tracking disabled)")
+                continue
+
+            # Verify locomotives are in YOLO training set
+            if lead_addr not in ADDRESS_TO_CLASS:
+                print(f"⚠️  Skipping consist {consist_id}: lead loco {lead_addr} not in YOLO training set")
+                print(f"    Trained locomotives: {list(ADDRESS_TO_CLASS.keys())}")
+                continue
+            if rear_addr and rear_addr not in ADDRESS_TO_CLASS:
+                print(f"⚠️  Skipping consist {consist_id}: rear loco {rear_addr} not in YOLO training set")
+                print(f"    Trained locomotives: {list(ADDRESS_TO_CLASS.keys())}")
+                continue
+
             self.consist_config[consist_id] = {
                 'lead_address': lead_addr,
                 'rear_address': rear_addr,
