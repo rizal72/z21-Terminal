@@ -641,6 +641,7 @@ class TrackingDaemon:
         self.consist_speeds = {}  # {consist_address: speed}
         self.active_tracking = False
         self.last_fps_mode = None  # Track mode changes for logging
+        self.video_connected = True  # Track video connection state for logging
         self.idle_timer_task = None  # Asyncio task for 10s cooldown timer
 
     async def connect_backend(self):
@@ -905,9 +906,17 @@ class TrackingDaemon:
             while self.running:
                 ret, frame = self.cap.read()
                 if not ret:
-                    print("⚠️  Lost video connection")
+                    # Log only on state change (avoid spam)
+                    if self.video_connected:
+                        print("⚠️  Lost video connection")
+                        self.video_connected = False
                     await asyncio.sleep(1)
                     continue
+
+                # Video connection restored
+                if not self.video_connected:
+                    print("✅ Video connection restored")
+                    self.video_connected = True
 
                 self.frame_count += 1
 
