@@ -25,14 +25,15 @@ CAMERA_CONFIG_PATH = project_root / 'camera_config.json'
 
 
 def load_camera_config() -> str:
-    """Load camera configuration and build RTSP URL."""
+    """Load camera configuration and build RTSP URL for video feed."""
     try:
         with open(CAMERA_CONFIG_PATH, 'r') as f:
             config = json.load(f)
 
         camera_ip = config.get('camera_ip', '192.168.1.4')
         camera_port = config.get('camera_port', 554)
-        stream = config.get('stream', 'stream2')
+        # Use dedicated stream_video_feed (SD) for browser, fallback to stream (HD for YOLO)
+        stream = config.get('stream_video_feed', config.get('stream', 'stream2'))
         username = config['username']
         password = config['password']
 

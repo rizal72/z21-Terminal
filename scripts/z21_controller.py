@@ -37,7 +37,9 @@ from typing import Optional, Dict
 from pathlib import Path
 
 sys.path.insert(0, '/Users/riccardosallusti/Documents/_PROGETTI/z21-Terminal/scripts')
+sys.path.insert(0, '/Users/riccardosallusti/Documents/_PROGETTI/z21-Terminal/backend')
 from z21 import Z21
+from config_loader import load_config
 
 
 # Percorsi JMRI
@@ -118,6 +120,42 @@ def load_consists() -> Dict[int, Dict]:
     return consists
 
 
+def load_consist_modes() -> Dict[int, Dict]:
+    """
+    Load consist configuration from config.json (virtual_mode + locomotives).
+
+    Returns:
+        dict: {
+            10: {
+                'virtual_mode': True,
+                'lead_address': 1,
+                'rear_address': 5
+            },
+            ...
+        }
+    """
+    try:
+        config = load_config()
+        consists_config = config.get('consists', {})
+
+        result = {}
+        for consist_addr_str, consist_data in consists_config.items():
+            try:
+                consist_addr = int(consist_addr_str)
+                result[consist_addr] = {
+                    'virtual_mode': consist_data.get('virtual_mode', True),
+                    'lead_address': consist_data.get('lead_address'),
+                    'rear_address': consist_data.get('rear_address')
+                }
+            except (ValueError, KeyError):
+                continue
+
+        return result
+    except Exception as e:
+        print(f"⚠️  Warning: Could not load consist config: {e}")
+        return {}
+
+
 class LocoController:
     """Controller interattivo per locomotive."""
 
@@ -129,6 +167,11 @@ class LocoController:
         self.running = True
         self.max_speed = 126
         self.track_power_on = True  # Stato corrente binari
+
+        # Virtual consist support
+        self.is_virtual_consist = False
+        self.lead_address = None
+        self.rear_address = None
 
         # Polling configuration
         self.last_poll = time.time()
@@ -155,6 +198,7 @@ class LocoController:
         print("\n📂 Loading JMRI roster...")
         self.locomotives = load_locomotives_from_roster()
         self.consists = load_consists()
+        self.consist_modes = load_consist_modes()  # Load virtual_mode config
 
         # Create complete address list with consists
         self.all_addresses = {}
@@ -216,9 +260,36 @@ class LocoController:
                 sys.exit(1)
 
             self.address = address
+            self._configure_consist_mode(address)
+
             # Read actual state from locomotive
             self._sync_function_states()
             print(f"\n✅ Selected: {self.all_addresses[address]}")
+
+    def _configure_consist_mode(self, address: int):
+        """
+        Configure consist mode (Virtual vs DCC) for given address.
+
+        Sets self.is_virtual_consist, self.lead_address, self.rear_address
+        and prints mode info.
+        """
+        if address in self.consist_modes:
+            mode_config = self.consist_modes[address]
+            if mode_config['virtual_mode']:
+                self.is_virtual_consist = True
+                self.lead_address = mode_config['lead_address']
+                self.rear_address = mode_config['rear_address']
+                print(f"🔀 Virtual Mode: Will control lead ({self.lead_address}) + rear ({self.rear_address}) separately")
+            else:
+                self.is_virtual_consist = False
+                self.lead_address = None
+                self.rear_address = None
+                print(f"🔗 DCC Mode: Consist address {address} configured in decoder (CV19)")
+        else:
+            # Single locomotive or unknown consist
+            self.is_virtual_consist = False
+            self.lead_address = None
+            self.rear_address = None
 
     def select_locomotive(self):
         """Interactive locomotive selection."""
@@ -260,6 +331,8 @@ class LocoController:
                 addr = int(choice)
                 if addr in self.all_addresses:
                     self.address = addr
+                    self._configure_consist_mode(addr)
+
                     # Reset local function state
                     self.function_states = {i: False for i in range(29)}
 
@@ -552,7 +625,15 @@ OTHER:
 
     def send_speed(self):
         """Invia comando velocità alla Z21."""
-        self.z21.set_loco_speed(self.address, self.speed, self.forward)
+        if self.is_virtual_consist:
+            # Virtual Mode: control lead + rear separately
+            # Send SAME direction to both - decoder CV29 handles physical reversal
+            self.z21.set_loco_speed(self.lead_address, self.speed, self.forward)
+            self.z21.set_loco_speed(self.rear_address, self.speed, self.forward)
+        else:
+            # DCC Mode or single loco: use consist/loco address
+            self.z21.set_loco_speed(self.address, self.speed, self.forward)
+
         # Marca timestamp comando per evitare sync immediato (da tempo a JMRI di stabilizzarsi)
         self.last_command_time = time.time()
         self.show_status()
@@ -560,11 +641,15 @@ OTHER:
     def toggle_function(self, func_num: int):
         """Toggle una funzione ON/OFF."""
         # Determina address corretto
-        if "[IN CONSIST" in self.all_addresses.get(self.address, ""):
+        if self.is_virtual_consist:
+            # Virtual consist: use lead address for functions
+            function_address = self.lead_address
+            loco_data = self.locomotives.get(self.lead_address, {})
+        elif "[IN CONSIST" in self.all_addresses.get(self.address, ""):
             function_address = self.address
             loco_data = self.locomotives.get(self.address, {})
         elif "CONSIST" in self.all_addresses.get(self.address, ""):
-            # Consist: usa lead address per funzioni normali
+            # DCC Consist: usa lead address per funzioni normali
             consist_locos = self.consists.get(self.address, [])
             lead_address = None
             for loco in consist_locos:
@@ -587,15 +672,21 @@ OTHER:
         is_lockable = func_data.get('lockable', True)
 
         # F0 (luci) è speciale: se siamo in un consist, sincronizza su TUTTE le loco
-        if func_num == 0 and "CONSIST" in self.all_addresses.get(self.address, ""):
+        if func_num == 0 and (self.is_virtual_consist or "CONSIST" in self.all_addresses.get(self.address, "")):
             # Toggle stato
             current_state = self.function_states.get(func_num, False)
             new_state = not current_state
             self.function_states[func_num] = new_state
 
-            consist_locos = self.consists.get(self.address, [])
-            for loco in consist_locos:
-                loco_addr = loco['address']
+            if self.is_virtual_consist:
+                # Virtual mode: control lead + rear
+                loco_addresses = [self.lead_address, self.rear_address]
+            else:
+                # DCC mode: get all consist locos
+                consist_locos = self.consists.get(self.address, [])
+                loco_addresses = [loco['address'] for loco in consist_locos]
+
+            for loco_addr in loco_addresses:
                 # Leggi stato funzioni corrente della loco
                 loco_func_states = {i: False for i in range(29)}
                 loco_info = self.z21.get_loco_info(loco_addr)
@@ -751,7 +842,7 @@ OTHER:
                         time.sleep(0.1)
                         # Resetta velocità questa loco
                         self.speed = 0
-                        self.z21.set_loco_speed(self.address, 0, self.forward)
+                        self.send_speed()  # Uses virtual/DCC mode logic
                         self.track_power_on = False
                     else:
                         # Suono power on
@@ -911,7 +1002,7 @@ OTHER:
                             time.sleep(0.1)
                             # Resetta velocità questa loco
                             self.speed = 0
-                            self.z21.set_loco_speed(self.address, 0, self.forward)
+                            self.send_speed()  # Uses virtual/DCC mode logic
                             self.track_power_on = False
                         else:
                             # Suono power on

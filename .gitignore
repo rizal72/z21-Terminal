@@ -28,9 +28,9 @@ ENV/
 # Project specific
 data/
 *.tmp
+*.old
 
-# YOLO Training - DO NOT commit (large files)
-scripts/models/
+# YOLO Training
 scripts/utils/data/
 *.mp4
 *.avi

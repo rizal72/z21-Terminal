@@ -12,8 +12,8 @@
         3,
         4
       ],
-      "virtual_mode": true,
-      "auto_compensation_enabled": true,
+      "virtual_mode": false,
+      "auto_compensation_enabled": false,
       "reference": {
         "loco": 5,
         "adjust": 1,
@@ -29,8 +29,8 @@
         1,
         2
       ],
-      "virtual_mode": true,
-      "auto_compensation_enabled": true,
+      "virtual_mode": false,
+      "auto_compensation_enabled": false,
       "reference": {
         "loco": 8,
         "adjust": 7,
@@ -122,5 +122,7 @@
       "max_delta_t": 15.0,
       "notes": "Thresholds in seconds: |Δt| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
     }
-  }
+  },
+  "_comment": "Copy this file to config.local.json to override settings locally",
+  "_usage": "config.local.json is gitignored and won't be committed"
 }

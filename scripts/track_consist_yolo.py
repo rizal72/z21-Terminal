@@ -674,8 +674,9 @@ class YOLOTracker:
             detections: dict {class_id: (pos, conf)}
             results: YOLO results object
         """
-        # Run inference
-        results = self.model(frame, conf=CONFIDENCE_THRESHOLD, verbose=False)
+        # Run inference with rectangular image size (matches training)
+        # (640, 1152) = 16:9 aspect ratio, no letterboxing waste
+        results = self.model(frame, conf=CONFIDENCE_THRESHOLD, imgsz=(640, 1152), verbose=False)
 
         detections = {}  # {class_id: (pos, conf)}
 
@@ -1333,6 +1334,12 @@ def track_consist(model_path: str):
             # Draw tracking overlay only if tracking enabled and data available
             if tracking_enabled and track_data is not None:
                 draw_overlay(frame_display, tracker, track_data, debug_view, show_panels, frame_count, marker_state, tracking_enabled)
+
+            # Downscale for display if HD (save rendering performance)
+            # BUT: skip if Marker Mode enabled (mouse coordinates must match frame size)
+            display_height, display_width = frame_display.shape[:2]
+            if display_width > 1280 and not marker_state.enabled:  # Only downscale when NOT editing
+                frame_display = cv2.resize(frame_display, (1280, 720), interpolation=cv2.INTER_AREA)
 
             cv2.imshow(window_name, frame_display)
 
