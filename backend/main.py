@@ -19,14 +19,14 @@ from roster_loader import load_consist_with_functions, load_all_locomotives, loa
 from tracking_manager import TrackingManager
 import video_feed as video_feed_module
 from video_feed import generate_video_frames
+from config_loader import load_config, save_config, get_config_path
 
 # Default constants (single source of truth)
 DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}
 DEFAULT_CONTROLLER = {'id': None, 'type': None, 'address': None}
 
 # Configuration paths (all in project root)
-project_root = Path(__file__).parent.parent  # z21-Terminal/ root
-CONFIG_PATH = project_root / 'config.json'
+CONFIG_PATH = get_config_path()  # Centralized config path
 
 # Global instances
 z21_manager: Z21Manager = None
@@ -179,26 +179,24 @@ async def lifespan(app: FastAPI):
 
     # Load debug mode configuration FIRST
     try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-            debug_config = config.get('debug', {'enabled': False})
-            debug_enabled = debug_config.get('enabled', False)
+        config = load_config()
+        debug_config = config.get('debug', {'enabled': False})
+        debug_enabled = debug_config.get('enabled', False)
     except Exception:
         debug_enabled = False
 
     # Load timing thresholds from config.json
     print("⏱️  Loading timing thresholds from config.json...")
     try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-            tracking_config = config.get('tracking', {})
-            thresholds = tracking_config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
-            timing_thresholds = {
-                'normal': thresholds.get('normal', DEFAULT_TIMING_THRESHOLDS['normal']),
-                'warning': thresholds.get('warning', DEFAULT_TIMING_THRESHOLDS['warning'])
-            }
-            if debug_enabled:
-                print(f"  ✓ Timing thresholds: SYNCED < {timing_thresholds['normal']}s, WARNING < {timing_thresholds['warning']}s")
+        config = load_config()
+        tracking_config = config.get('tracking', {})
+        thresholds = tracking_config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
+        timing_thresholds = {
+            'normal': thresholds.get('normal', DEFAULT_TIMING_THRESHOLDS['normal']),
+            'warning': thresholds.get('warning', DEFAULT_TIMING_THRESHOLDS['warning'])
+        }
+        if debug_enabled:
+            print(f"  ✓ Timing thresholds: SYNCED < {timing_thresholds['normal']}s, WARNING < {timing_thresholds['warning']}s")
     except FileNotFoundError:
         print(f"  ⚠️  config.json not found, using default thresholds ({DEFAULT_TIMING_THRESHOLDS['normal']}s/{DEFAULT_TIMING_THRESHOLDS['warning']}s)")
         timing_thresholds = DEFAULT_TIMING_THRESHOLDS.copy()
@@ -209,47 +207,51 @@ async def lifespan(app: FastAPI):
     # Load reference loco configuration (from consists)
     print("🎯 Loading reference loco configuration...")
     try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-            consists = config.get('consists', {})
-            # Extract reference info from each consist
-            reference_locos = {}
-            for consist_addr, consist_info in consists.items():
-                if 'reference' in consist_info:
-                    ref = consist_info['reference']
-                    reference_locos[consist_addr] = {
-                        'reference': ref.get('loco'),
-                        'adjust': ref.get('adjust')
-                    }
-            if debug_enabled:
-                print(f"  ✓ Reference locos: {len(reference_locos)} consists configured")
-                for consist_addr, ref_config in reference_locos.items():
-                    print(f"    Consist {consist_addr}: reference={ref_config['reference']}, adjust={ref_config['adjust']}")
+        config = load_config()
+        consists = config.get('consists', {})
+        # Extract reference info from each consist
+        reference_locos = {}
+        for consist_addr, consist_info in consists.items():
+            if 'reference' in consist_info:
+                ref = consist_info['reference']
+                reference_locos[consist_addr] = {
+                    'reference': ref.get('loco'),
+                    'adjust': ref.get('adjust')
+                }
+        if debug_enabled:
+            print(f"  ✓ Reference locos: {len(reference_locos)} consists configured")
+            for consist_addr, ref_config in reference_locos.items():
+                print(f"    Consist {consist_addr}: reference={ref_config['reference']}, adjust={ref_config['adjust']}")
     except Exception as e:
         print(f"  ⚠️  Error loading reference locos: {e}")
 
     # Load tracked consist IDs (only consists with gate tracking configured)
     print("📍 Loading tracked consist IDs...")
     try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-            consists = config.get('consists', {})
-            # Filter only consist IDs with gate_ids configured
-            for consist_key, consist_info in consists.items():
-                consist_id = int(consist_key)
-                gate_ids = consist_info.get('gate_ids', [])
-                if gate_ids:  # Only add if gates configured
-                    tracked_consist_ids.append(consist_id)
-            tracked_consist_ids.sort()
-            if debug_enabled:
-                print(f"  ✓ Tracked consists: {tracked_consist_ids}")
+        config = load_config()
+        consists = config.get('consists', {})
+        # Filter only consist IDs with gate_ids configured
+        for consist_key, consist_info in consists.items():
+            consist_id = int(consist_key)
+            gate_ids = consist_info.get('gate_ids', [])
+            if gate_ids:  # Only add if gates configured
+                tracked_consist_ids.append(consist_id)
+        tracked_consist_ids.sort()
+        if debug_enabled:
+            print(f"  ✓ Tracked consists: {tracked_consist_ids}")
     except Exception as e:
         print(f"  ⚠️  Error loading tracked consists: {e}")
         reference_locos = {}
+        consists = {}
 
     # Load consist configuration
     # Priority: config.json consists → JMRI (bootstrap only)
-    consists = config.get('consists', {})
+    if not consists:
+        try:
+            config = load_config()
+            consists = config.get('consists', {})
+        except Exception:
+            consists = {}
 
     if consists:
         # Load from config.json (source of truth)
@@ -280,6 +282,12 @@ async def lifespan(app: FastAPI):
 
             # Save to config.json for future use
             print("💾 Saving consists to config.json for future use...")
+            # Reload config to ensure we have latest version
+            try:
+                config = load_config()
+            except Exception:
+                config = {}
+
             if 'consists' not in config:
                 config['consists'] = {}
 
@@ -297,9 +305,7 @@ async def lifespan(app: FastAPI):
                     }
 
             # Save updated config
-            with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-                json.dump(config, f, indent=2, ensure_ascii=False)
-
+            save_config(config)
             print(f"  ✓ Saved {len(consist_data)} consists to config.json")
 
     # Load all locomotives from JMRI
@@ -537,8 +543,7 @@ async def reload_roster_data():
 
     # Load config to check consists
     try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config = json.load(f)
+        config = load_config()
     except Exception as e:
         print(f"⚠️  Error loading config: {e}")
         return False
@@ -622,11 +627,10 @@ def build_consist_response(address, data, state):
     # Load gate_ids from config consists
     gate_ids = []
     try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-            consists = config.get('consists', {})
-            consist_info = consists.get(str(address), {})
-            gate_ids = consist_info.get('gate_ids', [])
+        config = load_config()
+        consists = config.get('consists', {})
+        consist_info = consists.get(str(address), {})
+        gate_ids = consist_info.get('gate_ids', [])
     except Exception:
         pass  # If config load fails, gate_ids stays empty
 
@@ -651,8 +655,7 @@ def build_consist_response(address, data, state):
 async def get_consists():
     """Get all consists configuration and available gates"""
     # Load config to get gates
-    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-        config = json.load(f)
+    config = load_config()
 
     consists_result = {}
     for address, data in consist_data.items():
@@ -697,8 +700,7 @@ async def create_consist(request: dict):
             return {"success": False, "error": "Missing required fields"}
 
         # Load config
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config = json.load(f)
+        config = load_config()
 
         # Check if consist already exists
         if consist_address in config.get("consists", {}):
@@ -724,8 +726,7 @@ async def create_consist(request: dict):
         }
 
         # Save config
-        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
+        save_config(config)
 
         # Write CV19 based on mode
         if z21_manager and z21_manager.z21:
@@ -768,8 +769,7 @@ async def update_consist(address: str, request: dict):
 
     try:
         # Load config
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config = json.load(f)
+        config = load_config()
 
         # Check if consist exists
         if address not in config.get("consists", {}):
@@ -811,8 +811,7 @@ async def update_consist(address: str, request: dict):
                 consist["reference"]["adjust"] = lead_address
 
         # Save config
-        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
+        save_config(config)
 
         # If virtual_mode changed, write CV19 accordingly
         if virtual_mode_changed and z21_manager and z21_manager.z21:
@@ -868,8 +867,7 @@ async def delete_consist(address: str):
 
     try:
         # Load config
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config = json.load(f)
+        config = load_config()
 
         # Check if consist exists
         if address not in config.get("consists", {}):
@@ -891,8 +889,7 @@ async def delete_consist(address: str):
         del config["consists"][address]
 
         # Save config
-        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
+        save_config(config)
 
         # Reload consist_data from updated config before broadcasting
         consist_data = load_consists_from_config(CONFIG_PATH)

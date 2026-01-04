@@ -40,6 +40,7 @@ scripts/utils/data/
 
 # Sensitive data
 config.local.py
+config.local.json
 secrets.json
 .env
 camera_config.json

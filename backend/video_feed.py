@@ -15,6 +15,8 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from config_loader import load_config
+
 
 # Configuration paths (all in project root)
 project_root = Path(__file__).parent.parent  # z21-Terminal/ root
@@ -50,15 +52,7 @@ def load_camera_config() -> str:
 
 RTSP_URL = load_camera_config()
 
-
-def load_config() -> Dict:
-    """Load system configuration from JSON"""
-    try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error loading config: {e}")
-        return {'gates': []}
+# load_config() now imported from config_loader (supports config.local.json override)
 
 
 def draw_gates(frame: np.ndarray, gates: List[Dict]) -> np.ndarray:

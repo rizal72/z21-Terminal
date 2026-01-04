@@ -73,21 +73,15 @@ DISTANCE_HISTORY_SIZE = 10000  # Number of distance measurements to store (large
 # Config paths
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
-CONFIG_PATH = PROJECT_ROOT / 'config.json'
+
+# Add backend to path for config_loader import
+backend_dir = PROJECT_ROOT / 'backend'
+sys.path.insert(0, str(backend_dir))
+
+from config_loader import load_config, save_config as save_config_central, get_config_path
 
 # === CONFIGURATION ===
-def load_config():
-    """Load system configuration from JSON file."""
-    try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-        return config
-    except FileNotFoundError:
-        print(f"⚠️  Config not found: {CONFIG_PATH}")
-        return {'gates': [], 'tracking': {'timing_thresholds': {'normal': 1.0, 'warning': 1.5}}, 'consists': {}}
-    except json.JSONDecodeError as e:
-        print(f"⚠️  Invalid JSON in config: {e}")
-        return {'gates': [], 'tracking': {'timing_thresholds': {'normal': 1.0, 'warning': 1.5}}, 'consists': {}}
+# load_config() now imported from config_loader (supports config.local.json override)
 
 # Class IDs (from Roboflow training - BiancAlice v3)
 # Roboflow orders alphabetically by class name
@@ -156,39 +150,22 @@ GATE_SAVED_COLOR = (0, 255, 0)  # Green
 # Consist 11: 2 shared gates - both locos cross both gates
 # Gates and timing thresholds loaded dynamically from JSON config
 
-# System configuration file (in project root)
-CONFIG_FILE = Path(__file__).parent.parent / "config.json"
-
-
-def load_config():
-    """Load system configuration from JSON file."""
-    if not CONFIG_FILE.exists():
-        print(f"⚠️  Config file not found: {CONFIG_FILE}")
-        return {"gates": [], "consists": {}, "tracking": {"timing_thresholds": {"normal": 1.0, "warning": 2.0}}}
-
-    try:
-        with open(CONFIG_FILE, 'r') as f:
-            config = json.load(f)
-        print(f"✅ Loaded {len(config.get('gates', []))} gates from config")
-        return config
-    except Exception as e:
-        print(f"❌ Error loading config: {e}")
-        return {"gates": [], "consists": {}, "tracking": {"timing_thresholds": {"normal": 1.0, "warning": 2.0}}}
+# load_config() now imported from config_loader (centralized)
 
 
 def save_config(config):
     """Save system configuration to JSON file (with automatic backup)."""
     try:
         # Create backup before overwriting
-        if CONFIG_FILE.exists():
+        config_file = get_config_path()
+        if config_file.exists():
             import shutil
-            backup_file = CONFIG_FILE.with_suffix('.json.backup')
-            shutil.copy2(CONFIG_FILE, backup_file)
+            backup_file = config_file.with_suffix('.json.backup')
+            shutil.copy2(config_file, backup_file)
             print(f"💾 Backup created: {backup_file.name}")
 
-        # Save new config
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(config, f, indent=2)
+        # Save using centralized config_loader (writes to config.json, NOT config.local.json)
+        save_config_central(config)
         print(f"✅ Config saved: {len(config.get('gates', []))} gates")
         return True
     except Exception as e:
