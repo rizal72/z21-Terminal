@@ -261,6 +261,9 @@ function App() {
         const timestamp = lastMessage.timestamp;
         const timeStr = lastMessage.time_str; // Pre-calculated elapsed time
         const thresholds = lastMessage.thresholds; // NEW: dynamic thresholds from config
+        const adjustLocoAddress = lastMessage.adjust_loco_address; // Which loco is being adjusted
+        const adjustSpeed = lastMessage.adjust_speed; // Actual speed sent to adjust loco
+        const adjustCorrection = lastMessage.adjust_correction; // Difference from target
 
         // Update consist with delta_t data (only if changed)
         setConsists(prev => {
@@ -281,7 +284,10 @@ function App() {
               delta_t: deltaT,
               delta_t_timestamp: timestamp,
               delta_t_time_str: timeStr, // Pre-calculated elapsed time string
-              timing_thresholds: thresholds // Store thresholds for DeltaTStatsPanel
+              timing_thresholds: thresholds, // Store thresholds for DeltaTStatsPanel
+              adjust_loco_address: adjustLocoAddress, // Compensation info
+              adjust_speed: adjustSpeed,
+              adjust_correction: adjustCorrection
             }
           };
         });

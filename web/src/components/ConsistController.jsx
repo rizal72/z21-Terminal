@@ -464,6 +464,9 @@ export default function ConsistController({
             deltaTTimeStr={item.delta_t_time_str}
             timingThresholds={item.timing_thresholds}
             virtualMode={item.virtual_mode}
+            adjustLocoAddress={item.adjust_loco_address}
+            adjustSpeed={item.adjust_speed}
+            adjustCorrection={item.adjust_correction}
           />
         </div>
       )}

@@ -331,6 +331,11 @@ class Z21Manager:
                         self.z21.set_loco_speed(loco_lead_addr, speed_reference, forward)
                         self.z21.set_loco_speed(loco_rear_addr, speed_adjust, forward)
 
+                    # Save compensation data for UI display
+                    consist['adjust_loco_address'] = adjust_addr
+                    consist['adjust_speed'] = speed_adjust
+                    consist['adjust_correction'] = speed_adjust - speed  # Difference from target
+
                     # Yellow color for speed changes (easy to spot in logs)
                     print(f"\033[93m  🎯 Virtual Mode: loco {adjust_addr}={speed_adjust}, loco {reference_addr}={speed_reference}\033[0m")
                 else:

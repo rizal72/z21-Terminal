@@ -1,4 +1,4 @@
-export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimestamp, deltaTTimeStr, timingThresholds, virtualMode }) {
+export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimestamp, deltaTTimeStr, timingThresholds, virtualMode, adjustLocoAddress, adjustSpeed, adjustCorrection }) {
   // Use dynamic thresholds from backend (or fallback to defaults)
   const thresholdNormal = timingThresholds?.normal || 1.0;
   const thresholdWarning = timingThresholds?.warning || 2.0;
@@ -68,13 +68,28 @@ export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimesta
       {/* Delta T Value */}
       {deltaT !== null && deltaT !== undefined ? (
         <>
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-3xl font-mono font-bold text-white">
-              Δt = {deltaT >= 0 ? '+' : ''}{deltaT.toFixed(3)}s
-            </span>
-            <span className={`text-sm font-semibold ${statusInfo.color}`}>
-              {statusInfo.status}
-            </span>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl font-mono font-bold text-white">
+                Δt = {deltaT >= 0 ? '+' : ''}{deltaT.toFixed(3)}s
+              </span>
+              <span className={`text-sm font-semibold ${statusInfo.color}`}>
+                {statusInfo.status}
+              </span>
+            </div>
+
+            {/* Compensation info (only if adjust data available) */}
+            {adjustLocoAddress !== null && adjustLocoAddress !== undefined && adjustSpeed !== null && adjustSpeed !== undefined && (
+              <div className="flex items-center gap-2 text-sm font-mono">
+                <span className="text-track-steel">Loco {adjustLocoAddress}:</span>
+                <span className="text-white font-semibold">{adjustSpeed}</span>
+                {adjustCorrection !== 0 && (
+                  <span className={adjustCorrection > 0 ? 'text-signal-green' : 'text-signal-red'}>
+                    ({adjustCorrection > 0 ? '+' : ''}{adjustCorrection})
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Interpretation */}
