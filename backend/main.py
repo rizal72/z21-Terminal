@@ -1373,6 +1373,12 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                                     # Call set_speed with auto_compensation flag (handles both compensation and decay)
                                     z21_manager.set_speed(consist_address, last_speed, last_direction, is_auto_compensation=True)
 
+                        # Get compensation data for UI display
+                        consist = z21_manager.consist_state[consist_address]
+                        adjust_loco_address = consist.get('adjust_loco_address')
+                        adjust_speed = consist.get('adjust_speed')
+                        adjust_correction = consist.get('adjust_correction')
+
                         # Broadcast to all frontend clients (include thresholds and time_str)
                         message = {
                             'type': 'delta_t_update',
@@ -1381,7 +1387,10 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                             'status': status,
                             'timestamp': timestamp,
                             'time_str': time_str,  # Pre-calculated elapsed time
-                            'thresholds': thresholds  # Dynamic thresholds from daemon
+                            'thresholds': thresholds,  # Dynamic thresholds from daemon
+                            'adjust_loco_address': adjust_loco_address,  # Which loco is being adjusted
+                            'adjust_speed': adjust_speed,  # Actual speed sent to adjust loco
+                            'adjust_correction': adjust_correction  # Difference from target (speed_adjust - speed)
                         }
 
                         disconnected_clients = []
