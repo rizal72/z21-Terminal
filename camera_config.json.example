@@ -2,6 +2,9 @@
   "camera_ip": "192.168.1.4",
   "camera_port": 554,
   "stream": "stream2",
+  "stream_video_feed": "stream2",
   "username": "your_camera_username",
-  "password": "your_camera_password"
+  "password": "your_camera_password",
+  "_comment_stream": "stream = for YOLO tracking/recording (stream1=1080p HD, stream2=720p SD)",
+  "_comment_video_feed": "stream_video_feed = for browser video feed (keep stream2 to save bandwidth)"
 }

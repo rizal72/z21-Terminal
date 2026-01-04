@@ -338,7 +338,9 @@ class YOLOTracker:
         Returns:
             detections: dict {class_id: {'pos': (x,y), 'conf': float, 'name': str}}
         """
-        results = self.model(frame, conf=CONFIDENCE_THRESHOLD, verbose=False)
+        # Run inference with rectangular image size (matches training)
+        # (640, 1152) = 16:9 aspect ratio, no letterboxing waste
+        results = self.model(frame, conf=CONFIDENCE_THRESHOLD, imgsz=(640, 1152), verbose=False)
 
         detections = {}  # {class_id: {'pos': (x,y), 'conf': float, 'name': str}}
 

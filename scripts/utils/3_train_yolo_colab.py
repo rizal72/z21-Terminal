@@ -15,15 +15,15 @@ Instructions:
 2. New Notebook
 3. Runtime → Change runtime type → GPU (T4)
 4. Copy-paste this entire script in a code cell
-5. Run (Ctrl+Enter)
+5. Run (Ctrl+Enter) - automatically uses latest Roboflow version
 6. Download trained model: best.pt
 """
 
 # ============================================
-# CONFIGURATION - Change version number here
+# CONFIGURATION
 # ============================================
-MODEL_VERSION = 3  # ⚠️ UPDATE THIS: Roboflow dataset version (1, 2, 3, etc.)
 PROJECT_NAME = "BiancAlice"  # Model identifier (layout name)
+# MODEL_VERSION: Uses latest Roboflow version automatically
 
 # ============================================
 # STEP 1: Install Dependencies
@@ -41,7 +41,13 @@ from roboflow import Roboflow
 rf = Roboflow(api_key="8nIuiAbHCUu79WNHaXsI")
 # Project name (lowercase URL-friendly)
 project = rf.workspace("rizal72").project("biancalice")
-version = project.version(MODEL_VERSION)
+
+# Use latest version automatically
+versions_list = project.versions()  # Call method to get versions
+version = versions_list[0]  # First in array = latest version
+MODEL_VERSION = version.version  # Get actual version number
+
+print(f"📦 Using Roboflow version: {MODEL_VERSION} (latest)")
 dataset = version.download("yolov8")
 
 print(f"✅ Dataset downloaded to: {dataset.location}")
@@ -56,11 +62,16 @@ from ultralytics import YOLO
 # Load YOLOv8 nano (fastest, smallest)
 model = YOLO('yolov8n.pt')
 
-# Train
+# Train with rectangular images (16:9 aspect ratio)
+# Camera native: 2304x1296 or 1280x720 (both 16:9)
+# Roboflow: "Fit within 1280x1280" preserves aspect ratio
+# Training uses (640, 1152) to match 16:9 without letterboxing
+# Benefits: zero padding waste, uses full resolution
 results = model.train(
     data=f"{dataset.location}/data.yaml",
     epochs=50,              # Number of training epochs
-    imgsz=512,              # Image size (match Roboflow preprocessing)
+    imgsz=(640, 1152),      # Rectangular: height x width (16:9 aspect ratio)
+    rect=True,              # Rectangular training (optimized for non-square)
     batch=16,               # Batch size (adjust if GPU memory issues)
     name=f'{PROJECT_NAME}_v{MODEL_VERSION}',
     patience=10,            # Early stopping after 10 epochs no improvement
@@ -124,5 +135,5 @@ print(f"      ln -sf {model_name} best.pt")
 print("   5. Test tracking:")
 print("      cd ~/Documents/_PROGETTI/z21-Terminal/scripts")
 print("      python3 track_consist_yolo.py")
-print(f"\n💡 Note: To train v{MODEL_VERSION + 1}, update MODEL_VERSION = {MODEL_VERSION + 1} at the top of this script")
+print(f"\n💡 Note: Script automatically uses latest Roboflow version (currently v{MODEL_VERSION})")
 print(f"\n⚠️  REMEMBER: Never change DCC addresses (CV1) after training!")

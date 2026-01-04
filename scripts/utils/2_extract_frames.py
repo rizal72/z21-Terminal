@@ -35,6 +35,14 @@ def extract_frames(video_path, interval=10):
     output_dir = script_dir / "data" / "frames"
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Clear existing frames before extracting new ones
+    existing_frames = list(output_dir.glob("*.jpg"))
+    if existing_frames:
+        print(f"🗑️  Clearing {len(existing_frames)} existing frames from {output_dir}")
+        for frame in existing_frames:
+            frame.unlink()
+        print()
+
     print(f"🎥 Opening video: {video_path.name}")
     print(f"📁 Output directory: {output_dir}")
     print(f"⏭️  Extracting 1 frame every {interval} frames")

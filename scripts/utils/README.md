@@ -7,8 +7,9 @@ Workflow completo per creare e trainare modelli YOLO per tracking locomotive.
 ### Step 1: Record Video
 ```bash
 cd scripts/utils
-python3 1_record_video.py <username> <password>
+python3 1_record_video.py
 ```
+- Camera credentials loaded from `camera_config.json` (see example file)
 - Premi **R** per iniziare/fermare registrazione
 - Fai fare 5-10 giri completi al consist sul tracciato
 - Video salvato in: `data/videos/camera_video_YYYYMMDD_HHMMSS.mp4`
@@ -50,8 +51,9 @@ ln -sf consist11_v1.pt best.pt
 ### Step 6: Test Tracking
 ```bash
 cd ~/Documents/_PROGETTI/z21-Terminal/scripts
-python3 track_consist_yolo.py <username> <password>
+python3 track_consist_yolo.py
 ```
+- Camera credentials loaded from `camera_config.json`
 - Usa `models/best.pt` di default
 - Oppure specifica modello: `--model models/consist11_v2.pt`
 
