@@ -1,0 +1,8 @@
+{
+  "_comment": "Copy this file to config.local.json to override settings locally",
+  "_usage": "config.local.json is gitignored and won't be committed",
+
+  "debug": {
+    "enabled": true
+  }
+}

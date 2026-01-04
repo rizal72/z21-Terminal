@@ -20,6 +20,7 @@ scripts_dir = Path(__file__).parent.parent / 'scripts'
 sys.path.insert(0, str(scripts_dir))
 
 from z21 import Z21
+from config_loader import load_config, save_config
 
 # Path to persist virtual mode state (will be migrated to config.json)
 CONSIST_STATE_FILE = Path(__file__).parent / 'consist_state.json'
@@ -626,24 +627,23 @@ class Z21Manager:
         try:
             # Try loading from config.json first (new consolidated approach)
             if self.config_path.exists():
-                with open(self.config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    consists = config.get('consists', {})
+                config = load_config()
+                consists = config.get('consists', {})
 
-                    # Extract virtual_mode and auto_compensation_enabled from each consist
-                    state = {}
-                    for consist_id, consist_info in consists.items():
-                        virtual_mode = consist_info.get('virtual_mode', False)
-                        auto_compensation = consist_info.get('auto_compensation_enabled', virtual_mode)
+                # Extract virtual_mode and auto_compensation_enabled from each consist
+                state = {}
+                for consist_id, consist_info in consists.items():
+                    virtual_mode = consist_info.get('virtual_mode', False)
+                    auto_compensation = consist_info.get('auto_compensation_enabled', virtual_mode)
 
-                        state[consist_id] = {
-                            'virtual_mode': virtual_mode,
-                            'auto_compensation_enabled': auto_compensation
-                        }
+                    state[consist_id] = {
+                        'virtual_mode': virtual_mode,
+                        'auto_compensation_enabled': auto_compensation
+                    }
 
-                    if self.debug_enabled and state:
-                        print(f"  ✓ Loaded persisted state from config.json: {state}")
-                    return state
+                if self.debug_enabled and state:
+                    print(f"  ✓ Loaded persisted state from config.json: {state}")
+                return state
 
             # Fallback: try old consist_state.json for migration
             if CONSIST_STATE_FILE.exists():
@@ -663,8 +663,7 @@ class Z21Manager:
         """Save virtual_mode and auto_compensation_enabled state to config.json consists"""
         try:
             # Load current config.json
-            with open(self.config_path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+            config = load_config()
 
             consists = config.get('consists', {})
 
@@ -683,9 +682,7 @@ class Z21Manager:
 
             # Write back to config.json
             config['consists'] = consists
-
-            with open(self.config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, indent=2, ensure_ascii=False)
+            save_config(config)
 
             if self.debug_enabled:
                 saved_state = {k: {'virtual_mode': v.get('virtual_mode'), 'auto_compensation_enabled': v.get('auto_compensation_enabled')}

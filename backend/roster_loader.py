@@ -238,12 +238,12 @@ def load_all_locomotives():
     return locomotives
 
 
-def load_consists_from_config(config_path):
+def load_consists_from_config(config_path=None):
     """
     Carica consist da config.json invece che da JMRI
 
     Args:
-        config_path: Path to config.json
+        config_path: Path to config.json (deprecated, uses centralized loader now)
 
     Returns:
         dict: Same structure as load_consist_with_functions()
@@ -259,13 +259,13 @@ def load_consists_from_config(config_path):
             ...
         }
     """
-    import json
+    from config_loader import load_config
 
     result = {}
 
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = json.load(f)
+        # Use centralized config loader (supports config.local.json override)
+        config = load_config()
 
         consists = config.get('consists', {})
 

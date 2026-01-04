@@ -25,10 +25,12 @@ from ultralytics import YOLO
 scripts_dir = Path(__file__).parent.parent / 'scripts'
 sys.path.insert(0, str(scripts_dir))
 
+# Import centralized config loader
+from config_loader import load_config
+
 # === CONFIGURATION ===
 project_root = Path(__file__).parent.parent  # z21-Terminal/ root
 MODEL_PATH = scripts_dir / 'models' / 'best.pt'  # Symlink to current model version
-CONFIG_PATH = project_root / 'config.json'
 CAMERA_CONFIG_PATH = project_root / 'camera_config.json'
 BACKEND_WS_URL = "ws://localhost:8000/ws/tracking"  # WebSocket to FastAPI backend
 
@@ -85,18 +87,7 @@ ADDRESS_TO_CLASS = {
 }
 
 # === CONFIGURATION ===
-def load_config():
-    """Load system configuration from JSON file."""
-    try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-        return config
-    except FileNotFoundError:
-        print(f"⚠️  Config not found: {CONFIG_PATH}")
-        return {'gates': [], 'tracking': {'timing_thresholds': {'normal': 1.0, 'warning': 2.0}}}
-    except json.JSONDecodeError as e:
-        print(f"⚠️  Invalid JSON in config: {e}")
-        return {'gates': [], 'tracking': {'timing_thresholds': {'normal': 1.0, 'warning': 2.0}}}
+# load_config() now imported from config_loader (supports config.local.json override)
 
 
 def gate_json_to_dict(gate_json):
@@ -625,12 +616,11 @@ class TrackingDaemon:
 
         # Load FPS settings from config (debug mode already loaded in tracker)
         try:
-            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                tracking_config = config.get('tracking', {})
-                fps_config = tracking_config.get('fps', {'active': 30, 'idle': 1})
-                self.fps_active = fps_config.get('active', 30)
-                self.fps_idle = fps_config.get('idle', 1)
+            config = load_config()
+            tracking_config = config.get('tracking', {})
+            fps_config = tracking_config.get('fps', {'active': 30, 'idle': 1})
+            self.fps_active = fps_config.get('active', 30)
+            self.fps_idle = fps_config.get('idle', 1)
         except Exception as e:
             if self.debug_enabled:
                 print(f"⚠️  Error loading config: {e}, using defaults")
