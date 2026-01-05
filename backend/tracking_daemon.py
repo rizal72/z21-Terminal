@@ -242,6 +242,11 @@ class YOLOTracker:
         if self.debug_enabled:
             print(f"⚠️  Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
 
+        # Load YOLO inference image size
+        self.yolo_imgsz = tracking_config.get('yolo_imgsz', 640)
+        if self.debug_enabled:
+            print(f"🔍 YOLO inference size: {self.yolo_imgsz}")
+
         # Load reference loco configuration (from consists)
         consists = config.get('consists', {})
         self.reference_locos = {}
@@ -338,9 +343,8 @@ class YOLOTracker:
         Returns:
             detections: dict {class_id: {'pos': (x,y), 'conf': float, 'name': str}}
         """
-        # Run inference with rectangular image size (matches training)
-        # (640, 1152) = 16:9 aspect ratio, no letterboxing waste
-        results = self.model(frame, conf=CONFIDENCE_THRESHOLD, imgsz=(640, 1152), verbose=False)
+        # Run inference (imgsz from config.json)
+        results = self.model(frame, conf=CONFIDENCE_THRESHOLD, imgsz=self.yolo_imgsz, verbose=False)
 
         detections = {}  # {class_id: {'pos': (x,y), 'conf': float, 'name': str}}
 

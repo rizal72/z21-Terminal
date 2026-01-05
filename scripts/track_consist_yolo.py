@@ -251,9 +251,10 @@ class MarkerState:
             new_angle = (self.current_gate['angle'] + delta) % 360
             self.current_gate['angle'] = new_angle
 
-    def save_current_gate(self):
+    def save_current_gate(self, tracker=None):
         """Save current gate to config (new or update existing)."""
         if self.current_gate:
+            gate_id_to_update = None
             if self.editing_gate_id is not None:
                 # Update existing gate
                 gate = next((g for g in self.config['gates'] if g['id'] == self.editing_gate_id), None)
@@ -262,10 +263,20 @@ class MarkerState:
                     gate['width'] = self.current_gate['width']
                     gate['height'] = self.current_gate['height']
                     gate['angle'] = self.current_gate['angle']
+                    gate_id_to_update = self.editing_gate_id
                     print(f"✅ Gate {self.editing_gate_id} updated")
             else:
                 # Add new gate
                 gate_id = get_next_gate_id(self.config)
+
+                # Cycle through consist colors in pairs (Orange for C11, Cyan for C10)
+                # Gate 1,2: Orange | Gate 3,4: Cyan | Gate 5,6: Orange | etc.
+                # Yellow reserved for edit mode
+                if ((gate_id - 1) // 2) % 2 == 0:
+                    color = [255, 165, 0]  # Orange (C11)
+                else:
+                    color = [0, 255, 255]  # Cyan (C10)
+
                 new_gate = {
                     'id': gate_id,
                     'name': f"Gate {gate_id}",
@@ -273,11 +284,17 @@ class MarkerState:
                     'width': self.current_gate['width'],
                     'height': self.current_gate['height'],
                     'angle': self.current_gate['angle'],
-                    'color': [255, 255, 0],  # Yellow (BGR)
-                    'notes': "Added in marker mode"
+                    'color': color
                 }
                 self.config['gates'].append(new_gate)
+                gate_id_to_update = gate_id
                 print(f"✅ Gate {gate_id} saved (total: {len(self.config['gates'])})")
+
+            # Update tracker.gates if tracker provided (for immediate rendering)
+            if tracker and gate_id_to_update:
+                gate_json = next((g for g in self.config['gates'] if g['id'] == gate_id_to_update), None)
+                if gate_json:
+                    tracker.gates[gate_id_to_update] = gate_json_to_dict(gate_json)
 
             self.current_gate = None
             self.editing_gate_id = None
@@ -336,7 +353,8 @@ class MarkerState:
     def save_to_config(self):
         """Save all gates to JSON config file."""
         if save_config(self.config):
-            print(f"💾 Saved {len(self.config['gates'])} gates to {CONFIG_FILE.name}")
+            config_path = get_config_path()
+            print(f"💾 Saved {len(self.config['gates'])} gates to {config_path.name}")
             return True
         return False
 
@@ -399,17 +417,18 @@ def gate_json_to_dict(gate_json):
     Convert gate from JSON format to is_point_in_gate() format.
 
     Args:
-        gate_json: dict with 'center' [x, y], 'width', 'height', 'angle'
+        gate_json: dict with 'center' [x, y], 'width', 'height', 'angle', 'color' [R, G, B]
 
     Returns:
-        dict with 'center_x', 'center_y', 'width', 'height', 'angle'
+        dict with 'center_x', 'center_y', 'width', 'height', 'angle', 'color'
     """
     return {
         'center_x': gate_json['center'][0],
         'center_y': gate_json['center'][1],
         'width': gate_json['width'],
         'height': gate_json['height'],
-        'angle': gate_json['angle']
+        'angle': gate_json['angle'],
+        'color': gate_json.get('color', [255, 255, 0])  # Default yellow if missing
     }
 
 
@@ -509,6 +528,10 @@ class YOLOTracker:
         # Load Δt sanity check threshold (ignore outliers from video lag)
         self.delta_t_max_threshold = thresholds.get('max_delta_t', 15.0)
         print(f"⚠️  Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
+
+        # Load YOLO inference image size
+        self.yolo_imgsz = tracking_config.get('yolo_imgsz', 640)
+        print(f"🔍 YOLO inference size: {self.yolo_imgsz}")
 
         # === PHASE 5: CONFIG-DRIVEN MULTI-CONSIST SUPPORT ===
         # Load consists from config.json
@@ -674,9 +697,8 @@ class YOLOTracker:
             detections: dict {class_id: (pos, conf)}
             results: YOLO results object
         """
-        # Run inference with rectangular image size (matches training)
-        # (640, 1152) = 16:9 aspect ratio, no letterboxing waste
-        results = self.model(frame, conf=CONFIDENCE_THRESHOLD, imgsz=(640, 1152), verbose=False)
+        # Run inference (imgsz from config.json)
+        results = self.model(frame, conf=CONFIDENCE_THRESHOLD, imgsz=self.yolo_imgsz, verbose=False)
 
         detections = {}  # {class_id: (pos, conf)}
 
@@ -804,14 +826,6 @@ def draw_gates_overlay(frame, tracker):
     for config in tracker.consist_config.values():
         all_gate_ids.update(config['gate_ids'])
 
-    # Gate colors (cycling through colors for different gates)
-    GATE_COLORS = [
-        (255, 255, 0),   # Yellow (Gate 1)
-        (255, 128, 0),   # Orange (Gate 2)
-        (0, 255, 255),   # Cyan (Gate 3)
-        (255, 0, 255),   # Magenta (Gate 4)
-    ]
-
     for gate_id in sorted(all_gate_ids):
         if gate_id not in tracker.gates:
             continue
@@ -822,7 +836,9 @@ def draw_gates_overlay(frame, tracker):
             gate['width'], gate['height'],
             gate['angle']
         )
-        color = GATE_COLORS[(gate_id - 1) % len(GATE_COLORS)]
+        # Convert RGB (from config) to BGR (for OpenCV)
+        color_rgb = gate.get('color', [255, 255, 0])  # Default yellow if missing
+        color = (color_rgb[2], color_rgb[1], color_rgb[0])  # RGB → BGR
         cv2.polylines(frame, [gate_points], True, color, 2)
         cv2.putText(frame, f"G{gate_id}", (gate['center_x'] - 10, gate['center_y'] + 5),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
@@ -835,34 +851,11 @@ def draw_marker_mode_overlay(frame, marker_state):
     if not marker_state:
         return frame
 
-    # Colors for marker mode
+    # Color for marker mode
     GATE_COLOR = (0, 255, 255)  # Cyan for current gate being edited
-    GATE_SAVED_COLOR = (0, 255, 0)  # Green for saved gates
+    # Note: Saved gates are drawn by draw_gates_overlay() with their config colors
 
-    # Draw saved gates (green) - skip the one being edited
-    for gate in marker_state.config['gates']:
-        # Skip gate if it's currently being edited
-        if marker_state.editing_gate_id == gate['id']:
-            continue
-
-        cx, cy = gate['center'][0], gate['center'][1]
-        w, h = gate['width'], gate['height']
-        angle = gate['angle']
-
-        # Get rotated rectangle points
-        points = get_rotated_rect_points(cx, cy, w, h, angle)
-        cv2.polylines(frame, [points], True, GATE_SAVED_COLOR, 2)
-
-        # Draw center crosshair
-        cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_SAVED_COLOR, 1)
-        cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_SAVED_COLOR, 1)
-
-        # Draw gate ID label
-        label = f"G{gate['id']}"
-        cv2.putText(frame, label, (cx - 15, cy - h//2 - 5),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, GATE_SAVED_COLOR, 1)
-
-    # Draw current gate being positioned (yellow)
+    # Draw current gate being positioned/edited (cyan)
     if marker_state.current_gate:
         gate = marker_state.current_gate
         cx, cy = gate['center_x'], gate['center_y']
@@ -930,50 +923,8 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
         if consist['lead_pos'] and consist['rear_pos']:
             cv2.line(frame, consist['lead_pos'], consist['rear_pos'], colors['line'], 2)
 
-    # Draw gate markers (always visible, even if panels hidden)
-    if marker_state:
-        # Draw saved gates (green) - skip the one being edited
-        for gate in marker_state.config['gates']:
-            # Skip gate if it's currently being edited
-            if marker_state.editing_gate_id == gate['id']:
-                continue
-
-            cx, cy = gate['center'][0], gate['center'][1]
-            w, h = gate['width'], gate['height']
-            angle = gate['angle']
-
-            # Get rotated rectangle points
-            points = get_rotated_rect_points(cx, cy, w, h, angle)
-            cv2.polylines(frame, [points], True, GATE_SAVED_COLOR, 2)
-
-            # Draw center crosshair
-            cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_SAVED_COLOR, 1)
-            cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_SAVED_COLOR, 1)
-
-            # Draw gate ID label
-            label = f"G{gate['id']}"
-            cv2.putText(frame, label, (cx - 15, cy - h//2 - 5),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, GATE_SAVED_COLOR, 1)
-
-        # Draw current gate being positioned (yellow)
-        if marker_state.current_gate:
-            gate = marker_state.current_gate
-            cx, cy = gate['center_x'], gate['center_y']
-            w, h = gate['width'], gate['height']
-            angle = gate['angle']
-
-            # Get rotated rectangle points
-            points = get_rotated_rect_points(cx, cy, w, h, angle)
-            cv2.polylines(frame, [points], True, GATE_COLOR, 2)
-
-            # Draw center crosshair
-            cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_COLOR, 1)
-            cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_COLOR, 1)
-
-            # Show dimensions and angle
-            dim_text = f"{w}x{h}px @ {angle}deg"
-            cv2.putText(frame, dim_text, (cx - 60, cy - h//2 - 15),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, GATE_COLOR, 2)
+    # Note: Gates are drawn by draw_gates_overlay() and draw_marker_mode_overlay()
+    # No need to draw them here again
 
     # Early return if panels hidden (P key pressed) - calculation continues in background
     # Gate markers also hidden when panels are off
@@ -1244,6 +1195,8 @@ def track_consist(model_path: str):
     frame_clean = None  # Clean copy of frame for redrawing when paused
     frame_display = None  # Display frame with overlay
     track_data = None
+    pause_feedback_text = None  # Text to show for pause toggle feedback
+    pause_feedback_time = 0  # Timestamp when pause was toggled
 
     # Detection state tracking for logging
     prev_detection_state = {}  # {class_id: bool}
@@ -1335,6 +1288,23 @@ def track_consist(model_path: str):
             if tracking_enabled and track_data is not None:
                 draw_overlay(frame_display, tracker, track_data, debug_view, show_panels, frame_count, marker_state, tracking_enabled)
 
+            # Draw pause feedback banner (2 seconds after toggle)
+            if pause_feedback_text and (time.time() - pause_feedback_time) < 2.0:
+                h, w = frame_display.shape[:2]
+                # Semi-transparent background
+                overlay = frame_display.copy()
+                cv2.rectangle(overlay, (w//2 - 150, h//2 - 40), (w//2 + 150, h//2 + 40), (0, 0, 0), -1)
+                cv2.addWeighted(overlay, 0.7, frame_display, 0.3, 0, frame_display)
+                # Text (use SIMPLEX with high thickness for bold effect)
+                font_scale = 1.5
+                thickness = 4
+                color = (255, 255, 255)  # White
+                text_size = cv2.getTextSize(pause_feedback_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)[0]
+                text_x = w//2 - text_size[0]//2
+                text_y = h//2 + text_size[1]//2
+                cv2.putText(frame_display, pause_feedback_text, (text_x, text_y),
+                           cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness)
+
             # Downscale for display if HD (save rendering performance)
             # BUT: skip if Marker Mode enabled (mouse coordinates must match frame size)
             display_height, display_width = frame_display.shape[:2]
@@ -1390,6 +1360,8 @@ def track_consist(model_path: str):
                     print(f"📸 Snapshot saved: {filepath}")
         elif key == ord(' '):
             paused = not paused
+            pause_feedback_text = "PAUSED" if paused else "RESUMED"
+            pause_feedback_time = time.time()
             print(f"{'⏸️  Paused' if paused else '▶️  Resumed'}")
         # Marker mode controls
         elif key == ord('m') or key == ord('M'):
@@ -1417,7 +1389,7 @@ def track_consist(model_path: str):
                 print(f"> Width increased: {w}px")
         elif key == 13:  # ENTER key
             if marker_state.current_gate:
-                marker_state.save_current_gate()
+                marker_state.save_current_gate(tracker)
         elif key == ord('c') or key == ord('C'):
             if marker_state.enabled:
                 # Clear current gate being positioned (not saved gates)

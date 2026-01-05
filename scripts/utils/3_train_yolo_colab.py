@@ -11,12 +11,16 @@ Uses DCC address as class prefix for direct mapping.
 - Changing CV1 breaks class mapping and requires full re-training.
 
 Instructions:
-1. Open Google Colab: https://colab.research.google.com
-2. New Notebook
-3. Runtime → Change runtime type → GPU (T4)
-4. Copy-paste this entire script in a code cell
-5. Run (Ctrl+Enter) - automatically uses latest Roboflow version
-6. Download trained model: best.pt
+1. Create new version on Roboflow with appropriate preprocessing:
+   - SQUARE (v5): "Stretch to 640x640" → Set RECTANGULAR = False below
+   - RECTANGULAR (v4): "Fit within 1280x1280" → Set RECTANGULAR = True below
+2. Open Google Colab: https://colab.research.google.com
+3. New Notebook
+4. Runtime → Change runtime type → GPU (T4)
+5. Copy-paste this entire script in a code cell
+6. Verify RECTANGULAR flag matches Roboflow preprocessing (line 33)
+7. Run (Ctrl+Enter) - automatically uses latest Roboflow version
+8. Download trained model: best.pt
 """
 
 # ============================================
@@ -24,6 +28,13 @@ Instructions:
 # ============================================
 PROJECT_NAME = "BiancAlice"  # Model identifier (layout name)
 # MODEL_VERSION: Uses latest Roboflow version automatically
+
+# Training mode: Set based on Roboflow preprocessing
+# - RECTANGULAR = True: 16:9 aspect ratio (for GPU, best accuracy)
+#   → Roboflow: "Fit within 1280x1280"
+# - RECTANGULAR = False: Square 640x640 (for CPU, faster)
+#   → Roboflow: "Stretch to 640x640"
+RECTANGULAR = False  # ⚠️ CHANGE THIS: False for v5 square, True for v4 rectangular
 
 # ============================================
 # STEP 1: Install Dependencies
@@ -62,16 +73,30 @@ from ultralytics import YOLO
 # Load YOLOv8 nano (fastest, smallest)
 model = YOLO('yolov8n.pt')
 
-# Train with rectangular images (16:9 aspect ratio)
-# Camera native: 2304x1296 or 1280x720 (both 16:9)
-# Roboflow: "Fit within 1280x1280" preserves aspect ratio
-# Training uses (640, 1152) to match 16:9 without letterboxing
-# Benefits: zero padding waste, uses full resolution
+# Configure training based on RECTANGULAR flag
+if RECTANGULAR:
+    # Rectangular training (16:9 aspect ratio)
+    # Camera native: 2304x1296 or 1280x720 (both 16:9)
+    # Roboflow: "Fit within 1280x1280" preserves aspect ratio
+    # Training uses (640, 1152) to match 16:9 without letterboxing
+    # Benefits: zero padding waste, uses full resolution, best for GPU
+    imgsz_param = (640, 1152)
+    rect_param = True
+    print("📐 Training mode: RECTANGULAR (640x1152) - optimized for GPU")
+else:
+    # Square training (faster inference on CPU)
+    # Roboflow: "Stretch to 640x640"
+    # Benefits: faster inference, better for CPU-only deployment
+    imgsz_param = 640
+    rect_param = False
+    print("📐 Training mode: SQUARE (640x640) - optimized for CPU")
+
+# Train
 results = model.train(
     data=f"{dataset.location}/data.yaml",
     epochs=50,              # Number of training epochs
-    imgsz=(640, 1152),      # Rectangular: height x width (16:9 aspect ratio)
-    rect=True,              # Rectangular training (optimized for non-square)
+    imgsz=imgsz_param,      # Image size (640x640 square or 640x1152 rectangular)
+    rect=rect_param,        # Rectangular training (only for RECTANGULAR mode)
     batch=16,               # Batch size (adjust if GPU memory issues)
     name=f'{PROJECT_NAME}_v{MODEL_VERSION}',
     patience=10,            # Early stopping after 10 epochs no improvement
