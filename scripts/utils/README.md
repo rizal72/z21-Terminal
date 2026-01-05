@@ -34,18 +34,27 @@ python3 2_extract_frames.py data/videos/camera_video_XXXXXX.mp4 --interval 10
 1. Apri https://colab.research.google.com
 2. Runtime → Change runtime type → **GPU T4**
 3. Copia codice da `3_train_yolo_colab.py`
-4. Aggiorna `version = project.version(2)` se necessario
-5. Run training (~30-60 min)
-6. Download `best.pt` dal file panel
+4. **CRITICAL**: Set `RECTANGULAR` flag based on Roboflow preprocessing:
+   - `RECTANGULAR = False` → Square 640x640 (CPU-optimized, faster inference)
+     - Roboflow preprocessing: "Stretch to 640x640"
+   - `RECTANGULAR = True` → Rectangular 640x1152 (GPU-optimized, better accuracy)
+     - Roboflow preprocessing: "Fit within 1280x1280"
+5. Script auto-fetches latest Roboflow version (no manual version update needed)
+6. Run training (~4 minutes for 50 epochs)
+7. Download `best.pt` from file panel
 
 ### Step 5: Deploy Model
 ```bash
-# Sposta modello trainato
-mv ~/Downloads/best.pt ~/Documents/_PROGETTI/z21-Terminal/scripts/models/consist11_v1.pt
+# Sposta modello trainato (rinomina con version number)
+mv ~/Downloads/best.pt ~/Documents/_PROGETTI/z21-Terminal/scripts/models/BiancAlice_v6.pt
 
 # Crea symlink per modello attivo
 cd ~/Documents/_PROGETTI/z21-Terminal/scripts/models
-ln -sf consist11_v1.pt best.pt
+ln -sf BiancAlice_v6.pt best.pt
+
+# Update inference size in config.json
+# - Square model (640x640): "yolo_imgsz": 640
+# - Rectangular model (640x1152): "yolo_imgsz": [640, 1152]
 ```
 
 ### Step 6: Test Tracking
@@ -93,20 +102,34 @@ utils/
 
 Per migliorare il modello:
 1. Registra più video (diverse condizioni luce, posizioni)
-2. Annota più frame (target: 100-200 originali)
-3. Re-train su Google Colab
-4. Salva nuova versione: `consist11_v2.pt`, `consist11_v3.pt`, etc.
-5. Aggiorna symlink `best.pt` se il nuovo modello è migliore
+2. Annota più frame su Roboflow (target: 150-200 originali)
+3. Set `RECTANGULAR` flag based on deployment target (CPU vs GPU)
+4. Re-train su Google Colab (script auto-fetches latest Roboflow version)
+5. Salva nuova versione: `BiancAlice_v6.pt`, `BiancAlice_v7.pt`, etc.
+6. Test new model: compare mAP50 and real-world detection confidence
+7. Aggiorna symlink `best.pt` se il nuovo modello è migliore
 
 ## 📊 Model Versioning
 
-**Naming convention**:
-- `consist11_v1.pt` - Primo training (46 img originali, 138 augmented)
-- `consist11_v2.pt` - Secondo training (più dati, condizioni diverse)
-- `consist10_v1.pt` - Futuro: altro consist
-- `best.pt` - Symlink al modello attivo corrente
+**Naming convention**: `BiancAlice_v{N}.pt` (layout name + version)
+
+**Model History**:
+- `BiancAlice_v3.pt` - Initial training (137 images, mAP50 = 80.7%)
+- `BiancAlice_v4.pt` - Rectangular 640x1152 for GPU (mAP50 = 0.919)
+- `BiancAlice_v5.pt` - **ACTIVE** Square 640x640 for CPU (mAP50 = **0.931** ✅)
+- `best.pt` - Symlink to active model (currently → BiancAlice_v5.pt)
+
+**Training Modes**:
+- **Square (v5)**: 640x640, CPU-optimized, fastest inference, best mAP
+- **Rectangular (v4)**: 640x1152, GPU-optimized, reserved for future PC deployment
+
+**Deployment Strategy**:
+- **Mac (current)**: v5 square - symlinked as `best.pt`
+- **PC GPU (future)**: v4 rectangular - will replace symlink when GPU available
+- **Switching**: `ln -sf BiancAlice_vX.pt best.pt` + update `config.json` → `tracking.yolo_imgsz`
 
 **Tips**:
-- Mantieni vecchie versioni come backup
-- Testa sempre nuovo modello prima di sostituire `best.pt`
-- Annota versioni con date e metriche (mAP50, mAP50-95)
+- Keep old versions as backup (v3, v4 saved in `scripts/models/`)
+- Always test new model before updating `best.pt` symlink
+- Document versions with date and metrics (mAP50, training mode, deployment target)
+- Use `config.json` → `tracking.yolo_imgsz` to match model inference size
