@@ -1117,6 +1117,12 @@ def track_consist(model_path: str):
 
     # Connect to camera
     cap = cv2.VideoCapture(rtsp_url)
+
+    # CRITICAL: Set minimal buffer to prevent lag accumulation
+    # RTSP streams buffer frames causing 20+ second delays over time
+    # buffer=1 = always read FRESHEST frame available (adaptive skip if processing is slow)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
     if not cap.isOpened():
         print("❌ Failed to connect to camera")
         return

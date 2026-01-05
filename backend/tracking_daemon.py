@@ -888,6 +888,12 @@ class TrackingDaemon:
         print(f"📹 Opening video stream: {RTSP_URL}")
         self.cap = cv2.VideoCapture(RTSP_URL)
 
+        # CRITICAL: Set minimal buffer to prevent lag accumulation
+        # RTSP streams buffer frames causing 20+ second delays over time
+        # buffer=1 = always read FRESHEST frame available (adaptive skip if processing is slow)
+        # This ensures gate crossings are detected in real-time, not 20s late!
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
         if not self.cap.isOpened():
             print("❌ Failed to open video stream")
             return
