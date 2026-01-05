@@ -506,8 +506,9 @@ OTHER:
     def _sync_function_states(self):
         """Sincronizza stato funzioni dal decoder locomotive (o lead se consist)."""
         # Determina quale address interrogare
-        if "CONSIST" in self.all_addresses.get(self.address, ""):
-            # Per consist, leggi dalla loco lead
+        # Check if this address IS a consist (not a loco IN a consist)
+        if self.address in self.consists:
+            # Per consist, leggi dalla loco lead (funzioni sono sulla loco, non sul consist)
             consist_locos = self.consists.get(self.address, [])
             query_address = None
             for loco in consist_locos:
@@ -518,11 +519,10 @@ OTHER:
                 print("⚠️  Loco lead non trovata, stato funzioni non sincronizzato")
                 return
         else:
-            # Per loco singola, leggi direttamente
+            # Per loco singola, leggi direttamente (anche se è in un consist)
             query_address = self.address
 
         # Interroga locomotiva
-        print(f"🔄 Reading function states from address {query_address}...", end="", flush=True)
         loco_info = self.z21.get_loco_info(query_address)
 
         if loco_info and 'functions' in loco_info:
