@@ -371,7 +371,7 @@ class YOLOTracker:
                     current_time = time.time()
                     should_print = (
                         cdata['last_ignored_delta_t1'] is None or
-                        abs(delta_t1 - cdata['last_ignored_delta_t1']) > 1.0 or
+                        abs(delta_t1 - cdata['last_ignored_delta_t1']) > 0.01 or  # Changed from 1.0 to 0.01 (dedupe identical values)
                         (current_time - cdata['last_ignored_delta_t1_time']) > 5.0
                     )
                     if should_print:
@@ -405,7 +405,7 @@ class YOLOTracker:
                     current_time = time.time()
                     should_print = (
                         cdata['last_ignored_delta_t2'] is None or
-                        abs(delta_t2 - cdata['last_ignored_delta_t2']) > 1.0 or
+                        abs(delta_t2 - cdata['last_ignored_delta_t2']) > 0.01 or  # Changed from 1.0 to 0.01 (dedupe identical values)
                         (current_time - cdata['last_ignored_delta_t2_time']) > 5.0
                     )
                     if should_print:
