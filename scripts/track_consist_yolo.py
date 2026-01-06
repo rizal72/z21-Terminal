@@ -9,10 +9,10 @@ Dynamically tracks N consists based on config.json:
 
 Uses custom trained YOLOv8 model for real-time locomotive detection.
 
-Perspective Correction:
-    - Display: original camera view (oblique perspective)
-    - Distance calculations: perspective-corrected frame (6px/cm uniform scale)
-    - Coordinates transformed in background for accurate measurements
+Gate Timing Detection:
+    - Dual-gate co-presence timing for speed matching
+    - Cross-gate Δt calculation (timing-based, not distance-based)
+    - Real-time delta-t monitoring per consist
 
 Usage:
     python track_consist_yolo.py [--model best.pt]
@@ -23,12 +23,12 @@ Usage:
 Controls:
     - Q: Quit
     - SPACE: Pause/Resume video
-    - D: Toggle debug view (show bounding boxes with confidence)
+    - D: Toggle debug view (shows detection markers + confidence + connection lines)
     - P: Toggle info panels (clean view, gates+markers only)
     - Y: Toggle YOLO inference (disable = pause video for fast gate editing)
     - M: Toggle Marker Mode (gate positioning/editing)
     - S: Save gate positions to config.json (Marker Mode only)
-    - R: Reset distance history (both consists)
+    - R: Reset gate crossing counters (all consists)
 
 Marker Mode (M key):
     - Click: Place new gate OR select existing gate
@@ -61,82 +61,75 @@ except ImportError:
     print("Install with: pip3 install ultralytics")
     sys.exit(1)
 
-# Camera settings
-CAMERA_IP = "192.168.1.4"
-CAMERA_PORT = 554
-STREAM = "stream2"  # 720P stream (better for real-time)
-
 # Detection settings
 CONFIDENCE_THRESHOLD = 0.6  # Minimum confidence for detection
-DISTANCE_HISTORY_SIZE = 10000  # Number of distance measurements to store (large for baseline testing)
+# DISTANCE_HISTORY_SIZE = 10000  # [LEGACY - NOT USED] Distance measurements (replaced by gate timing)
 
 # Config paths
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 
-# Add backend to path for config_loader import
+# Add backend to path for config_loader and tracking imports
 backend_dir = PROJECT_ROOT / 'backend'
 sys.path.insert(0, str(backend_dir))
 
 from config_loader import load_config, save_config as save_config_central, get_config_path
 
-# === CONFIGURATION ===
-# load_config() now imported from config_loader (supports config.local.json override)
-
-# Class IDs (from Roboflow training - BiancAlice v3)
-# Roboflow orders alphabetically by class name
-# NOTE: These are YOLO class IDs, not DCC addresses!
-CLASS_NAMES = {
-    0: "1_Gr675_017",   # DCC address 1 (Consist 10 lead)
-    1: "5_D645_014",    # DCC address 5 (Consist 10 rear)
-    2: "7_E656_239",    # DCC address 7 (Consist 11 lead)
-    3: "8_E444_056"     # DCC address 8 (Consist 11 rear)
-}
-
-# Build mapping: DCC address → YOLO class ID (reverse lookup)
-# This allows config.json to reference DCC addresses (7, 8) and map to YOLO classes (2, 3)
-DCC_TO_YOLO_CLASS = {}
-for yolo_class_id, class_name in CLASS_NAMES.items():
-    dcc_address = int(class_name.split('_')[0])  # Extract "7" from "7_E656_239"
-    DCC_TO_YOLO_CLASS[dcc_address] = yolo_class_id
-
-# Perspective correction settings (calibrated 2025-12-30)
-# Used ONLY for accurate distance calculations (6px/cm uniform scale)
-# Detection and display remain on original camera frame
-SRC_POINTS = np.float32([
-    [7, 246],      # Top-left
-    [376, 31],     # Top-right
-    [957, 37],     # Bottom-right
-    [257, 718]     # Bottom-left
-])
-
-DST_WIDTH = 600
-DST_HEIGHT = 1200
-Y_OFFSET = 50
-LAYOUT_HEIGHT = 950
-
-DST_POINTS = np.float32([
-    [0, Y_OFFSET],
-    [DST_WIDTH, Y_OFFSET],
-    [DST_WIDTH, Y_OFFSET + LAYOUT_HEIGHT],
-    [0, Y_OFFSET + LAYOUT_HEIGHT]
-])
-
-# Pre-compute perspective transform matrix (for distance calculations)
-PERSPECTIVE_MATRIX = cv2.getPerspectiveTransform(
-    np.float32([
-        SRC_POINTS[0],
-        SRC_POINTS[1],
-        [SRC_POINTS[2][0] + (SRC_POINTS[2][0] - SRC_POINTS[1][0]) * 0.05,
-         SRC_POINTS[2][1] + (720 - SRC_POINTS[2][1]) * 0.3],
-        [SRC_POINTS[3][0] - (SRC_POINTS[0][0] - SRC_POINTS[3][0]) * 0.05,
-         SRC_POINTS[3][1] + (720 - SRC_POINTS[3][1]) * 0.3]
-    ]),
-    DST_POINTS
+# Import shared tracking modules (YOLO tracker, gate utilities, RTSP handler)
+from tracking.yolo_tracker import (
+    YOLOTracker,
+    gate_json_to_dict,
+    get_rotated_rect_points,
+    is_point_in_gate,
+    CLASS_NAMES,
+    ADDRESS_TO_CLASS
 )
+from tracking.rtsp_handler import load_camera_config, setup_rtsp_stream
 
-# Scale: 6 px/cm on corrected frame
-PX_PER_CM = 6.0
+# === CONFIGURATION ===
+# CLASS_NAMES and ADDRESS_TO_CLASS now imported from tracking.yolo_tracker
+
+# Alias for semantic clarity (same as ADDRESS_TO_CLASS)
+DCC_TO_YOLO_CLASS = ADDRESS_TO_CLASS
+
+# === LEGACY CODE - Perspective Correction (NOT USED) ===
+# Previously used for distance calculations (6px/cm uniform scale)
+# Now replaced by gate timing detection (no distance needed)
+# Kept for potential future use
+#
+# SRC_POINTS = np.float32([
+#     [7, 246],      # Top-left
+#     [376, 31],     # Top-right
+#     [957, 37],     # Bottom-right
+#     [257, 718]     # Bottom-left
+# ])
+#
+# DST_WIDTH = 600
+# DST_HEIGHT = 1200
+# Y_OFFSET = 50
+# LAYOUT_HEIGHT = 950
+#
+# DST_POINTS = np.float32([
+#     [0, Y_OFFSET],
+#     [DST_WIDTH, Y_OFFSET],
+#     [DST_WIDTH, Y_OFFSET + LAYOUT_HEIGHT],
+#     [0, Y_OFFSET + LAYOUT_HEIGHT]
+# ])
+#
+# PERSPECTIVE_MATRIX = cv2.getPerspectiveTransform(
+#     np.float32([
+#         SRC_POINTS[0],
+#         SRC_POINTS[1],
+#         [SRC_POINTS[2][0] + (SRC_POINTS[2][0] - SRC_POINTS[1][0]) * 0.05,
+#          SRC_POINTS[2][1] + (720 - SRC_POINTS[2][1]) * 0.3],
+#         [SRC_POINTS[3][0] - (SRC_POINTS[0][0] - SRC_POINTS[3][0]) * 0.05,
+#          SRC_POINTS[3][1] + (720 - SRC_POINTS[3][1]) * 0.3]
+#     ]),
+#     DST_POINTS
+# )
+# === END LEGACY CODE ===
+
+# PX_PER_CM = 6.0  # [LEGACY - NOT USED] Scale for distance calculations
 
 # Marker mode settings
 DEFAULT_GATE_WIDTH = 100
@@ -251,9 +244,10 @@ class MarkerState:
             new_angle = (self.current_gate['angle'] + delta) % 360
             self.current_gate['angle'] = new_angle
 
-    def save_current_gate(self):
+    def save_current_gate(self, tracker=None):
         """Save current gate to config (new or update existing)."""
         if self.current_gate:
+            gate_id_to_update = None
             if self.editing_gate_id is not None:
                 # Update existing gate
                 gate = next((g for g in self.config['gates'] if g['id'] == self.editing_gate_id), None)
@@ -262,10 +256,20 @@ class MarkerState:
                     gate['width'] = self.current_gate['width']
                     gate['height'] = self.current_gate['height']
                     gate['angle'] = self.current_gate['angle']
+                    gate_id_to_update = self.editing_gate_id
                     print(f"✅ Gate {self.editing_gate_id} updated")
             else:
                 # Add new gate
                 gate_id = get_next_gate_id(self.config)
+
+                # Cycle through consist colors in pairs (Orange for C11, Cyan for C10)
+                # Gate 1,2: Orange | Gate 3,4: Cyan | Gate 5,6: Orange | etc.
+                # Yellow reserved for edit mode
+                if ((gate_id - 1) // 2) % 2 == 0:
+                    color = [255, 165, 0]  # Orange (C11)
+                else:
+                    color = [0, 255, 255]  # Cyan (C10)
+
                 new_gate = {
                     'id': gate_id,
                     'name': f"Gate {gate_id}",
@@ -273,11 +277,17 @@ class MarkerState:
                     'width': self.current_gate['width'],
                     'height': self.current_gate['height'],
                     'angle': self.current_gate['angle'],
-                    'color': [255, 255, 0],  # Yellow (BGR)
-                    'notes': "Added in marker mode"
+                    'color': color
                 }
                 self.config['gates'].append(new_gate)
+                gate_id_to_update = gate_id
                 print(f"✅ Gate {gate_id} saved (total: {len(self.config['gates'])})")
+
+            # Update tracker.gates if tracker provided (for immediate rendering)
+            if tracker and gate_id_to_update:
+                gate_json = next((g for g in self.config['gates'] if g['id'] == gate_id_to_update), None)
+                if gate_json:
+                    tracker.gates[gate_id_to_update] = gate_json_to_dict(gate_json)
 
             self.current_gate = None
             self.editing_gate_id = None
@@ -336,7 +346,8 @@ class MarkerState:
     def save_to_config(self):
         """Save all gates to JSON config file."""
         if save_config(self.config):
-            print(f"💾 Saved {len(self.config['gates'])} gates to {CONFIG_FILE.name}")
+            config_path = get_config_path()
+            print(f"💾 Saved {len(self.config['gates'])} gates to {config_path.name}")
             return True
         return False
 
@@ -353,448 +364,25 @@ class MarkerState:
         print("="*60)
 
 
-def get_rotated_rect_points(center_x, center_y, width, height, angle_deg):
-    """
-    Calculate 4 corner points of a rotated rectangle.
-
-    Args:
-        center_x, center_y: Center of rectangle
-        width, height: Dimensions
-        angle_deg: Rotation angle in degrees (negative = clockwise)
-
-    Returns:
-        np.array of 4 points (TL, TR, BR, BL)
-    """
-    import math
-    angle_rad = math.radians(angle_deg)
-    cos_a = math.cos(angle_rad)
-    sin_a = math.sin(angle_rad)
-
-    # Half dimensions
-    hw = width / 2.0
-    hh = height / 2.0
-
-    # 4 corners relative to center (before rotation)
-    corners = [
-        (-hw, -hh),  # Top-left
-        (hw, -hh),   # Top-right
-        (hw, hh),    # Bottom-right
-        (-hw, hh)    # Bottom-left
-    ]
-
-    # Rotate and translate to absolute position
-    rotated = []
-    for x, y in corners:
-        # Rotation matrix
-        x_rot = x * cos_a - y * sin_a
-        y_rot = x * sin_a + y * cos_a
-        # Translate to center
-        rotated.append((int(center_x + x_rot), int(center_y + y_rot)))
-
-    return np.array(rotated, dtype=np.int32)
-
-
-def gate_json_to_dict(gate_json):
-    """
-    Convert gate from JSON format to is_point_in_gate() format.
-
-    Args:
-        gate_json: dict with 'center' [x, y], 'width', 'height', 'angle'
-
-    Returns:
-        dict with 'center_x', 'center_y', 'width', 'height', 'angle'
-    """
-    return {
-        'center_x': gate_json['center'][0],
-        'center_y': gate_json['center'][1],
-        'width': gate_json['width'],
-        'height': gate_json['height'],
-        'angle': gate_json['angle']
-    }
-
-
-def is_point_in_gate(point, gate):
-    """
-    Check if a point (locomotive center) is inside a gate zone.
-
-    Args:
-        point: (x, y) tuple
-        gate: dict with 'center_x', 'center_y', 'width', 'height', 'angle'
-
-    Returns:
-        bool: True if point is inside gate
-    """
-    if point is None:
-        return False
-
-    # Get gate polygon points
-    gate_points = get_rotated_rect_points(
-        gate['center_x'], gate['center_y'],
-        gate['width'], gate['height'],
-        gate['angle']
-    )
-
-    # Use OpenCV pointPolygonTest (returns positive if inside)
-    result = cv2.pointPolygonTest(gate_points, point, False)
-    return result >= 0  # >= 0 means inside or on edge
-
-
-def transform_to_corrected(point):
-    """
-    Transform point from original frame to perspective-corrected frame.
-    Used for accurate distance calculations.
-
-    Args:
-        point: (x, y) tuple in original frame coordinates
-
-    Returns:
-        (x, y) tuple in corrected frame coordinates
-    """
-    pts = np.array([[point]], dtype=np.float32)
-    transformed = cv2.perspectiveTransform(pts, PERSPECTIVE_MATRIX)
-    return (transformed[0][0][0], transformed[0][0][1])
-
-
-class YOLOTracker:
-    """
-    YOLO-based locomotive tracker with cross-gate timing detection.
-
-    NOMENCLATURE (CRITICAL):
-    - lead/rear = JMRI consist roles (NOT physical position!)
-      - lead: receives function commands (F0-F28)
-      - rear: "succube" loco (follows lead for movement)
-    - reference/adjust = Speed matching roles (gate_config.json)
-      - reference: stable decoder, NEVER modified
-      - adjust: unstable decoder, ALWAYS compensated
-
-    CONSIST 11 MAPPING:
-    - Lead JMRI (loco 7, E656_239) = Adjust (Hornby unstable)
-    - Rear JMRI (loco 8, E444_056) = Reference (ESU stable)
-
-    CROSS-GATE TIMING STRATEGY:
-    - 2 gates per consist (both locos pass through BOTH gates)
-    - Δt = timestamp_lead - timestamp_rear
-    - Δt > 0: lead passes first (adjust too fast) → slow down
-    - Δt < 0: rear passes first (adjust too slow) → speed up
-    - Cross-validation: |Δt₁ - Δt₂| < threshold confirms drift
-
-    FRESH TIMESTAMPS LOGIC:
-    - self.last_delta_t_time = max(timestamp1, timestamp2)
-    - Ensures BOTH timestamps are fresh (> last_delta_t_time)
-    - Prevents spurious Δt from stale timestamps
-
-    NOTE: Currently hardcoded for Consist 11 only.
-    Future refactoring (Phase 4C) will support multiple consists dynamically.
-    """
-
-    def __init__(self, model_path: str):
-        """Initialize tracker with YOLO model."""
-        print(f"🤖 Loading YOLO model: {model_path}")
-        self.model = YOLO(model_path)
-
-        # Load gates and thresholds from config
-        config = load_config()
-        self.gates = {}
-        for gate in config['gates']:
-            self.gates[gate['id']] = gate_json_to_dict(gate)
-        print(f"🚪 Loaded {len(self.gates)} gates from config")
-
-        # Load timing thresholds
-        tracking_config = config.get('tracking', {})
-        thresholds = tracking_config.get('timing_thresholds', {'normal': 1.0, 'warning': 2.0})
-        self.threshold_normal = thresholds.get('normal', 1.0)
-        self.threshold_warning = thresholds.get('warning', 2.0)
-        print(f"⏱️  Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
-
-        # Load Δt sanity check threshold (ignore outliers from video lag)
-        self.delta_t_max_threshold = thresholds.get('max_delta_t', 15.0)
-        print(f"⚠️  Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
-
-        # === PHASE 5: CONFIG-DRIVEN MULTI-CONSIST SUPPORT ===
-        # Load consists from config.json
-        consists = config.get('consists', {})
-
-        # Build consist_config (mapping consist_id → addresses + YOLO class IDs + gates)
-        self.consist_config = {}
-        for consist_key, consist_info in consists.items():
-
-            consist_id = int(consist_key)  # "11" → 11
-            lead_addr = consist_info['lead_address']
-            rear_addr = consist_info.get('rear_address')  # Can be null for single locos
-            gate_ids = consist_info.get('gate_ids', [])
-
-            # Map DCC addresses to YOLO class IDs
-            lead_yolo_class = DCC_TO_YOLO_CLASS.get(lead_addr)
-            rear_yolo_class = DCC_TO_YOLO_CLASS.get(rear_addr) if rear_addr else None
-
-            if lead_yolo_class is None:
-                print(f"⚠️  Warning: Lead address {lead_addr} not found in YOLO model classes")
-                continue
-
-            self.consist_config[consist_id] = {
-                'lead_address': lead_addr,
-                'rear_address': rear_addr,
-                'lead_yolo_class': lead_yolo_class,
-                'rear_yolo_class': rear_yolo_class,
-                'gate_ids': gate_ids,
-                'name': consist_info.get('name', f'Consist {consist_id}')
-            }
-
-        print(f"🚂 Loaded {len(self.consist_config)} consists from config:")
-        for consist_id, cfg in self.consist_config.items():
-            gates_str = f" → gates {cfg['gate_ids']}" if cfg['gate_ids'] else ""
-            print(f"   Consist {consist_id}: lead={cfg['lead_address']}, rear={cfg['rear_address']}{gates_str}")
-
-        # Initialize consist_data (dynamic state for all consists)
-        self.consist_data = {}
-        for consist_id in self.consist_config.keys():
-            gate_ids = self.consist_config[consist_id]['gate_ids']
-
-            # Initialize gate timing state (2 gates per consist)
-            gate_state = {}
-            for gate_id in gate_ids:
-                gate_state[gate_id] = {
-                    'lead_timestamp': None,
-                    'rear_timestamp': None,
-                    'lead_in_gate': False,
-                    'rear_in_gate': False
-                }
-
-            self.consist_data[consist_id] = {
-                'lead_pos': None,
-                'rear_pos': None,
-                'lead_conf': None,
-                'rear_conf': None,
-                'visible_together_count': 0,
-                'gate_state': gate_state,  # Per-gate timing state
-                'delta_t': None,           # Latest Δt value
-                'delta_t_type': None,      # e.g. "L7G1-L8G2"
-                'gate_crossing_count': 0,  # Total Δt calculations for this consist
-                'last_delta_t_time': 0,    # Last Δt calc time (fresh timestamps check)
-                # Spam reduction for ignored Δt warnings
-                'last_ignored_delta_t1': None,
-                'last_ignored_delta_t1_time': 0,
-                'last_ignored_delta_t2': None,
-                'last_ignored_delta_t2_time': 0
-            }
-
-        print("✅ YOLO model loaded (multi-consist tracking ready)")
-
-    def calculate_delta_t_centralized(self):
-        """
-        Centralized Δt calculation for ALL consists with 2 cross-gate checks each.
-
-        Called once per frame after all gate detection points updated.
-        Iterates over all consists with 2+ gates configured.
-        """
-        for consist_id, consist in self.consist_data.items():
-            gate_ids = self.consist_config[consist_id]['gate_ids']
-
-            # Skip consists without 2 gates configured
-            if len(gate_ids) < 2:
-                continue
-
-            gate1_id, gate2_id = gate_ids[0], gate_ids[1]
-            gate1_state = consist['gate_state'][gate1_id]
-            gate2_state = consist['gate_state'][gate2_id]
-
-            lead_addr = self.consist_config[consist_id]['lead_address']
-            rear_addr = self.consist_config[consist_id]['rear_address']
-
-            # Check 1: Δt₁ = lead@G1 - rear@G2 (cross-gate timing)
-            if (gate1_state['lead_timestamp'] is not None and
-                gate2_state['rear_timestamp'] is not None):
-
-                max_t1 = max(gate1_state['lead_timestamp'], gate2_state['rear_timestamp'])
-
-                # Calculate only if BOTH timestamps are fresh (prevents mixing laps)
-                if (max_t1 > consist['last_delta_t_time'] and
-                    gate1_state['lead_timestamp'] > consist['last_delta_t_time'] and
-                    gate2_state['rear_timestamp'] > consist['last_delta_t_time']):
-                    delta_t1 = gate1_state['lead_timestamp'] - gate2_state['rear_timestamp']
-
-                    # Sanity check: ignore impossible Δt values (outliers from video lag)
-                    if abs(delta_t1) > self.delta_t_max_threshold:
-                        # Throttle spam: only print if value changed significantly or 5s passed
-                        current_time = time.time()
-                        should_print = (
-                            consist['last_ignored_delta_t1'] is None or
-                            abs(delta_t1 - consist['last_ignored_delta_t1']) > 1.0 or
-                            (current_time - consist['last_ignored_delta_t1_time']) > 5.0
-                        )
-                        if should_print:
-                            print(f"⚠️  C{consist_id} Ignored Δt₁ = {delta_t1:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
-                            consist['last_ignored_delta_t1'] = delta_t1
-                            consist['last_ignored_delta_t1_time'] = current_time
-                    else:
-                        consist['delta_t'] = delta_t1
-                        consist['delta_t_type'] = f"L{lead_addr}G{gate1_id}-L{rear_addr}G{gate2_id}"
-                        consist['gate_crossing_count'] += 1
-                        consist['last_delta_t_time'] = max_t1
-                        print(f"🚪 C{consist_id} Cross-gate: {consist['delta_t_type']} = Δt = {consist['delta_t']:+.3f}s")
-                        continue  # Calculated, move to next consist
-
-            # Check 2: Δt₂ = lead@G2 - rear@G1 (cross-gate timing)
-            if (gate2_state['lead_timestamp'] is not None and
-                gate1_state['rear_timestamp'] is not None):
-
-                max_t2 = max(gate2_state['lead_timestamp'], gate1_state['rear_timestamp'])
-
-                # Calculate only if BOTH timestamps are fresh (prevents mixing laps)
-                if (max_t2 > consist['last_delta_t_time'] and
-                    gate2_state['lead_timestamp'] > consist['last_delta_t_time'] and
-                    gate1_state['rear_timestamp'] > consist['last_delta_t_time']):
-                    delta_t2 = gate2_state['lead_timestamp'] - gate1_state['rear_timestamp']
-
-                    # Sanity check: ignore impossible Δt values (outliers from video lag)
-                    if abs(delta_t2) > self.delta_t_max_threshold:
-                        # Throttle spam: only print if value changed significantly or 5s passed
-                        current_time = time.time()
-                        should_print = (
-                            consist['last_ignored_delta_t2'] is None or
-                            abs(delta_t2 - consist['last_ignored_delta_t2']) > 1.0 or
-                            (current_time - consist['last_ignored_delta_t2_time']) > 5.0
-                        )
-                        if should_print:
-                            print(f"⚠️  C{consist_id} Ignored Δt₂ = {delta_t2:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
-                            consist['last_ignored_delta_t2'] = delta_t2
-                            consist['last_ignored_delta_t2_time'] = current_time
-                    else:
-                        consist['delta_t'] = delta_t2
-                        consist['delta_t_type'] = f"L{lead_addr}G{gate2_id}-L{rear_addr}G{gate1_id}"
-                        consist['gate_crossing_count'] += 1
-                        consist['last_delta_t_time'] = max_t2
-                        print(f"🚪 C{consist_id} Cross-gate: {consist['delta_t_type']} = Δt = {consist['delta_t']:+.3f}s")
-
-    def detect_locomotives(self, frame):
-        """
-        Detect all locomotives using YOLO.
-
-        Returns:
-            detections: dict {class_id: (pos, conf)}
-            results: YOLO results object
-        """
-        # Run inference with rectangular image size (matches training)
-        # (640, 1152) = 16:9 aspect ratio, no letterboxing waste
-        results = self.model(frame, conf=CONFIDENCE_THRESHOLD, imgsz=(640, 1152), verbose=False)
-
-        detections = {}  # {class_id: (pos, conf)}
-
-        # Parse detections
-        for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                # Get box info
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                conf = float(box.conf[0])
-                cls = int(box.cls[0])
-
-                # Calculate center point
-                center_x = int((x1 + x2) / 2)
-                center_y = int((y1 + y2) / 2)
-
-                # Store detection (keep highest confidence if multiple)
-                if cls not in detections or conf > detections[cls][1]:
-                    detections[cls] = ((center_x, center_y), conf)
-
-        return detections, results[0] if results else None
-
-    def update(self, frame):
-        """
-        Update tracking with new frame for ALL consists dynamically.
-
-        Returns:
-            Dictionary with consist data and shared detection info
-        """
-        detections, results = self.detect_locomotives(frame)
-
-        # === DYNAMIC CONSIST TRACKING ===
-        # Iterate over all configured consists
-        for consist_id, consist in self.consist_data.items():
-            config = self.consist_config[consist_id]
-
-            # Get YOLO class IDs from config
-            lead_yolo_class = config['lead_yolo_class']
-            rear_yolo_class = config['rear_yolo_class']
-
-            # Get lead detection
-            lead_data = detections.get(lead_yolo_class)
-            consist['lead_pos'] = lead_data[0] if lead_data else None
-            consist['lead_conf'] = lead_data[1] if lead_data else 0.0
-
-            # Get rear detection (if consist has rear locomotive)
-            if rear_yolo_class is not None:
-                rear_data = detections.get(rear_yolo_class)
-                consist['rear_pos'] = rear_data[0] if rear_data else None
-                consist['rear_conf'] = rear_data[1] if rear_data else 0.0
-            else:
-                # Single locomotive (no rear)
-                consist['rear_pos'] = None
-                consist['rear_conf'] = 0.0
-
-            # Track visibility (both locomotives visible together)
-            if consist['lead_pos'] and consist['rear_pos']:
-                consist['visible_together_count'] += 1
-
-            # === GATE TIMING DETECTION ===
-            # Only if consist has 2+ gates configured
-            gate_ids = config['gate_ids']
-            if len(gate_ids) >= 2:
-                # Iterate over all gates for this consist
-                for gate_id in gate_ids:
-                    gate_state = consist['gate_state'][gate_id]
-                    gate = self.gates.get(gate_id)
-
-                    if gate is None:
-                        continue
-
-                    # Lead locomotive gate detection (rising edge)
-                    lead_in_gate = is_point_in_gate(consist['lead_pos'], gate)
-                    if lead_in_gate and not gate_state['lead_in_gate']:
-                        # Rising edge: loco just entered gate
-                        gate_state['lead_timestamp'] = time.time()
-                        gate_state['lead_in_gate'] = True
-                    elif not lead_in_gate:
-                        gate_state['lead_in_gate'] = False
-
-                    # Rear locomotive gate detection (rising edge)
-                    if consist['rear_pos'] is not None:
-                        rear_in_gate = is_point_in_gate(consist['rear_pos'], gate)
-                        if rear_in_gate and not gate_state['rear_in_gate']:
-                            # Rising edge: loco just entered gate
-                            gate_state['rear_timestamp'] = time.time()
-                            gate_state['rear_in_gate'] = True
-                        elif not rear_in_gate:
-                            gate_state['rear_in_gate'] = False
-
-        # Centralized Δt calculation (called once per frame after all gate detection points)
-        self.calculate_delta_t_centralized()
-
-        # Build return dictionary with all consist data
-        consist_results = {}
-        for consist_id, consist in self.consist_data.items():
-            consist_results[consist_id] = {
-                'lead_pos': consist['lead_pos'],
-                'rear_pos': consist['rear_pos'],
-                'lead_conf': consist['lead_conf'],
-                'rear_conf': consist['rear_conf'],
-                'delta_t': consist['delta_t'],
-                'delta_t_type': consist['delta_t_type']
-            }
-
-        return {
-            'consist_data': consist_results,
-            'detections': detections,
-            'results': results
-        }
-
-    def get_visibility_stats(self, consist_id, total_frames):
-        """Get visibility statistics for specified consist ID."""
-        if consist_id in self.consist_data:
-            count = self.consist_data[consist_id]['visible_together_count']
-            percentage = (count / total_frames * 100) if total_frames > 0 else 0
-            return count, percentage
-        return 0, 0.0
+# === LEGACY FUNCTION - transform_to_corrected (NOT USED) ===
+# Previously used for perspective correction in distance calculations
+# Now replaced by gate timing detection (no distance needed)
+#
+# def transform_to_corrected(point):
+#     """
+#     Transform point from original frame to perspective-corrected frame.
+#     Used for accurate distance calculations.
+#
+#     Args:
+#         point: (x, y) tuple in original frame coordinates
+#
+#     Returns:
+#         (x, y) tuple in corrected frame coordinates
+#     """
+#     pts = np.array([[point]], dtype=np.float32)
+#     transformed = cv2.perspectiveTransform(pts, PERSPECTIVE_MATRIX)
+#     return (transformed[0][0][0], transformed[0][0][1])
+# === END LEGACY FUNCTION ===
 
 
 def draw_gates_overlay(frame, tracker):
@@ -803,14 +391,6 @@ def draw_gates_overlay(frame, tracker):
     all_gate_ids = set()
     for config in tracker.consist_config.values():
         all_gate_ids.update(config['gate_ids'])
-
-    # Gate colors (cycling through colors for different gates)
-    GATE_COLORS = [
-        (255, 255, 0),   # Yellow (Gate 1)
-        (255, 128, 0),   # Orange (Gate 2)
-        (0, 255, 255),   # Cyan (Gate 3)
-        (255, 0, 255),   # Magenta (Gate 4)
-    ]
 
     for gate_id in sorted(all_gate_ids):
         if gate_id not in tracker.gates:
@@ -822,7 +402,9 @@ def draw_gates_overlay(frame, tracker):
             gate['width'], gate['height'],
             gate['angle']
         )
-        color = GATE_COLORS[(gate_id - 1) % len(GATE_COLORS)]
+        # Convert RGB (from config) to BGR (for OpenCV)
+        color_rgb = gate.get('color', [255, 255, 0])  # Default yellow if missing
+        color = (color_rgb[2], color_rgb[1], color_rgb[0])  # RGB → BGR
         cv2.polylines(frame, [gate_points], True, color, 2)
         cv2.putText(frame, f"G{gate_id}", (gate['center_x'] - 10, gate['center_y'] + 5),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
@@ -835,34 +417,11 @@ def draw_marker_mode_overlay(frame, marker_state):
     if not marker_state:
         return frame
 
-    # Colors for marker mode
+    # Color for marker mode
     GATE_COLOR = (0, 255, 255)  # Cyan for current gate being edited
-    GATE_SAVED_COLOR = (0, 255, 0)  # Green for saved gates
+    # Note: Saved gates are drawn by draw_gates_overlay() with their config colors
 
-    # Draw saved gates (green) - skip the one being edited
-    for gate in marker_state.config['gates']:
-        # Skip gate if it's currently being edited
-        if marker_state.editing_gate_id == gate['id']:
-            continue
-
-        cx, cy = gate['center'][0], gate['center'][1]
-        w, h = gate['width'], gate['height']
-        angle = gate['angle']
-
-        # Get rotated rectangle points
-        points = get_rotated_rect_points(cx, cy, w, h, angle)
-        cv2.polylines(frame, [points], True, GATE_SAVED_COLOR, 2)
-
-        # Draw center crosshair
-        cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_SAVED_COLOR, 1)
-        cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_SAVED_COLOR, 1)
-
-        # Draw gate ID label
-        label = f"G{gate['id']}"
-        cv2.putText(frame, label, (cx - 15, cy - h//2 - 5),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, GATE_SAVED_COLOR, 1)
-
-    # Draw current gate being positioned (yellow)
+    # Draw current gate being positioned/edited (cyan)
     if marker_state.current_gate:
         gate = marker_state.current_gate
         cx, cy = gate['center_x'], gate['center_y']
@@ -885,7 +444,7 @@ def draw_marker_mode_overlay(frame, marker_state):
     # Show marker mode indicator
     if marker_state.enabled:
         overlay = frame.copy()
-        cv2.rectangle(overlay, (5, frame.shape[0] - 90), (380, frame.shape[0] - 5), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (5, frame.shape[0] - 90), (430, frame.shape[0] - 5), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
         cv2.putText(frame, "MARKER MODE (M to exit)", (15, frame.shape[0] - 75),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
@@ -906,9 +465,17 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
     if not tracking_enabled or track_data is None:
         return frame
 
-    consist_data = track_data['consist_data']
     all_detections = track_data['detections']
-    results = track_data['results']
+
+    # Reconstruct consist_data from track_data (format: c10, c11, etc.)
+    consist_data = {}
+    for consist_id in tracker.consist_config.keys():
+        consist_key = f'c{consist_id}'
+        if consist_key in track_data:
+            consist_data[consist_id] = {
+                'lead_pos': track_data[consist_key]['lead'],
+                'rear_pos': track_data[consist_key]['rear']
+            }
 
     # Define colors for up to 4 consists (can be extended)
     CONSIST_COLORS = {
@@ -927,53 +494,37 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
         if consist['rear_pos']:
             cv2.circle(frame, consist['rear_pos'], 10, colors['rear'], -1)
 
-        if consist['lead_pos'] and consist['rear_pos']:
+        # Connection line (debug mode only)
+        if debug_view and consist['lead_pos'] and consist['rear_pos']:
             cv2.line(frame, consist['lead_pos'], consist['rear_pos'], colors['line'], 2)
 
-    # Draw gate markers (always visible, even if panels hidden)
-    if marker_state:
-        # Draw saved gates (green) - skip the one being edited
-        for gate in marker_state.config['gates']:
-            # Skip gate if it's currently being edited
-            if marker_state.editing_gate_id == gate['id']:
-                continue
+    # Debug view - draw bounding boxes, center points, and confidence labels
+    # (ALWAYS visible when debug_view=True, independent from show_panels)
+    if debug_view and all_detections:
+        colors = {0: (255, 255, 0), 1: (255, 128, 0), 2: (0, 255, 0), 3: (0, 0, 255)}
+        for cls, det_data in all_detections.items():
+            pos = det_data['pos']
+            bbox = det_data.get('bbox')  # (x1, y1, x2, y2)
+            conf = det_data['conf']
+            class_name = CLASS_NAMES.get(cls, f"Class_{cls}")
+            color = colors.get(cls, (255, 255, 255))
 
-            cx, cy = gate['center'][0], gate['center'][1]
-            w, h = gate['width'], gate['height']
-            angle = gate['angle']
+            # Draw bounding box
+            if bbox:
+                x1, y1, x2, y2 = bbox
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
-            # Get rotated rectangle points
-            points = get_rotated_rect_points(cx, cy, w, h, angle)
-            cv2.polylines(frame, [points], True, GATE_SAVED_COLOR, 2)
+            # Draw center point (larger circle for debug)
+            cv2.circle(frame, pos, 15, color, 2)  # Hollow circle
 
-            # Draw center crosshair
-            cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_SAVED_COLOR, 1)
-            cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_SAVED_COLOR, 1)
+            # Draw label with confidence (above bounding box if available, else near center)
+            label = f"{class_name} {conf:.2f}"
+            label_pos = (bbox[0], bbox[1] - 10) if bbox else (pos[0] + 20, pos[1])
+            cv2.putText(frame, label, label_pos,
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-            # Draw gate ID label
-            label = f"G{gate['id']}"
-            cv2.putText(frame, label, (cx - 15, cy - h//2 - 5),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, GATE_SAVED_COLOR, 1)
-
-        # Draw current gate being positioned (yellow)
-        if marker_state.current_gate:
-            gate = marker_state.current_gate
-            cx, cy = gate['center_x'], gate['center_y']
-            w, h = gate['width'], gate['height']
-            angle = gate['angle']
-
-            # Get rotated rectangle points
-            points = get_rotated_rect_points(cx, cy, w, h, angle)
-            cv2.polylines(frame, [points], True, GATE_COLOR, 2)
-
-            # Draw center crosshair
-            cv2.line(frame, (cx - 10, cy), (cx + 10, cy), GATE_COLOR, 1)
-            cv2.line(frame, (cx, cy - 10), (cx, cy + 10), GATE_COLOR, 1)
-
-            # Show dimensions and angle
-            dim_text = f"{w}x{h}px @ {angle}deg"
-            cv2.putText(frame, dim_text, (cx - 60, cy - h//2 - 15),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, GATE_COLOR, 2)
+    # Note: Gates are drawn by draw_gates_overlay() and draw_marker_mode_overlay()
+    # No need to draw them here again
 
     # Early return if panels hidden (P key pressed) - calculation continues in background
     # Gate markers also hidden when panels are off
@@ -991,40 +542,17 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
     # Info panel with background
     overlay = frame.copy()
     info_text = "Dual Consist YOLO Tracking"
-    cv2.rectangle(overlay, (5, 45), (400, 75), (0, 0, 0), -1)
+    cv2.rectangle(overlay, (5, 45), (430, 75), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
     cv2.putText(frame, info_text, (10, 65),
                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-    # Co-Visibility Stats Panel (dynamic for all consists)
-    overlay = frame.copy()
-    panel_height = 80 + 25 * len(consist_data) + 10
-    cv2.rectangle(overlay, (5, 80), (550, panel_height), (0, 0, 0), -1)
-    cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
-    cv2.putText(frame, "Co-Visibility (Lead + Rear together):", (10, 100),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-
-    # Dynamic consist stats (iterate over all consists)
-    y_pos = 125
-    for consist_id in sorted(consist_data.keys()):
-        consist = consist_data[consist_id]
-        consist_state = tracker.consist_data[consist_id]
-
-        count = consist_state['visible_together_count']
-        pct = (count / total_frames * 100) if total_frames > 0 else 0
-        status = "YES" if (consist['lead_pos'] and consist['rear_pos']) else "NO"
-
-        colors = CONSIST_COLORS.get(consist_id, {'line': (255, 255, 255)})
-        cv2.putText(frame, f"C{consist_id}: {status}  {count} frames ({pct:.1f}%)", (20, y_pos),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.45, colors['line'], 1)
-        y_pos += 25
-
-    # All Locomotives Detected Panel (position dynamically after co-visibility panel)
-    locos_y = panel_height + 10
+    # All Locomotives Detected Panel
+    locos_y = 85
     num_classes = len(CLASS_NAMES)
     locos_height = locos_y + 20 + (num_classes * 20) + 10
     overlay = frame.copy()
-    cv2.rectangle(overlay, (5, locos_y), (450, locos_height), (0, 0, 0), -1)
+    cv2.rectangle(overlay, (5, locos_y), (430, locos_height), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
     cv2.putText(frame, "All Locomotives Detected:", (10, locos_y + 20),
                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
@@ -1036,7 +564,7 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
         detected = class_id in all_detections if all_detections else False
 
         if detected:
-            conf = all_detections[class_id][1]
+            conf = all_detections[class_id]['conf']
             reliable = conf >= CONFIDENCE_THRESHOLD
             if reliable:
                 indicator = "+"
@@ -1071,7 +599,7 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
         # Calculate panel height (header + timestamps + delta_t)
         panel_height_gate = 20 + 20 + (len(gate_ids) * 20) + 20 + 10
         overlay = frame.copy()
-        cv2.rectangle(overlay, (5, y_offset), (450, y_offset + panel_height_gate), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (5, y_offset), (430, y_offset + panel_height_gate), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
 
         # Panel title
@@ -1089,10 +617,10 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
 
         y_timestamp = y_offset + 60
 
-        # Lead loco timestamps (all gates)
+        # Lead loco timestamps (all gates) - use gate_timestamps['lead'][gate_id]
         gate_timestamps_lead = []
         for gate_id in gate_ids:
-            ts = consist_state['gate_state'][gate_id]['lead_timestamp']
+            ts = consist_state['gate_timestamps']['lead'].get(gate_id)
             ts_str = time.strftime("%H:%M:%S", time.localtime(ts)) if ts else "---"
             gate_timestamps_lead.append(f"G{gate_id}={ts_str}")
 
@@ -1101,11 +629,11 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, colors_consist['lead'], 1)
         y_timestamp += 20
 
-        # Rear loco timestamps (all gates)
+        # Rear loco timestamps (all gates) - use gate_timestamps['rear'][gate_id]
         if rear_addr:
             gate_timestamps_rear = []
             for gate_id in gate_ids:
-                ts = consist_state['gate_state'][gate_id]['rear_timestamp']
+                ts = consist_state['gate_timestamps']['rear'].get(gate_id)
                 ts_str = time.strftime("%H:%M:%S", time.localtime(ts)) if ts else "---"
                 gate_timestamps_rear.append(f"G{gate_id}={ts_str}")
 
@@ -1136,41 +664,20 @@ def draw_overlay(frame, tracker, track_data, debug_view, show_panels=True, total
 
         y_offset += panel_height_gate + 10
 
-    # Debug view - draw all bounding boxes
-    if debug_view and results:
-        for box in results.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-            conf = float(box.conf[0])
-            cls = int(box.cls[0])
-            class_name = CLASS_NAMES.get(cls, f"Class_{cls}")
-
-            # Draw bounding box (color by class)
-            colors = {0: (255, 255, 0), 1: (255, 128, 0), 2: (0, 255, 0), 3: (0, 0, 255)}
-            color = colors.get(cls, (255, 255, 255))
-            cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
-
-            # Draw label
-            label = f"{class_name} {conf:.2f}"
-            cv2.putText(frame, label, (int(x1), int(y1) - 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
 
 def track_consist(model_path: str):
     """Main tracking loop."""
-    # Load camera config from shared config file
-    from camera_utils import load_camera_config
-    rtsp_url, camera_ip, camera_port, stream = load_camera_config()
+    # Load RTSP URL from camera config (using shared rtsp_handler module)
+    rtsp_url = load_camera_config()
 
     print("🎥 Starting YOLO Tracking...")
     print()
 
-    # Connect to camera
-    cap = cv2.VideoCapture(rtsp_url)
-    if not cap.isOpened():
+    # Connect to camera with optimal buffering
+    cap = setup_rtsp_stream(rtsp_url, description="YOLO tracking stream")
+    if not cap:
         print("❌ Failed to connect to camera")
         return
-
-    print("✅ Camera connected!")
 
     # Get resolution
     ret, frame = cap.read()
@@ -1180,18 +687,16 @@ def track_consist(model_path: str):
 
     actual_height, actual_width = frame.shape[:2]
     print(f"📐 Stream resolution: {actual_width}x{actual_height}")
-    print(f"🔧 Perspective correction: applied in background for distance calculations")
-    print(f"   Display: original camera view")
-    print(f"   Distance calculations: corrected frame (6px/cm uniform scale)")
+
+    # Initialize tracker
+    tracker = YOLOTracker(model_path)
+    print(f"⏱️  Gate timing detection: {len(tracker.consist_config)} consist(s) configured")
     print()
 
     # Create window
     window_name = "YOLO Consist Tracking - Press Q to quit"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, actual_width, actual_height)
-
-    # Initialize tracker
-    tracker = YOLOTracker(model_path)
 
     # Initialize marker state
     marker_state = MarkerState()
@@ -1244,6 +749,8 @@ def track_consist(model_path: str):
     frame_clean = None  # Clean copy of frame for redrawing when paused
     frame_display = None  # Display frame with overlay
     track_data = None
+    pause_feedback_text = None  # Text to show for pause toggle feedback
+    pause_feedback_time = 0  # Timestamp when pause was toggled
 
     # Detection state tracking for logging
     prev_detection_state = {}  # {class_id: bool}
@@ -1278,7 +785,7 @@ def track_consist(model_path: str):
             for class_id in range(4):  # Classes 0-3
                 detected = class_id in all_detections
                 if detected:
-                    conf = all_detections[class_id][1]
+                    conf = all_detections[class_id]['conf']
                     reliable = conf >= CONFIDENCE_THRESHOLD
                     current_detection_state[class_id] = reliable
                 else:
@@ -1292,11 +799,11 @@ def track_consist(model_path: str):
                 # if current_detection_state[class_id] != prev_detection_state[class_id]:
                 #     class_name = CLASS_NAMES.get(class_id, f"Class_{class_id}")
                 #     if current_detection_state[class_id]:
-                #         conf = all_detections[class_id][1]
+                #         conf = all_detections[class_id]['conf']
                 #         print(f"✅ {class_name} detected (confidence: {conf:.2f})")
                 #     else:
                 #         if class_id in all_detections:
-                #             conf = all_detections[class_id][1]
+                #             conf = all_detections[class_id]['conf']
                 #             print(f"⚠️  {class_name} lost (low confidence: {conf:.2f})")
                 #         else:
                 #             print(f"❌ {class_name} lost (not detected)")
@@ -1310,7 +817,7 @@ def track_consist(model_path: str):
                 for class_id in range(4):
                     class_name = CLASS_NAMES.get(class_id, f"Class_{class_id}")
                     if class_id in all_detections:
-                        conf = all_detections[class_id][1]
+                        conf = all_detections[class_id]['conf']
                         reliable = conf >= CONFIDENCE_THRESHOLD
                         if reliable:
                             print(f"   {class_name}: ✓ RELIABLE ({conf:.2f})")
@@ -1335,6 +842,23 @@ def track_consist(model_path: str):
             if tracking_enabled and track_data is not None:
                 draw_overlay(frame_display, tracker, track_data, debug_view, show_panels, frame_count, marker_state, tracking_enabled)
 
+            # Draw pause feedback banner (2 seconds after toggle)
+            if pause_feedback_text and (time.time() - pause_feedback_time) < 2.0:
+                h, w = frame_display.shape[:2]
+                # Semi-transparent background
+                overlay = frame_display.copy()
+                cv2.rectangle(overlay, (w//2 - 150, h//2 - 40), (w//2 + 150, h//2 + 40), (0, 0, 0), -1)
+                cv2.addWeighted(overlay, 0.7, frame_display, 0.3, 0, frame_display)
+                # Text (use SIMPLEX with high thickness for bold effect)
+                font_scale = 1.5
+                thickness = 4
+                color = (255, 255, 255)  # White
+                text_size = cv2.getTextSize(pause_feedback_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)[0]
+                text_x = w//2 - text_size[0]//2
+                text_y = h//2 + text_size[1]//2
+                cv2.putText(frame_display, pause_feedback_text, (text_x, text_y),
+                           cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness)
+
             # Downscale for display if HD (save rendering performance)
             # BUT: skip if Marker Mode enabled (mouse coordinates must match frame size)
             display_height, display_width = frame_display.shape[:2]
@@ -1357,9 +881,8 @@ def track_consist(model_path: str):
                 print(f"🔄 Rotated: {angle}°")
             else:
                 # Otherwise: reset tracking counters for ALL consists
-                print("🔄 Reset tracking counters (visibility + gate crossings)")
+                print("🔄 Reset tracking counters (gate crossings)")
                 for consist_id, consist in tracker.consist_data.items():
-                    consist['visible_together_count'] = 0
                     consist['gate_crossing_count'] = 0
                     consist['last_delta_t_time'] = 0
                 frame_count = 0  # Reset frame count too
@@ -1390,6 +913,8 @@ def track_consist(model_path: str):
                     print(f"📸 Snapshot saved: {filepath}")
         elif key == ord(' '):
             paused = not paused
+            pause_feedback_text = "PAUSED" if paused else "RESUMED"
+            pause_feedback_time = time.time()
             print(f"{'⏸️  Paused' if paused else '▶️  Resumed'}")
         # Marker mode controls
         elif key == ord('m') or key == ord('M'):
@@ -1417,7 +942,7 @@ def track_consist(model_path: str):
                 print(f"> Width increased: {w}px")
         elif key == 13:  # ENTER key
             if marker_state.current_gate:
-                marker_state.save_current_gate()
+                marker_state.save_current_gate(tracker)
         elif key == ord('c') or key == ord('C'):
             if marker_state.enabled:
                 # Clear current gate being positioned (not saved gates)
@@ -1494,15 +1019,6 @@ def track_consist(model_path: str):
     print(f"   🟢 |Δt| < {tracker.threshold_normal}s = SYNCED")
     print(f"   🟡 |Δt| {tracker.threshold_normal}-{tracker.threshold_warning}s = WARNING")
     print(f"   🔴 |Δt| > {tracker.threshold_warning}s = CRITICAL")
-    print()
-
-    # Co-visibility statistics (dynamic for all consists)
-    print("👁️  CO-VISIBILITY STATISTICS")
-    print("-" * 60)
-    for consist_id in sorted(tracker.consist_data.keys()):
-        config = tracker.consist_config[consist_id]
-        count, pct = tracker.get_visibility_stats(consist_id, frame_count)
-        print(f"   Consist {consist_id} ({config['name']}): {count} frames ({pct:.1f}%) - {count} co-detections")
     print()
     print("="*60)
 

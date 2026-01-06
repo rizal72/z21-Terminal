@@ -12,8 +12,8 @@
         3,
         4
       ],
-      "virtual_mode": false,
-      "auto_compensation_enabled": false,
+      "virtual_mode": true,
+      "auto_compensation_enabled": true,
       "reference": {
         "loco": 5,
         "adjust": 1,
@@ -29,8 +29,8 @@
         1,
         2
       ],
-      "virtual_mode": false,
-      "auto_compensation_enabled": false,
+      "virtual_mode": true,
+      "auto_compensation_enabled": true,
       "reference": {
         "loco": 8,
         "adjust": 7,
@@ -42,7 +42,7 @@
   "gates": [
     {
       "id": 1,
-      "name": "Bottom Right (vicino)",
+      "name": "Gate 1",
       "center": [
         1227,
         213
@@ -52,17 +52,16 @@
       "angle": 0,
       "color": [
         255,
-        255,
+        165,
         0
-      ],
-      "notes": "Consist 11 - GIALLO (RGB) - Gate vicino alla camera"
+      ]
     },
     {
       "id": 2,
-      "name": "Top Left (lontano)",
+      "name": "Gate 2",
       "center": [
-        141,
-        162
+        133,
+        149
       ],
       "width": 80,
       "height": 60,
@@ -71,42 +70,39 @@
         255,
         165,
         0
-      ],
-      "notes": "Consist 11 - ARANCIONE (RGB) - Gate lontano dalla camera"
+      ]
     },
     {
       "id": 3,
       "name": "Gate 3",
       "center": [
-        929,
-        33
+        1086,
+        326
       ],
-      "width": 70,
-      "height": 70,
-      "angle": 0,
+      "width": 80,
+      "height": 80,
+      "angle": 300,
       "color": [
         0,
         255,
         255
-      ],
-      "notes": "Consist 10 - CIANO CHIARO (RGB)"
+      ]
     },
     {
       "id": 4,
       "name": "Gate 4",
       "center": [
-        92,
-        326
+        479,
+        29
       ],
-      "width": 70,
-      "height": 70,
-      "angle": 315,
+      "width": 50,
+      "height": 50,
+      "angle": 0,
       "color": [
         0,
-        180,
-        200
-      ],
-      "notes": "Consist 10 - CIANO SCURO (RGB)"
+        255,
+        255
+      ]
     }
   ],
   "tracking": {
@@ -121,7 +117,9 @@
       "warning": 1.5,
       "max_delta_t": 15.0,
       "notes": "Thresholds in seconds: |Δt| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
-    }
+    },
+    "yolo_imgsz": 640,
+    "notes_yolo": "YOLO inference image size: 640 for square models (fast, CPU), [640, 1152] for rectangular models (accurate, GPU)"
   },
   "_comment": "Copy this file to config.local.json to override settings locally",
   "_usage": "config.local.json is gitignored and won't be committed"

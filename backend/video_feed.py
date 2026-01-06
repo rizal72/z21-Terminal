@@ -285,6 +285,11 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
     print(f"🎥 Opening video stream: {RTSP_URL}")
     cap = cv2.VideoCapture(RTSP_URL)
 
+    # CRITICAL: Set minimal buffer to prevent lag accumulation
+    # RTSP streams buffer frames causing 20+ second delays over time
+    # buffer=1 = always read FRESHEST frame available (adaptive skip if processing is slow)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
     if not cap.isOpened():
         print("  ✗ Failed to open video stream")
         # Return a black frame with error message
@@ -313,6 +318,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
                 cap.release()
                 time.sleep(2)
                 cap = cv2.VideoCapture(RTSP_URL)
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Restore buffer=1 after reconnect
                 continue
 
             # Draw gate overlays
