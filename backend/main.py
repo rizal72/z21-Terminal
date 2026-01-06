@@ -372,15 +372,20 @@ async def lifespan(app: FastAPI):
                 consist['decay_applied'] = False
             # auto_compensation_enabled is now handled in z21_manager._load_persisted_state()
 
-        # Get initial track power state
-        status = z21_manager.z21.get_status()
-        if status:
-            last_track_power_state = not status.get('track_power_off', False)
-            if debug_enabled:
-                print(f"  ✓ Initial track power: {'ON' if last_track_power_state else 'OFF'}")
-            z21_online = True
-            if debug_enabled:
-                print(f"  ✓ Z21 connection: ONLINE")
+        # Get initial track power state (with error handling for unreachable Z21)
+        try:
+            status = z21_manager.z21.get_status()
+            if status:
+                last_track_power_state = not status.get('track_power_off', False)
+                if debug_enabled:
+                    print(f"  ✓ Initial track power: {'ON' if last_track_power_state else 'OFF'}")
+                z21_online = True
+                if debug_enabled:
+                    print(f"  ✓ Z21 connection: ONLINE")
+        except (OSError, ConnectionError, TimeoutError) as e:
+            print(f"⚠️  Z21 not responding (will retry in background): {e}")
+            z21_online = False
+            # Backend continues startup - health check will retry connection
 
         # Start background polling tasks
         polling_task = asyncio.create_task(poll_track_power())
