@@ -110,10 +110,19 @@ class Z21:
 
     def get_status(self) -> Optional[dict]:
         """
-        Legge lo stato del sistema Z21.
+        Legge lo stato del sistema Z21 + telemetria track-level.
 
         Returns:
-            dict con 'track_power_on', 'emergency_stop', 'programming_mode'
+            dict con:
+            - track_power_on, emergency_stop, programming_mode, short_circuit
+            - telemetry: {
+                'main_current_ma': int,          # Track current (mA)
+                'prog_current_ma': int,           # Programming track current (mA)
+                'filtered_current_ma': int,       # Filtered track current (mA)
+                'temperature_c': float,           # Z21 internal temp (°C)
+                'supply_voltage_v': float,        # Input voltage (V)
+                'vcc_voltage_v': float            # Logic voltage (V)
+              }
             None se errore
         """
         if self.verbose:
@@ -125,35 +134,54 @@ class Z21:
         if response:
             header, data = response
             # LAN_STATUS_CHANGED è 0x84
-            if header == 0x84 and len(data) >= 1:
+            if header == 0x84 and len(data) >= 13:
                 # Format: MainCurrent(2) ProgCurrent(2) FilteredMainCurrent(2)
                 #         Temperature(2) SupplyVoltage(2) VCCVoltage(2) CentralState(1) CentralStateEx(1)
-                # CentralState is at byte offset 12 (0-indexed)
-                if len(data) >= 13:
-                    central_state = data[12]
 
-                    # Parse CentralState bits
-                    # Bit 0: emergency stop active
-                    # Bit 1: track voltage off
-                    # Bit 2: short circuit
-                    # Bit 3: programming mode active
-                    emergency_stop = bool(central_state & 0x01)
-                    track_power_off = bool(central_state & 0x02)
-                    short_circuit = bool(central_state & 0x04)
-                    programming_mode = bool(central_state & 0x08)
+                # Parse telemetry data (bytes 0-11, little-endian uint16)
+                main_current = struct.unpack('<H', data[0:2])[0]
+                prog_current = struct.unpack('<H', data[2:4])[0]
+                filtered_current = struct.unpack('<H', data[4:6])[0]
+                temperature = struct.unpack('<H', data[6:8])[0]
+                supply_voltage = struct.unpack('<H', data[8:10])[0]
+                vcc_voltage = struct.unpack('<H', data[10:12])[0]
 
-                    result = {
-                        'track_power_on': not track_power_off,
-                        'emergency_stop': emergency_stop,
-                        'programming_mode': programming_mode,
-                        'short_circuit': short_circuit
+                # Parse CentralState (byte 12)
+                central_state = data[12]
+
+                # Parse CentralState bits
+                # Bit 0: emergency stop active
+                # Bit 1: track voltage off
+                # Bit 2: short circuit
+                # Bit 3: programming mode active
+                emergency_stop = bool(central_state & 0x01)
+                track_power_off = bool(central_state & 0x02)
+                short_circuit = bool(central_state & 0x04)
+                programming_mode = bool(central_state & 0x08)
+
+                result = {
+                    'track_power_on': not track_power_off,
+                    'emergency_stop': emergency_stop,
+                    'programming_mode': programming_mode,
+                    'short_circuit': short_circuit,
+                    'telemetry': {
+                        'main_current_ma': main_current,
+                        'prog_current_ma': prog_current,
+                        'filtered_current_ma': filtered_current,
+                        'temperature_c': temperature / 10.0,  # Stored as °C × 10
+                        'supply_voltage_v': supply_voltage / 1000.0,  # Stored as mV
+                        'vcc_voltage_v': vcc_voltage / 1000.0
                     }
+                }
 
-                    if self.verbose:
-                        print(f"✅ Status: Power={'ON' if result['track_power_on'] else 'OFF'}, "
-                              f"Emergency={'YES' if emergency_stop else 'NO'}")
+                if self.verbose:
+                    print(f"✅ Status: Power={'ON' if result['track_power_on'] else 'OFF'}, "
+                          f"Emergency={'YES' if emergency_stop else 'NO'}")
+                    print(f"📊 Telemetry: Current={main_current}mA, "
+                          f"Voltage={supply_voltage/1000.0:.1f}V, "
+                          f"Temp={temperature/10.0:.1f}°C")
 
-                    return result
+                return result
 
             if self.verbose:
                 print(f"⚠️  Risposta inattesa (header: 0x{header:04X}, data: {data.hex()})")

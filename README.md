@@ -224,6 +224,13 @@ python3 z21_controller.py 10            # Control consist 10
   - Virtual Mode already provides real-time compensation
   - Revisit only if speed matching degrades significantly over time
 
+- [ ] **Phase 9: Motor Load Monitoring** (Quick Win - 1-2 hours): Z21 track-level telemetry
+  - Extend `z21.py` to parse existing Z21 telemetry (current, voltage, temperature)
+  - Backend API endpoint for telemetry data
+  - Track power quality monitoring, preventive maintenance alerts
+  - Complete technical analysis in `docs/MOTOR_LOAD_MONITORING.md`
+  - Phase 2-3 (RailCom Plus) conditional on Z21 White compatibility verification
+
 ## Configuration
 
 ### config.json
