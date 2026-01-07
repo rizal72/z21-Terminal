@@ -126,74 +126,56 @@ def save_config(config: Dict[str, Any], config_path: Path = None) -> None:
     if config_path is None:
         config_path = get_config_path()
 
-    # Generate JSON with standard formatting
-    json_str = json.dumps(config, indent=2, ensure_ascii=False)
+    # Filter out keys starting with _ (comments, metadata)
+    filtered_config = {k: v for k, v in config.items() if not k.startswith('_')}
 
-    # Compact arrays of primitives - multiple passes to handle nested arrays
+    # Generate JSON with standard formatting
+    json_str = json.dumps(filtered_config, indent=2, ensure_ascii=False)
+
+    # Compact arrays of primitives - iterative regex approach (innermost arrays first)
     import re
 
-    def compact_pass(text):
-        """Single pass of array compaction. Returns (new_text, changed)."""
-        lines = text.split('\n')
-        result = []
-        i = 0
-        changed = False
+    def compact_innermost_arrays(text):
+        """
+        Find and compact ONE innermost array (no nested [ or { inside).
+        Returns (new_text, changed).
+        """
+        # Pattern: Find arrays that span multiple lines and contain NO nested [ or {
+        # Match:  "key": [\n   content_without_brackets\n  ]
+        pattern = re.compile(
+            r'(.*?\[)\s*\n'           # Capture opening: "key": [
+            r'((?:[^[\]{}]*\n)*?)'    # Capture content: lines without [], {}
+            r'\s*(\](?:,?))',          # Capture closing: ] or ],
+            re.MULTILINE
+        )
 
-        while i < len(lines):
-            line = lines[i]
+        def replacer(match):
+            """Replace multi-line array with inline if it contains only primitives."""
+            opening = match.group(1)  # "key": [
+            content = match.group(2)   # array content
+            closing = match.group(3)   # ] or ],
 
-            # Check if this line opens an array (ends with [)
-            if line.rstrip(',').rstrip().endswith('['):
-                array_start = i
-                array_content = []
-                bracket_depth = 1  # We just found opening [
-                i += 1
+            # Double-check: ensure no brackets inside (regex might be greedy)
+            if '[' in content or ']' in content or '{' in content or '}' in content:
+                return match.group(0)  # Keep as-is
 
-                # Collect lines until we find MATCHING closing ]
-                while i < len(lines) and bracket_depth > 0:
-                    current_line = lines[i]
+            # Extract primitive values
+            values = re.findall(r'(-?\d+\.?\d*|"[^"]*"|true|false|null)', content)
 
-                    # Count brackets in this line to track depth
-                    bracket_depth += current_line.count('[') - current_line.count(']')
+            if not values:
+                return match.group(0)  # Empty array or no primitives, keep as-is
 
-                    if bracket_depth == 0:
-                        # Found matching closing bracket
-                        # Check if array contains only primitives
-                        content_str = ' '.join(array_content)
+            # Reconstruct as inline
+            return opening + ', '.join(values) + closing
 
-                        if '{' not in content_str and '[' not in content_str:
-                            # Extract primitive values
-                            values = re.findall(r'(-?\d+\.?\d*|"[^"]*"|true|false|null)', content_str)
+        new_text = pattern.sub(replacer, text)
+        changed = (new_text != text)
+        return new_text, changed
 
-                            # Reconstruct as inline
-                            key_line = lines[array_start].rstrip()
-                            stripped = current_line.strip()
-                            trailing_comma = ',' if stripped.endswith(',') else ''
-                            inline = key_line + ', '.join(values) + ']' + trailing_comma
-
-                            result.append(inline)
-                            changed = True
-                        else:
-                            # Keep multi-line (contains objects or nested arrays)
-                            result.append(lines[array_start])
-                            result.extend([lines[j] for j in range(array_start + 1, i + 1)])
-
-                        i += 1
-                        break
-                    else:
-                        # Still inside array, collect content
-                        array_content.append(current_line)
-                        i += 1
-            else:
-                result.append(line)
-                i += 1
-
-        return '\n'.join(result), changed
-
-    # Run multiple passes until no more changes (handles nested arrays)
-    max_passes = 10
-    for pass_num in range(max_passes):
-        json_str, changed = compact_pass(json_str)
+    # Run iteratively until no more changes (handles nested arrays layer by layer)
+    max_iterations = 20
+    for iteration in range(max_iterations):
+        json_str, changed = compact_innermost_arrays(json_str)
         if not changed:
             break
 
