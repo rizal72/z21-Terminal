@@ -1064,15 +1064,13 @@ async def video_feed():
     Returns:
         StreamingResponse: MJPEG stream
     """
-    # Cache for time_str calculation (per-consist, only recalculate when timestamp changes)
-    _timestamp_cache = {}  # consist_id → {'previous': timestamp, 'time_str': str}
-    # Cache for last valid delta_t (preserve when locos stop)
-    _last_valid_delta_t = {}  # consist_id → {'delta_t': float, 'status': str, 'timestamp': float, 'time_str': str}
-
     def get_tracking_data():
-        """Callback to get latest tracking data for overlay - MULTI-CONSIST"""
-        nonlocal _timestamp_cache, _last_valid_delta_t
+        """
+        Callback to get latest tracking data for video feed overlay - MULTI-CONSIST
 
+        Simply reads data from consist_state (populated by tracking_daemon WebSocket).
+        Single source of truth: tracking_daemon calculates delta_t, status, time_str.
+        """
         if not z21_manager:
             return {}
 
@@ -1086,66 +1084,17 @@ async def video_feed():
             state = z21_manager.consist_state[consist_id]
             delta_t = state.get('delta_t')
 
-            # Initialize cache for this consist if not exists
-            if consist_id not in _timestamp_cache:
-                _timestamp_cache[consist_id] = {'previous': None, 'time_str': ""}
-
             if delta_t is not None:
-                # Valid delta_t: calculate status and update cache
-                abs_delta_t = abs(delta_t)
-                if abs_delta_t < timing_thresholds['normal']:
-                    status = 'SYNCED'
-                elif abs_delta_t < timing_thresholds['warning']:
-                    status = 'WARNING'
-                else:
-                    status = 'CRITICAL'
-
-                # Calculate elapsed time string ONLY when timestamp changes (not every frame)
-                current_timestamp = state.get('delta_t_timestamp')
-                if current_timestamp and current_timestamp != _timestamp_cache[consist_id]['previous']:
-                    # New Δt arrived: calculate difference from PREVIOUS Δt timestamp
-                    if _timestamp_cache[consist_id]['previous']:
-                        elapsed = current_timestamp - _timestamp_cache[consist_id]['previous']
-                        if elapsed < 1:
-                            _timestamp_cache[consist_id]['time_str'] = "now"
-                        elif elapsed < 60:
-                            _timestamp_cache[consist_id]['time_str'] = f"after {int(elapsed)}s"
-                        else:
-                            minutes = int(elapsed // 60)
-                            seconds = int(elapsed % 60)
-                            _timestamp_cache[consist_id]['time_str'] = f"after {minutes}m {seconds}s"
-                    else:
-                        # First Δt: no previous to compare
-                        _timestamp_cache[consist_id]['time_str'] = "now"
-
-                    # Update previous timestamp for next calculation
-                    _timestamp_cache[consist_id]['previous'] = current_timestamp
-
+                # Use data from tracking_daemon (already calculated via WebSocket)
                 all_tracking_data[consist_id] = {
                     'consist_address': consist_id,
                     'delta_t': delta_t,
-                    'status': status,
-                    'timestamp': current_timestamp,
-                    'time_str': _timestamp_cache[consist_id]['time_str']
+                    'status': state.get('delta_t_status', 'UNKNOWN'),
+                    'timestamp': state.get('delta_t_timestamp'),
+                    'time_str': state.get('delta_t_time_str', '')
                 }
-
-                # Update cache for display (when loco stops, backend resets to None but we keep showing this)
-                _last_valid_delta_t[consist_id] = all_tracking_data[consist_id].copy()
-            else:
-                # delta_t is None (loco stopped, backend reset for fresh start)
-                # Return cached value for display (matches React panel behavior)
-                if consist_id in _last_valid_delta_t and _last_valid_delta_t[consist_id]['delta_t'] is not None:
-                    # Use cached value: preserves last valid Δt on display
-                    all_tracking_data[consist_id] = _last_valid_delta_t[consist_id].copy()
-                else:
-                    # No cache yet (first run): show "Waiting..."
-                    all_tracking_data[consist_id] = {
-                        'consist_address': consist_id,
-                        'delta_t': None,
-                        'status': None,
-                        'timestamp': None,
-                        'time_str': ""
-                    }
+            # If delta_t is None (no tracking data yet), don't add to dict
+            # video_feed.py will show "Waiting..." when tracking_data is empty
 
         return all_tracking_data
 
@@ -1396,9 +1345,11 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                     thresholds = data.get('thresholds', timing_thresholds)  # From daemon or fallback to loaded
 
                     if z21_manager and consist_address in consist_data:
-                        # Update consist state with Δt data
+                        # Update consist state with ALL Δt data from tracking_daemon (single source of truth)
                         z21_manager.consist_state[consist_address]['delta_t'] = delta_t
                         z21_manager.consist_state[consist_address]['delta_t_timestamp'] = timestamp
+                        z21_manager.consist_state[consist_address]['delta_t_status'] = status
+                        z21_manager.consist_state[consist_address]['delta_t_time_str'] = time_str
 
                         # Colored status log (only status word colored)
                         if status == 'CRITICAL':
