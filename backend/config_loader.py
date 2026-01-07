@@ -104,7 +104,17 @@ def get_config_path() -> Path:
 
 def save_config(config: Dict[str, Any], config_path: Path = None) -> None:
     """
-    Save configuration to config.json (does NOT save to config.local.json).
+    Save configuration to config.json with inline arrays (does NOT save to config.local.json).
+
+    Arrays of primitives (numbers, strings, booleans) are formatted inline:
+        "gate_ids": [3, 4]
+        "center": [1227, 213]
+
+    Arrays of objects remain multi-line:
+        "gates": [
+          { ... },
+          { ... }
+        ]
 
     Args:
         config: Configuration dict to save
@@ -116,6 +126,77 @@ def save_config(config: Dict[str, Any], config_path: Path = None) -> None:
     if config_path is None:
         config_path = get_config_path()
 
+    # Generate JSON with standard formatting
+    json_str = json.dumps(config, indent=2, ensure_ascii=False)
+
+    # Compact arrays of primitives - multiple passes to handle nested arrays
+    import re
+
+    def compact_pass(text):
+        """Single pass of array compaction. Returns (new_text, changed)."""
+        lines = text.split('\n')
+        result = []
+        i = 0
+        changed = False
+
+        while i < len(lines):
+            line = lines[i]
+
+            # Check if this line opens an array (ends with [)
+            if line.rstrip(',').rstrip().endswith('['):
+                array_start = i
+                array_content = []
+                bracket_depth = 1  # We just found opening [
+                i += 1
+
+                # Collect lines until we find MATCHING closing ]
+                while i < len(lines) and bracket_depth > 0:
+                    current_line = lines[i]
+
+                    # Count brackets in this line to track depth
+                    bracket_depth += current_line.count('[') - current_line.count(']')
+
+                    if bracket_depth == 0:
+                        # Found matching closing bracket
+                        # Check if array contains only primitives
+                        content_str = ' '.join(array_content)
+
+                        if '{' not in content_str and '[' not in content_str:
+                            # Extract primitive values
+                            values = re.findall(r'(-?\d+\.?\d*|"[^"]*"|true|false|null)', content_str)
+
+                            # Reconstruct as inline
+                            key_line = lines[array_start].rstrip()
+                            stripped = current_line.strip()
+                            trailing_comma = ',' if stripped.endswith(',') else ''
+                            inline = key_line + ', '.join(values) + ']' + trailing_comma
+
+                            result.append(inline)
+                            changed = True
+                        else:
+                            # Keep multi-line (contains objects or nested arrays)
+                            result.append(lines[array_start])
+                            result.extend([lines[j] for j in range(array_start + 1, i + 1)])
+
+                        i += 1
+                        break
+                    else:
+                        # Still inside array, collect content
+                        array_content.append(current_line)
+                        i += 1
+            else:
+                result.append(line)
+                i += 1
+
+        return '\n'.join(result), changed
+
+    # Run multiple passes until no more changes (handles nested arrays)
+    max_passes = 10
+    for pass_num in range(max_passes):
+        json_str, changed = compact_pass(json_str)
+        if not changed:
+            break
+
     with open(config_path, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
+        f.write(json_str)
         f.write('\n')  # Add trailing newline

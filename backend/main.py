@@ -212,12 +212,10 @@ async def lifespan(app: FastAPI):
         # Extract reference info from each consist
         reference_locos = {}
         for consist_addr, consist_info in consists.items():
-            if 'reference' in consist_info:
-                ref = consist_info['reference']
-                reference_locos[consist_addr] = {
-                    'reference': ref.get('loco'),
-                    'adjust': ref.get('adjust')
-                }
+            reference_locos[consist_addr] = {
+                'reference': consist_info.get('reference_loco'),
+                'adjust': consist_info.get('adjust_loco')
+            }
         if debug_enabled:
             print(f"  ✓ Reference locos: {len(reference_locos)} consists configured")
             for consist_addr, ref_config in reference_locos.items():
@@ -673,12 +671,10 @@ async def get_consists():
     # Extract reference_locos from consists for backward compatibility
     reference_locos = {}
     for consist_addr, consist_info in consists_config.items():
-        if 'reference' in consist_info:
-            ref = consist_info['reference']
-            reference_locos[consist_addr] = {
-                'reference': ref.get('loco'),
-                'adjust': ref.get('adjust')
-            }
+        reference_locos[consist_addr] = {
+            'reference': consist_info.get('reference_loco'),
+            'adjust': consist_info.get('adjust_loco')
+        }
 
     return {
         "consists": consists_result,
@@ -719,14 +715,12 @@ async def create_consist(request: dict):
             "name": f"Consist {consist_address}",
             "lead_address": lead_address,
             "rear_address": rear_address,
+            "reference_loco": rear_address if reference_loco == "rear" else lead_address,
+            "adjust_loco": lead_address if reference_loco == "rear" else rear_address,
             "gate_ids": gate_ids,
+            "gate_assignment": None,  # Default: symmetric cross-gate mode
             "virtual_mode": virtual_mode,
             "auto_compensation_enabled": False,
-            "reference": {
-                "loco": rear_address if reference_loco == "rear" else lead_address,
-                "adjust": lead_address if reference_loco == "rear" else rear_address,
-                "notes": ""
-            },
             "notes": ""
         }
 
@@ -802,18 +796,15 @@ async def update_consist(address: str, request: dict):
 
         # Update reference if reference_loco specified
         if "reference_loco" in request:
-            if "reference" not in consist:
-                consist["reference"] = {}
-
             lead_address = consist["lead_address"]
             rear_address = consist["rear_address"]
 
             if request["reference_loco"] == "lead":
-                consist["reference"]["loco"] = lead_address
-                consist["reference"]["adjust"] = rear_address
+                consist["reference_loco"] = lead_address
+                consist["adjust_loco"] = rear_address
             else:  # rear
-                consist["reference"]["loco"] = rear_address
-                consist["reference"]["adjust"] = lead_address
+                consist["reference_loco"] = rear_address
+                consist["adjust_loco"] = lead_address
 
         # Save config
         save_config(config)

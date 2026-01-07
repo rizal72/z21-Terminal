@@ -8,35 +8,28 @@
       "name": "Consist 10 - Tracciato Interno (Figura 8)",
       "lead_address": 1,
       "rear_address": 5,
-      "gate_ids": [
-        3,
-        4
-      ],
+      "reference_loco": 5,
+      "adjust_loco": 1,
+      "gate_ids": [3, 4],
+      "gate_assignment": {
+        "reference": 3,
+        "adjust": 4
+      },
       "virtual_mode": true,
       "auto_compensation_enabled": true,
-      "reference": {
-        "loco": 5,
-        "adjust": 1,
-        "notes": "D645 014 (ESU) likely reference, Gr.675 017 (ESU LokSound) likely adjust"
-      },
-      "notes": "Dual-gate co-presence timing. Traditional consist (2 locos). Lead=1 (sound, Gr.675), Rear=5 (reference, D645)."
+      "notes": "Asymmetric gate timing: only L5@G3-L1@G4 valid (figure-8 track geometry). Reference=D645 014 (ESU stable), Adjust=Gr.675 017 (ESU LokSound)."
     },
     "11": {
       "name": "Consist 11 - Tracciato Esterno (Ovale)",
       "lead_address": 7,
       "rear_address": 8,
-      "gate_ids": [
-        1,
-        2
-      ],
+      "reference_loco": 8,
+      "adjust_loco": 7,
+      "gate_ids": [1, 2],
+      "gate_assignment": null,
       "virtual_mode": true,
       "auto_compensation_enabled": true,
-      "reference": {
-        "loco": 8,
-        "adjust": 7,
-        "notes": "Loco 8 (E444_056, ESU) stable reference - NEVER touch. Loco 7 (E656_239, Hornby) always adjust"
-      },
-      "notes": "Dual-gate co-presence timing. Traditional consist (2 locos)."
+      "notes": "Symmetric cross-gate timing: both L7@G1-L8@G2 and L7@G2-L8@G1 valid (oval track). Reference=E444 056 (ESU stable, NEVER touch), Adjust=E656 239 (Hornby)."
     }
   },
   "gates": [
