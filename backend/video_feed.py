@@ -32,8 +32,7 @@ def load_camera_config() -> str:
 
         camera_ip = config.get('camera_ip', '192.168.1.4')
         camera_port = config.get('camera_port', 554)
-        # Use dedicated stream_video_feed (SD) for browser, fallback to stream (HD for YOLO)
-        stream = config.get('stream_video_feed', config.get('stream', 'stream2'))
+        stream = config.get('stream', 'stream2')
         username = config['username']
         password = config['password']
 
@@ -380,29 +379,6 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
 
             # Draw gate overlays
             frame = draw_gates(frame, gates)
-
-            # Draw keyboard hint (top right, semi-transparent)
-            hint_text = "P: Toggle Panel | B: Debug YOLO"
-            font = cv2.FONT_HERSHEY_PLAIN
-            font_scale = 0.9
-            thickness = 1
-            (text_width, text_height), baseline = cv2.getTextSize(hint_text, font, font_scale, thickness)
-
-            # Position: top right with 10px padding
-            hint_x = frame.shape[1] - text_width - 10
-            hint_y = text_height + 10
-
-            # Draw semi-transparent background
-            padding = 4
-            overlay = frame.copy()
-            cv2.rectangle(overlay,
-                         (hint_x - padding, hint_y - text_height - padding),
-                         (hint_x + text_width + padding, hint_y + baseline + padding),
-                         (0, 0, 0), -1)
-            frame = cv2.addWeighted(overlay, 0.5, frame, 0.5, 0)
-
-            # Draw text
-            cv2.putText(frame, hint_text, (hint_x, hint_y), font, font_scale, (180, 180, 180), thickness)
 
             # Draw debug overlay (bounding boxes + pallini + confidence) when enabled
             global SHOW_DEBUG_OVERLAY
