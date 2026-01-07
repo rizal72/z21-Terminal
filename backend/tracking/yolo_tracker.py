@@ -338,8 +338,12 @@ class YOLOTracker:
         Called once per frame after all gate detection points updated.
 
         GATE TIMING MODES:
-        - Asymmetric (gate_assignment defined): Δt = reference_loco@ref_gate - adjust_loco@adj_gate
-        - Symmetric (gate_assignment null): Cross-gate timing with 2 checks (both directions valid)
+        - Asymmetric (gate_assignment defined): Δt = adjust_loco@adj_gate - reference_loco@ref_gate
+        - Symmetric (gate_assignment null): Δt = lead@gate_i - rear@gate_j (cross-gate, both directions)
+
+        UNIVERSAL INTERPRETATION (both modes):
+        - Δt > 0: reference passes first → adjust too slow → speed up adjust
+        - Δt < 0: adjust passes first → adjust too fast → slow down adjust
         """
         consist_info = self.consist_config[consist_id]
         cdata = self.consist_data[consist_id]
@@ -381,7 +385,11 @@ class YOLOTracker:
                 if (max_t > cdata['last_delta_t_time'] and
                     ref_ts > cdata['last_delta_t_time'] and
                     adj_ts > cdata['last_delta_t_time']):
-                    delta_t = ref_ts - adj_ts
+                    # CRITICAL: Same logic as symmetric mode
+                    # Δt = adjust_ts - reference_ts (consistent with symmetric cross-gate)
+                    # Δt > 0: reference passes first → adjust too slow → speed up adjust
+                    # Δt < 0: adjust passes first → adjust too fast → slow down adjust
+                    delta_t = adj_ts - ref_ts
 
                     # Sanity check
                     if abs(delta_t) > self.delta_t_max_threshold:
