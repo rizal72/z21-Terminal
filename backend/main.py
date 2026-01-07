@@ -1108,7 +1108,15 @@ async def video_feed():
                 # Use cached value to preserve display (matches React behavior)
                 if consist_id in _last_valid_delta_t:
                     all_tracking_data[consist_id] = _last_valid_delta_t[consist_id]
-                # If no cache yet (first run), don't add to dict (shows "Waiting...")
+                else:
+                    # No cache yet (first run): show placeholder panel for this consist
+                    all_tracking_data[consist_id] = {
+                        'consist_address': consist_id,
+                        'delta_t': None,
+                        'status': None,
+                        'timestamp': None,
+                        'time_str': ''
+                    }
 
         return all_tracking_data
 
