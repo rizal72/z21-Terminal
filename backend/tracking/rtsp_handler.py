@@ -6,6 +6,7 @@ Used by both:
 - scripts/track_consist_yolo.py (standalone GUI testing)
 - backend/video_feed.py (MJPEG stream for web browser)
 
+All use the same 'stream' from camera_config.json (stream2 = 1280x720 SD).
 Handles camera config loading and RTSP stream setup with optimal buffering.
 """
 import cv2
@@ -18,12 +19,9 @@ project_root = Path(__file__).parent.parent.parent  # z21-Terminal/ root
 CAMERA_CONFIG_PATH = project_root / 'camera_config.json'
 
 
-def load_camera_config(stream_key='stream'):
+def load_camera_config():
     """
     Load camera configuration and build RTSP URL.
-
-    Args:
-        stream_key: Key in camera_config.json for stream ('stream', 'stream_video_feed', etc.)
 
     Returns:
         rtsp_url: RTSP URL string
@@ -37,7 +35,7 @@ def load_camera_config(stream_key='stream'):
 
         camera_ip = config.get('camera_ip', '192.168.1.4')
         camera_port = config.get('camera_port', 554)
-        stream = config.get(stream_key, 'stream2')  # Default to 'stream2' if key missing
+        stream = config.get('stream', 'stream2')
         username = config['username']
         password = config['password']
 

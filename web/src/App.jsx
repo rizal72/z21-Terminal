@@ -53,6 +53,8 @@ function App() {
   const [wakeLockActive, setWakeLockActive] = useState(false); // Wake Lock status
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // Mobile hamburger menu
   const [consistManagerOpen, setConsistManagerOpen] = useState(false); // Consist Manager modal (Phase 6B)
+  const [editMode, setEditMode] = useState(false); // Gate editor mode
+  const [debugMode, setDebugMode] = useState(false); // Debug overlay mode
 
   // Dynamic controllers array (scalable UI with focus management)
   const [controllers, setControllers] = useState([
@@ -469,13 +471,30 @@ function App() {
       // B key to toggle debug overlay in video feed (allow even when dropdown focused)
       if (e.key === 'b' || e.key === 'B') {
         e.preventDefault();
+
+        // Sync with backend and use backend state as source of truth
         fetch(`${API_URL}/api/toggle-debug`, { method: 'POST' })
           .then(res => res.json())
           .then(data => {
-            const status = data.debug_visible ? 'visible' : 'hidden';
-            console.log(`🔍 Debug overlay toggled: ${status}`);
+            const newMode = data.debug_visible;
+            setDebugMode(newMode);
+            console.log(`🔍 Debug mode toggled: ${newMode ? 'enabled' : 'disabled'}`);
           })
           .catch(err => console.error('Failed to toggle debug:', err));
+        return;
+      }
+
+      // E key to toggle edit mode in video feed (allow even when dropdown focused, desktop/tablet only)
+      if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        const isMobile = window.innerWidth < 768;
+        if (!isMobile) {
+          setEditMode(prev => {
+            const newMode = !prev;
+            console.log(`🔧 Edit mode toggled: ${newMode ? 'enabled' : 'disabled'}`);
+            return newMode;
+          });
+        }
         return;
       }
 
@@ -931,7 +950,13 @@ function App() {
         )}
 
         {/* Video Feed Panel - Collapsible */}
-        <VideoFeedPanel apiUrl={API_URL} />
+        <VideoFeedPanel
+          apiUrl={API_URL}
+          editMode={editMode}
+          onEditModeChange={setEditMode}
+          debugMode={debugMode}
+          onDebugModeChange={setDebugMode}
+        />
 
         {/* Controllers grid - Dynamic and scalable */}
         <div className="controllers-grid grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-8">

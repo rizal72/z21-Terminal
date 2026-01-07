@@ -1002,6 +1002,60 @@ async def toggle_debug():
     }
 
 
+@app.get("/api/gates")
+async def get_gates():
+    """Get current gate configuration"""
+    config = load_config()
+    return config.get('gates', [])
+
+
+@app.post("/api/save-gates")
+async def save_gates(gates: List[Dict[str, Any]]):
+    """Save gate configuration from web editor (press 'E' in UI)"""
+    try:
+        # Load current config
+        config = load_config()
+
+        # Validate gates format
+        for gate in gates:
+            required_fields = ['id', 'name', 'center', 'width', 'height', 'angle', 'color']
+            if not all(field in gate for field in required_fields):
+                return {
+                    "status": "error",
+                    "message": f"Invalid gate format, missing required fields"
+                }
+
+        # Create backup before saving
+        import shutil
+        from datetime import datetime
+        from pathlib import Path
+
+        config_path = Path(__file__).parent.parent / 'config.json'
+        backup_name = "config.json.backup"
+        backup_path = config_path.parent / backup_name
+
+        shutil.copy(config_path, backup_path)
+        print(f"  💾 Config backup created: {backup_name}")
+
+        # Update gates in config
+        config['gates'] = gates
+
+        # Save config (with inline array formatting)
+        save_config(config)
+
+        print(f"  💾 Gates configuration saved ({len(gates)} gates)")
+        return {
+            "status": "success",
+            "message": f"Saved {len(gates)} gates (backup: {backup_name})"
+        }
+    except Exception as e:
+        print(f"  ❌ Error saving gates: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
 @app.get("/api/video_feed")
 async def video_feed():
     """
