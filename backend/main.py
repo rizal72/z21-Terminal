@@ -1064,13 +1064,20 @@ async def video_feed():
     Returns:
         StreamingResponse: MJPEG stream
     """
+    # Cache to preserve last valid delta_t for video feed (when locos stop)
+    _last_valid_delta_t = {}  # consist_id → last valid tracking data dict
+
     def get_tracking_data():
         """
         Callback to get latest tracking data for video feed overlay - MULTI-CONSIST
 
-        Simply reads data from consist_state (populated by tracking_daemon WebSocket).
+        Reads data from consist_state (populated by tracking_daemon WebSocket).
         Single source of truth: tracking_daemon calculates delta_t, status, time_str.
+
+        Preserves last valid delta_t when locos stop (matches React panel behavior).
         """
+        nonlocal _last_valid_delta_t
+
         if not z21_manager:
             return {}
 
@@ -1085,16 +1092,23 @@ async def video_feed():
             delta_t = state.get('delta_t')
 
             if delta_t is not None:
-                # Use data from tracking_daemon (already calculated via WebSocket)
-                all_tracking_data[consist_id] = {
+                # Valid delta_t: read from consist_state (no calculations)
+                tracking_data = {
                     'consist_address': consist_id,
                     'delta_t': delta_t,
                     'status': state.get('delta_t_status', 'UNKNOWN'),
                     'timestamp': state.get('delta_t_timestamp'),
                     'time_str': state.get('delta_t_time_str', '')
                 }
-            # If delta_t is None (no tracking data yet), don't add to dict
-            # video_feed.py will show "Waiting..." when tracking_data is empty
+                all_tracking_data[consist_id] = tracking_data
+                # Cache for when locos stop (preserve last value)
+                _last_valid_delta_t[consist_id] = tracking_data.copy()
+            else:
+                # delta_t is None (locos stopped or no tracking yet)
+                # Use cached value to preserve display (matches React behavior)
+                if consist_id in _last_valid_delta_t:
+                    all_tracking_data[consist_id] = _last_valid_delta_t[consist_id]
+                # If no cache yet (first run), don't add to dict (shows "Waiting...")
 
         return all_tracking_data
 
