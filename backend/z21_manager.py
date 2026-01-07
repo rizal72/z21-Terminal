@@ -289,36 +289,31 @@ class Z21Manager:
 
                                 # Save new incremental speed
                                 consist['speed_actual_adjust'] = speed_adjust
-                    # SYNCED zone decay: one-shot decay (only once after each compensation cycle)
+                    # SYNCED zone reset: immediate snapback to target speed (unified for all track geometries)
                     elif is_auto_compensation and delta_t is not None and abs(delta_t) < self.timing_thresholds['normal']:
                         accumulated = consist.get('compensation_accumulated', 0)
-                        decay_already_applied = consist.get('decay_applied', False)
 
-                        if accumulated != 0 and not decay_already_applied:  # Only decay once per compensation cycle
-                            # Calculate decay amount (half of accumulated, rounded)
-                            decay = round(accumulated / 2)
-                            if decay == 0:
-                                decay = 1 if accumulated > 0 else -1  # At least ±1 step
+                        if accumulated != 0:  # Reset only if there was previous compensation
+                            # Snapback: reset adjust loco to target speed (complete reset, no progressive decay)
+                            # This works better for both short-interval (C11) and long-interval (C10) tracks
+                            # Avoids oscillations and overshoot from progressive decay with infrequent checks
+                            old_speed = speed_adjust
+                            speed_adjust = speed  # Reset to target
+                            correction = speed_adjust - old_speed
 
-                            # Apply decay: move speed_adjust back toward target
-                            if accumulated > 0:
-                                # Was sped up, slow down toward target
-                                speed_adjust = max(speed, speed_adjust - decay)
-                                consist['compensation_accumulated'] -= decay
-                                # Green color for decay (returning toward target)
-                                print(f"\033[92m  ⬇️  Decay: SYNCED (Δt={delta_t:.3f}s), reduce compensation by {decay} steps (accumulated: {accumulated} → {consist['compensation_accumulated']})\033[0m")
+                            # Green color for reset (returning to target)
+                            if correction > 0:
+                                print(f"\033[92m  ⬆️  Reset: SYNCED (Δt={delta_t:.3f}s), speed up loco {adjust_addr} by {correction} steps (reset accumulated: {accumulated} → 0)\033[0m")
+                            elif correction < 0:
+                                print(f"\033[92m  ⬇️  Reset: SYNCED (Δt={delta_t:.3f}s), slow down loco {adjust_addr} by {abs(correction)} steps (reset accumulated: {accumulated} → 0)\033[0m")
                             else:
-                                # Was slowed down, speed up toward target
-                                speed_adjust = min(speed, speed_adjust - decay)  # decay is negative here
-                                consist['compensation_accumulated'] -= decay
-                                # Green color for decay (returning toward target)
-                                print(f"\033[92m  ⬆️  Decay: SYNCED (Δt={delta_t:.3f}s), reduce compensation by {abs(decay)} steps (accumulated: {accumulated} → {consist['compensation_accumulated']})\033[0m")
+                                print(f"\033[92m  ✓ Reset: SYNCED (Δt={delta_t:.3f}s), no change needed (already at target, reset accumulated: {accumulated} → 0)\033[0m")
 
-                            # Save decayed speed
+                            # Save reset speed
                             consist['speed_actual_adjust'] = speed_adjust
 
-                            # Mark decay as applied (one-shot: no more decay until next CRITICAL)
-                            consist['decay_applied'] = True
+                            # Reset accumulated compensation
+                            consist['compensation_accumulated'] = 0
                     else:
                         # WARNING zone (normal < |Δt| < warning): No action, reset overflow counter
                         if address in self.overflow_warnings:
