@@ -12,35 +12,35 @@ z21-Terminal/
 ├── scripts/           # Python scripts (terminal controller, YOLO tracking, utilities)
 ├── backend/           # FastAPI backend + WebSocket + Z21Manager + Tracking Daemon
 ├── web/               # React frontend (Vite + Tailwind CSS)
-├── docs/              # Technical documentation (Z21 protocol, JMRI integration, phases)
-├── config.json        # Central configuration (gates, thresholds, reference locos, debug)
+├── config.json        # Central configuration (consists, gates, thresholds, debug)
 └── camera_config.json # Camera credentials (gitignored)
 ```
 
 ## Relationship with JMRI
 
-**z21-Terminal is an extension of JMRI, not a replacement.**
+**z21-Terminal started as a JMRI extension, now increasingly independent.**
 
-- **JMRI is required**: z21-Terminal reads roster and consists from JMRI XML files
-  - Your specific roster configuration lives in JMRI
-  - z21-Terminal dynamically loads functions, consists, and locomotive data
-  - JMRI does not need to be running (only XML files are read)
-- **Coexistence**: Both systems can control locomotives simultaneously
-- **Complementarity**:
-  - **JMRI**: Decoder configuration (DecoderPro), programming track, roster/consist management
-  - **z21-Terminal**: Fast operational control, modern web UI, YOLO tracking, automated compensation
+- **JMRI is optional**: z21-Terminal can manage consists directly via web UI
+  - Initial roster configuration can be imported from JMRI XML files
+  - **Consist management**: Create/edit/delete consists via web dashboard (no JMRI needed)
+  - **CV19 management**: Automatic DCC/Virtual mode toggle (no programming track needed)
+  - JMRI does not need to be running
+- **Coexistence**: Both systems can control locomotives simultaneously (if both installed)
+- **Complementarity** (if using JMRI):
+  - **JMRI**: Decoder configuration (DecoderPro), initial roster setup, programming track operations
+  - **z21-Terminal**: Operational control, modern web UI, consist CRUD, YOLO tracking, automated compensation
 
 **Typical workflow**:
-1. Configure locomotives and consists in JMRI (DecoderPro)
-2. Use z21-Terminal for operational control (web dashboard with real-time tracking)
-3. Both software can remain open and work together (last command has priority)
+1. (Optional) Import initial roster from JMRI, OR configure locomotives manually
+2. Manage consists directly in z21-Terminal web dashboard
+3. Use z21-Terminal for all operational control (tracking, compensation, multi-device sync)
 
 ## Setup
 
 ### Requirements
 - **Control Station**: Roco Z21 (White, Black, or Pro) connected to your network
-- **Software**: JMRI installed with configured roster (does not need to be running)
 - **Network**: Z21 and computer on same network (or accessible via VPN/Tailscale)
+- **Optional**: JMRI (for initial roster import or decoder programming)
 - **Optional**: IP camera with RTSP support for YOLO tracking (Tapo camera tested)
 
 ### Hardware Setup
@@ -63,9 +63,10 @@ Access at: **http://localhost:5173** (or network: `http://192.168.1.xxx:5173`)
 **Tailscale HTTPS**: `https://mbp16diriccardo.tail9350d7.ts.net` (permanent, persists after reboot)
 
 **Core Features:**
+- **Consist Manager**: Create/edit/delete consists via web UI (CRUD operations, no JMRI needed)
 - **Scalable UI**: Dynamic controller panels with [+] button (add/remove controllers on-the-fly)
 - **Virtual Consist Mode**: Automatic CV19 management + real-time speed compensation based on Δt
-- **Touch-optimized**: Speed slider with 200ms throttling, 48px touch targets
+- **Touch-optimized**: Speed slider with 200ms throttling, 48px touch targets, responsive hamburger menu
 - **Real-time sync**: WebSocket multi-device support (iPad + Phone + Laptop simultaneously)
 - **PWA**: Installable on iPad/iPhone home screen (standalone app experience)
 - **Wake Lock API**: Prevent screen sleep on mobile during operations (iOS/Android)
@@ -79,7 +80,7 @@ Real-time locomotive tracking via IP camera with automatic speed compensation:
 
 **Features:**
 - **YOLO Object Detection**: Custom YOLOv8 nano model trained on 4 locomotives (mAP50 = 80.7%)
-- **Gate Timing Detection**: Cross-gate co-presence timing with dual-gate validation
+- **Gate Timing Detection**: Symmetric (oval track) and asymmetric (figure-8 track) timing modes
 - **Multi-Consist Support**: Config-driven tracking (supports N consists via `config.json`)
 - **Speed Compensation**: Automatic Δt-based compensation in Virtual Mode (bang-bang + decay)
 - **Video Feed**: Real-time MJPEG stream with gate overlay + Δt stats panel
@@ -113,7 +114,9 @@ python3 z21_controller.py 10            # Control consist 10
 ### Web Dashboard ✅
 - [x] Modern web UI (Vite + React + Tailwind CSS + Font Awesome 6)
 - [x] FastAPI backend with WebSocket real-time sync
-- [x] **Scalable UI**: Dynamic controller panels with [+] button (Phase 1 complete)
+- [x] **Consist Manager**: CRUD operations via web UI (create/edit/delete consists, gate assignment)
+- [x] **Scalable UI**: Dynamic controller panels with [+] button
+- [x] **Mobile Header**: Responsive hamburger menu (<768px)
 - [x] Flexible roster selection (consists + standalone locomotives)
 - [x] Touch-optimized controls (mobile-first design, 48px touch targets)
 - [x] Speed control slider with 200ms throttling
@@ -128,9 +131,9 @@ python3 z21_controller.py 10            # Control consist 10
 - [x] Tailscale HTTPS support (permanent, persists after reboot)
 - [x] Safari Mac animation compatibility
 
-### YOLO Tracking System ✅ (Phases 3-5 Complete)
+### YOLO Tracking System ✅
 - [x] **YOLO Custom Training**: YOLOv8 nano model trained on 4 locomotives
-- [x] **Gate Timing Detection**: Cross-gate co-presence timing with dual-gate validation
+- [x] **Gate Timing Detection**: Symmetric (oval) and asymmetric (figure-8) timing modes
 - [x] **Multi-Consist Support**: Config-driven tracking (supports N consists)
 - [x] **Video Feed**: Real-time MJPEG stream with gate overlay + Δt stats panels
 - [x] **Dynamic FPS Control**: 30 FPS active, 1 FPS idle (auto-switches on movement)
@@ -173,25 +176,9 @@ python3 z21_controller.py 10            # Control consist 10
 - [x] YOLO training scripts (dataset creation, annotation, training)
 
 ### Future Enhancements ⏳
-- [ ] **Consist Manager UI**: CRUD operations for consists (Phase 6)
-  - Create/Edit/Delete consists via web UI
-  - Gate assignment per consist
-  - Single loco support (rear_address = null)
-  - Eliminate JMRI dependency for consist management
-- [ ] **Mobile Header Refactor**: Hamburger menu for mobile (<768px)
-- [ ] **Consist 10 Tracking**: Configure gates for internal track (figura 8)
-- [ ] **Auto CV Adjust** (Nice to Have): Permanent CV tuning based on Δt statistics
-  - Low priority: Virtual Mode already provides real-time compensation
-  - Revisit only if speed matching degrades over time
-
-## Documentation
-
-Complete technical documentation in `/docs`:
-
-- **[Z21_PROTOCOL.md](docs/Z21_PROTOCOL.md)**: Z21 LAN protocol specification (UDP, XpressNet)
-- **[JMRI_INTEGRATION.md](docs/JMRI_INTEGRATION.md)**: Relationship with JMRI (complementary, not replacement)
-- **[CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md)**: Historical changelog (2025-12-16 → 2025-12-27)
-- **[PHASE5_CONSIST_TRACKING.md](docs/PHASE5_CONSIST_TRACKING.md)**: Multi-consist tracking refactor details
+- [ ] **Auto CV Adjust** (Low Priority): Permanent CV tuning based on Δt statistics
+  - Virtual Mode already provides real-time compensation
+  - Revisit only if speed matching degrades significantly over time
 
 ## Configuration
 
@@ -200,34 +187,48 @@ Central configuration file (project root):
 
 ```json
 {
-  "gates": [...],                    // Gate definitions (position, size)
-  "timing_thresholds": {             // Δt thresholds
-    "normal": 1.0,                   // SYNCED threshold (seconds)
-    "warning": 1.5,                  // WARNING threshold (seconds)
-    "max_delta_t": 15.0              // Sanity check (ignore outliers)
+  "debug": {
+    "enabled": false                 // Production: false, Verbose logs: true
   },
-  "reference_locos": {               // Reference loco strategy
-    "11": {"reference": 8, "adjust": 7},
-    "10": {"reference": 5, "adjust": 1}
-  },
-  "tracking_assignments": {          // Multi-consist tracking
-    "11": {
-      "lead_address": 7,
-      "rear_address": 8,
-      "gate_ids": [1, 2]
-    },
+  "consists": {                      // Consist definitions (unified structure)
     "10": {
+      "name": "Consist 10 - Internal Track",
       "lead_address": 1,
       "rear_address": 5,
-      "gate_ids": [3, 4]
+      "reference_loco": 5,           // Never touch (stable decoder)
+      "adjust_loco": 1,              // Speed compensation target
+      "gate_ids": [3, 4],
+      "gate_assignment": {           // Asymmetric mode (figure-8)
+        "reference": 3,
+        "adjust": 4
+      },
+      "virtual_mode": true,
+      "auto_compensation_enabled": true
+    },
+    "11": {
+      "name": "Consist 11 - External Track",
+      "lead_address": 7,
+      "rear_address": 8,
+      "reference_loco": 8,
+      "adjust_loco": 7,
+      "gate_ids": [1, 2],
+      "gate_assignment": null,       // Symmetric mode (oval)
+      "virtual_mode": true,
+      "auto_compensation_enabled": true
     }
   },
-  "tracking_fps": {                  // Dynamic FPS control
-    "active": 30,
-    "idle": 1
-  },
-  "debug": {                         // Debug mode
-    "enabled": false
+  "gates": [...],                    // Gate definitions (position, size, color)
+  "tracking": {
+    "fps": {                         // Dynamic FPS control
+      "active": 30,
+      "idle": 1
+    },
+    "timing_thresholds": {           // Δt thresholds
+      "normal": 1.0,
+      "warning": 1.5,
+      "max_delta_t": 15.0
+    },
+    "yolo_imgsz": 640                // YOLO inference size (640 square, or [640,1152] rect)
   }
 }
 ```
@@ -247,18 +248,19 @@ Camera credentials (gitignored):
 
 ## Notes
 
-- **Roster Management**: Configure your locomotives in JMRI DecoderPro
-  - z21-Terminal automatically loads roster from JMRI XML files
-  - Supports individual locomotives and consists (DAC software-based)
+- **Consist Management**:
+  - **Web UI**: Create/edit/delete consists directly in z21-Terminal (no JMRI needed)
+  - **JMRI Integration** (optional): Can import initial roster from JMRI XML files
+  - CV19 management handled automatically (DCC/Virtual mode toggle)
 - **Speed Matching**:
-  - Manual tuning via JMRI speed tables (CV67-94)
-  - Virtual Mode provides real-time compensation (session-based)
-  - Auto CV Adjust planned for future (permanent tuning)
+  - **Virtual Mode**: Real-time compensation based on Δt feedback (session-based, no CV writes)
+  - **Manual tuning** (optional): JMRI speed tables (CV67-94) for permanent adjustments
+  - **Auto CV Adjust**: Low priority (Virtual Mode already compensates in real-time)
 - **Z21 Protocol**:
   - Direct Z21 LAN control (UDP port 21105) ✅
   - Tested on Z21 White (compatible with Z21 Black/Pro)
   - Operations mode CV write/read implemented (no programming track needed)
-  - Coexists with JMRI: both can control locomotives simultaneously
+  - Coexists with JMRI if both installed (last command has priority)
 - **YOLO Training**:
   - DCC address MUST be class prefix (e.g., `7_E656_239`)
   - ⚠️ **NEVER change CV1 after training** (breaks class mapping)
