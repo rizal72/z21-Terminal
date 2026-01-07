@@ -1,6 +1,6 @@
 # z21-Terminal
 
-Interactive terminal controller for DCC locomotives via Z21 LAN protocol with advanced YOLO-based tracking and automatic speed compensation.
+Web-based DCC locomotive controller with real-time YOLO tracking, automatic speed compensation, and multi-device sync via Z21 LAN protocol.
 
 **Project**: DCC Model Railway - BiancAlice
 
@@ -54,13 +54,13 @@ z21-Terminal/
 Modern web interface for locomotive control (mobile-first, multi-device, PWA):
 
 ```bash
-z21              # Start backend + frontend + tracking daemon (3 iTerm tabs)
+z21              # Start backend + frontend (2 iTerm tabs, daemon auto-managed)
 z21-backend      # Start only backend (FastAPI + WebSocket)
 z21-frontend     # Start only frontend (Vite dev server)
 ```
 
 Access at: **http://localhost:5173** (or network: `http://192.168.1.xxx:5173`)
-**Tailscale HTTPS**: `https://mbp16diriccardo.tail9350d7.ts.net` (permanent, persists after reboot)
+**Tailscale HTTPS**: `https://<your-machine>.tail<xxxx>.ts.net` (optional, for remote access)
 
 **Core Features:**
 - **Consist Manager**: Create/edit/delete consists via web UI (CRUD operations, no JMRI needed)
@@ -79,7 +79,7 @@ Access at: **http://localhost:5173** (or network: `http://192.168.1.xxx:5173`)
 Real-time locomotive tracking via IP camera with automatic speed compensation:
 
 **Features:**
-- **YOLO Object Detection**: Custom YOLOv8 nano model trained on 4 locomotives (mAP50 = 80.7%)
+- **YOLO Object Detection**: Custom YOLOv8 nano model trained on 4 locomotives (mAP50 = 93.1%)
 - **Gate Timing Detection**: Symmetric (oval track) and asymmetric (figure-8 track) timing modes
 - **Multi-Consist Support**: Config-driven tracking (supports N consists via `config.json`)
 - **Speed Compensation**: Automatic Δt-based compensation in Virtual Mode (bang-bang + decay)
@@ -97,11 +97,11 @@ Real-time locomotive tracking via IP camera with automatic speed compensation:
 - **Gates**: Rectangular zones (configurable position/size in `config.json`)
 - **Thresholds**: SYNCED < 1.0s, WARNING < 1.5s (configurable)
 
-### Terminal Controller ⌨️
-Interactive keyboard control:
+### Terminal Controller ⌨️ (Optional CLI Utility)
+Interactive keyboard control for CLI enthusiasts:
 
 ```bash
-cd ~/Documents/_PROGETTI/z21-Terminal/scripts
+cd scripts/
 
 # Interactive Z21 controller
 python3 z21_controller.py               # Interactive loco selection
@@ -141,10 +141,10 @@ python3 z21_controller.py 10            # Control consist 10
 - [x] **Frame Queue Sharing**: Single RTSP capture, dual consumers (daemon + video feed)
 - [x] **Timing Thresholds**: Configurable SYNCED/WARNING thresholds
 
-### Virtual Consist Mode ✅ (Phase 4B Complete)
+### Virtual Consist Mode ✅
 - [x] **Automatic CV19 Management**: Toggle DCC/Virtual mode via UI (writes CV19=0 or CV19=consist_address)
 - [x] **Speed Compensation**: Real-time Δt-based adjustment (bang-bang control)
-- [x] **Decay Mechanism**: One-shot proportional decay in SYNCED zone (Phase 4C)
+- [x] **Decay Mechanism**: One-shot proportional decay in SYNCED zone
 - [x] **Reference Loco Strategy**: Config-driven (never touch reference loco, adjust only unstable loco)
 - [x] **Transparent UX**: Single slider, dual locomotive control behind the scenes
 - [x] **Auto-Compensation Toggle**: Enable/disable compensation per consist (UI switch)
