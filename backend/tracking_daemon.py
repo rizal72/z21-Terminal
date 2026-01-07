@@ -263,11 +263,10 @@ class TrackingDaemon:
 
         # Reset Δt timestamp for THIS consist if speed = 0 (so next Δt shows "now" when it restarts)
         if speed == 0:
-            for consist_key in self.last_broadcasted_per_consist:
-                # consist_key format: "G{gate_id}_C{consist_id}" or just consist_id
-                # Match by consist_id at the end
-                if consist_key.endswith(f"_{consist_address}") or consist_key == str(consist_address):
-                    self.last_broadcasted_per_consist[consist_key]['timestamp'] = None
+            # consist_key format: "c{consist_address}" (e.g., "c10", "c11")
+            consist_key = f'c{consist_address}'
+            if consist_key in self.last_broadcasted_per_consist:
+                self.last_broadcasted_per_consist[consist_key]['timestamp'] = None
 
         # Check if any consist is moving
         any_movement = any(s > 0 for s in self.consist_speeds.values())

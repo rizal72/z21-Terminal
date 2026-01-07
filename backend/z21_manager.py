@@ -205,12 +205,6 @@ class Z21Manager:
                         consist['delta_t_timestamp'] = None
                         if self.debug_enabled:
                             print(f"  ⏪ REVERSE: no compensation (forward direction only)")
-                    # Restart from stop: reset stale delta_t to prevent invalid compensation
-                    elif consist.get('previous_speed', 0) == 0 and speed > 0:
-                        consist['delta_t'] = None
-                        consist['delta_t_timestamp'] = None
-                        if self.debug_enabled:
-                            print(f"  🔄 RESTART: reset delta_t (stale value protection)")
                     # Bang-bang compensation: intervene only if |Δt| > warning threshold (CRITICAL)
                     # Dead band < warning avoids oscillations from YOLO detection noise
                     elif is_auto_compensation and delta_t is not None and abs(delta_t) > self.timing_thresholds['warning']:
@@ -351,9 +345,7 @@ class Z21Manager:
 
             # Update state
             if address in self.consist_state:
-                # Track previous speed for restart detection (stale delta_t protection)
                 consist = self.consist_state[address]
-                consist['previous_speed'] = consist.get('speed', 0)
                 consist['speed'] = speed
                 consist['direction'] = 'forward' if forward else 'reverse'
 
