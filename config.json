@@ -36,18 +36,18 @@
     {
       "id": 1,
       "name": "Gate 1",
-      "center": [1227, 213],
-      "width": 100,
-      "height": 100,
+      "center": [1218, 270],
+      "width": 78,
+      "height": 73,
       "angle": 0,
       "color": [255, 165, 0]
     },
     {
       "id": 2,
       "name": "Gate 2",
-      "center": [133, 149],
-      "width": 80,
-      "height": 60,
+      "center": [142, 138],
+      "width": 52,
+      "height": 50,
       "angle": -30,
       "color": [255, 165, 0]
     },
@@ -74,7 +74,7 @@
     "fps": {
       "active": 30,
       "idle": 1,
-      "video_feed": 15,
+      "video_feed": 30,
       "notes": "Tracking FPS (active/idle) and video feed stream FPS"
     },
     "timing_thresholds": {
