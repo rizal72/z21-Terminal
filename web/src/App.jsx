@@ -466,6 +466,19 @@ function App() {
         return;
       }
 
+      // B key to toggle debug overlay in video feed (allow even when dropdown focused)
+      if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        fetch(`${API_URL}/api/toggle-debug`, { method: 'POST' })
+          .then(res => res.json())
+          .then(data => {
+            const status = data.debug_visible ? 'visible' : 'hidden';
+            console.log(`🔍 Debug overlay toggled: ${status}`);
+          })
+          .catch(err => console.error('Failed to toggle debug:', err));
+        return;
+      }
+
       // For other keys, don't handle if input/select/textarea is focused
       if (document.activeElement.tagName === 'INPUT' ||
           document.activeElement.tagName === 'TEXTAREA' ||

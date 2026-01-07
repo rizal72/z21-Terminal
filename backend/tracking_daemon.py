@@ -218,7 +218,8 @@ class TrackingDaemon:
                 'address': address,
                 'name': loco_name_short,  # "E656" or "E444"
                 'position': list(det['pos']),  # [x, y]
-                'confidence': det['conf']
+                'confidence': det['conf'],
+                'bbox': list(det['bbox']) if 'bbox' in det else None  # [x1, y1, x2, y2] for debug overlay
             })
 
         if not positions:

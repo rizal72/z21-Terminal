@@ -258,8 +258,65 @@ def draw_locomotive_markers(frame: np.ndarray, detections: List[Dict]) -> np.nda
     return frame
 
 
+def draw_debug_overlay(frame: np.ndarray, detections: List[Dict]) -> np.ndarray:
+    """
+    Draw debug overlay with bounding boxes, center points, and confidence labels
+    (similar to track_consist_yolo.py debug view)
+
+    Args:
+        frame: Input frame
+        detections: List of detections with {'address', 'name', 'position', 'confidence', 'bbox'}
+
+    Returns:
+        Frame with debug overlay
+    """
+    # Color mapping for addresses (same as track_consist_yolo.py for consistency)
+    COLORS = {
+        1: (255, 255, 0),   # Loco 1 (Gr675) - Yellow
+        5: (255, 128, 0),   # Loco 5 (D645) - Orange
+        7: (0, 255, 0),     # Loco 7 (E656) - Green
+        8: (0, 0, 255)      # Loco 8 (E444) - Red
+    }
+
+    for det in detections:
+        address = det.get('address')
+        name = det.get('name', f"Loco {address}")
+        position = det.get('position', [0, 0])
+        confidence = det.get('confidence', 0.0)
+        bbox = det.get('bbox')  # Optional: [x1, y1, x2, y2] in camera coords
+
+        if len(position) < 2:
+            continue
+
+        x, y = int(position[0]), int(position[1])
+        color = COLORS.get(address, (255, 255, 255))  # Default white
+
+        # Draw bounding box (if available)
+        if bbox and len(bbox) == 4:
+            x1, y1, x2, y2 = [int(coord) for coord in bbox]
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+
+        # Draw center point (larger hollow circle for debug visibility)
+        cv2.circle(frame, (x, y), 15, color, 2)  # Hollow circle
+
+        # Draw confidence label (above bbox if available, else near center)
+        label = f"{name} {confidence:.2f}"
+        if bbox and len(bbox) == 4:
+            label_pos = (int(bbox[0]), int(bbox[1]) - 10)
+        else:
+            label_pos = (x + 20, y)
+
+        cv2.putText(frame, label, label_pos, cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, color, 2)
+
+    return frame
+
+
 # Global toggle for Δt panel (can be toggled via API endpoint)
 SHOW_DELTA_T_PANEL = True
+
+# Global toggle for debug overlay (bounding boxes + pallini + confidence)
+SHOW_DEBUG_OVERLAY = False
 
 
 def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=None):
@@ -325,7 +382,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
             frame = draw_gates(frame, gates)
 
             # Draw keyboard hint (top right, semi-transparent)
-            hint_text = "P: Toggle Panel"
+            hint_text = "P: Toggle Panel | B: Debug YOLO"
             font = cv2.FONT_HERSHEY_PLAIN
             font_scale = 0.9
             thickness = 1
@@ -347,14 +404,15 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
             # Draw text
             cv2.putText(frame, hint_text, (hint_x, hint_y), font, font_scale, (180, 180, 180), thickness)
 
-            # Draw locomotive markers (pallini YOLO) - DISABLED: RTSP delay too high
-            # if yolo_detections_callback:
-            #     try:
-            #         detections = yolo_detections_callback()
-            #         if detections:
-            #             frame = draw_locomotive_markers(frame, detections)
-            #     except Exception as e:
-            #         print(f"  ⚠️  Error getting YOLO detections: {e}")
+            # Draw debug overlay (bounding boxes + pallini + confidence) when enabled
+            global SHOW_DEBUG_OVERLAY
+            if SHOW_DEBUG_OVERLAY and yolo_detections_callback:
+                try:
+                    detections = yolo_detections_callback()
+                    if detections:
+                        frame = draw_debug_overlay(frame, detections)
+                except Exception as e:
+                    print(f"  ⚠️  Error drawing debug overlay: {e}")
 
             # === TRACKING INFO PANEL (toggle with SHOW_DELTA_T_PANEL global) ===
             global SHOW_DELTA_T_PANEL
