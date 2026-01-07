@@ -204,12 +204,10 @@ class YOLOTracker:
         consists = config.get('consists', {})
         self.reference_locos = {}
         for consist_addr, consist_info in consists.items():
-            if 'reference' in consist_info:
-                ref = consist_info['reference']
-                self.reference_locos[consist_addr] = {
-                    'reference': ref.get('loco'),
-                    'adjust': ref.get('adjust')
-                }
+            self.reference_locos[consist_addr] = {
+                'reference': consist_info.get('reference_loco'),
+                'adjust': consist_info.get('adjust_loco')
+            }
         if self.reference_locos and self.debug_enabled:
             print(f"🎯 Reference locos: {len(self.reference_locos)} consists configured")
 
@@ -247,7 +245,10 @@ class YOLOTracker:
                 'name': consist_info.get('name', f'Consist {consist_id}'),
                 'lead_address': lead_addr,
                 'rear_address': rear_addr,
+                'reference_loco': consist_info.get('reference_loco'),
+                'adjust_loco': consist_info.get('adjust_loco'),
                 'gate_ids': gate_ids,
+                'gate_assignment': consist_info.get('gate_assignment'),  # None = symmetric, dict = asymmetric
                 'lead_class_id': ADDRESS_TO_CLASS[lead_addr],
                 'rear_class_id': ADDRESS_TO_CLASS[rear_addr] if rear_addr else None
             }
@@ -329,28 +330,80 @@ class YOLOTracker:
 
     def calculate_delta_t_centralized(self, consist_id: int):
         """
-        Centralized Δt calculation with 2 independent cross-gate checks (generic for any consist).
+        Centralized Δt calculation with support for asymmetric and symmetric gate timing.
 
         Args:
             consist_id: Consist ID (10, 11, etc.)
 
         Called once per frame after all gate detection points updated.
 
-        DUAL-GATE CROSS-GATE TIMING (2 gates per consist):
-        - Check 1: Δt₁ = lead@G1 - rear@G2 (cross-gate)
-        - Check 2: Δt₂ = lead@G2 - rear@G1 (cross-gate)
+        GATE TIMING MODES:
+        - Asymmetric (gate_assignment defined): Δt = reference_loco@ref_gate - adjust_loco@adj_gate
+        - Symmetric (gate_assignment null): Cross-gate timing with 2 checks (both directions valid)
         """
         consist_info = self.consist_config[consist_id]
         cdata = self.consist_data[consist_id]
         gate_ids = consist_info['gate_ids']
         lead_addr = consist_info['lead_address']
         rear_addr = consist_info['rear_address']
+        gate_assignment = consist_info.get('gate_assignment')
 
-        # Require exactly 2 gates for cross-gate timing
+        # Require exactly 2 gates for timing
         if len(gate_ids) != 2:
             return  # Not configured for dual-gate timing
 
         g1, g2 = gate_ids[0], gate_ids[1]
+
+        # === ASYMMETRIC MODE: Single direction only ===
+        if gate_assignment:
+            # Get gate IDs from assignment
+            ref_gate = gate_assignment.get('reference')
+            adj_gate = gate_assignment.get('adjust')
+            ref_loco = consist_info['reference_loco']
+            adj_loco = consist_info['adjust_loco']
+
+            # Determine which role (lead/rear) matches reference/adjust
+            if ref_loco == lead_addr:
+                ref_ts = cdata['gate_timestamps']['lead'].get(ref_gate)
+            else:  # ref_loco == rear_addr
+                ref_ts = cdata['gate_timestamps']['rear'].get(ref_gate)
+
+            if adj_loco == lead_addr:
+                adj_ts = cdata['gate_timestamps']['lead'].get(adj_gate)
+            else:  # adj_loco == rear_addr
+                adj_ts = cdata['gate_timestamps']['rear'].get(adj_gate)
+
+            # Calculate if both timestamps available
+            if ref_ts is not None and adj_ts is not None:
+                max_t = max(ref_ts, adj_ts)
+
+                # Fresh timestamp check
+                if (max_t > cdata['last_delta_t_time'] and
+                    ref_ts > cdata['last_delta_t_time'] and
+                    adj_ts > cdata['last_delta_t_time']):
+                    delta_t = ref_ts - adj_ts
+
+                    # Sanity check
+                    if abs(delta_t) > self.delta_t_max_threshold:
+                        current_time = time.time()
+                        should_print = (
+                            cdata['last_ignored_delta_t1'] is None or
+                            abs(delta_t - cdata['last_ignored_delta_t1']) > 0.01 or
+                            (current_time - cdata['last_ignored_delta_t1_time']) > 5.0
+                        )
+                        if should_print:
+                            print(f"⚠️  C{consist_id}: Ignored Δt = {delta_t:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
+                            cdata['last_ignored_delta_t1'] = delta_t
+                            cdata['last_ignored_delta_t1_time'] = current_time
+                    else:
+                        cdata['delta_t'] = delta_t
+                        cdata['delta_t_type'] = f"L{ref_loco}G{ref_gate}-L{adj_loco}G{adj_gate}"
+                        cdata['gate_crossing_count'] += 1
+                        cdata['last_delta_t_time'] = max_t
+                        print(f"🚪 C{consist_id} Asymmetric: L{ref_loco}G{ref_gate}-L{adj_loco}G{adj_gate} = Δt = {cdata['delta_t']:+.3f}s")
+            return  # Asymmetric mode: only one calculation
+
+        # === SYMMETRIC MODE: Cross-gate timing (both directions valid) ===
 
         # Check 1: Δt₁ = lead@G1 - rear@G2 (cross-gate timing)
         lead_g1_ts = cdata['gate_timestamps']['lead'].get(g1)
