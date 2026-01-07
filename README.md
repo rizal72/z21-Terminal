@@ -53,6 +53,7 @@ z21-Terminal/
 ### Web Dashboard 🌐
 Modern web interface for locomotive control (mobile-first, multi-device, PWA):
 
+#### macOS (Development)
 ```bash
 z21              # Start backend + frontend (2 iTerm tabs, daemon auto-managed)
 z21-backend      # Start only backend (FastAPI + WebSocket)
@@ -60,7 +61,44 @@ z21-frontend     # Start only frontend (Vite dev server)
 ```
 
 Access at: **http://localhost:5173** (or network: `http://192.168.1.xxx:5173`)
-**Tailscale HTTPS**: `https://<your-machine>.tail<xxxx>.ts.net` (optional, for remote access)
+
+#### Windows PC (Production - PowerShell)
+```powershell
+z21-deploy       # Full deployment: git pull + stop backend + build frontend
+z21-start        # Start backend in background (hidden window, persists after SSH close)
+z21-reload       # Restart backend (stop + start)
+z21-stop         # Stop backend
+z21-backend      # Interactive mode (see logs real-time, Ctrl+C to stop - no Y/N prompt)
+z21-frontend     # Start frontend dev server
+```
+
+**Command Flow Diagram**:
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    PC Windows Production                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  1️⃣  First Time Setup / Full Deployment                     │
+│      z21-deploy  →  [git pull + stop + build] → z21-start   │
+│                                                              │
+│  2️⃣  Backend Updates (code changes)                         │
+│      git pull  →  z21-reload                                 │
+│                                                              │
+│  3️⃣  Frontend Updates (UI changes)                          │
+│      z21-deploy  →  z21-start                                │
+│                                                              │
+│  4️⃣  Development/Debug                                       │
+│      z21-backend  (interactive, see logs, Ctrl+C to stop)    │
+│                                                              │
+│  5️⃣  Stop Production Backend                                 │
+│      z21-stop                                                │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Access**:
+- Local: **http://localhost:8000** (production mode - FastAPI serves frontend dist/)
+- Tailscale: **https://gaming-pc.tail9350d7.ts.net** (remote access via VPN)
 
 **Core Features:**
 - **Consist Manager**: Create/edit/delete consists via web UI (CRUD operations, no JMRI needed)
@@ -246,6 +284,32 @@ Camera credentials (gitignored):
 }
 ```
 
+## Deployment Architecture
+
+### Development Mode (macOS)
+- **Environment**: Mac + iTerm2
+- **Backend**: Port 8000 (API only)
+- **Frontend**: Port 5173 (Vite dev server with HMR)
+- **Features**: Hot module replacement, debug logs, fast iteration
+- **Command**: `z21` (starts both in iTerm tabs)
+
+### Production Mode (Windows PC)
+- **Environment**: Windows PC + PowerShell + GPU (NVIDIA GTX 1050 Ti)
+- **Backend**: Port 8000 (API + serves frontend dist/)
+- **Frontend**: Built static files (web/dist/) served by FastAPI
+- **Features**: GPU-accelerated YOLO (3-5x faster), optimized bundle, Tailscale HTTPS
+- **Commands**: `z21-deploy` (build) + `z21-start` (run in background)
+- **Performance**: CPU usage 800% (Mac) → 100% (PC with GPU)
+
+**Key Differences**:
+| Aspect | macOS (Dev) | Windows PC (Prod) |
+|--------|-------------|-------------------|
+| Port | 5173 (frontend) + 8000 (backend) | 8000 (unified) |
+| Frontend | Vite dev server | Static dist/ bundle |
+| YOLO | CPU (slow) | GPU (fast) |
+| Process | Foreground (Ctrl+C stops) | Background (persists after SSH close) |
+| Log visibility | Console output | C:\z21-Terminal\backend.log |
+
 ## Notes
 
 - **Consist Management**:
@@ -267,6 +331,9 @@ Camera credentials (gitignored):
   - Re-training required if DCC addresses change
 - **Browser Compatibility**: Optimized for Safari Mac, Chrome Mac, iOS Safari, and Android Chrome
 - **Debug Mode**: Set `debug.enabled: true` in `config.json` for verbose startup/runtime logs
+- **PowerShell Aliases** (Windows PC): All z21-* commands are PowerShell functions (no .bat files)
+  - Located in: `$PROFILE` (`C:\Users\Riccardo\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`)
+  - Reload profile: `. $PROFILE` (after modifications)
 
 ## License
 
