@@ -214,7 +214,13 @@ python3 z21_controller.py 10            # Control consist 10
 - [x] YOLO training scripts (dataset creation, annotation, training)
 
 ### Future Enhancements ⏳
-- [ ] **Auto CV Adjust** (Low Priority): Permanent CV tuning based on Δt statistics
+- [ ] **Phase 7: Track Occupancy Map** (Postponed): Real-time locomotive positions on SVG track layout
+  - Complete implementation plan available in `docs/TRACK_MAP_IMPLEMENTATION.md`
+  - Perspective transform (camera → orthogonal), SVG rendering, tunnel interpolation
+  - Postponed: Video feed with debug overlay already sufficient
+  - Revisit if advanced visualization becomes necessary
+
+- [ ] **Phase 8: Auto CV Adjust** (Very Low Priority): Permanent CV tuning based on Δt statistics
   - Virtual Mode already provides real-time compensation
   - Revisit only if speed matching degrades significantly over time
 
