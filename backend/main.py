@@ -1037,6 +1037,14 @@ async def save_gates(gates: List[Dict[str, Any]]):
         shutil.copy(config_path, backup_path)
         print(f"  💾 Config backup created: {backup_name}")
 
+        # Round all numeric values to integers (OpenCV requires int for coordinates)
+        for gate in gates:
+            gate['center'] = [int(round(gate['center'][0])), int(round(gate['center'][1]))]
+            gate['width'] = int(round(gate['width']))
+            gate['height'] = int(round(gate['height']))
+            gate['angle'] = int(round(gate['angle']))
+            gate['color'] = [int(round(c)) for c in gate['color']]
+
         # Update gates in config
         config['gates'] = gates
 
