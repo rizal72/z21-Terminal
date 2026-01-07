@@ -186,6 +186,15 @@ export default function GateEditor({ apiUrl, videoWidth, videoHeight, onClose })
       const data = await response.json();
       if (data.status === 'success') {
         console.log('✅ Gates saved successfully');
+
+        // Restart tracking daemon to reload new gate configuration
+        try {
+          await fetch(`${apiUrl}/api/restart-daemon`, { method: 'POST' });
+          console.log('✅ Tracking daemon restarted with new gates');
+        } catch (err) {
+          console.warn('⚠️  Failed to restart tracking daemon:', err);
+        }
+
         onClose();
       } else {
         console.error('Failed to save gates:', data.message);
