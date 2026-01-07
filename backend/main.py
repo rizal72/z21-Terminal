@@ -990,6 +990,18 @@ async def toggle_panel():
     }
 
 
+@app.post("/api/toggle-debug")
+async def toggle_debug():
+    """Toggle debug overlay in video feed (press 'B' in UI)"""
+    video_feed_module.SHOW_DEBUG_OVERLAY = not video_feed_module.SHOW_DEBUG_OVERLAY
+    status = "visible" if video_feed_module.SHOW_DEBUG_OVERLAY else "hidden"
+    print(f"  🔍 Debug overlay toggled: {status}")
+    return {
+        "status": "success",
+        "debug_visible": video_feed_module.SHOW_DEBUG_OVERLAY
+    }
+
+
 @app.get("/api/video_feed")
 async def video_feed():
     """
