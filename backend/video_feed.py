@@ -105,10 +105,15 @@ def draw_gates(frame: np.ndarray, gates: List[Dict]) -> np.ndarray:
         # Draw rectangle
         cv2.polylines(frame, [points], isClosed=True, color=color, thickness=2)
 
-        # Draw gate label
+        # Draw gate label (centered)
         label = f"G{gate_id}"
-        label_pos = (cx - 15, cy - 10)
-        cv2.putText(frame, label, label_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        thickness = 2
+        (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, thickness)
+        # Center text: subtract half width and add half height (text origin is bottom-left)
+        label_pos = (cx - text_width // 2, cy + text_height // 2)
+        cv2.putText(frame, label, label_pos, font, font_scale, color, thickness)
 
     return frame
 
