@@ -5,7 +5,9 @@ import MobileMenu from './components/MobileMenu';
 import ConsistManagerModal from './components/ConsistManagerModal';
 import TrackTelemetryPopover from './components/TrackTelemetryPopover';
 import Z21HealthPopover from './components/Z21HealthPopover';
+import Notification from './components/Notification';
 import { useWebSocket } from './hooks/useWebSocket';
+import { useNotification } from './hooks/useNotification.jsx';
 
 // Mock data for development - will be replaced with real data from backend
 const MOCK_CONSISTS = {
@@ -68,6 +70,9 @@ function App() {
   ]);
   const [activeControllerId, setActiveControllerId] = useState(1); // Focus-based control
   const lastControllerRef = useRef(null); // Ref for auto-scroll to new controller
+
+  // Notification system
+  const { notifications, showNotification } = useNotification();
 
   // Auto-detect WebSocket URL based on current hostname
   const getWebSocketUrl = () => {
@@ -338,6 +343,13 @@ function App() {
     // Play sound feedback
     playPowerSound(newPowerState);
 
+    // Show notification
+    showNotification({
+      message: `Track power: ${newPowerState ? 'ON' : 'OFF'}`,
+      type: newPowerState ? 'success' : 'warning',
+      duration: 2000
+    });
+
     // Send to backend
     sendMessage({
       type: 'emergency_stop',
@@ -488,7 +500,34 @@ function App() {
         e.preventDefault();
         const currentIndex = controllers.findIndex(c => c.id === activeControllerId);
         const nextIndex = (currentIndex + 1) % controllers.length;
-        setActiveControllerId(controllers[nextIndex].id);
+        const newController = controllers[nextIndex];
+        setActiveControllerId(newController.id);
+
+        // Show notification overlay with selected consist/loco info
+        const { type, address } = newController;
+        let message = '';
+
+        if (type === 'consist') {
+          const consist = consists[address];
+          if (consist) {
+            // Use short form: "Consist 10" or "Consist 11"
+            message = `Consist ${address} selected`;
+          }
+        } else if (type === 'locomotive') {
+          const loco = locomotives[address];
+          if (loco) {
+            // Use loco name: "Gr.675 017 selected"
+            message = `${loco.name} selected`;
+          } else {
+            message = `Loco ${address} selected`;
+          }
+        }
+
+        // Trigger notification
+        if (message) {
+          showNotification({ message, type: 'info', duration: 2000 });
+        }
+
         return;
       }
 
@@ -500,6 +539,12 @@ function App() {
           .then(data => {
             const status = data.panel_visible ? 'visible' : 'hidden';
             console.log(`🎛️  Δt panel toggled: ${status}`);
+            // Show notification
+            showNotification({
+              message: `Δt panel: ${data.panel_visible ? 'visible' : 'hidden'}`,
+              type: 'info',
+              duration: 2000
+            });
           })
           .catch(err => console.error('Failed to toggle panel:', err));
         return;
@@ -516,6 +561,12 @@ function App() {
             const newMode = data.debug_visible;
             setDebugMode(newMode);
             console.log(`🔍 Debug mode toggled: ${newMode ? 'enabled' : 'disabled'}`);
+            // Show notification
+            showNotification({
+              message: `Debug mode: ${newMode ? 'enabled' : 'disabled'}`,
+              type: 'info',
+              duration: 2000
+            });
           })
           .catch(err => console.error('Failed to toggle debug:', err));
         return;
@@ -529,6 +580,12 @@ function App() {
           setEditMode(prev => {
             const newMode = !prev;
             console.log(`🔧 Edit mode toggled: ${newMode ? 'enabled' : 'disabled'}`);
+            // Show notification
+            showNotification({
+              message: `Edit mode: ${newMode ? 'enabled' : 'disabled'}`,
+              type: 'info',
+              duration: 2000
+            });
             return newMode;
           });
         }
@@ -1067,6 +1124,7 @@ function App() {
                   onFunctionToggle={handleFunctionToggle}
                   onToggleVirtualMode={handleToggleVirtualMode}
                   onToggleAutoCompensation={handleToggleAutoCompensation}
+                  showNotification={showNotification}
                 />
               </div>
             );
@@ -1131,6 +1189,9 @@ function App() {
         apiUrl={API_URL}
         isHover={window.innerWidth >= 768}
       />
+
+      {/* Notification overlay (generic system) */}
+      <Notification notifications={notifications} />
     </div>
   );
 }

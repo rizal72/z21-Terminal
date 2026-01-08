@@ -16,7 +16,8 @@ export default function ConsistController({
   onDirectionChange,
   onFunctionToggle,
   onToggleVirtualMode,
-  onToggleAutoCompensation
+  onToggleAutoCompensation,
+  showNotification
 }) {
   const [speed, setSpeed] = useState(0);
   const [direction, setDirection] = useState('forward');
@@ -145,12 +146,28 @@ export default function ConsistController({
           if (onDirectionChange) {
             onDirectionChange(selection.address, newDirection);
           }
+          // Show notification
+          if (showNotification) {
+            showNotification({
+              message: `Direction: ${newDirection === 'forward' ? 'Forward' : 'Reverse'}`,
+              type: 'info',
+              duration: 2000
+            });
+          }
         }
       }
       // Backslash = 0%
       else if (e.key === '\\' || e.key === '|') {  // | is Shift+\
         e.preventDefault();
         setSpeedPercent(0);
+        // Show notification
+        if (showNotification) {
+          showNotification({
+            message: 'Speed: 0%',
+            type: 'info',
+            duration: 2000
+          });
+        }
       }
       // 1-9 = 10-90% (use e.code to detect physical key, works with Shift/Ctrl)
       else if (e.code >= 'Digit1' && e.code <= 'Digit9') {
@@ -158,17 +175,33 @@ export default function ConsistController({
         const digit = parseInt(e.code.slice(-1)); // Extract digit from "Digit1", "Digit2", etc.
         const percent = digit * 10;
         setSpeedPercent(percent);
+        // Show notification
+        if (showNotification) {
+          showNotification({
+            message: `Speed: ${percent}%`,
+            type: 'info',
+            duration: 2000
+          });
+        }
       }
       // 0 = 100% (use e.code to detect physical key, works with Shift/Ctrl)
       else if (e.code === 'Digit0') {
         e.preventDefault();
         setSpeedPercent(100);
+        // Show notification
+        if (showNotification) {
+          showNotification({
+            message: 'Speed: 100%',
+            type: 'info',
+            duration: 2000
+          });
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [trackPower, isLocoInConsist, selection?.address, direction, onSpeedChange, onDirectionChange, isActive]);
+  }, [trackPower, isLocoInConsist, selection?.address, direction, onSpeedChange, onDirectionChange, isActive, showNotification]);
 
   const toggleDirection = () => {
     if (isLocoInConsist) return; // Disabled for locos in consist
