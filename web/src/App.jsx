@@ -289,6 +289,29 @@ function App() {
             return prev; // Same value, don't update
           }
 
+          // Detect if we're transitioning to SYNCED after corrections
+          const wasCorrection = currentConsist.adjust_correction && currentConsist.adjust_correction !== 0;
+          const isSynced = Math.abs(deltaT) < thresholds.synced;
+          const nowCorrecting = adjustCorrection && adjustCorrection !== 0;
+
+          // Show notifications
+          if (nowCorrecting) {
+            // CRITICAL: Auto-compensation active (|Δt| > 2.0s)
+            const sign = adjustCorrection > 0 ? '+' : '';
+            showNotification({
+              message: `Loco ${adjustLocoAddress}: Speed ${sign}${adjustCorrection}%`,
+              type: 'warning',
+              duration: 2000
+            });
+          } else if (wasCorrection && isSynced && !nowCorrecting) {
+            // SYNCED: First sync after CRITICAL corrections completed
+            showNotification({
+              message: `Consist ${consistAddress}: SYNCED`,
+              type: 'success',
+              duration: 2000
+            });
+          }
+
           return {
             ...prev,
             [consistAddress]: {
