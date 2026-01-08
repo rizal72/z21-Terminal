@@ -3,6 +3,8 @@ import ConsistController from './components/ConsistController';
 import VideoFeedPanel from './components/VideoFeedPanel';
 import MobileMenu from './components/MobileMenu';
 import ConsistManagerModal from './components/ConsistManagerModal';
+import TrackTelemetryPopover from './components/TrackTelemetryPopover';
+import Z21HealthPopover from './components/Z21HealthPopover';
 import { useWebSocket } from './hooks/useWebSocket';
 
 // Mock data for development - will be replaced with real data from backend
@@ -55,6 +57,9 @@ function App() {
   const [consistManagerOpen, setConsistManagerOpen] = useState(false); // Consist Manager modal (Phase 6B)
   const [editMode, setEditMode] = useState(false); // Gate editor mode
   const [debugMode, setDebugMode] = useState(false); // Debug overlay mode
+  const [trackTelemetryOpen, setTrackTelemetryOpen] = useState(false); // Track telemetry popover
+  const [z21HealthOpen, setZ21HealthOpen] = useState(false); // Z21 health popover
+  const [telemetryWarnings, setTelemetryWarnings] = useState({ track: false, z21: false }); // Warning indicators
 
   // Dynamic controllers array (scalable UI with focus management)
   const [controllers, setControllers] = useState([
@@ -442,6 +447,38 @@ function App() {
       releaseWakeLock();
     };
   }, []);
+
+  // Fetch telemetry periodically to check for warnings
+  useEffect(() => {
+    const fetchTelemetryWarnings = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/z21/telemetry`);
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          const hasTrackWarnings = data.warnings && data.warnings.length > 0;
+          const hasZ21Warnings = data.quality_checks &&
+            (data.quality_checks.temperature_high || data.quality_checks.temperature_elevated);
+
+          setTelemetryWarnings({
+            track: hasTrackWarnings,
+            z21: hasZ21Warnings
+          });
+        }
+      } catch (error) {
+        // Silently fail if telemetry unavailable
+        console.log('Telemetry fetch failed:', error);
+      }
+    };
+
+    // Fetch immediately on mount
+    fetchTelemetryWarnings();
+
+    // Fetch every 5 seconds
+    const interval = setInterval(fetchTelemetryWarnings, 5000);
+
+    return () => clearInterval(interval);
+  }, [API_URL]);
 
   // Global keyboard shortcuts (ESC for emergency stop, TAB to cycle controllers)
   useEffect(() => {
@@ -851,10 +888,31 @@ function App() {
                 </div>
               </button>
 
-              {/* Track Power Status */}
+              {/* Track Telemetry Badge (⚡) - Hover on desktop, click on mobile */}
               <div
-                className="flex items-center gap-2 cursor-default"
-                title={`Track Power: ${trackPower ? 'ON' : 'OFF'}`}
+                className={`flex items-center gap-2 px-2 py-2 bg-control-dark rounded border transition-all duration-200 ${
+                  telemetryWarnings.track
+                    ? 'border-amber-500 ring-2 ring-amber-500/50'
+                    : 'border-control-grey'
+                } ${
+                  z21Online ? 'md:hover:border-signal-amber cursor-pointer' : 'opacity-50 cursor-not-allowed'
+                }`}
+                title={`Track Telemetry${telemetryWarnings.track ? ' - Warning!' : ''}`}
+                onMouseEnter={() => {
+                  if (z21Online && window.innerWidth >= 768) {
+                    setTrackTelemetryOpen(true);
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (window.innerWidth >= 768) {
+                    setTrackTelemetryOpen(false);
+                  }
+                }}
+                onClick={() => {
+                  if (z21Online && window.innerWidth < 768) {
+                    setTrackTelemetryOpen(!trackTelemetryOpen);
+                  }
+                }}
               >
                 <i className={`fa-solid fa-bolt text-lg md:text-xl ${trackPower ? 'text-signal-green' : 'text-signal-red'}`}></i>
                 <div className="hidden md:block text-xs font-mono w-4">
@@ -866,7 +924,7 @@ function App() {
 
               {/* WebSocket Status */}
               <div
-                className="flex items-center gap-2 cursor-default"
+                className="flex items-center gap-2 px-2 py-2 bg-control-dark rounded border border-control-grey cursor-default"
                 title={`WebSocket Connection: ${isConnected ? 'Connected' : 'Disconnected'}`}
               >
                 <i className={`fa-solid fa-wifi text-lg md:text-xl ${isConnected ? 'text-signal-green' : 'text-signal-red'}`}></i>
@@ -877,10 +935,31 @@ function App() {
                 </div>
               </div>
 
-              {/* Z21 Status */}
+              {/* Z21 Health Badge (🖥️) - Hover on desktop, click on mobile */}
               <div
-                className="flex items-center gap-2 cursor-default"
-                title={`Z21 Device: ${z21Online ? 'Online' : 'Offline'}`}
+                className={`flex items-center gap-2 px-2 py-2 bg-control-dark rounded border transition-all duration-200 ${
+                  telemetryWarnings.z21
+                    ? 'border-amber-500 ring-2 ring-amber-500/50'
+                    : 'border-control-grey'
+                } ${
+                  z21Online ? 'md:hover:border-signal-amber cursor-pointer' : 'opacity-50 cursor-not-allowed'
+                }`}
+                title={`Z21 System Health${telemetryWarnings.z21 ? ' - Warning!' : ''}`}
+                onMouseEnter={() => {
+                  if (z21Online && window.innerWidth >= 768) {
+                    setZ21HealthOpen(true);
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (window.innerWidth >= 768) {
+                    setZ21HealthOpen(false);
+                  }
+                }}
+                onClick={() => {
+                  if (z21Online && window.innerWidth < 768) {
+                    setZ21HealthOpen(!z21HealthOpen);
+                  }
+                }}
               >
                 <i className={`fa-solid fa-server text-lg md:text-xl ${z21Online ? 'text-signal-green' : 'text-signal-red'}`}></i>
                 <div className="hidden md:block text-xs font-mono">
@@ -1038,6 +1117,20 @@ function App() {
           </div>
         </div>
       </main>
+
+      {/* Telemetry Popovers (Phase 9) */}
+      <TrackTelemetryPopover
+        isOpen={trackTelemetryOpen}
+        onClose={() => setTrackTelemetryOpen(false)}
+        apiUrl={API_URL}
+        isHover={window.innerWidth >= 768}
+      />
+      <Z21HealthPopover
+        isOpen={z21HealthOpen}
+        onClose={() => setZ21HealthOpen(false)}
+        apiUrl={API_URL}
+        isHover={window.innerWidth >= 768}
+      />
     </div>
   );
 }

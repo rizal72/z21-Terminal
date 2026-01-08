@@ -617,6 +617,76 @@ async def api_status():
     }
 
 
+@app.get("/api/z21/telemetry")
+async def get_z21_telemetry():
+    """
+    Get Z21 track-level telemetry (Phase 9 - Motor Load Monitoring).
+
+    Returns:
+        - status: success/error
+        - telemetry: dict with current, voltage, temperature data
+        - timestamp: Unix timestamp
+        - quality_checks: dict with warnings/alerts
+    """
+    if not z21_manager or not z21_manager.z21:
+        return {
+            "status": "error",
+            "message": "Z21 not connected"
+        }
+
+    try:
+        status = z21_manager.z21.get_status()
+
+        if status and 'telemetry' in status:
+            t = status['telemetry']
+
+            # Quality checks
+            checks = {
+                'voltage_ok': 14.0 <= t['supply_voltage_v'] <= 18.0,
+                'voltage_warning': t['supply_voltage_v'] < 14.0 or t['supply_voltage_v'] > 18.0,
+                'current_high': t['main_current_ma'] > 2000,
+                'temperature_high': t['temperature_c'] > 60.0,
+                'temperature_elevated': 50.0 < t['temperature_c'] <= 60.0
+            }
+
+            # Generate warnings
+            warnings = []
+            if not checks['voltage_ok']:
+                if t['supply_voltage_v'] < 14.0:
+                    warnings.append("Supply voltage low - Check power supply or track resistance")
+                else:
+                    warnings.append("Supply voltage high - Check power supply")
+
+            if checks['current_high']:
+                warnings.append(f"High track current ({t['main_current_ma']}mA) - Possible short circuit")
+
+            if checks['temperature_high']:
+                warnings.append(f"Z21 temperature critical ({t['temperature_c']:.1f}°C) - Check ventilation")
+            elif checks['temperature_elevated']:
+                warnings.append(f"Z21 temperature elevated ({t['temperature_c']:.1f}°C) - Monitor closely")
+
+            return {
+                "status": "success",
+                "telemetry": t,
+                "track_power_on": status['track_power_on'],
+                "emergency_stop": status['emergency_stop'],
+                "short_circuit": status['short_circuit'],
+                "timestamp": time.time(),
+                "quality_checks": checks,
+                "warnings": warnings
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "No telemetry data available from Z21"
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to get telemetry: {str(e)}"
+        }
+
+
 def build_consist_response(address, data, state):
     """
     Single source of truth for consist response structure.
