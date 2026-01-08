@@ -301,14 +301,14 @@ function App() {
             showNotification({
               message: `Loco ${adjustLocoAddress}: Speed ${sign}${adjustCorrection}%`,
               type: 'error',
-              duration: 4000
+              duration: 5000
             });
           } else if (justFinishedCorrecting) {
             // SYNCED: Backend reset speeds to equal (adjust_correction: 0 after corrections)
             showNotification({
               message: `Consist ${consistAddress}: SYNCED`,
               type: 'success',
-              duration: 4000
+              duration: 5000
             });
           }
 
