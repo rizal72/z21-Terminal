@@ -22,9 +22,6 @@ sys.path.insert(0, str(scripts_dir))
 from z21 import Z21
 from config_loader import load_config, save_config
 
-# Path to persist virtual mode state (will be migrated to config.json)
-CONSIST_STATE_FILE = Path(__file__).parent / 'consist_state.json'
-
 
 class Z21Manager:
     """
@@ -639,18 +636,16 @@ class Z21Manager:
                         'auto_compensation_enabled': auto_compensation
                     }
 
+                    # Warn if virtual_mode is not configured (locomotives won't respond to speed commands)
+                    if not virtual_mode:
+                        print(f"  ⚠️  WARNING: Consist {consist_id} has virtual_mode=False")
+                        print(f"      → Speed commands will be sent to consist address {consist_id} (DCC mode)")
+                        print(f"      → Locomotives may not respond unless CV19={consist_id} is programmed")
+                        print(f"      → Set 'virtual_mode: true' in config.json consists.{consist_id} for proper operation")
+
                 if self.debug_enabled and state:
                     print(f"  ✓ Loaded persisted state from config.json: {state}")
                 return state
-
-            # Fallback: try old consist_state.json for migration
-            if CONSIST_STATE_FILE.exists():
-                with open(CONSIST_STATE_FILE, 'r') as f:
-                    state = json.load(f)
-                    if self.debug_enabled:
-                        print(f"  ⚠️  Migrating state from old consist_state.json: {state}")
-                    # Will be saved to config.json on first _save_persisted_state() call
-                    return state
 
         except Exception as e:
             if self.debug_enabled:
