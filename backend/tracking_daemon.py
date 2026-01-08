@@ -24,7 +24,7 @@ from config_loader import load_config
 
 # Import shared tracking modules
 from tracking.yolo_tracker import YOLOTracker
-from tracking.rtsp_handler import load_camera_config, setup_rtsp_stream
+from tracking.rtsp_handler import load_camera_config, setup_rtsp_stream, reconnect_rtsp_stream
 
 # === CONFIGURATION ===
 project_root = Path(__file__).parent.parent  # z21-Terminal/ root
@@ -343,9 +343,12 @@ class TrackingDaemon:
                 if not ret:
                     # Log only on state change (avoid spam)
                     if self.video_connected:
-                        print("⚠️  Lost video connection")
+                        print("⚠️  Lost video connection, reconnecting...")
                         self.video_connected = False
-                    await asyncio.sleep(1)
+
+                    # Reconnect RTSP stream (same logic as video_feed.py)
+                    await asyncio.sleep(2)
+                    self.cap = reconnect_rtsp_stream(self.cap, RTSP_URL, description="tracking daemon stream")
                     continue
 
                 # Video connection restored
