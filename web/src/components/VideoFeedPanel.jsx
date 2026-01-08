@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import GateEditor from './GateEditor';
 
-function VideoFeedPanel({ apiUrl, editMode, onEditModeChange, debugMode, onDebugModeChange }) {
+export default function VideoFeedPanel({ apiUrl, editMode, onEditModeChange, debugMode, onDebugModeChange }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
@@ -160,6 +160,3 @@ function VideoFeedPanel({ apiUrl, editMode, onEditModeChange, debugMode, onDebug
     </div>
   );
 }
-
-// Memoize to prevent re-render when speed changes in ConsistController
-export default memo(VideoFeedPanel);

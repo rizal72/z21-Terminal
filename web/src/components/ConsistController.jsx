@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import DeltaTStatsPanel from './DeltaTStatsPanel';
 
-function ConsistController({
+export default function ConsistController({
   item,
   selection,
   rosterOptions,
@@ -669,6 +669,3 @@ function ConsistController({
     </div>
   );
 }
-
-// Memoize to prevent re-render when other controllers change speed
-export default memo(ConsistController);
