@@ -147,6 +147,13 @@ python3 z21_controller.py 1             # Control loco address 1
 python3 z21_controller.py 10            # Control consist 10
 ```
 
+## Installation
+
+See **[INSTALL.md](INSTALL.md)** for complete setup instructions:
+- macOS Development (CPU-only)
+- Windows PC Production (GPU + CUDA)
+- Conda environment setup
+
 ## Features
 
 ### Web Dashboard ✅
