@@ -168,7 +168,7 @@ class Z21:
                         'main_current_ma': main_current,
                         'prog_current_ma': prog_current,
                         'filtered_current_ma': filtered_current,
-                        'temperature_c': temperature / 10.0,  # Stored as °C × 10
+                        'temperature_c': float(temperature),  # Stored as °C (integer)
                         'supply_voltage_v': supply_voltage / 1000.0,  # Stored as mV
                         'vcc_voltage_v': vcc_voltage / 1000.0
                     }
@@ -179,7 +179,7 @@ class Z21:
                           f"Emergency={'YES' if emergency_stop else 'NO'}")
                     print(f"📊 Telemetry: Current={main_current}mA, "
                           f"Voltage={supply_voltage/1000.0:.1f}V, "
-                          f"Temp={temperature/10.0:.1f}°C")
+                          f"Temp={float(temperature):.1f}°C")
 
                 return result
 
