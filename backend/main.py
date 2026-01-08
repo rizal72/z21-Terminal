@@ -1564,6 +1564,16 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
+    import logging
+
+    # Filter out repetitive telemetry GET logs (called every 5s)
+    class TelemetryFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            # Hide only GET /api/z21/telemetry logs, keep all other HTTP logs
+            return '/api/z21/telemetry' not in record.getMessage()
+
+    # Apply filter to uvicorn access logger
+    logging.getLogger("uvicorn.access").addFilter(TelemetryFilter())
 
     print("""
 ╔═══════════════════════════════════════════════════════════╗
