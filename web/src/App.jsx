@@ -289,10 +289,10 @@ function App() {
             return prev; // Same value, don't update
           }
 
-          // Detect if we're transitioning to SYNCED after corrections
+          // Detect correction state
           const wasCorrection = currentConsist.adjust_correction && currentConsist.adjust_correction !== 0;
-          const isSynced = Math.abs(deltaT) < thresholds.synced;
           const nowCorrecting = adjustCorrection && adjustCorrection !== 0;
+          const justFinishedCorrecting = wasCorrection && adjustCorrection === 0;
 
           // Show notifications
           if (nowCorrecting) {
@@ -300,15 +300,15 @@ function App() {
             const sign = adjustCorrection > 0 ? '+' : '';
             showNotification({
               message: `Loco ${adjustLocoAddress}: Speed ${sign}${adjustCorrection}%`,
-              type: 'warning',
-              duration: 2000
+              type: 'error',
+              duration: 4000
             });
-          } else if (wasCorrection && isSynced && !nowCorrecting) {
-            // SYNCED: First sync after CRITICAL corrections completed
+          } else if (justFinishedCorrecting) {
+            // SYNCED: Backend reset speeds to equal (adjust_correction: 0 after corrections)
             showNotification({
               message: `Consist ${consistAddress}: SYNCED`,
               type: 'success',
-              duration: 2000
+              duration: 4000
             });
           }
 
