@@ -175,6 +175,13 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     global z21_manager, tracking_manager, tracking_daemon_ws, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config, timing_thresholds, reference_locos, tracked_consist_ids, debug_enabled
 
+    # Filter out repetitive telemetry GET logs (called every 5s)
+    import logging
+    class TelemetryFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return '/api/z21/telemetry' not in record.getMessage()
+    logging.getLogger("uvicorn.access").addFilter(TelemetryFilter())
+
     print("🚂 z21-Terminal Backend Starting...")
 
     # Load debug mode configuration FIRST
@@ -1564,16 +1571,6 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    import logging
-
-    # Filter out repetitive telemetry GET logs (called every 5s)
-    class TelemetryFilter(logging.Filter):
-        def filter(self, record: logging.LogRecord) -> bool:
-            # Hide only GET /api/z21/telemetry logs, keep all other HTTP logs
-            return '/api/z21/telemetry' not in record.getMessage()
-
-    # Apply filter to uvicorn access logger
-    logging.getLogger("uvicorn.access").addFilter(TelemetryFilter())
 
     print("""
 ╔═══════════════════════════════════════════════════════════╗
