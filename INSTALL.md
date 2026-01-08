@@ -100,6 +100,12 @@ pip install -r requirements-gpu.txt
 - Update pip: `pip3 install --upgrade pip`
 - Reinstall dependencies: `pip3 install --force-reinstall -r requirements-cpu.txt`
 
+### NumPy compatibility warning (macOS)
+If you see `ERROR: pip's dependency resolver does not currently take into account all the packages that are installed`:
+- **This is a false positive** - opencv-python 4.12 works fine with numpy 1.26.4
+- Verify with: `python -c "import torch; import cv2; import numpy as np; print('✓ OK')"`
+- If imports succeed, ignore the warning
+
 ---
 
 ## Next Steps

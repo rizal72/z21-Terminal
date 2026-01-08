@@ -1,6 +1,9 @@
 # CPU-only dependencies for macOS Development
 # Install with: pip install -r requirements-cpu.txt
 
+# NumPy compatibility (PyTorch 2.2.2 compiled with NumPy 1.x)
+numpy<2
+
 # PyTorch CPU-only (lighter, no CUDA)
 torch==2.2.2
 torchvision==0.17.2
