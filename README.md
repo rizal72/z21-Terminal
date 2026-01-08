@@ -66,8 +66,9 @@ Access at: **http://localhost:5173** (or network: `http://192.168.1.xxx:5173`)
 ```powershell
 z21-deploy       # Full deployment: git pull + stop backend + build frontend
 z21-start        # Start backend in background (hidden window, persists after SSH close)
-z21-reload       # Restart backend (stop + start)
+z21-restart      # Restart backend (stop + start)
 z21-stop         # Stop backend
+z21-status       # Check if backend is running (port 8000 listen check)
 z21-backend      # Interactive mode (see logs real-time, Ctrl+C to stop - no Y/N prompt)
 z21-frontend     # Start frontend dev server
 ```
@@ -82,7 +83,7 @@ z21-frontend     # Start frontend dev server
 │      z21-deploy  →  [git pull + stop + build] → z21-start   │
 │                                                              │
 │  2️⃣  Backend Updates (code changes)                         │
-│      git pull  →  z21-reload                                 │
+│      git pull  →  z21-restart                                │
 │                                                              │
 │  3️⃣  Frontend Updates (UI changes)                          │
 │      z21-deploy  →  z21-start                                │
