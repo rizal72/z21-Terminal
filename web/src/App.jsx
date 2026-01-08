@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import ConsistController from './components/ConsistController';
 import VideoFeedPanel from './components/VideoFeedPanel';
 import MobileMenu from './components/MobileMenu';
@@ -330,24 +330,24 @@ function App() {
     }
   }, [lastMessage]);
 
-  const handleSpeedChange = (address, speed, forward) => {
+  const handleSpeedChange = useCallback((address, speed, forward) => {
     sendMessage({
       type: 'set_speed',
       address,
       speed,
       forward
     });
-  };
+  }, [sendMessage]);
 
-  const handleDirectionChange = (address, direction) => {
+  const handleDirectionChange = useCallback((address, direction) => {
     sendMessage({
       type: 'set_direction',
       address,
       direction
     });
-  };
+  }, [sendMessage]);
 
-  const handleFunctionToggle = (address, funcNumber, state) => {
+  const handleFunctionToggle = useCallback((address, funcNumber, state) => {
     const message = {
       type: 'set_function',
       address,
@@ -355,7 +355,7 @@ function App() {
       state
     };
     sendMessage(message);
-  };
+  }, [sendMessage]);
 
   const handleEmergencyStop = () => {
     const newPowerState = !trackPower;
@@ -809,7 +809,7 @@ function App() {
   };
 
   // Virtual Mode toggle handler
-  const handleToggleVirtualMode = (consistAddress, enable) => {
+  const handleToggleVirtualMode = useCallback((consistAddress, enable) => {
     console.log('toggleVirtualMode:', { consistAddress, enable });
 
     // Send to backend
@@ -832,9 +832,9 @@ function App() {
         }
       };
     });
-  };
+  }, [sendMessage]);
 
-  const handleToggleAutoCompensation = (consistAddress, enable) => {
+  const handleToggleAutoCompensation = useCallback((consistAddress, enable) => {
     console.log('toggleAutoCompensation:', { consistAddress, enable });
 
     // Send to backend
@@ -857,7 +857,7 @@ function App() {
         }
       };
     });
-  };
+  }, [sendMessage]);
 
   return (
     <div className="min-h-screen bg-control-black grain-overlay">

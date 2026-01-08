@@ -13,7 +13,7 @@
  *   });
  */
 
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useCallback } from 'react';
 
 const NotificationContext = createContext();
 
@@ -44,7 +44,7 @@ const NOTIFICATION_TYPES = {
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
 
-  const showNotification = ({ message, type = 'info', icon, duration = 2000 }) => {
+  const showNotification = useCallback(({ message, type = 'info', icon, duration = 2000 }) => {
     // Generate unique ID for this notification
     const id = Date.now() + Math.random();
 
@@ -69,7 +69,7 @@ export function NotificationProvider({ children }) {
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id));
     }, duration);
-  };
+  }, []); // No dependencies since it only uses setNotifications (stable) and local variables
 
   return (
     <NotificationContext.Provider value={{ notifications, showNotification }}>

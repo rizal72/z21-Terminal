@@ -171,10 +171,10 @@ export default function ConsistController({
       }
       // 1-9 = 10-90% (use e.code to detect physical key, works with Shift/Ctrl)
       else if (e.code >= 'Digit1' && e.code <= 'Digit9') {
-        e.preventDefault();
         const digit = parseInt(e.code.slice(-1)); // Extract digit from "Digit1", "Digit2", etc.
         const percent = digit * 10;
         setSpeedPercent(percent);
+        e.preventDefault();
         // Show notification
         if (showNotification) {
           showNotification({
