@@ -636,6 +636,13 @@ class Z21Manager:
                         'auto_compensation_enabled': auto_compensation
                     }
 
+                    # Warn if virtual_mode is not configured (locomotives won't respond to speed commands)
+                    if not virtual_mode:
+                        print(f"  ⚠️  WARNING: Consist {consist_id} has virtual_mode=False")
+                        print(f"      → Speed commands will be sent to consist address {consist_id} (DCC mode)")
+                        print(f"      → Locomotives may not respond unless CV19={consist_id} is programmed")
+                        print(f"      → Set 'virtual_mode: true' in config.json consists.{consist_id} for proper operation")
+
                 if self.debug_enabled and state:
                     print(f"  ✓ Loaded persisted state from config.json: {state}")
                 return state
