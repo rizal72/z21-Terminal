@@ -1,8 +1,9 @@
 /**
  * Notification Component
  *
- * Toast-style notifications in bottom-right corner.
+ * Generic notification overlay that displays messages with auto-dismiss.
  * Supports multiple notification types (success, info, warning, error).
+ * Can display multiple notifications stacked vertically.
  *
  * Managed by useNotification hook.
  */
@@ -11,11 +12,11 @@ export default function Notification({ notifications }) {
   if (!notifications || notifications.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[200] flex flex-col gap-3 pointer-events-none">
+    <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center pointer-events-none gap-3">
       {notifications.map((notification) => (
         <div
           key={notification.id}
-          className={`bg-control-dark/95 border ${notification.borderClass} rounded-lg px-6 py-3 shadow-2xl animate-fade-in-out pointer-events-auto`}
+          className={`bg-control-dark/90 backdrop-blur-sm border ${notification.borderClass} rounded-lg px-6 py-3 shadow-2xl animate-fade-in-out pointer-events-auto`}
         >
           <div className="flex items-center gap-3">
             {/* Icon */}
