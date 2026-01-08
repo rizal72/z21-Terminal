@@ -1,0 +1,10 @@
+# GPU-specific dependencies for Windows PC with CUDA 11.8
+# Install with: pip install -r requirements-gpu.txt
+
+# PyTorch with CUDA 11.8 support
+--index-url https://download.pytorch.org/whl/cu118
+torch==2.2.2
+torchvision==0.17.2
+
+# NOTE: CUDA Toolkit 11.8 must be installed separately
+# Download from: https://developer.nvidia.com/cuda-11-8-0-download-archive
