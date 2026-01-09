@@ -324,13 +324,13 @@ class YOLOTracker:
                 if boxes is not None and len(boxes) > 0:
                     print(f"[DEBUG] First box attributes: {dir(boxes[0])}")
                 for box in boxes:
-                    # OBB format: box.xyxyxyxy = 4 corner points [x1,y1, x2,y2, x3,y3, x4,y4]
+                    # OBB format: box.xyxyxyxy = 4 corner points [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
                     if hasattr(box, 'xyxyxyxy'):
-                        points = box.xyxyxyxy[0].cpu().numpy()  # 8 values: 4 corners
+                        points = box.xyxyxyxy[0].cpu().numpy()  # Shape (4, 2): 4 corners
                         # Calculate center as average of 4 corners
-                        center_x = int((points[0] + points[2] + points[4] + points[6]) / 4)
-                        center_y = int((points[1] + points[3] + points[5] + points[7]) / 4)
-                        bbox_data = tuple(points.astype(int))  # Store all 8 values
+                        center_x = int(points[:, 0].mean())
+                        center_y = int(points[:, 1].mean())
+                        bbox_data = tuple(points.flatten().astype(int))  # Flatten to 8 values
                     else:
                         # Fallback to xywhr format if xyxyxyxy not available
                         xywhr = box.xywhr[0].cpu().numpy()  # [cx, cy, w, h, rotation]
