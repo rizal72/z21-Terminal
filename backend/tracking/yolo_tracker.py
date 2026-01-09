@@ -197,10 +197,12 @@ class YOLOTracker:
         self.yolo_imgsz = tracking_config.get('yolo_imgsz', 640)
         self.confidence_threshold = tracking_config.get('yolo_confidence', 0.5)
         self.iou_threshold = tracking_config.get('yolo_iou', 0.45)
+        self.yolo_obb = tracking_config.get('yolo_obb', False)
         if self.debug_enabled:
             log('[INIT]', f"YOLO inference size: {self.yolo_imgsz}")
             log('[INIT]', f"YOLO confidence threshold: {self.confidence_threshold}")
             log('[INIT]', f"YOLO IoU threshold (NMS): {self.iou_threshold}")
+            log('[INIT]', f"YOLO mode: {'OBB (Oriented Bounding Boxes)' if self.yolo_obb else 'Standard (axis-aligned boxes)'}")
 
         # Load reference loco configuration (from consists)
         consists = config.get('consists', {})
@@ -298,35 +300,58 @@ class YOLOTracker:
         Detect all locomotives using YOLO.
 
         Returns:
-            detections: dict {class_id: {'pos': (x,y), 'bbox': (x1,y1,x2,y2), 'conf': float, 'name': str}}
+            detections: dict {class_id: {'pos': (x,y), 'bbox': (x1,y1,x2,y2) or OBB points, 'conf': float, 'name': str}}
         """
         # Run inference (imgsz, confidence, and IoU from config.json)
         results = self.model(frame, conf=self.confidence_threshold, iou=self.iou_threshold, imgsz=self.yolo_imgsz, verbose=False)
 
-        detections = {}  # {class_id: {'pos': (x,y), 'bbox': (x1,y1,x2,y2), 'conf': float, 'name': str}}
+        detections = {}  # {class_id: {'pos': (x,y), 'bbox': bbox_data, 'conf': float, 'name': str}}
 
         for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                conf = float(box.conf[0])
-                cls = int(box.cls[0])
+            if self.yolo_obb:
+                # OBB mode: Oriented Bounding Boxes
+                boxes = result.obb if hasattr(result, 'obb') else result.boxes
+                for box in boxes:
+                    # OBB format: box.xyxyxyxy = 4 corner points [x1,y1, x2,y2, x3,y3, x4,y4]
+                    if hasattr(box, 'xyxyxyxy'):
+                        points = box.xyxyxyxy[0].cpu().numpy()  # 8 values: 4 corners
+                        # Calculate center as average of 4 corners
+                        center_x = int((points[0] + points[2] + points[4] + points[6]) / 4)
+                        center_y = int((points[1] + points[3] + points[5] + points[7]) / 4)
+                        bbox_data = tuple(points.astype(int))  # Store all 8 values
+                    else:
+                        # Fallback to xywhr format if xyxyxyxy not available
+                        xywhr = box.xywhr[0].cpu().numpy()  # [cx, cy, w, h, rotation]
+                        center_x = int(xywhr[0])
+                        center_y = int(xywhr[1])
+                        bbox_data = tuple(xywhr.astype(float))
 
-                # Calculate center point
-                center_x = int((x1 + x2) / 2)
-                center_y = int((y1 + y2) / 2)
+                    conf = float(box.conf[0])
+                    cls = int(box.cls[0])
+            else:
+                # Standard mode: axis-aligned bounding boxes
+                boxes = result.boxes
+                for box in boxes:
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                    conf = float(box.conf[0])
+                    cls = int(box.cls[0])
 
-                # Get class name (e.g., "7_E656_239")
-                class_name = CLASS_NAMES.get(cls, f"Unknown_{cls}")
+                    # Calculate center point
+                    center_x = int((x1 + x2) / 2)
+                    center_y = int((y1 + y2) / 2)
+                    bbox_data = (int(x1), int(y1), int(x2), int(y2))
 
-                # Store detection (keep highest confidence if multiple)
-                if cls not in detections or conf > detections[cls]['conf']:
-                    detections[cls] = {
-                        'pos': (center_x, center_y),
-                        'bbox': (int(x1), int(y1), int(x2), int(y2)),  # Bounding box coordinates
-                        'conf': conf,
-                        'name': class_name
-                    }
+            # Get class name (e.g., "7_E656_239")
+            class_name = CLASS_NAMES.get(cls, f"Unknown_{cls}")
+
+            # Store detection (keep highest confidence if multiple)
+            if cls not in detections or conf > detections[cls]['conf']:
+                detections[cls] = {
+                    'pos': (center_x, center_y),
+                    'bbox': bbox_data,
+                    'conf': conf,
+                    'name': class_name
+                }
 
         return detections
 

@@ -1,8 +1,9 @@
 """
-YOLOv8 Training Script for Google Colab
+YOLOv8/YOLOv8-OBB Training Script for Google Colab
 z21-Terminal - Multi-Locomotive Tracking
 
 Trains YOLO model to recognize locomotives on layout.
+Supports both standard bounding boxes and Oriented Bounding Boxes (OBB).
 Uses DCC address as class prefix for direct mapping.
 
 ⚠️ IMPORTANT: Class Names Convention
@@ -34,7 +35,8 @@ PROJECT_NAME = "BiancAlice"  # Model identifier (layout name)
 #   → Roboflow: "Fit within 1280x1280"
 # - RECTANGULAR = False: Square 640x640 (for CPU, faster)
 #   → Roboflow: "Stretch to 640x640"
-RECTANGULAR = False  # ⚠️ CHANGE THIS: False for v5 square, True for v4 rectangular
+# NOTE: OBB models (yolov8n-obb) use RECTANGULAR = False (square 640x640)
+RECTANGULAR = False  # ⚠️ CHANGE THIS: False for OBB/v5 square, True for v4 rectangular
 
 # ============================================
 # STEP 1: Install Dependencies
@@ -59,19 +61,19 @@ version = versions_list[0]  # First in array = latest version
 MODEL_VERSION = version.version  # Get actual version number
 
 print(f"📦 Using Roboflow version: {MODEL_VERSION} (latest)")
-dataset = version.download("yolov8")
+dataset = version.download("yolov8-obb")
 
 print(f"✅ Dataset downloaded to: {dataset.location}")
 
 # ============================================
 # STEP 3: Train YOLOv8 Model
 # ============================================
-print("\n🚂 Starting YOLOv8 training...")
+print("\n🚂 Starting YOLOv8-OBB training (Oriented Bounding Boxes)...")
 
 from ultralytics import YOLO
 
-# Load YOLOv8 nano (fastest, smallest)
-model = YOLO('yolov8n.pt')
+# Load YOLOv8 nano OBB model (fastest, smallest, oriented bounding boxes)
+model = YOLO('yolov8n-obb.pt')
 
 # Configure training based on RECTANGULAR flag
 if RECTANGULAR:
