@@ -297,17 +297,26 @@ def draw_debug_overlay(frame: np.ndarray, detections: List[Dict]) -> np.ndarray:
         color = COLORS.get(address, (255, 255, 255))  # Default white
 
         # Draw bounding box (if available)
-        if bbox and len(bbox) == 4:
-            x1, y1, x2, y2 = [int(coord) for coord in bbox]
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        if bbox:
+            if len(bbox) == 4:
+                # Standard axis-aligned bbox
+                x1, y1, x2, y2 = [int(coord) for coord in bbox]
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            elif len(bbox) == 8:
+                # OBB (Oriented Bounding Box) - draw polygon
+                points = np.array(bbox, dtype=np.int32).reshape((-1, 2))
+                cv2.polylines(frame, [points], isClosed=True, color=color, thickness=2)
 
         # Draw center point (larger hollow circle for debug visibility)
         cv2.circle(frame, (x, y), 15, color, 2)  # Hollow circle
 
         # Draw confidence label (above bbox if available, else near center)
         label = f"{name} {confidence:.2f}"
-        if bbox and len(bbox) == 4:
-            label_pos = (int(bbox[0]), int(bbox[1]) - 10)
+        if bbox:
+            if len(bbox) >= 2:
+                label_pos = (int(bbox[0]), int(bbox[1]) - 10)
+            else:
+                label_pos = (x + 20, y)
         else:
             label_pos = (x + 20, y)
 
