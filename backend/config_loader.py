@@ -182,3 +182,25 @@ def save_config(config: Dict[str, Any], config_path: Path = None) -> None:
     with open(config_path, 'w', encoding='utf-8') as f:
         f.write(json_str)
         f.write('\n')  # Add trailing newline
+
+
+def save_config_backup(config: Dict[str, Any], config_path: Path = None) -> None:
+    """Save configuration backup to config.json.backup (unified backup for gates + CV profiles + future features)."""
+    if config_path is None:
+        config_path = get_config_path()
+    backup_path = config_path.parent / f"{config_path.name}.backup"
+    json_str = json.dumps(config, indent=2, ensure_ascii=False)
+    with open(backup_path, 'w', encoding='utf-8') as f:
+        f.write(json_str)
+        f.write('\n')
+
+
+def load_config_backup(config_path: Path = None) -> Dict[str, Any]:
+    """Load configuration from config.json.backup if exists, otherwise return empty dict."""
+    if config_path is None:
+        config_path = get_config_path()
+    backup_path = config_path.parent / f"{config_path.name}.backup"
+    if not backup_path.exists():
+        return {}
+    with open(backup_path, 'r', encoding='utf-8') as f:
+        return json.load(f)

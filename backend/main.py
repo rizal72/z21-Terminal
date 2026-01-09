@@ -1079,6 +1079,20 @@ async def toggle_debug():
     }
 
 
+@app.post("/api/toggle-cv-profile-mode")
+async def toggle_cv_profile_mode():
+    """Toggle CV profile mode between 'normal' and 'testing' for ALL locomotives (hotkey T in UI)"""
+    success, new_mode, message = z21_manager.toggle_cv_profile_mode()
+    return {"status": "success" if success else "error", "mode": new_mode, "message": message}
+
+
+@app.get("/api/cv-profile-mode")
+async def get_cv_profile_mode():
+    """Get current CV profile mode ('normal' or 'testing')"""
+    config = load_config()
+    return {"mode": config.get('cv_profile_mode', 'normal')}
+
+
 @app.get("/api/gates")
 async def get_gates():
     """Get current gate configuration"""

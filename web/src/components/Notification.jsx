@@ -16,7 +16,10 @@ export default function Notification({ notifications }) {
       {notifications.map((notification) => (
         <div
           key={notification.id}
-          className={`bg-control-dark/90 backdrop-blur-sm border ${notification.borderClass} rounded-lg px-6 py-3 shadow-2xl animate-fade-in-out pointer-events-auto`}
+          className={`bg-control-dark/90 backdrop-blur-sm border ${notification.borderClass} rounded-lg px-6 py-3 shadow-2xl pointer-events-auto`}
+          style={{
+            animation: `fade-in-out ${notification.duration}ms ease-in-out forwards`
+          }}
         >
           <div className="flex items-center gap-3">
             {/* Icon */}
