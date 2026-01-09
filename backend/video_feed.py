@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from config_loader import load_config
+from log_colors import log
 
 
 # Configuration paths (all in project root)
@@ -39,14 +40,14 @@ def load_camera_config() -> str:
         rtsp_url = f"rtsp://{username}:{password}@{camera_ip}:{camera_port}/{stream}"
         return rtsp_url
     except FileNotFoundError:
-        print(f"❌ ERROR: Camera config not found at {CAMERA_CONFIG_PATH}")
+        log('[ERROR]', f"Camera config not found at {CAMERA_CONFIG_PATH}")
         print(f"   Create it from template: cp {CAMERA_CONFIG_PATH}.example {CAMERA_CONFIG_PATH}")
         return None
     except KeyError as e:
-        print(f"❌ ERROR: Missing required field in camera config: {e}")
+        log('[ERROR]', f"Missing required field in camera config: {e}")
         return None
     except json.JSONDecodeError as e:
-        print(f"❌ ERROR: Invalid JSON in camera config: {e}")
+        log('[ERROR]', f"Invalid JSON in camera config: {e}")
         return None
 
 
@@ -343,7 +344,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
     fps_settings = tracking_config.get('fps', {})
     fps_target = fps_settings.get('video_feed', 15)  # Load from config, fallback to 15
 
-    print(f"🎥 Opening video stream: {RTSP_URL}")
+    log('[INIT]', f"Opening video stream: {RTSP_URL}")
     cap = cv2.VideoCapture(RTSP_URL)
 
     # CRITICAL: Set minimal buffer to prevent lag accumulation
@@ -375,7 +376,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
 
             ret, frame = cap.read()
             if not ret:
-                print("  ⚠️  Failed to read frame, reconnecting...")
+                log('[WARN]', f"Failed to read frame, reconnecting...")
                 cap.release()
                 time.sleep(2)
                 cap = cv2.VideoCapture(RTSP_URL)
@@ -393,7 +394,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
                     if detections:
                         frame = draw_debug_overlay(frame, detections)
                 except Exception as e:
-                    print(f"  ⚠️  Error drawing debug overlay: {e}")
+                    log('[WARN]', f"Error drawing debug overlay: {e}")
 
             # === TRACKING INFO PANEL (toggle with SHOW_DELTA_T_PANEL global) ===
             global SHOW_DELTA_T_PANEL
@@ -404,7 +405,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
                     try:
                         tracking_data = tracking_data_callback()
                     except Exception as e:
-                        print(f"  ⚠️  Error getting tracking data: {e}")
+                        log('[WARN]', f"Error getting tracking data: {e}")
 
                 # Draw tracking info panel
                 frame = draw_tracking_info(frame, tracking_data)
@@ -444,4 +445,4 @@ if __name__ == '__main__':
             break
         print(f"Frame {i}: {len(frame_data)} bytes")
 
-    print("✅ Video feed test complete")
+    log('[INIT]', "Video feed test complete")

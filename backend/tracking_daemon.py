@@ -25,6 +25,7 @@ from config_loader import load_config
 # Import shared tracking modules
 from tracking.yolo_tracker import YOLOTracker
 from tracking.rtsp_handler import load_camera_config, setup_rtsp_stream, reconnect_rtsp_stream
+from log_colors import log
 
 # === CONFIGURATION ===
 project_root = Path(__file__).parent.parent  # z21-Terminal/ root
@@ -63,7 +64,7 @@ class TrackingDaemon:
             self.fps_idle = fps_config.get('idle', 1)
         except Exception as e:
             if self.debug_enabled:
-                print(f"⚠️  Error loading config: {e}, using defaults")
+                log('[WARN]', f"Error loading config: {e}, using defaults")
             self.fps_active = 30
             self.fps_idle = 1
 
@@ -78,12 +79,12 @@ class TrackingDaemon:
         """Connect to FastAPI backend via WebSocket."""
         try:
             self.websocket = await websockets.connect(BACKEND_WS_URL)
-            print(f"✅ Connected to backend: {BACKEND_WS_URL}")
+            log('[INIT]', f"Connected to backend: {BACKEND_WS_URL}")
             # Reset reconnect delay on successful connection
             self.reconnect_delay = 2.0
             return True
         except Exception as e:
-            print(f"❌ Failed to connect to backend: {e}")
+            log('[WARN]', f"Failed to connect to backend: {e}")
             return False
 
     async def ensure_connected(self):
@@ -100,7 +101,7 @@ class TrackingDaemon:
         # Attempt reconnect
         self.last_reconnect_attempt = now
         if self.debug_enabled:
-            print(f"🔄 Attempting to reconnect to backend... (retry in {self.reconnect_delay:.1f}s if fails)")
+            log('[DETECT]', f"Attempting to reconnect to backend... (retry in {self.reconnect_delay:.1f}s if fails)")
 
         success = await self.connect_backend()
 
@@ -108,7 +109,7 @@ class TrackingDaemon:
             # Exponential backoff
             self.reconnect_delay = min(self.reconnect_delay * 2, self.max_reconnect_delay)
             if self.debug_enabled:
-                print(f"⏳ Next retry in {self.reconnect_delay:.1f}s")
+                log('[DETECT]', f"Next retry in {self.reconnect_delay:.1f}s")
 
         return success
 
@@ -185,7 +186,7 @@ class TrackingDaemon:
             try:
                 await self.websocket.send(json.dumps(message))
             except Exception as e:
-                print(f"⚠️  Backend disconnected: {e}")
+                log('[WARN]', f"Backend disconnected: {e}")
                 self.websocket = None  # Mark as disconnected
                 break  # Stop broadcasting if disconnected
 
@@ -246,7 +247,7 @@ class TrackingDaemon:
             any_movement = any(s > 0 for s in self.consist_speeds.values())
             if not any_movement and self.active_tracking:
                 self.active_tracking = False
-                print(f"🔄 Switched to Low-Power Mode ({self.fps_idle} FPS) (after {IDLE_COOLDOWN_SECONDS:.0f}s cooldown)")
+                log('[DETECT]', f"Switched to Low-Power Mode ({self.fps_idle} FPS) (after {IDLE_COOLDOWN_SECONDS:.0f}s cooldown)")
         except asyncio.CancelledError:
             # Timer cancellato (movimento ripreso)
             pass
@@ -279,11 +280,11 @@ class TrackingDaemon:
 
             if not self.active_tracking:
                 self.active_tracking = True
-                print(f"🔄 Switched to Active Tracking ({self.fps_active} FPS)")
+                log('[DETECT]', f"Switched to Active Tracking ({self.fps_active} FPS)")
         else:
             # Tutto fermo: avvia timer 10s (se non già avviato)
             if not self.idle_timer_task and self.active_tracking:
-                print(f"⏸️  All consists stopped - starting {IDLE_COOLDOWN_SECONDS:.0f}s cooldown timer...")
+                log('[DETECT]', f"All consists stopped - starting {IDLE_COOLDOWN_SECONDS:.0f}s cooldown timer...")
                 self.idle_timer_task = asyncio.create_task(self._idle_timer())
 
     async def listen_backend_messages(self):
@@ -331,8 +332,8 @@ class TrackingDaemon:
         if not self.cap:
             return
 
-        print(f"✅ Tracking daemon started - Low-Power Mode ({self.fps_idle} FPS)")
-        print(f"   (switches to Active Tracking {self.fps_active} FPS when movement detected)")
+        log('[INIT]', f"Tracking daemon started - Low-Power Mode ({self.fps_idle} FPS)")
+        log('[INIT]', f"(switches to Active Tracking {self.fps_active} FPS when movement detected)")
 
         # Start backend message listener in parallel
         listener_task = asyncio.create_task(self.listen_backend_messages())
@@ -343,7 +344,7 @@ class TrackingDaemon:
                 if not ret:
                     # Log only on state change (avoid spam)
                     if self.video_connected:
-                        print("⚠️  Lost video connection, reconnecting...")
+                        log('[WARN]', f"Lost video connection, reconnecting...")
                         self.video_connected = False
 
                     # Reconnect RTSP stream (same logic as video_feed.py)
@@ -353,7 +354,7 @@ class TrackingDaemon:
 
                 # Video connection restored
                 if not self.video_connected:
-                    print("✅ Video connection restored")
+                    log('[INIT]', f"Video connection restored")
                     self.video_connected = True
 
                 self.frame_count += 1
@@ -362,7 +363,7 @@ class TrackingDaemon:
                 if not self.active_tracking:
                     # Log only on state change (avoid spam) - verbose, only if debug enabled
                     if self.last_fps_mode != 'idle':
-                        print(f"🔇 YOLO tracking paused (idle @ {self.fps_idle} FPS, flushing RTSP buffer only)")
+                        log('[DETECT]', f"YOLO tracking paused (idle @ {self.fps_idle} FPS, flushing RTSP buffer only)")
                         self.last_fps_mode = 'idle'
                     # Idle: read frame to flush RTSP buffer, but skip YOLO + broadcast
                     await asyncio.sleep(1.0 / self.fps_idle)
@@ -371,7 +372,7 @@ class TrackingDaemon:
                 # Active: YOLO tracking + broadcast
                 # Log only on state change (avoid spam) - verbose, only if debug enabled
                 if self.last_fps_mode != 'active':
-                    print(f"🔊 YOLO tracking resumed (active @ {self.fps_active} FPS)")
+                    log('[DETECT]', f"YOLO tracking resumed (active @ {self.fps_active} FPS)")
                     self.last_fps_mode = 'active'
 
                 tracking_data = self.tracker.update(frame)
@@ -387,9 +388,9 @@ class TrackingDaemon:
                 await asyncio.sleep(1.0 / self.fps_active)
 
         except KeyboardInterrupt:
-            print("\n⚠️  Interrupted by user")
+            log('[SHUT]', f"Interrupted by user")
         except Exception as e:
-            print(f"❌ Error in tracking loop: {e}")
+            log('[WARN]', f"Error in tracking loop: {e}")
         finally:
             # Cancel listener task
             if listener_task:
@@ -415,23 +416,23 @@ class TrackingDaemon:
 
         if self.start_time and self.debug_enabled:
             duration = time.time() - self.start_time
-            print(f"\n📊 Session Summary:")
-            print(f"   Duration: {duration:.1f}s")
-            print(f"   Frames: {self.frame_count}")
+            log('[SHUT]', f"Session Summary:")
+            log('[SHUT]', f"Duration: {duration:.1f}s")
+            log('[SHUT]', f"Frames: {self.frame_count}")
 
             # Per-consist statistics
             for consist_id, cdata in self.tracker.consist_data.items():
                 crossings = cdata['gate_crossing_count']
                 delta_t = cdata['delta_t']
                 if crossings > 0:
-                    print(f"   Consist {consist_id}:")
-                    print(f"     Gate crossings: {crossings}")
+                    log('[SHUT]', f"Consist {consist_id}:")
+                    log('[SHUT]', f"  Gate crossings: {crossings}")
                     if delta_t is not None:
                         status = self.tracker.get_delta_t_status(consist_id)
-                        print(f"     Last Δt: {delta_t:+.3f}s ({status})")
+                        log('[SHUT]', f"  Last Δt: {delta_t:+.3f}s ({status})")
 
         if self.debug_enabled:
-            print("✅ Tracking daemon stopped")
+            log('[SHUT]', f"Tracking daemon stopped")
 
 
 # === MAIN ===
@@ -440,7 +441,7 @@ shutdown_flag = False
 def signal_handler(sig, frame):
     """Handle SIGINT/SIGTERM for graceful shutdown."""
     global shutdown_flag
-    print("\n⚠️  Shutdown signal received")
+    log('[SHUT]', f"Shutdown signal received")
     shutdown_flag = True
 
 

@@ -9,6 +9,7 @@ import sys
 # Import daemon in-process (not subprocess) for frame queue sharing
 sys.path.insert(0, str(Path(__file__).parent))
 from tracking_daemon import TrackingDaemon
+from log_colors import log
 
 
 class TrackingManager:
@@ -29,7 +30,7 @@ class TrackingManager:
         self.daemon: Optional[TrackingDaemon] = None
         self.daemon_task: Optional[asyncio.Task] = None
 
-        print("🎯 TrackingManager initialized (in-process asyncio.Task for frame queue sharing)")
+        log('[INIT]', f"TrackingManager initialized (in-process asyncio.Task for frame queue sharing)")
 
     def should_track(self) -> bool:
         """
@@ -61,11 +62,11 @@ class TrackingManager:
     async def start_tracking(self):
         """Start tracking daemon as asyncio.Task (in-process for frame queue sharing)"""
         if self.daemon_task:
-            print("⚠️  Tracking already running")
+            log('[WARN]', f"Tracking already running")
             return
 
         try:
-            print("🚀 Starting tracking daemon (in-process asyncio.Task)...")
+            log('[INIT]', f"Starting tracking daemon (in-process asyncio.Task)...")
 
             # Create daemon instance
             self.daemon = TrackingDaemon()
@@ -76,7 +77,7 @@ class TrackingManager:
             print(f"  ✓ Tracking daemon started (frame_queue accessible for video feed)")
 
         except Exception as e:
-            print(f"  ✗ Failed to start tracking daemon: {e}")
+            log('[WARN]', f"Failed to start tracking daemon: {e}")
             self.daemon = None
             self.daemon_task = None
 
@@ -86,7 +87,7 @@ class TrackingManager:
             return
 
         try:
-            print("🛑 Stopping tracking daemon...")
+            log('[SHUT]', f"Stopping tracking daemon...")
 
             # Signal daemon to stop
             if self.daemon:
@@ -99,19 +100,19 @@ class TrackingManager:
             except asyncio.CancelledError:
                 pass  # Expected
 
-            print("  ✓ Tracking daemon stopped")
+            log('[INIT]', f"Tracking daemon stopped")
 
         except Exception as e:
-            print(f"  ✗ Error stopping tracking daemon: {e}")
+            log('[WARN]', f"Error stopping tracking daemon: {e}")
 
         finally:
             self.daemon = None
             self.daemon_task = None
-            print("  ✓ Tracking daemon cleanup complete")
+            log('[INIT]', f"Tracking daemon cleanup complete")
 
     async def on_client_connected(self):
         """Called when a client connects"""
-        print(f"👤 Client connected (total: {len(self.connected_clients)})")
+        log('[WS]', f"Client connected (total: {len(self.connected_clients)})")
 
         # Start tracking daemon
         if self.should_track() and not self.daemon_task:
@@ -119,22 +120,22 @@ class TrackingManager:
 
     async def on_client_disconnected(self):
         """Called when a client disconnects"""
-        print(f"👤 Client disconnected (remaining: {len(self.connected_clients)})")
+        log('[WS]', f"Client disconnected (remaining: {len(self.connected_clients)})")
 
         # Stop tracking if no clients remain
         if len(self.connected_clients) == 0 and self.daemon_task:
-            print("   → No clients remaining, stopping tracking...")
+            log('[SHUT]', f"No clients remaining, stopping tracking...")
             await self.stop_tracking()
 
     async def shutdown(self):
         """Cleanup on backend shutdown"""
-        print("🧹 TrackingManager shutting down...")
+        log('[SHUT]', f"TrackingManager shutting down...")
 
         # Stop tracking daemon
         if self.daemon_task:
             await self.stop_tracking()
 
-        print("  ✓ TrackingManager cleanup complete")
+        log('[INIT]', f"TrackingManager cleanup complete")
 
 
 if __name__ == '__main__':

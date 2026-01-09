@@ -7,6 +7,7 @@ Supports base config.json + optional config.local.json override (gitignored)
 import json
 from pathlib import Path
 from typing import Dict, Any
+from log_colors import log
 
 # Track first load to print local override message only once
 _first_load = True
@@ -83,10 +84,10 @@ def load_config(config_path: Path = None) -> Dict[str, Any]:
 
             # Print only on first load (avoid spam)
             if _first_load:
-                print(f"✅ Config loaded with local overrides: {local_config_path.name}")
+                log('[INIT]', f"Config loaded with local overrides: {local_config_path.name}")
                 _first_load = False
         except json.JSONDecodeError as e:
-            print(f"⚠️  Warning: Invalid JSON in {local_config_path}, ignoring: {e}")
+            log('[WARN]', f"Warning: Invalid JSON in {local_config_path}, ignoring: {e}")
 
     return config
 

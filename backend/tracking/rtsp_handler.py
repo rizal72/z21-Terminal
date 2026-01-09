@@ -14,6 +14,11 @@ import json
 import sys
 from pathlib import Path
 
+# Add backend to path for log_colors import
+backend_path = Path(__file__).parent.parent
+sys.path.insert(0, str(backend_path))
+from log_colors import log
+
 # Camera config path (project root)
 project_root = Path(__file__).parent.parent.parent  # z21-Terminal/ root
 CAMERA_CONFIG_PATH = project_root / 'camera_config.json'
@@ -42,16 +47,16 @@ def load_camera_config():
         rtsp_url = f"rtsp://{username}:{password}@{camera_ip}:{camera_port}/{stream}"
         return rtsp_url
     except FileNotFoundError:
-        print(f"❌ ERROR: Camera config not found at {CAMERA_CONFIG_PATH}")
+        log('[ERROR]', f"Camera config not found at {CAMERA_CONFIG_PATH}")
         print(f"   Create it from template: cp {CAMERA_CONFIG_PATH}.example {CAMERA_CONFIG_PATH}")
         print(f"   Then edit with your camera credentials.")
         sys.exit(1)
     except KeyError as e:
-        print(f"❌ ERROR: Missing required field in camera config: {e}")
+        log('[ERROR]', f"Missing required field in camera config: {e}")
         print(f"   Check {CAMERA_CONFIG_PATH} and ensure 'username' and 'password' are set.")
         sys.exit(1)
     except json.JSONDecodeError as e:
-        print(f"❌ ERROR: Invalid JSON in camera config: {e}")
+        log('[ERROR]', f"Invalid JSON in camera config: {e}")
         sys.exit(1)
 
 
@@ -70,7 +75,7 @@ def setup_rtsp_stream(rtsp_url, description="video stream"):
         Sets CAP_PROP_BUFFERSIZE=1 to prevent progressive lag accumulation.
         This ensures always-fresh frames (adaptive skip if processing is slow).
     """
-    print(f"📹 Opening {description}: {rtsp_url}")
+    log('[INIT]', f"Opening {description}: {rtsp_url}")
     cap = cv2.VideoCapture(rtsp_url)
 
     # CRITICAL: Set minimal buffer to prevent lag accumulation
@@ -80,10 +85,10 @@ def setup_rtsp_stream(rtsp_url, description="video stream"):
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
     if not cap.isOpened():
-        print(f"❌ Failed to open {description}")
+        log('[ERROR]', f"Failed to open {description}")
         return None
 
-    print(f"✅ {description.capitalize()} opened")
+    log('[INIT]', f"{description.capitalize()} opened")
     return cap
 
 
@@ -102,13 +107,13 @@ def reconnect_rtsp_stream(cap, rtsp_url, description="video stream"):
     if cap:
         cap.release()
 
-    print(f"🔄 Reconnecting {description}...")
+    log('[INIT]', f"Reconnecting {description}...")
     cap = cv2.VideoCapture(rtsp_url)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Restore buffer=1 after reconnect
 
     if cap.isOpened():
-        print(f"✅ {description.capitalize()} reconnected")
+        log('[INIT]', f"{description.capitalize()} reconnected")
     else:
-        print(f"❌ Failed to reconnect {description}")
+        log('[ERROR]', f"Failed to reconnect {description}")
 
     return cap

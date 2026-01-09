@@ -129,7 +129,7 @@
     },
     "7": {
       "normal": {
-        "cv3": 24,
+        "cv3": 22,
         "cv4": 16
       },
       "testing": {
@@ -148,5 +148,5 @@
       }
     }
   },
-  "cv_profile_mode": "testing"
+  "cv_profile_mode": "normal"
 }
