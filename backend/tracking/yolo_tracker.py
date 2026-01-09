@@ -20,9 +20,6 @@ from config_loader import load_config
 from log_colors import log
 
 # === CONFIGURATION ===
-# YOLO confidence threshold
-CONFIDENCE_THRESHOLD = 0.5
-
 # Class mapping (YOLO model classes)
 CLASS_NAMES = {
     0: '1_Gr675_017',    # Consist 10 lead
@@ -196,10 +193,12 @@ class YOLOTracker:
         if self.debug_enabled:
             log('[WARN]', f"dT sanity check: ignore |dT| > {self.delta_t_max_threshold}s")
 
-        # Load YOLO inference image size
+        # Load YOLO inference image size and confidence threshold
         self.yolo_imgsz = tracking_config.get('yolo_imgsz', 640)
+        self.confidence_threshold = tracking_config.get('yolo_confidence', 0.5)
         if self.debug_enabled:
             log('[INIT]', f"YOLO inference size: {self.yolo_imgsz}")
+            log('[INIT]', f"YOLO confidence threshold: {self.confidence_threshold}")
 
         # Load reference loco configuration (from consists)
         consists = config.get('consists', {})
@@ -299,8 +298,8 @@ class YOLOTracker:
         Returns:
             detections: dict {class_id: {'pos': (x,y), 'bbox': (x1,y1,x2,y2), 'conf': float, 'name': str}}
         """
-        # Run inference (imgsz from config.json)
-        results = self.model(frame, conf=CONFIDENCE_THRESHOLD, imgsz=self.yolo_imgsz, verbose=False)
+        # Run inference (imgsz and confidence from config.json)
+        results = self.model(frame, conf=self.confidence_threshold, imgsz=self.yolo_imgsz, verbose=False)
 
         detections = {}  # {class_id: {'pos': (x,y), 'bbox': (x1,y1,x2,y2), 'conf': float, 'name': str}}
 
