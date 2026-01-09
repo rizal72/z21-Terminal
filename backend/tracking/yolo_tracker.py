@@ -305,12 +305,24 @@ class YOLOTracker:
         # Run inference (imgsz, confidence, and IoU from config.json)
         results = self.model(frame, conf=self.confidence_threshold, iou=self.iou_threshold, imgsz=self.yolo_imgsz, verbose=False)
 
+        # DEBUG: Print what results contain
+        print(f"[DEBUG] OBB mode: {self.yolo_obb}")
+        print(f"[DEBUG] Results type: {type(results)}")
+        print(f"[DEBUG] Number of results: {len(results)}")
+
         detections = {}  # {class_id: {'pos': (x,y), 'bbox': bbox_data, 'conf': float, 'name': str}}
 
         for result in results:
+            print(f"[DEBUG] Result attributes: {dir(result)}")
+            print(f"[DEBUG] Has obb: {hasattr(result, 'obb')}")
+            print(f"[DEBUG] Has boxes: {hasattr(result, 'boxes')}")
             if self.yolo_obb:
                 # OBB mode: Oriented Bounding Boxes
                 boxes = result.obb if hasattr(result, 'obb') else result.boxes
+                print(f"[DEBUG] OBB boxes type: {type(boxes)}")
+                print(f"[DEBUG] OBB boxes length: {len(boxes) if boxes is not None else 0}")
+                if boxes is not None and len(boxes) > 0:
+                    print(f"[DEBUG] First box attributes: {dir(boxes[0])}")
                 for box in boxes:
                     # OBB format: box.xyxyxyxy = 4 corner points [x1,y1, x2,y2, x3,y3, x4,y4]
                     if hasattr(box, 'xyxyxyxy'):
@@ -328,6 +340,7 @@ class YOLOTracker:
 
                     conf = float(box.conf[0])
                     cls = int(box.cls[0])
+                    print(f"[DEBUG] OBB box found: cls={cls}, conf={conf:.3f}, center=({center_x},{center_y})")
             else:
                 # Standard mode: axis-aligned bounding boxes
                 boxes = result.boxes
@@ -352,6 +365,11 @@ class YOLOTracker:
                     'conf': conf,
                     'name': class_name
                 }
+
+        print(f"[DEBUG] Total detections stored: {len(detections)}")
+        if detections:
+            for cls_id, det in detections.items():
+                print(f"[DEBUG] Stored: {det['name']} conf={det['conf']:.3f} pos={det['pos']}")
 
         return detections
 
