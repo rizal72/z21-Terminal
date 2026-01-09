@@ -192,7 +192,7 @@ def draw_tracking_info(frame: np.ndarray, tracking_data: Optional[Dict[int, Dict
         delta_t = data.get('delta_t')
         if delta_t is not None:
             sign = '+' if delta_t >= 0 else ''
-            cv2.putText(frame, f"Dt: {sign}{delta_t:.3f}s", (text_x, y), font, font_scale, (255, 255, 255), 1)
+            cv2.putText(frame, f"Δt: {sign}{delta_t:.3f}s", (text_x, y), font, font_scale, (255, 255, 255), 1)
             y += line_height
 
             # Line 3: Status (color-coded)
@@ -214,7 +214,7 @@ def draw_tracking_info(frame: np.ndarray, tracking_data: Optional[Dict[int, Dict
                 cv2.putText(frame, time_str, (text_x, y), font, font_scale, (180, 180, 180), 1)
         else:
             # No delta_t available yet
-            cv2.putText(frame, "Dt: Waiting...", (text_x, y), font, font_scale, (128, 128, 128), 1)
+            cv2.putText(frame, "Δt: Waiting...", (text_x, y), font, font_scale, (128, 128, 128), 1)
 
     return frame
 
