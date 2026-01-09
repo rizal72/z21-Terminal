@@ -2,7 +2,7 @@
 YOLO Tracker - Shared locomotive tracking logic
 
 Used by both:
-- backend/tracking_daemon.py (headless WebSocket daemon)  
+- backend/tracking_daemon.py (headless WebSocket daemon)
 - scripts/track_consist_yolo.py (standalone GUI testing)
 
 Handles YOLO inference, gate timing detection, and multi-consist tracking.
@@ -17,6 +17,7 @@ from ultralytics import YOLO
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config_loader import load_config
+from log_colors import log
 
 # === CONFIGURATION ===
 # YOLO confidence threshold
@@ -167,12 +168,12 @@ class YOLOTracker:
 
         # Log debug mode status
         if self.debug_enabled:
-            print("🐛 Debug mode: ENABLED (verbose logging)")
+            log('[INIT]', "Debug mode: ENABLED (verbose logging)")
         else:
-            print("🔇 Debug mode: DISABLED (only connections, Δt updates, and speed corrections)")
+            log('[INIT]', "Debug mode: DISABLED (only connections, Δt updates, and speed corrections)")
 
         if self.debug_enabled:
-            print(f"🤖 Loading YOLO model: {model_path}")
+            log('[INIT]', f"Loading YOLO model: {model_path}")
         self.model = YOLO(model_path)
 
         # Load gates and thresholds from config
@@ -180,7 +181,7 @@ class YOLOTracker:
         for gate in config['gates']:
             self.gates[gate['id']] = gate_json_to_dict(gate)
         if self.debug_enabled:
-            print(f"🚪 Loaded {len(self.gates)} gates from config")
+            log('[INIT]', f"Loaded {len(self.gates)} gates from config")
 
         # Load timing thresholds
         tracking_config = config.get('tracking', {})
@@ -188,17 +189,17 @@ class YOLOTracker:
         self.threshold_normal = thresholds.get('normal', 1.0)
         self.threshold_warning = thresholds.get('warning', 2.0)
         if self.debug_enabled:
-            print(f"⏱️  Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
+            log('[INIT]', f"Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
 
         # Load Δt sanity check threshold (ignore outliers from video lag)
         self.delta_t_max_threshold = thresholds.get('max_delta_t', 15.0)
         if self.debug_enabled:
-            print(f"⚠️  Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
+            log('[WARN]', f"Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
 
         # Load YOLO inference image size
         self.yolo_imgsz = tracking_config.get('yolo_imgsz', 640)
         if self.debug_enabled:
-            print(f"🔍 YOLO inference size: {self.yolo_imgsz}")
+            log('[INIT]', f"YOLO inference size: {self.yolo_imgsz}")
 
         # Load reference loco configuration (from consists)
         consists = config.get('consists', {})
@@ -209,7 +210,7 @@ class YOLOTracker:
                 'adjust': consist_info.get('adjust_loco')
             }
         if self.reference_locos and self.debug_enabled:
-            print(f"🎯 Reference locos: {len(self.reference_locos)} consists configured")
+            log('[INIT]', f"Reference locos: {len(self.reference_locos)} consists configured")
 
         # === PHASE 5: CONFIG-DRIVEN MULTI-CONSIST SUPPORT ===
         # Load consists from config.json
@@ -228,16 +229,16 @@ class YOLOTracker:
             # These are software-only consists that don't require YOLO training
             if not gate_ids or len(gate_ids) == 0:
                 if self.debug_enabled:
-                    print(f"⏭️  Skipping consist {consist_id} (no gates - tracking disabled)")
+                    log('[INIT]', f"Skipping consist {consist_id} (no gates - tracking disabled)")
                 continue
 
             # Verify locomotives are in YOLO training set
             if lead_addr not in ADDRESS_TO_CLASS:
-                print(f"⚠️  Skipping consist {consist_id}: lead loco {lead_addr} not in YOLO training set")
+                log('[WARN]', f"Skipping consist {consist_id}: lead loco {lead_addr} not in YOLO training set")
                 print(f"    Trained locomotives: {list(ADDRESS_TO_CLASS.keys())}")
                 continue
             if rear_addr and rear_addr not in ADDRESS_TO_CLASS:
-                print(f"⚠️  Skipping consist {consist_id}: rear loco {rear_addr} not in YOLO training set")
+                log('[WARN]', f"Skipping consist {consist_id}: rear loco {rear_addr} not in YOLO training set")
                 print(f"    Trained locomotives: {list(ADDRESS_TO_CLASS.keys())}")
                 continue
 
@@ -254,7 +255,7 @@ class YOLOTracker:
             }
 
         if self.debug_enabled:
-            print(f"🚂 Loaded {len(self.consist_config)} consists from config:")
+            log('[INIT]', f"Loaded {len(self.consist_config)} consists from config:")
             for cid, cinfo in self.consist_config.items():
                 gates_str = f"{cinfo['gate_ids']}" if cinfo['gate_ids'] else "[]"
                 lead_class = cinfo['lead_class_id']
@@ -289,7 +290,7 @@ class YOLOTracker:
             }
 
         if self.debug_enabled:
-            print("✅ YOLO model loaded")
+            log('[INIT]', "YOLO model loaded")
 
     def detect_locomotives(self, frame):
         """
@@ -400,7 +401,7 @@ class YOLOTracker:
                             (current_time - cdata['last_ignored_delta_t1_time']) > 5.0
                         )
                         if should_print:
-                            print(f"⚠️  C{consist_id}: Ignored Δt = {delta_t:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
+                            log('[WARN]', f"C{consist_id}: Ignored Δt = {delta_t:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
                             cdata['last_ignored_delta_t1'] = delta_t
                             cdata['last_ignored_delta_t1_time'] = current_time
                     else:
@@ -408,7 +409,7 @@ class YOLOTracker:
                         cdata['delta_t_type'] = f"L{ref_loco}G{ref_gate}-L{adj_loco}G{adj_gate}"
                         cdata['gate_crossing_count'] += 1
                         cdata['last_delta_t_time'] = max_t
-                        print(f"🚪 C{consist_id} Asymmetric: L{ref_loco}G{ref_gate}-L{adj_loco}G{adj_gate} = Δt = {cdata['delta_t']:+.3f}s")
+                        log('[GATE]', f"C{consist_id} Asymmetric: L{ref_loco}G{ref_gate}-L{adj_loco}G{adj_gate} | Δt={cdata['delta_t']:+.3f}s")
             return  # Asymmetric mode: only one calculation
 
         # === SYMMETRIC MODE: Cross-gate timing (both directions valid) ===
@@ -436,7 +437,7 @@ class YOLOTracker:
                         (current_time - cdata['last_ignored_delta_t1_time']) > 5.0
                     )
                     if should_print:
-                        print(f"⚠️  C{consist_id}: Ignored Δt₁ = {delta_t1:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
+                        log('[WARN]', f"C{consist_id}: Ignored Δt₁={delta_t1:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
                         cdata['last_ignored_delta_t1'] = delta_t1
                         cdata['last_ignored_delta_t1_time'] = current_time
                 else:
@@ -444,7 +445,7 @@ class YOLOTracker:
                     cdata['delta_t_type'] = f"L{lead_addr}G{g1}-L{rear_addr}G{g2}"
                     cdata['gate_crossing_count'] += 1
                     cdata['last_delta_t_time'] = max_t1
-                    print(f"🚪 C{consist_id} Cross-gate: L{lead_addr}G{g1}-L{rear_addr}G{g2} = Δt = {cdata['delta_t']:+.3f}s")
+                    log('[GATE]', f"C{consist_id} Cross-gate: L{lead_addr}G{g1}-L{rear_addr}G{g2} | Δt={cdata['delta_t']:+.3f}s")
                     return  # Calculated, done
 
         # Check 2: Δt₂ = lead@G2 - rear@G1 (cross-gate timing)
@@ -470,7 +471,7 @@ class YOLOTracker:
                         (current_time - cdata['last_ignored_delta_t2_time']) > 5.0
                     )
                     if should_print:
-                        print(f"⚠️  C{consist_id}: Ignored Δt₂ = {delta_t2:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
+                        log('[WARN]', f"C{consist_id}: Ignored Δt₂={delta_t2:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
                         cdata['last_ignored_delta_t2'] = delta_t2
                         cdata['last_ignored_delta_t2_time'] = current_time
                 else:
@@ -478,7 +479,7 @@ class YOLOTracker:
                     cdata['delta_t_type'] = f"L{lead_addr}G{g2}-L{rear_addr}G{g1}"
                     cdata['gate_crossing_count'] += 1
                     cdata['last_delta_t_time'] = max_t2
-                    print(f"🚪 C{consist_id} Cross-gate: L{lead_addr}G{g2}-L{rear_addr}G{g1} = Δt = {cdata['delta_t']:+.3f}s")
+                    log('[GATE]', f"C{consist_id} Cross-gate: L{lead_addr}G{g2}-L{rear_addr}G{g1} | Δt={cdata['delta_t']:+.3f}s")
 
     def update(self, frame):
         """
@@ -565,7 +566,7 @@ class YOLOTracker:
                 timestamp_str = time.strftime('%H:%M:%S', time.localtime(timestamp))
                 gate_center = (gate['center_x'], gate['center_y'])
                 if self.debug_enabled:
-                    print(f"🚦 C{consist_id}: Loco {lead_addr} (LEAD) passed G{gate_id} at {timestamp_str}.{int((timestamp % 1) * 1000):03d} | pos={lead_pos}, gate_center={gate_center}, gate_size={gate['width']}x{gate['height']}")
+                    log('[GATE]', f"C{consist_id}: Loco {lead_addr} (LEAD) passed G{gate_id} at {timestamp_str}.{int((timestamp % 1) * 1000):03d} | pos={lead_pos}, gate_center={gate_center}, gate_size={gate['width']}x{gate['height']}")
             elif not in_gate:
                 cdata['gate_states']['lead'][gate_id] = False
 
@@ -581,7 +582,7 @@ class YOLOTracker:
                 timestamp_str = time.strftime('%H:%M:%S', time.localtime(timestamp))
                 gate_center = (gate['center_x'], gate['center_y'])
                 if self.debug_enabled:
-                    print(f"🚦 C{consist_id}: Loco {rear_addr} (REAR) passed G{gate_id} at {timestamp_str}.{int((timestamp % 1) * 1000):03d} | pos={rear_pos}, gate_center={gate_center}, gate_size={gate['width']}x{gate['height']}")
+                    log('[GATE]', f"C{consist_id}: Loco {rear_addr} (REAR) passed G{gate_id} at {timestamp_str}.{int((timestamp % 1) * 1000):03d} | pos={rear_pos}, gate_center={gate_center}, gate_size={gate['width']}x{gate['height']}")
             elif not in_gate:
                 cdata['gate_states']['rear'][gate_id] = False
 

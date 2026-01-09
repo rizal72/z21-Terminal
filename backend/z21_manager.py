@@ -21,6 +21,7 @@ sys.path.insert(0, str(scripts_dir))
 
 from z21 import Z21
 from config_loader import load_config, save_config
+from log_colors import log, colorize_status
 
 
 class Z21Manager:
@@ -99,7 +100,7 @@ class Z21Manager:
 
         if virtual_mode:
             if self.debug_enabled:
-                print(f"  ✓ Consist {address}: Restored Virtual Mode from saved state")
+                log('[INIT]', f"Consist {address}: Restored Virtual Mode from saved state")
 
         # Initialize function states
         for fn in data.get('functions', []):
@@ -118,10 +119,10 @@ class Z21Manager:
                             if fn_num in self.consist_state[address]['functions']:
                                 self.consist_state[address]['functions'][fn_num] = fn_state
                         if self.debug_enabled:
-                            print(f"  ✓ Synced functions for consist {address} from lead loco {lead_addr}")
+                            log('[SYNC]', f"Synced functions for consist {address} from lead loco {lead_addr}")
                 except Exception as e:
                     if self.debug_enabled:
-                        print(f"  ⚠️  Could not sync functions for consist {address}: {e}")
+                        log('[WARN]', f"Could not sync functions for consist {address}: {e}")
 
     def get_consist_state(self, address):
         """Get current state of a consist"""
@@ -168,7 +169,7 @@ class Z21Manager:
                         adjust_addr = loco_lead_addr
                         reference_addr = loco_rear_addr
                         if self.verbose and self.debug_enabled:
-                            print(f"  ⚠️  No reference config for consist {address}, using default (adjust lead)")
+                            log('[WARN]', f"No reference config for consist {address}, using default (adjust lead)")
 
                     # User command: reset speed_actual_adjust to target
                     if not is_auto_compensation:
@@ -190,7 +191,7 @@ class Z21Manager:
                         # Reset delta_t (user may move locos manually while stopped)
                         consist['delta_t'] = None
                         consist['delta_t_timestamp'] = None
-                        print(f"  🛑 STOP: both locos set to 0 (compensation reset)")
+                        log('[STOP]', f"STOP: both locos set to 0 (compensation reset)")
                     # No compensation in REVERSE direction (only forward supported)
                     elif not forward:
                         speed_adjust = speed
@@ -201,7 +202,7 @@ class Z21Manager:
                         consist['delta_t'] = None  # Reset delta_t (reverse movement invalidates forward timing)
                         consist['delta_t_timestamp'] = None
                         if self.debug_enabled:
-                            print(f"  ⏪ REVERSE: no compensation (forward direction only)")
+                            log('[COMP]', f"REVERSE: no compensation (forward direction only)")
                     # Bang-bang compensation: intervene only if |Δt| > warning threshold (CRITICAL)
                     # Dead band < warning avoids oscillations from YOLO detection noise
                     elif is_auto_compensation and delta_t is not None and abs(delta_t) > self.timing_thresholds['warning']:
@@ -222,20 +223,20 @@ class Z21Manager:
                                     self.overflow_warnings[address] = 0
                                 self.overflow_warnings[address] += 1
 
-                                print(f"  🎚️ Compensation: Δt={delta_t:.3f}s (CRITICAL), speed up loco {adjust_addr} by {compensation} steps")
-                                print(f"  ⚠️  Overflow: adjust at max (126), reference reduced by {overflow} steps")
+                                log('[COMP]', f"Auto-compensation: {colorize_status(f'Δt={delta_t:.3f}s (CRITICAL)')}, speed up loco {adjust_addr} by {compensation} steps")
+                                log('[OVFL]', f"Overflow: adjust at max (126), reference reduced by {overflow} steps")
 
                                 # Persistent overflow warning every 5 occurrences
                                 if self.overflow_warnings[address] % 5 == 0:
-                                    print(f"  ⚠️  PERSISTENT OVERFLOW ({self.overflow_warnings[address]}x): Consider increasing CV5 (Vmax) for loco {adjust_addr} via JMRI")
+                                    log('[WARN]', f"PERSISTENT OVERFLOW ({self.overflow_warnings[address]}x): Consider increasing CV5 (Vmax) for loco {adjust_addr} via JMRI")
 
                                 # Track accumulated compensation
                                 consist['compensation_accumulated'] += compensation
                                 consist['decay_applied'] = False  # Reset: new compensation allows new decay
                             else:
                                 speed_adjust = speed_adjust_target
-                                # Red color for CRITICAL compensation
-                                print(f"\033[91m  🎚️ Compensation: Δt={delta_t:.3f}s (CRITICAL), speed up loco {adjust_addr} by {compensation} steps\033[0m")
+                                # CRITICAL compensation
+                                log('[COMP]', f"Auto-compensation: {colorize_status(f'Δt={delta_t:.3f}s (CRITICAL)')}, speed up loco {adjust_addr} by {compensation} steps")
                                 # Reset overflow counter (normal compensation, no overflow)
                                 if address in self.overflow_warnings:
                                     self.overflow_warnings[address] = 0
@@ -261,12 +262,12 @@ class Z21Manager:
                                     self.overflow_warnings[address] = 0
                                 self.overflow_warnings[address] += 1
 
-                                print(f"  🎚️ Compensation: Δt={delta_t:.3f}s (CRITICAL), slow down loco {adjust_addr} by {compensation} steps")
-                                print(f"  ⚠️  Overflow: adjust at min (0), reference increased by {overflow} steps")
+                                log('[COMP]', f"Auto-compensation: {colorize_status(f'Δt={delta_t:.3f}s (CRITICAL)')}, slow down loco {adjust_addr} by {compensation} steps")
+                                log('[OVFL]', f"Overflow: adjust at min (0), reference increased by {overflow} steps")
 
                                 # Persistent overflow warning every 5 occurrences
                                 if self.overflow_warnings[address] % 5 == 0:
-                                    print(f"  ⚠️  PERSISTENT OVERFLOW ({self.overflow_warnings[address]}x): Consider decreasing CV2 (Vstart) or CV5 (Vmax) for loco {adjust_addr} via JMRI")
+                                    log('[WARN]', f"PERSISTENT OVERFLOW ({self.overflow_warnings[address]}x): Consider decreasing CV2 (Vstart) or CV5 (Vmax) for loco {adjust_addr} via JMRI")
 
                                 # Track accumulated compensation
                                 consist['compensation_accumulated'] -= compensation
@@ -276,8 +277,8 @@ class Z21Manager:
                                 consist['speed_actual_adjust'] = speed_adjust
                             else:
                                 speed_adjust = speed_adjust_target
-                                # Red color for CRITICAL compensation
-                                print(f"\033[91m  🎚️ Compensation: Δt={delta_t:.3f}s (CRITICAL), slow down loco {adjust_addr} by {compensation} steps\033[0m")
+                                # CRITICAL compensation
+                                log('[COMP]', f"Auto-compensation: {colorize_status(f'Δt={delta_t:.3f}s (CRITICAL)')}, slow down loco {adjust_addr} by {compensation} steps")
                                 # Reset overflow counter (normal compensation, no overflow)
                                 if address in self.overflow_warnings:
                                     self.overflow_warnings[address] = 0
@@ -300,13 +301,13 @@ class Z21Manager:
                             speed_adjust = speed  # Reset to target
                             correction = speed_adjust - old_speed
 
-                            # Green color for reset (returning to target)
+                            # SYNCED reset (returning to target)
                             if correction > 0:
-                                print(f"\033[92m  ⬆️  Reset: SYNCED (Δt={delta_t:.3f}s), speed up loco {adjust_addr} by {correction} steps (reset accumulated: {accumulated} → 0)\033[0m")
+                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (Δt={delta_t:.3f}s), speed up loco {adjust_addr} by {correction} steps (reset accumulated: {accumulated} → 0)")
                             elif correction < 0:
-                                print(f"\033[92m  ⬇️  Reset: SYNCED (Δt={delta_t:.3f}s), slow down loco {adjust_addr} by {abs(correction)} steps (reset accumulated: {accumulated} → 0)\033[0m")
+                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (Δt={delta_t:.3f}s), slow down loco {adjust_addr} by {abs(correction)} steps (reset accumulated: {accumulated} → 0)")
                             else:
-                                print(f"\033[92m  ✓ Reset: SYNCED (Δt={delta_t:.3f}s), no change needed (already at target, reset accumulated: {accumulated} → 0)\033[0m")
+                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (Δt={delta_t:.3f}s), no change needed (already at target, reset accumulated: {accumulated} → 0)")
 
                             # Save reset speed
                             consist['speed_actual_adjust'] = speed_adjust
@@ -331,8 +332,8 @@ class Z21Manager:
                     consist['adjust_speed'] = speed_adjust
                     consist['adjust_correction'] = speed_adjust - speed  # Difference from target
 
-                    # Yellow color for speed changes (easy to spot in logs)
-                    print(f"\033[93m  🎯 Virtual Mode: loco {adjust_addr}={speed_adjust}, loco {reference_addr}={speed_reference}\033[0m")
+                    # Virtual Mode speed command
+                    log('[VIRT]', f"Virtual Mode: L{adjust_addr}={speed_adjust}, L{reference_addr}={speed_reference}")
                 else:
                     # Normal DCC consist mode
                     self.z21.set_loco_speed(address, speed, forward)
@@ -377,12 +378,12 @@ class Z21Manager:
                         target_addresses = [loco['address'] for loco in locomotives]
                         loco_addrs = ', '.join(map(str, target_addresses))
                         if self.debug_enabled:
-                            print(f"   → Consist {address}: F0 to all locos ({loco_addrs})")
+                            log('[INIT]', f"Consist {address}: F0 to all locos ({loco_addrs})")
                     else:
                         # Other functions only to lead (sound decoder)
                         target_addresses = [locomotives[0]['address']]
                         if self.debug_enabled:
-                            print(f"   → Consist {address}: F{function_number} to lead ({target_addresses[0]})")
+                            log('[INIT]', f"Consist {address}: F{function_number} to lead ({target_addresses[0]})")
                 else:
                     # Fallback: treat as single locomotive
                     target_addresses = [address]
@@ -441,7 +442,7 @@ class Z21Manager:
                     self.consist_state[address]['delta_t'] = None
                     self.consist_state[address]['delta_t_timestamp'] = None
 
-            print(f"  🚨 Emergency stop: all consists stopped (compensation reset)")
+            log('[STOP]', f"Emergency stop: all consists stopped (compensation reset)")
             return True
         except Exception as e:
             print(f"Error emergency stop: {e}")
@@ -530,23 +531,23 @@ class Z21Manager:
             bool: True if successful
         """
         if consist_address not in self.consist_state:
-            print(f"⚠️  Consist {consist_address} not found")
+            log('[WARN]', f"Consist {consist_address} not found")
             return False
 
         consist = self.consist_state[consist_address]
         locomotives = consist.get('locomotives', [])
 
         if len(locomotives) < 2:
-            print(f"⚠️  Consist {consist_address} has less than 2 locomotives")
+            log('[WARN]', f"Consist {consist_address} has less than 2 locomotives")
             return False
 
         lead_addr = locomotives[0]['address']
         rear_addr = locomotives[1]['address']
 
         # Always log Virtual Mode toggle (critical operation)
-        print(f"⚙️  Enabling Virtual Mode for consist {consist_address}...")
-        print(f"   → Writing CV19=0 to loco {lead_addr} (lead)")
-        print(f"   → Writing CV19=0 to loco {rear_addr} (rear)")
+        log('[CV]', f"Enabling Virtual Mode for consist {consist_address}...")
+        log('[CV]', f"Writing CV19=0 to loco {lead_addr} (lead)")
+        log('[CV]', f"Writing CV19=0 to loco {rear_addr} (rear)")
 
         # Write CV19=0 to free from consist (operations mode)
         success_lead = self.z21.write_cv_ops_mode(lead_addr, 19, 0)
@@ -556,7 +557,7 @@ class Z21Manager:
             consist['virtual_mode'] = True
             consist['auto_compensation_enabled'] = True  # Auto-enable compensation with Virtual Mode
             self._save_persisted_state()  # Persist to file
-            print(f"  ✓ Virtual Mode enabled for consist {consist_address} (auto-compensation ON)")
+            log('[CV]', f"Virtual Mode enabled for consist {consist_address} (auto-compensation ON)")
             return True
         else:
             error_locos = []
@@ -564,7 +565,7 @@ class Z21Manager:
                 error_locos.append(f"lead {lead_addr}")
             if not success_rear:
                 error_locos.append(f"rear {rear_addr}")
-            print(f"  ✗ Failed to enable Virtual Mode: CV write failed for {', '.join(error_locos)}")
+            log('[CV]', f"Failed to enable Virtual Mode: CV write failed for {', '.join(error_locos)}")
             return False
 
     def disable_virtual_mode(self, consist_address):
@@ -580,23 +581,23 @@ class Z21Manager:
             bool: True if successful
         """
         if consist_address not in self.consist_state:
-            print(f"⚠️  Consist {consist_address} not found")
+            log('[WARN]', f"Consist {consist_address} not found")
             return False
 
         consist = self.consist_state[consist_address]
         locomotives = consist.get('locomotives', [])
 
         if len(locomotives) < 2:
-            print(f"⚠️  Consist {consist_address} has less than 2 locomotives")
+            log('[WARN]', f"Consist {consist_address} has less than 2 locomotives")
             return False
 
         lead_addr = locomotives[0]['address']
         rear_addr = locomotives[1]['address']
 
         # Always log Virtual Mode toggle (critical operation)
-        print(f"⚙️  Disabling Virtual Mode for consist {consist_address}...")
-        print(f"   → Writing CV19={consist_address} to loco {lead_addr} (lead)")
-        print(f"   → Writing CV19={consist_address} to loco {rear_addr} (rear)")
+        log('[CV]', f"Disabling Virtual Mode for consist {consist_address}...")
+        log('[CV]', f"Writing CV19={consist_address} to loco {lead_addr} (lead)")
+        log('[CV]', f"Writing CV19={consist_address} to loco {rear_addr} (rear)")
 
         # Restore CV19 to consist address (operations mode)
         success_lead = self.z21.write_cv_ops_mode(lead_addr, 19, consist_address)
@@ -606,7 +607,7 @@ class Z21Manager:
             consist['virtual_mode'] = False
             consist['auto_compensation_enabled'] = False  # Auto-disable compensation with DCC Mode
             self._save_persisted_state()  # Persist to file
-            print(f"  ✓ Virtual Mode disabled for consist {consist_address} (auto-compensation OFF)")
+            log('[CV]', f"Virtual Mode disabled for consist {consist_address} (auto-compensation OFF)")
             return True
         else:
             error_locos = []
@@ -614,7 +615,7 @@ class Z21Manager:
                 error_locos.append(f"lead {lead_addr}")
             if not success_rear:
                 error_locos.append(f"rear {rear_addr}")
-            print(f"  ✗ Failed to disable Virtual Mode: CV write failed for {', '.join(error_locos)}")
+            log('[CV]', f"Failed to disable Virtual Mode: CV write failed for {', '.join(error_locos)}")
             return False
 
     def _load_persisted_state(self):
@@ -638,18 +639,18 @@ class Z21Manager:
 
                     # Warn if virtual_mode is not configured (locomotives won't respond to speed commands)
                     if not virtual_mode:
-                        print(f"  ⚠️  WARNING: Consist {consist_id} has virtual_mode=False")
-                        print(f"      → Speed commands will be sent to consist address {consist_id} (DCC mode)")
-                        print(f"      → Locomotives may not respond unless CV19={consist_id} is programmed")
-                        print(f"      → Set 'virtual_mode: true' in config.json consists.{consist_id} for proper operation")
+                        log('[WARN]', f"WARNING: Consist {consist_id} has virtual_mode=False")
+                        log('[WARN]', f"Speed commands will be sent to consist address {consist_id} (DCC mode)")
+                        log('[WARN]', f"Locomotives may not respond unless CV19={consist_id} is programmed")
+                        log('[WARN]', f"Set 'virtual_mode: true' in config.json consists.{consist_id} for proper operation")
 
                 if self.debug_enabled and state:
-                    print(f"  ✓ Loaded persisted state from config.json: {state}")
+                    log('[INIT]', f"Loaded persisted state from config.json: {state}")
                 return state
 
         except Exception as e:
             if self.debug_enabled:
-                print(f"  ⚠️  Failed to load persisted state: {e}")
+                log('[WARN]', f"Failed to load persisted state: {e}")
         return {}
 
     def _save_persisted_state(self):
@@ -680,11 +681,11 @@ class Z21Manager:
             if self.debug_enabled:
                 saved_state = {k: {'virtual_mode': v.get('virtual_mode'), 'auto_compensation_enabled': v.get('auto_compensation_enabled')}
                                for k, v in consists.items()}
-                print(f"  ✓ Saved persisted state to config.json: {saved_state}")
+                log('[INIT]', f"Saved persisted state to config.json: {saved_state}")
 
         except Exception as e:
             if self.debug_enabled:
-                print(f"  ⚠️  Failed to save persisted state: {e}")
+                log('[WARN]', f"Failed to save persisted state: {e}")
 
 
     def toggle_cv_profile_mode(self):
@@ -707,11 +708,11 @@ class Z21Manager:
 
             new_mode = 'testing' if current_mode == 'normal' else 'normal'
             addresses = [int(addr) for addr in cv_profiles.keys()]
-            print(f"🎚️  CV Profile Toggle: {current_mode} → {new_mode} (addresses: {addresses})")
+            log('[CV]', f"CV Profile Toggle: {current_mode} → {new_mode} (addresses: {addresses})")
             if new_mode == 'testing':
                 import time
                 start_time = time.time()
-                print("  ✍️  Writing CV testing values from config.json...")
+                log('[CV]', f"Writing CV testing values from config.json...")
                 success_count = 0
                 failed_locos = []
                 for addr in addresses:
@@ -725,13 +726,13 @@ class Z21Manager:
                         self.z21.write_cv_ops_mode(addr, 4, cv4_value)
                         time.sleep(0.1)  # Delay prima del prossimo loco
                         elapsed = time.time() - loco_start
-                        print(f"    Loco {addr}: CV3={cv3_value}, CV4={cv4_value} ✓ [{elapsed*1000:.0f}ms]")
+                        log('[CV]', f"Loco {addr}: CV3={cv3_value}, CV4={cv4_value} [{elapsed*1000:.0f}ms]")
                         success_count += 1
                     except Exception as e:
-                        print(f"    ⚠️  Loco {addr}: write failed: {e}")
+                        log('[CV]', f"Loco {addr}: write failed: {e}")
                         failed_locos.append(addr)
                 total_elapsed = time.time() - start_time
-                print(f"  ⏱️  Total time: {total_elapsed:.2f}s")
+                log('[CV]', f"Total time: {total_elapsed:.2f}s")
                 config['cv_profile_mode'] = 'testing'
                 save_config(config)
                 if failed_locos:
@@ -740,7 +741,7 @@ class Z21Manager:
             else:
                 import time
                 start_time = time.time()
-                print("  ✍️  Restoring CV values from config.json normal profiles...")
+                log('[CV]', f"Restoring CV values from config.json normal profiles...")
                 success_count = 0
                 failed_locos = []
                 for addr in addresses:
@@ -754,13 +755,13 @@ class Z21Manager:
                         self.z21.write_cv_ops_mode(addr, 4, cv4_value)
                         time.sleep(0.1)  # Delay prima del prossimo loco
                         elapsed = time.time() - loco_start
-                        print(f"    Loco {addr}: CV3={cv3_value}, CV4={cv4_value} ✓ [{elapsed*1000:.0f}ms]")
+                        log('[CV]', f"Loco {addr}: CV3={cv3_value}, CV4={cv4_value} [{elapsed*1000:.0f}ms]")
                         success_count += 1
                     except Exception as e:
-                        print(f"    ⚠️  Loco {addr}: restore failed: {e}")
+                        log('[CV]', f"Loco {addr}: restore failed: {e}")
                         failed_locos.append(addr)
                 total_elapsed = time.time() - start_time
-                print(f"  ⏱️  Total time: {total_elapsed:.2f}s")
+                log('[CV]', f"Total time: {total_elapsed:.2f}s")
                 config['cv_profile_mode'] = 'normal'
                 save_config(config)
                 if failed_locos:
