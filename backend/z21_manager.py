@@ -3,7 +3,7 @@ Z21Manager - Wrapper per la libreria z21.py con gestione stato consist
 
 REFACTOR HISTORY:
 - 2025-01-03: config.json structure refactored (see docs/CONFIG_REFACTOR.md)
-  - Hierarchical structure: debug → consists → gates → tracking
+  - Hierarchical structure: debug -> consists -> gates -> tracking
   - Consolidated reference_locos inside each consist
   - Grouped settings: tracking.fps, tracking.timing_thresholds
 
@@ -209,7 +209,7 @@ class Z21Manager:
                         compensation = 2  # Fixed: 2 speed steps per intervention (even number for cleaner decay)
 
                         if delta_t > 0:
-                            # dT > 0: adjust loco passes AFTER (too slow) → SPEED UP
+                            # dT > 0: adjust loco passes AFTER (too slow) -> SPEED UP
                             # INCREMENTAL: add compensation to current speed_adjust
                             speed_adjust_target = speed_adjust + compensation
                             if speed_adjust_target > 126:
@@ -248,7 +248,7 @@ class Z21Manager:
                             # Save new incremental speed
                             consist['speed_actual_adjust'] = speed_adjust
                         else:
-                            # dT < 0: adjust loco passes BEFORE (too fast) → SLOW DOWN
+                            # dT < 0: adjust loco passes BEFORE (too fast) -> SLOW DOWN
                             # INCREMENTAL: subtract compensation from current speed_adjust
                             speed_adjust_target = speed_adjust - compensation
                             if speed_adjust_target < 0:
@@ -303,11 +303,11 @@ class Z21Manager:
 
                             # SYNCED reset (returning to target)
                             if correction > 0:
-                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (dT={delta_t:.3f}s), speed up loco {adjust_addr} by {correction} steps (reset accumulated: {accumulated} → 0)")
+                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (dT={delta_t:.3f}s), speed up loco {adjust_addr} by {correction} steps (reset accumulated: {accumulated} -> 0)")
                             elif correction < 0:
-                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (dT={delta_t:.3f}s), slow down loco {adjust_addr} by {abs(correction)} steps (reset accumulated: {accumulated} → 0)")
+                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (dT={delta_t:.3f}s), slow down loco {adjust_addr} by {abs(correction)} steps (reset accumulated: {accumulated} -> 0)")
                             else:
-                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (dT={delta_t:.3f}s), no change needed (already at target, reset accumulated: {accumulated} → 0)")
+                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (dT={delta_t:.3f}s), no change needed (already at target, reset accumulated: {accumulated} -> 0)")
 
                             # Save reset speed
                             consist['speed_actual_adjust'] = speed_adjust
@@ -708,7 +708,7 @@ class Z21Manager:
 
             new_mode = 'testing' if current_mode == 'normal' else 'normal'
             addresses = [int(addr) for addr in cv_profiles.keys()]
-            log('[CV]', f"CV Profile Toggle: {current_mode} → {new_mode} (addresses: {addresses})")
+            log('[CV]', f"CV Profile Toggle: {current_mode} -> {new_mode} (addresses: {addresses})")
             if new_mode == 'testing':
                 import time
                 start_time = time.time()
