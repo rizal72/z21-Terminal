@@ -353,7 +353,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
     if not cap.isOpened():
-        print("  ✗ Failed to open video stream")
+        log('[FAIL]', "Failed to open video stream")
         # Return a black frame with error message
         error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
         cv2.putText(error_frame, "Video stream unavailable", (100, 240),
@@ -365,7 +365,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
             time.sleep(1)
 
-    print("  ✓ Video stream opened")
+    log('[OK]', "Video stream opened")
 
     frame_count = 0
     frame_delay = 1.0 / fps_target
@@ -430,10 +430,10 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
                 time.sleep(sleep_time)
 
     except Exception as e:
-        print(f"  ✗ Video stream error: {e}")
+        log('[FAIL]', f"Video stream error: {e}")
     finally:
         cap.release()
-        print("  ✓ Video stream closed")
+        log('[OK]', "Video stream closed")
 
 
 if __name__ == '__main__':

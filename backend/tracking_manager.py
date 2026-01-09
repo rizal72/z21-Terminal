@@ -74,7 +74,7 @@ class TrackingManager:
             # Start daemon as asyncio task
             self.daemon_task = asyncio.create_task(self.daemon.run())
 
-            print(f"  ✓ Tracking daemon started (frame_queue accessible for video feed)")
+            log('[OK]', "Tracking daemon started (frame_queue accessible for video feed)")
 
         except Exception as e:
             log('[WARN]', f"Failed to start tracking daemon: {e}")
@@ -194,7 +194,7 @@ if __name__ == '__main__':
         await tracker.shutdown()
 
         z21_mgr.disconnect()
-        print("\n✅ All tests complete")
+        log('[OK]', "All tests complete")
 
     # Run test
     asyncio.run(test())
