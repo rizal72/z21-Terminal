@@ -573,7 +573,7 @@ class Z21:
             print("   - Binari senza corrente (power off)")
         return None
 
-    def write_cv_ops_mode(self, address: int, cv_number: int, value: int, timeout: float = 3.0) -> bool:
+    def write_cv_ops_mode(self, address: int, cv_number: int, value: int, timeout: float = 0.1) -> bool:
         """
         Scrive un CV in operations mode (POM - Program On Main).
         La locomotiva può essere sul binario principale, anche in movimento.
@@ -583,8 +583,8 @@ class Z21:
         Args:
             address: DCC address della locomotiva
             cv_number: Numero CV da scrivere (1-1024)
-            value: Valore da scrivere (0-255)
-            timeout: Timeout in secondi (default 3s)
+            value: Valore da scrivire (0-255)
+            timeout: Timeout in secondi (default 0.1s)
 
         Returns:
             True se scrittura confermata, False se errore/timeout
@@ -596,12 +596,6 @@ class Z21:
 
         if self.verbose:
             print(f"\n✍️  Scrittura CV{cv_number} = {value} su address {address} (POM - Ops Mode Write)...")
-
-        # Prima "sveglia" la locomotiva
-        if self.verbose:
-            print("   Sveglia locomotiva...")
-        self.get_loco_info(address)
-        time.sleep(0.3)
 
         # CV number nel protocollo parte da 0 (CV1 = 0)
         cv_address = cv_number - 1
@@ -629,38 +623,10 @@ class Z21:
         # Invia comando
         self._send_packet(0x0040, data)  # X-Bus tunnel
 
-        # WRITE (E6 30): Z21 NON invia ACK, solo errori!
-        # Aspetta solo eventuali errori per 500ms
-        start_time = time.time()
-        error_timeout = 0.5
-
-        while time.time() - start_time < error_timeout:
-            response = self._receive_packet(timeout=0.2)
-            if response:
-                header, payload = response
-
-                # Risposta è X-Bus tunnel (0x0040)
-                if header == 0x0040 and len(payload) >= 2:
-                    if self.verbose:
-                        print(f"   Risposta: {payload.hex()}")
-
-                    # Controllo errori XpressNet (0x61)
-                    if payload[0] == 0x61:
-                        error_code = payload[1]
-                        error_msgs = {
-                            0x01: "Command rejected (busy)",
-                            0x02: "Instruction not supported",
-                            0x82: "No loco on track"
-                        }
-                        error_msg = error_msgs.get(error_code, f"Unknown error 0x{error_code:02x}")
-                        if self.verbose:
-                            print(f"❌ Error: {error_msg}")
-                        return False
-
-        # Nessun errore = successo!
+        # WRITE (E6 30): Z21 NON invia ACK per successo
+        # Fire-and-forget approach (come JMRI) per velocità massima
         if self.verbose:
-            print(f"✅ CV{cv_number} scritto = {value}")
-            print("   (Z21 non invia ACK per write, solo errori)")
+            print(f"✅ CV{cv_number} = {value} comando inviato (fire-and-forget)")
         return True
 
     def close(self):

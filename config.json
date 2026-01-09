@@ -85,5 +85,68 @@
     },
     "yolo_imgsz": 640,
     "notes_yolo": "YOLO inference image size: 640 for square models (fast, CPU), [640, 1152] for rectangular models (accurate, GPU)"
-  }
+  },
+  "cv_profiles": {
+    "1": {
+      "normal": {
+        "cv3": 78,
+        "cv4": 58
+      },
+      "testing": {
+        "cv3": 0,
+        "cv4": 0
+      }
+    },
+    "2": {
+      "normal": {
+        "cv3": 23,
+        "cv4": 14
+      },
+      "testing": {
+        "cv3": 0,
+        "cv4": 0
+      }
+    },
+    "5": {
+      "normal": {
+        "cv3": 22,
+        "cv4": 16
+      },
+      "testing": {
+        "cv3": 0,
+        "cv4": 0
+      }
+    },
+    "6": {
+      "normal": {
+        "cv3": 23,
+        "cv4": 14
+      },
+      "testing": {
+        "cv3": 0,
+        "cv4": 0
+      }
+    },
+    "7": {
+      "normal": {
+        "cv3": 24,
+        "cv4": 16
+      },
+      "testing": {
+        "cv3": 1,
+        "cv4": 1
+      }
+    },
+    "8": {
+      "normal": {
+        "cv3": 22,
+        "cv4": 15
+      },
+      "testing": {
+        "cv3": 0,
+        "cv4": 0
+      }
+    }
+  },
+  "cv_profile_mode": "testing"
 }

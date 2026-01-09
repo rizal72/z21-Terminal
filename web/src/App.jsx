@@ -59,6 +59,7 @@ function App() {
   const [consistManagerOpen, setConsistManagerOpen] = useState(false); // Consist Manager modal (Phase 6B)
   const [editMode, setEditMode] = useState(false); // Gate editor mode
   const [debugMode, setDebugMode] = useState(false); // Debug overlay mode
+  const [cvProfileMode, setCvProfileMode] = useState('normal'); // CV Profile mode: 'normal' or 'testing'
   const [trackTelemetryOpen, setTrackTelemetryOpen] = useState(false); // Track telemetry popover
   const [z21HealthOpen, setZ21HealthOpen] = useState(false); // Z21 health popover
   const [telemetryWarnings, setTelemetryWarnings] = useState({ track: false, z21: false }); // Warning indicators
@@ -483,6 +484,17 @@ function App() {
     };
   }, []);
 
+  // Load CV profile mode on mount
+  useEffect(() => {
+    fetch(`${API_URL}/api/cv-profile-mode`)
+      .then(res => res.json())
+      .then(data => {
+        setCvProfileMode(data.mode);
+        console.log(`🎚️  CV Profile mode loaded: ${data.mode}`);
+      })
+      .catch(err => console.error('Failed to load CV profile mode:', err));
+  }, []);
+
   // Fetch telemetry periodically to check for warnings
   useEffect(() => {
     const fetchTelemetryWarnings = async () => {
@@ -592,6 +604,55 @@ function App() {
             });
           })
           .catch(err => console.error('Failed to toggle debug:', err));
+        return;
+      }
+
+      // T key to toggle CV profile mode (Test ↔ Normal) for ALL locomotives
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+
+        // Save old mode for rollback
+        const oldMode = cvProfileMode;
+        const newMode = oldMode === 'normal' ? 'testing' : 'normal';
+
+        // Optimistic update (badge changes immediately)
+        setCvProfileMode(newMode);
+
+        // Sync with backend (async, notification only on completion)
+        fetch(`${API_URL}/api/toggle-cv-profile-mode`, { method: 'POST' })
+          .then(res => res.json())
+          .then(data => {
+            if (data.status === 'success') {
+              console.log(`🎚️  CV Profile mode toggled: ${data.mode}`);
+              // Sync with backend response (in case it differs from optimistic update)
+              setCvProfileMode(data.mode);
+              // Show success notification
+              showNotification({
+                message: data.message,
+                type: data.mode === 'testing' ? 'warning' : 'success',
+                duration: 3000
+              });
+            } else {
+              console.error('Failed to toggle CV profile mode:', data.message);
+              // Rollback on error
+              setCvProfileMode(oldMode);
+              showNotification({
+                message: `Error: ${data.message}`,
+                type: 'error',
+                duration: 3000
+              });
+            }
+          })
+          .catch(err => {
+            console.error('Failed to toggle CV profile mode:', err);
+            // Rollback on error
+            setCvProfileMode(oldMode);
+            showNotification({
+              message: 'Failed to toggle CV profile mode',
+              type: 'error',
+              duration: 3000
+            });
+          });
         return;
       }
 
@@ -1048,6 +1109,32 @@ function App() {
                   </div>
                 </div>
               </div>
+
+              {/* CV Profile Mode Badge (🎚️) - Click to toggle Test/Normal */}
+              <button
+                className={`flex items-center gap-2 px-2 py-2 bg-control-dark rounded border transition-all duration-200 ${
+                  cvProfileMode === 'testing'
+                    ? 'border-amber-500 ring-2 ring-amber-500/50'
+                    : 'border-control-grey'
+                } ${
+                  z21Online ? 'md:hover:border-signal-amber cursor-pointer' : 'opacity-50 cursor-not-allowed'
+                }`}
+                title={`CV Profile Mode: ${cvProfileMode === 'testing' ? 'TEST (CV3/CV4=0)' : 'NORMAL'} - Press T to toggle`}
+                onClick={() => {
+                  if (z21Online) {
+                    const event = new KeyboardEvent('keydown', { key: 'T', bubbles: true });
+                    window.dispatchEvent(event);
+                  }
+                }}
+                disabled={!z21Online}
+              >
+                <i className={`fa-solid ${cvProfileMode === 'testing' ? 'fa-flask-vial' : 'fa-check-circle'} text-lg md:text-xl ${cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}`}></i>
+                <div className="hidden md:block text-xs font-mono">
+                  <div className={cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}>
+                    {cvProfileMode === 'testing' ? 'TEST' : 'NORM'}
+                  </div>
+                </div>
+              </button>
             </div>
           </div>
         </div>

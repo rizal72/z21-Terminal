@@ -687,6 +687,89 @@ class Z21Manager:
                 print(f"  ⚠️  Failed to save persisted state: {e}")
 
 
+    def toggle_cv_profile_mode(self):
+        """Toggle CV profile mode between 'normal' and 'testing' for ALL locomotives. Returns (success: bool, new_mode: str, message: str)."""
+        try:
+            config = load_config()
+            current_mode = config.get('cv_profile_mode', 'normal')
+            cv_profiles = config.get('cv_profiles', {})
+            if not cv_profiles:
+                return False, current_mode, "No CV profiles configured in config.json"
+
+            # Check track power before attempting writes
+            status = self.z21.get_status()
+            if not status:
+                return False, current_mode, "⚠️ Cannot read Z21 status"
+            if not status['track_power_on']:
+                return False, current_mode, "⚠️ Track power is OFF - Turn on power before changing CV profiles"
+            if status['short_circuit']:
+                return False, current_mode, "⚠️ Short circuit detected - Check track and locomotives"
+
+            new_mode = 'testing' if current_mode == 'normal' else 'normal'
+            addresses = [int(addr) for addr in cv_profiles.keys()]
+            print(f"🎚️  CV Profile Toggle: {current_mode} → {new_mode} (addresses: {addresses})")
+            if new_mode == 'testing':
+                import time
+                start_time = time.time()
+                print("  ✍️  Writing CV testing values from config.json...")
+                success_count = 0
+                failed_locos = []
+                for addr in addresses:
+                    addr_str = str(addr)
+                    try:
+                        loco_start = time.time()
+                        cv3_value = cv_profiles[addr_str]['testing']['cv3']
+                        cv4_value = cv_profiles[addr_str]['testing']['cv4']
+                        self.z21.write_cv_ops_mode(addr, 3, cv3_value)
+                        time.sleep(0.1)  # Delay tra CV write per dare tempo al decoder
+                        self.z21.write_cv_ops_mode(addr, 4, cv4_value)
+                        time.sleep(0.1)  # Delay prima del prossimo loco
+                        elapsed = time.time() - loco_start
+                        print(f"    Loco {addr}: CV3={cv3_value}, CV4={cv4_value} ✓ [{elapsed*1000:.0f}ms]")
+                        success_count += 1
+                    except Exception as e:
+                        print(f"    ⚠️  Loco {addr}: write failed: {e}")
+                        failed_locos.append(addr)
+                total_elapsed = time.time() - start_time
+                print(f"  ⏱️  Total time: {total_elapsed:.2f}s")
+                config['cv_profile_mode'] = 'testing'
+                save_config(config)
+                if failed_locos:
+                    return True, 'testing', f"TEST MODE enabled - {success_count}/{len(addresses)} locomotives updated (failed: {', '.join(map(str, failed_locos))})"
+                return True, 'testing', f"TEST MODE enabled - CV testing values for {len(addresses)} locomotives"
+            else:
+                import time
+                start_time = time.time()
+                print("  ✍️  Restoring CV values from config.json normal profiles...")
+                success_count = 0
+                failed_locos = []
+                for addr in addresses:
+                    addr_str = str(addr)
+                    try:
+                        loco_start = time.time()
+                        cv3_value = cv_profiles[addr_str]['normal']['cv3']
+                        cv4_value = cv_profiles[addr_str]['normal']['cv4']
+                        self.z21.write_cv_ops_mode(addr, 3, cv3_value)
+                        time.sleep(0.1)  # Delay tra CV write per dare tempo al decoder
+                        self.z21.write_cv_ops_mode(addr, 4, cv4_value)
+                        time.sleep(0.1)  # Delay prima del prossimo loco
+                        elapsed = time.time() - loco_start
+                        print(f"    Loco {addr}: CV3={cv3_value}, CV4={cv4_value} ✓ [{elapsed*1000:.0f}ms]")
+                        success_count += 1
+                    except Exception as e:
+                        print(f"    ⚠️  Loco {addr}: restore failed: {e}")
+                        failed_locos.append(addr)
+                total_elapsed = time.time() - start_time
+                print(f"  ⏱️  Total time: {total_elapsed:.2f}s")
+                config['cv_profile_mode'] = 'normal'
+                save_config(config)
+                if failed_locos:
+                    return True, 'normal', f"NORMAL MODE restored - {success_count}/{len(addresses)} locomotives updated (failed: {', '.join(map(str, failed_locos))})"
+                return True, 'normal', f"NORMAL MODE restored - CV3/CV4 restored for {len(addresses)} locomotives"
+        except Exception as e:
+            return False, current_mode, f"Error toggling CV profile mode: {e}"
+
+
 if __name__ == '__main__':
     # Test
     manager = Z21Manager(verbose=True)
