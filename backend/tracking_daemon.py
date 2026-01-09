@@ -215,12 +215,17 @@ class TrackingDaemon:
             except (ValueError, IndexError):
                 continue
 
+            # Convert bbox to JSON-serializable list (handle numpy types)
+            bbox_json = None
+            if 'bbox' in det and det['bbox'] is not None:
+                bbox_json = [int(x) for x in det['bbox']]  # Convert to Python int
+
             positions.append({
                 'address': address,
                 'name': loco_name_short,  # "E656" or "E444"
                 'position': list(det['pos']),  # [x, y]
                 'confidence': det['conf'],
-                'bbox': list(det['bbox']) if 'bbox' in det else None  # [x1, y1, x2, y2] for debug overlay
+                'bbox': bbox_json  # [x1, y1, x2, y2] or [x1, y1, x2, y2, x3, y3, x4, y4] for OBB
             })
 
         if not positions:
