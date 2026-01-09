@@ -105,6 +105,7 @@ z21-frontend     # Start frontend dev server
 - **Consist Manager**: Create/edit/delete consists via web UI (CRUD operations, no JMRI needed)
 - **Scalable UI**: Dynamic controller panels with [+] button (add/remove controllers on-the-fly)
 - **Virtual Consist Mode**: Automatic CV19 management + real-time speed compensation based on Δt
+- **CV Profiles**: One-click TEST/NORMAL toggle (hotkey T) for instant speed matching across all locomotives (~1.2s)
 - **Touch-optimized**: Speed slider with 200ms throttling, 48px touch targets, responsive hamburger menu
 - **Real-time sync**: WebSocket multi-device support (iPad + Phone + Laptop simultaneously)
 - **PWA**: Installable on iPad/iPhone home screen (standalone app experience)
@@ -199,7 +200,11 @@ See **[INSTALL.md](INSTALL.md)** for complete setup instructions:
 - [x] **CV Write**: Write CV while locomotives running (XpressNet E6 30 command)
 - [x] **CV Read**: Read CV from decoder (verify trick, ESU only, Hornby not supported)
 - [x] **Tested Decoders**: ESU LokPilot/LokSound ✅, Hornby TXS (write only) ✅
-- [x] **Use Case**: Virtual Mode CV19 toggle (automatic, no programming track needed)
+- [x] **Use Cases**: Virtual Mode CV19 toggle, CV Profiles (TEST/NORMAL mode)
+- [x] **CV Profiles**: Global TEST/NORMAL toggle (hotkey T) for instant speed matching
+  - Writes CV3/CV4 on all locomotives (~1.2s total)
+  - Badge indicator (Flask = TEST, Check = NORMAL)
+  - Config-driven profiles tracked in config.json
 
 ### Debug Mode ✅
 - [x] **Production Clean Logs**: Only critical operational events visible by default
@@ -339,6 +344,10 @@ Camera credentials (gitignored):
   - CV19 management handled automatically (DCC/Virtual mode toggle)
 - **Speed Matching**:
   - **Virtual Mode**: Real-time compensation based on Δt feedback (session-based, no CV writes)
+  - **CV Profiles**: Press **T** to toggle TEST/NORMAL mode for instant speed response (CV3/CV4 written on all locos)
+    - **TEST mode**: CV3≈0, CV4≈0 (instant response for testing/tuning)
+    - **NORMAL mode**: CV3/CV4 restored (realistic acceleration/deceleration)
+    - ⚠️ **Important**: Press **T** to return to NORMAL before closing app or deploying (avoid CV misalignment)
   - **Manual tuning** (optional): JMRI speed tables (CV67-94) for permanent adjustments
   - **Auto CV Adjust**: Low priority (Virtual Mode already compensates in real-time)
 - **Z21 Protocol**:
