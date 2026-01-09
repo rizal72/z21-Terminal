@@ -405,7 +405,7 @@ class Z21Manager:
                 try:
                     self.z21.set_loco_function(target_addr, function_number, state, current_functions)
                 except Exception as e:
-                    print(f"   ✗ Error for address {target_addr}: {e}")
+                    log('[FAIL]', f"Error for address {target_addr}: {e}")
                     success = False
 
             # Update state in consist
@@ -700,11 +700,11 @@ class Z21Manager:
             # Check track power before attempting writes
             status = self.z21.get_status()
             if not status:
-                return False, current_mode, "⚠️ Cannot read Z21 status"
+                return False, current_mode, "Cannot read Z21 status"
             if not status['track_power_on']:
-                return False, current_mode, "⚠️ Track power is OFF - Turn on power before changing CV profiles"
+                return False, current_mode, "Track power is OFF - Turn on power before changing CV profiles"
             if status['short_circuit']:
-                return False, current_mode, "⚠️ Short circuit detected - Check track and locomotives"
+                return False, current_mode, "Short circuit detected - Check track and locomotives"
 
             new_mode = 'testing' if current_mode == 'normal' else 'normal'
             addresses = [int(addr) for addr in cv_profiles.keys()]

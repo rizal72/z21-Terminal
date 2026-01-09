@@ -114,9 +114,9 @@ async def health_check_z21():
 
         # If state changed, broadcast to all clients
         if z21_online != previous_state:
-            status_emoji = "✅" if z21_online else "❌"
             status_text = "ONLINE" if z21_online else "OFFLINE"
-            print(f"{status_emoji} Z21 status changed: {status_text}")
+            prefix = '[OK]' if z21_online else '[FAIL]'
+            log(prefix, f"Z21 status changed: {status_text}")
 
             # If Z21 went offline, set track power to OFF
             if not z21_online:
@@ -404,7 +404,7 @@ async def lifespan(app: FastAPI):
             log('[INIT]', f"Tracking Manager ready")
 
     else:
-        print("  ✗ Failed to connect to Z21")
+        log('[FAIL]', "Failed to connect to Z21")
         z21_online = False
 
     log('[INIT]', f"Backend ready!")
@@ -584,7 +584,7 @@ async def reload_roster_data():
             log('[INIT]', f"Loaded {len(locomotive_data)} locomotives")
 
     if not z21_manager or not z21_manager.z21:
-        print("  ✗ Z21 not connected, cannot reinitialize")
+        log('[FAIL]', "Z21 not connected, cannot reinitialize")
         return False
 
     # Re-initialize consist states

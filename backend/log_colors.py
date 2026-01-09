@@ -10,6 +10,8 @@ PREFIXES = {
     '[SHUT]': '\033[35m',    # Viola/Magenta normale - shutdown
     '[ERROR]': '\033[91m',   # Red bright - errori critici
     '[WARN]': '\033[93m',    # Yellow bright - warnings
+    '[OK]': '\033[92m',      # Green bright - success messages
+    '[FAIL]': '\033[91m',    # Red bright - failure messages
     '[STOP]': '\033[91m',    # Red bright - emergency/stop commands
     '[CV]': '\033[91m',      # Red bright - operazioni CV critiche
     '[COMP]': '\033[95m',    # Magenta bright - auto-compensation
