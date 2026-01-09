@@ -341,6 +341,18 @@ class YOLOTracker:
                     conf = float(box.conf[0])
                     cls = int(box.cls[0])
                     print(f"[DEBUG] OBB box found: cls={cls}, conf={conf:.3f}, center=({center_x},{center_y})")
+
+                    # Get class name (e.g., "7_E656_239")
+                    class_name = CLASS_NAMES.get(cls, f"Unknown_{cls}")
+
+                    # Store detection (keep highest confidence if multiple)
+                    if cls not in detections or conf > detections[cls]['conf']:
+                        detections[cls] = {
+                            'pos': (center_x, center_y),
+                            'bbox': bbox_data,
+                            'conf': conf,
+                            'name': class_name
+                        }
             else:
                 # Standard mode: axis-aligned bounding boxes
                 boxes = result.boxes
@@ -354,17 +366,17 @@ class YOLOTracker:
                     center_y = int((y1 + y2) / 2)
                     bbox_data = (int(x1), int(y1), int(x2), int(y2))
 
-            # Get class name (e.g., "7_E656_239")
-            class_name = CLASS_NAMES.get(cls, f"Unknown_{cls}")
+                    # Get class name (e.g., "7_E656_239")
+                    class_name = CLASS_NAMES.get(cls, f"Unknown_{cls}")
 
-            # Store detection (keep highest confidence if multiple)
-            if cls not in detections or conf > detections[cls]['conf']:
-                detections[cls] = {
-                    'pos': (center_x, center_y),
-                    'bbox': bbox_data,
-                    'conf': conf,
-                    'name': class_name
-                }
+                    # Store detection (keep highest confidence if multiple)
+                    if cls not in detections or conf > detections[cls]['conf']:
+                        detections[cls] = {
+                            'pos': (center_x, center_y),
+                            'bbox': bbox_data,
+                            'conf': conf,
+                            'name': class_name
+                        }
 
         print(f"[DEBUG] Total detections stored: {len(detections)}")
         if detections:
