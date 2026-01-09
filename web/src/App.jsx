@@ -294,13 +294,17 @@ function App() {
           const wasCorrection = currentConsist.adjust_correction && currentConsist.adjust_correction !== 0;
           const nowCorrecting = adjustCorrection && adjustCorrection !== 0;
           const justFinishedCorrecting = wasCorrection && adjustCorrection === 0;
+          const correctionChanged = currentConsist.adjust_correction !== adjustCorrection;
 
           // Show notifications
           if (nowCorrecting) {
-            // CRITICAL: Auto-compensation active (|Δt| > 2.0s)
+            // Auto-compensation active: distinguish between new correction and maintained correction
             const sign = adjustCorrection > 0 ? '+' : '';
+            const message = correctionChanged
+              ? `Loco ${adjustLocoAddress}: Speed ${sign}${adjustCorrection}%`  // New or changed correction
+              : `Loco ${adjustLocoAddress}: still at ${sign}${adjustCorrection}%`;  // Same correction maintained
             showNotification({
-              message: `Loco ${adjustLocoAddress}: Speed ${sign}${adjustCorrection}%`,
+              message: message,
               type: 'error',
               duration: 5000
             });
