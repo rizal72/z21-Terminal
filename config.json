@@ -80,7 +80,7 @@
     "timing_thresholds": {
       "normal": 1.0,
       "warning": 1.5,
-      "max_delta_t": 15.0,
+      "max_delta_t": 10.0,
       "notes": "Thresholds in seconds: |Δt| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
     },
     "yolo_imgsz": 640,
