@@ -589,8 +589,8 @@ function App() {
         return;
       }
 
-      // B key to toggle debug overlay in video feed (allow even when dropdown focused)
-      if (e.key === 'b' || e.key === 'B') {
+      // D key to toggle debug overlay in video feed (allow even when dropdown focused)
+      if (e.key === 'd' || e.key === 'D') {
         e.preventDefault();
 
         // Sync with backend and use backend state as source of truth
