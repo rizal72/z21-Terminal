@@ -481,7 +481,7 @@ async def broadcast_state_update(address: int):
             'functionStates': state.get('functions', {}),  # Function states (object)
             'virtual_mode': state.get('virtual_mode', False),  # NEW: Virtual Mode status
             'auto_compensation_enabled': state.get('auto_compensation_enabled', False),  # NEW: Auto-compensation flag
-            'delta_t': state.get('delta_t'),  # NEW: Latest Δt from tracking (or None)
+            'delta_t': state.get('delta_t'),  # NEW: Latest dT from tracking (or None)
             'delta_t_timestamp': state.get('delta_t_timestamp')  # NEW: Timestamp
         }
     }
@@ -1058,10 +1058,10 @@ async def reload_roster():
 
 @app.post("/api/toggle-panel")
 async def toggle_panel():
-    """Toggle Δt panel visibility in video feed (press 'P' in UI)"""
+    """Toggle dT panel visibility in video feed (press 'P' in UI)"""
     video_feed_module.SHOW_DELTA_T_PANEL = not video_feed_module.SHOW_DELTA_T_PANEL
     status = "visible" if video_feed_module.SHOW_DELTA_T_PANEL else "hidden"
-    log('[WS]', f"Δt panel toggled: {status}")
+    log('[WS]', f"dT panel toggled: {status}")
     return {
         "status": "success",
         "panel_visible": video_feed_module.SHOW_DELTA_T_PANEL
@@ -1460,7 +1460,7 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                 message_type = data.get('type')
 
                 if message_type == 'delta_t_update':
-                    # Update from tracking daemon with new Δt calculation
+                    # Update from tracking daemon with new dT calculation
                     consist_address = data.get('consist_address')
                     delta_t = data.get('delta_t')
                     status = data.get('status', 'UNKNOWN')
@@ -1469,7 +1469,7 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                     thresholds = data.get('thresholds', timing_thresholds)  # From daemon or fallback to loaded
 
                     if z21_manager and consist_address in consist_data:
-                        # Update consist state with ALL Δt data from tracking_daemon (single source of truth)
+                        # Update consist state with ALL dT data from tracking_daemon (single source of truth)
                         z21_manager.consist_state[consist_address]['delta_t'] = delta_t
                         z21_manager.consist_state[consist_address]['delta_t_timestamp'] = timestamp
                         z21_manager.consist_state[consist_address]['delta_t_status'] = status
@@ -1485,7 +1485,7 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
                         else:
                             colored_status = status
 
-                        log('[DETECT]', f"Δt update: consist {consist_address} = {delta_t:.3f}s ({colored_status})")
+                        log('[DETECT]', f"dT update: consist {consist_address} = {delta_t:.3f}s ({colored_status})")
 
                         # ⚡ AUTO-COMPENSATION: Trigger for CRITICAL (compensation) or SYNCED (decay)
                         if consist_address in z21_manager.consist_state:
@@ -1503,7 +1503,7 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
 
                                 if is_critical or is_synced:
                                     if is_critical:
-                                        log('[COMP]', f"Auto-compensation triggered: |Δt| = {abs(delta_t):.3f}s > {thresholds['warning']}s")
+                                        log('[COMP]', f"Auto-compensation triggered: |dT| = {abs(delta_t):.3f}s > {thresholds['warning']}s")
                                     # Call set_speed with auto_compensation flag (handles both compensation and decay)
                                     z21_manager.set_speed(consist_address, last_speed, last_direction, is_auto_compensation=True)
 
@@ -1560,7 +1560,7 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
         tracking_daemon_ws = None  # Clear reference
         # Note: consist_state['delta_t'] may be reset to None by z21_manager on stop (correct for logic)
         # But video_feed cache keeps last value for display (matches React panel behavior)
-        log('[DETECT]', f"Δt display: video cache preserves last value")
+        log('[DETECT]', f"dT display: video cache preserves last value")
     except Exception as e:
         print(f"Tracking WebSocket error: {e}")
         tracking_daemon_ws = None  # Clear reference on error

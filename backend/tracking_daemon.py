@@ -48,7 +48,7 @@ class TrackingDaemon:
         self.start_time = None
         self.last_broadcasted_delta_t = None
         self.last_broadcasted_type = None
-        self.last_broadcasted_timestamp = None  # Timestamp of previous Δt for time_str calculation
+        self.last_broadcasted_timestamp = None  # Timestamp of previous dT for time_str calculation
 
         # Auto-reconnect state
         self.reconnect_delay = 2.0  # Start with 2s
@@ -119,11 +119,11 @@ class TrackingDaemon:
         if not await self.ensure_connected():
             return  # Not connected, skip broadcast
 
-        # Loop over all consists and broadcast if Δt changed
+        # Loop over all consists and broadcast if dT changed
         for consist_id, cdata in self.tracker.consist_data.items():
             delta_t = cdata['delta_t']
             if delta_t is None:
-                continue  # No Δt for this consist
+                continue  # No dT for this consist
 
             # Get delta_t_type from tracking_data (backward compatible)
             current_type = tracking_data.get(f'c{consist_id}_delta_t_type', cdata['delta_t_type'])
@@ -146,10 +146,10 @@ class TrackingDaemon:
                 current_type == last_broadcast['type']):
                 continue  # Same value, skip
 
-            # New Δt calculated, broadcast it
+            # New dT calculated, broadcast it
             current_timestamp = time.time()
 
-            # Calculate time_str (elapsed since PREVIOUS Δt for this consist)
+            # Calculate time_str (elapsed since PREVIOUS dT for this consist)
             if last_broadcast['timestamp']:
                 elapsed = current_timestamp - last_broadcast['timestamp']
                 if elapsed < 1:
@@ -161,7 +161,7 @@ class TrackingDaemon:
                     seconds = int(elapsed % 60)
                     time_str = f"after {minutes}m {seconds}s"
             else:
-                # First Δt for this consist
+                # First dT for this consist
                 time_str = "now"
 
             # Update broadcast state for this consist
@@ -235,7 +235,7 @@ class TrackingDaemon:
         try:
             await self.websocket.send(json.dumps(message))
         except Exception as e:
-            # Silent fail for positions (less critical than Δt)
+            # Silent fail for positions (less critical than dT)
             self.websocket = None  # Mark as disconnected
 
     async def _idle_timer(self):
@@ -262,7 +262,7 @@ class TrackingDaemon:
         """
         self.consist_speeds[consist_address] = speed
 
-        # Reset Δt timestamp for THIS consist if speed = 0 (so next Δt shows "now" when it restarts)
+        # Reset dT timestamp for THIS consist if speed = 0 (so next dT shows "now" when it restarts)
         if speed == 0:
             # consist_key format: "c{consist_address}" (e.g., "c10", "c11")
             consist_key = f'c{consist_address}'
@@ -429,7 +429,7 @@ class TrackingDaemon:
                     log('[SHUT]', f"  Gate crossings: {crossings}")
                     if delta_t is not None:
                         status = self.tracker.get_delta_t_status(consist_id)
-                        log('[SHUT]', f"  Last Δt: {delta_t:+.3f}s ({status})")
+                        log('[SHUT]', f"  Last dT: {delta_t:+.3f}s ({status})")
 
         if self.debug_enabled:
             log('[SHUT]', f"Tracking daemon stopped")
