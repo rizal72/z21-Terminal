@@ -137,8 +137,8 @@ export default function ConsistController({
         return;
       }
 
-      // D = Toggle direction
-      if (e.key === 'd' || e.key === 'D') {
+      // R = Toggle direction (Reverse)
+      if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         if (!isLocoInConsist) {
           const newDirection = direction === 'forward' ? 'reverse' : 'forward';
@@ -482,7 +482,7 @@ export default function ConsistController({
           {isLocoInConsist ? (
             <span className="text-signal-amber">Speed control disabled (loco in consist)</span>
           ) : (
-            <div>D=Dir • \=0% • 1,2,3..0=10-100% → <span className="text-signal-amber">{isActive ? 'This' : '(click to activate)'}</span> | +Shift → <span className="text-signal-amber">All</span></div>
+            <div>R=Reverse • \=0% • 1,2,3..0=10-100% → <span className="text-signal-amber">{isActive ? 'This' : '(click to activate)'}</span> | +Shift → <span className="text-signal-amber">All</span></div>
           )}
         </div>
       </div>

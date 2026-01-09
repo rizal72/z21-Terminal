@@ -108,7 +108,7 @@ export default function VideoFeedPanel({ apiUrl, editMode, onEditModeChange, deb
                     ? 'bg-signal-amber text-control-black font-semibold'
                     : 'bg-control-grey hover:bg-control-black text-track-steel'
                 }`}
-                title="Toggle Debug Overlay (B)"
+                title="Toggle Debug Overlay (D)"
               >
                 Debug
               </button>
