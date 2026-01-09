@@ -91,8 +91,8 @@ class Z21Manager:
             'functions': {},  # {0: False, 1: False, ...}
             'virtual_mode': virtual_mode,  # Load from persisted state
             'auto_compensation_enabled': auto_compensation_enabled,  # Load from persisted state (or default to virtual_mode)
-            'delta_t': None,  # NEW: Latest Δt from tracking daemon (for display only)
-            'delta_t_timestamp': None,  # NEW: When Δt was last updated
+            'delta_t': None,  # NEW: Latest dT from tracking daemon (for display only)
+            'delta_t_timestamp': None,  # NEW: When dT was last updated
             'speed_actual_adjust': 0,  # NEW: Incremental compensated speed for adjust loco
             'compensation_accumulated': 0,  # NEW: Tracks total compensation applied (signed integer)
             'decay_applied': False  # NEW: One-shot decay flag (reset on new CRITICAL compensation)
@@ -153,7 +153,7 @@ class Z21Manager:
                 locomotives = consist.get('locomotives', [])
 
                 if is_virtual and len(locomotives) >= 2:
-                    # Virtual Mode: control locomotives separately with Δt compensation
+                    # Virtual Mode: control locomotives separately with dT compensation
                     loco_lead_addr = locomotives[0]['address']
                     loco_rear_addr = locomotives[1]['address']
                     delta_t = consist.get('delta_t', 0)
@@ -203,13 +203,13 @@ class Z21Manager:
                         consist['delta_t_timestamp'] = None
                         if self.debug_enabled:
                             log('[COMP]', f"REVERSE: no compensation (forward direction only)")
-                    # Bang-bang compensation: intervene only if |Δt| > warning threshold (CRITICAL)
+                    # Bang-bang compensation: intervene only if |dT| > warning threshold (CRITICAL)
                     # Dead band < warning avoids oscillations from YOLO detection noise
                     elif is_auto_compensation and delta_t is not None and abs(delta_t) > self.timing_thresholds['warning']:
                         compensation = 2  # Fixed: 2 speed steps per intervention (even number for cleaner decay)
 
                         if delta_t > 0:
-                            # Δt > 0: adjust loco passes AFTER (too slow) → SPEED UP
+                            # dT > 0: adjust loco passes AFTER (too slow) → SPEED UP
                             # INCREMENTAL: add compensation to current speed_adjust
                             speed_adjust_target = speed_adjust + compensation
                             if speed_adjust_target > 126:
@@ -223,7 +223,7 @@ class Z21Manager:
                                     self.overflow_warnings[address] = 0
                                 self.overflow_warnings[address] += 1
 
-                                log('[COMP]', f"Auto-compensation: {colorize_status(f'Δt={delta_t:.3f}s (CRITICAL)')}, speed up loco {adjust_addr} by {compensation} steps")
+                                log('[COMP]', f"Auto-compensation: {colorize_status(f'dT={delta_t:.3f}s (CRITICAL)')}, speed up loco {adjust_addr} by {compensation} steps")
                                 log('[OVFL]', f"Overflow: adjust at max (126), reference reduced by {overflow} steps")
 
                                 # Persistent overflow warning every 5 occurrences
@@ -236,7 +236,7 @@ class Z21Manager:
                             else:
                                 speed_adjust = speed_adjust_target
                                 # CRITICAL compensation
-                                log('[COMP]', f"Auto-compensation: {colorize_status(f'Δt={delta_t:.3f}s (CRITICAL)')}, speed up loco {adjust_addr} by {compensation} steps")
+                                log('[COMP]', f"Auto-compensation: {colorize_status(f'dT={delta_t:.3f}s (CRITICAL)')}, speed up loco {adjust_addr} by {compensation} steps")
                                 # Reset overflow counter (normal compensation, no overflow)
                                 if address in self.overflow_warnings:
                                     self.overflow_warnings[address] = 0
@@ -248,7 +248,7 @@ class Z21Manager:
                             # Save new incremental speed
                             consist['speed_actual_adjust'] = speed_adjust
                         else:
-                            # Δt < 0: adjust loco passes BEFORE (too fast) → SLOW DOWN
+                            # dT < 0: adjust loco passes BEFORE (too fast) → SLOW DOWN
                             # INCREMENTAL: subtract compensation from current speed_adjust
                             speed_adjust_target = speed_adjust - compensation
                             if speed_adjust_target < 0:
@@ -262,7 +262,7 @@ class Z21Manager:
                                     self.overflow_warnings[address] = 0
                                 self.overflow_warnings[address] += 1
 
-                                log('[COMP]', f"Auto-compensation: {colorize_status(f'Δt={delta_t:.3f}s (CRITICAL)')}, slow down loco {adjust_addr} by {compensation} steps")
+                                log('[COMP]', f"Auto-compensation: {colorize_status(f'dT={delta_t:.3f}s (CRITICAL)')}, slow down loco {adjust_addr} by {compensation} steps")
                                 log('[OVFL]', f"Overflow: adjust at min (0), reference increased by {overflow} steps")
 
                                 # Persistent overflow warning every 5 occurrences
@@ -278,7 +278,7 @@ class Z21Manager:
                             else:
                                 speed_adjust = speed_adjust_target
                                 # CRITICAL compensation
-                                log('[COMP]', f"Auto-compensation: {colorize_status(f'Δt={delta_t:.3f}s (CRITICAL)')}, slow down loco {adjust_addr} by {compensation} steps")
+                                log('[COMP]', f"Auto-compensation: {colorize_status(f'dT={delta_t:.3f}s (CRITICAL)')}, slow down loco {adjust_addr} by {compensation} steps")
                                 # Reset overflow counter (normal compensation, no overflow)
                                 if address in self.overflow_warnings:
                                     self.overflow_warnings[address] = 0
@@ -303,11 +303,11 @@ class Z21Manager:
 
                             # SYNCED reset (returning to target)
                             if correction > 0:
-                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (Δt={delta_t:.3f}s), speed up loco {adjust_addr} by {correction} steps (reset accumulated: {accumulated} → 0)")
+                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (dT={delta_t:.3f}s), speed up loco {adjust_addr} by {correction} steps (reset accumulated: {accumulated} → 0)")
                             elif correction < 0:
-                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (Δt={delta_t:.3f}s), slow down loco {adjust_addr} by {abs(correction)} steps (reset accumulated: {accumulated} → 0)")
+                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (dT={delta_t:.3f}s), slow down loco {adjust_addr} by {abs(correction)} steps (reset accumulated: {accumulated} → 0)")
                             else:
-                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (Δt={delta_t:.3f}s), no change needed (already at target, reset accumulated: {accumulated} → 0)")
+                                log('[SYNC]', f"Reset: {colorize_status('SYNCED')} (dT={delta_t:.3f}s), no change needed (already at target, reset accumulated: {accumulated} → 0)")
 
                             # Save reset speed
                             consist['speed_actual_adjust'] = speed_adjust
@@ -315,7 +315,7 @@ class Z21Manager:
                             # Reset accumulated compensation
                             consist['compensation_accumulated'] = 0
                     else:
-                        # WARNING zone (normal < |Δt| < warning): No action, reset overflow counter
+                        # WARNING zone (normal < |dT| < warning): No action, reset overflow counter
                         if address in self.overflow_warnings:
                             self.overflow_warnings[address] = 0
 

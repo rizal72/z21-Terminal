@@ -144,15 +144,15 @@ class YOLOTracker:
 
     CROSS-GATE TIMING STRATEGY:
     - 2 gates per consist (both locos pass through BOTH gates)
-    - Δt = timestamp_lead - timestamp_rear
-    - Δt > 0: lead passes first (adjust too fast) → slow down
-    - Δt < 0: rear passes first (adjust too slow) → speed up
-    - Cross-validation: |Δt₁ - Δt₂| < threshold confirms drift
+    - dT = timestamp_lead - timestamp_rear
+    - dT > 0: lead passes first (adjust too fast) → slow down
+    - dT < 0: rear passes first (adjust too slow) → speed up
+    - Cross-validation: |dT₁ - dT₂| < threshold confirms drift
 
     FRESH TIMESTAMPS LOGIC:
     - last_delta_t_time = max(timestamp1, timestamp2)
     - Ensures BOTH timestamps are fresh (> last_delta_t_time)
-    - Prevents spurious Δt from stale timestamps
+    - Prevents spurious dT from stale timestamps
 
     PHASE 5 COMPLETE: Generic multi-consist support (consists loaded from config.json).
     """
@@ -170,7 +170,7 @@ class YOLOTracker:
         if self.debug_enabled:
             log('[INIT]', "Debug mode: ENABLED (verbose logging)")
         else:
-            log('[INIT]', "Debug mode: DISABLED (only connections, Δt updates, and speed corrections)")
+            log('[INIT]', "Debug mode: DISABLED (only connections, dT updates, and speed corrections)")
 
         if self.debug_enabled:
             log('[INIT]', f"Loading YOLO model: {model_path}")
@@ -191,10 +191,10 @@ class YOLOTracker:
         if self.debug_enabled:
             log('[INIT]', f"Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
 
-        # Load Δt sanity check threshold (ignore outliers from video lag)
+        # Load dT sanity check threshold (ignore outliers from video lag)
         self.delta_t_max_threshold = thresholds.get('max_delta_t', 15.0)
         if self.debug_enabled:
-            log('[WARN]', f"Δt sanity check: ignore |Δt| > {self.delta_t_max_threshold}s")
+            log('[WARN]', f"dT sanity check: ignore |dT| > {self.delta_t_max_threshold}s")
 
         # Load YOLO inference image size
         self.yolo_imgsz = tracking_config.get('yolo_imgsz', 640)
@@ -282,7 +282,7 @@ class YOLOTracker:
                 'delta_t_type': None,
                 'last_delta_t_time': 0,
                 'gate_crossing_count': 0,
-                # Spam reduction for ignored Δt warnings
+                # Spam reduction for ignored dT warnings
                 'last_ignored_delta_t1': None,
                 'last_ignored_delta_t1_time': 0,
                 'last_ignored_delta_t2': None,
@@ -331,7 +331,7 @@ class YOLOTracker:
 
     def calculate_delta_t_centralized(self, consist_id: int):
         """
-        Centralized Δt calculation with support for asymmetric and symmetric gate timing.
+        Centralized dT calculation with support for asymmetric and symmetric gate timing.
 
         Args:
             consist_id: Consist ID (10, 11, etc.)
@@ -339,12 +339,12 @@ class YOLOTracker:
         Called once per frame after all gate detection points updated.
 
         GATE TIMING MODES:
-        - Asymmetric (gate_assignment defined): Δt = adjust_loco@adj_gate - reference_loco@ref_gate
-        - Symmetric (gate_assignment null): Δt = lead@gate_i - rear@gate_j (cross-gate, both directions)
+        - Asymmetric (gate_assignment defined): dT = adjust_loco@adj_gate - reference_loco@ref_gate
+        - Symmetric (gate_assignment null): dT = lead@gate_i - rear@gate_j (cross-gate, both directions)
 
         UNIVERSAL INTERPRETATION (both modes):
-        - Δt > 0: reference passes first → adjust too slow → speed up adjust
-        - Δt < 0: adjust passes first → adjust too fast → slow down adjust
+        - dT > 0: reference passes first → adjust too slow → speed up adjust
+        - dT < 0: adjust passes first → adjust too fast → slow down adjust
         """
         consist_info = self.consist_config[consist_id]
         cdata = self.consist_data[consist_id]
@@ -387,9 +387,9 @@ class YOLOTracker:
                     ref_ts > cdata['last_delta_t_time'] and
                     adj_ts > cdata['last_delta_t_time']):
                     # CRITICAL: Same logic as symmetric mode
-                    # Δt = adjust_ts - reference_ts (consistent with symmetric cross-gate)
-                    # Δt > 0: reference passes first → adjust too slow → speed up adjust
-                    # Δt < 0: adjust passes first → adjust too fast → slow down adjust
+                    # dT = adjust_ts - reference_ts (consistent with symmetric cross-gate)
+                    # dT > 0: reference passes first → adjust too slow → speed up adjust
+                    # dT < 0: adjust passes first → adjust too fast → slow down adjust
                     delta_t = adj_ts - ref_ts
 
                     # Sanity check
@@ -401,7 +401,7 @@ class YOLOTracker:
                             (current_time - cdata['last_ignored_delta_t1_time']) > 5.0
                         )
                         if should_print:
-                            log('[WARN]', f"C{consist_id}: Ignored Δt = {delta_t:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
+                            log('[WARN]', f"C{consist_id}: Ignored dT = {delta_t:+.3f}s (|dT| > {self.delta_t_max_threshold}s)")
                             cdata['last_ignored_delta_t1'] = delta_t
                             cdata['last_ignored_delta_t1_time'] = current_time
                     else:
@@ -409,12 +409,12 @@ class YOLOTracker:
                         cdata['delta_t_type'] = f"L{ref_loco}G{ref_gate}-L{adj_loco}G{adj_gate}"
                         cdata['gate_crossing_count'] += 1
                         cdata['last_delta_t_time'] = max_t
-                        log('[GATE]', f"C{consist_id} Asymmetric: L{ref_loco}G{ref_gate}-L{adj_loco}G{adj_gate} | Δt={cdata['delta_t']:+.3f}s")
+                        log('[GATE]', f"C{consist_id} Asymmetric: L{ref_loco}G{ref_gate}-L{adj_loco}G{adj_gate} | dT={cdata['delta_t']:+.3f}s")
             return  # Asymmetric mode: only one calculation
 
         # === SYMMETRIC MODE: Cross-gate timing (both directions valid) ===
 
-        # Check 1: Δt₁ = lead@G1 - rear@G2 (cross-gate timing)
+        # Check 1: dT₁ = lead@G1 - rear@G2 (cross-gate timing)
         lead_g1_ts = cdata['gate_timestamps']['lead'].get(g1)
         rear_g2_ts = cdata['gate_timestamps']['rear'].get(g2)
 
@@ -427,7 +427,7 @@ class YOLOTracker:
                 rear_g2_ts > cdata['last_delta_t_time']):
                 delta_t1 = lead_g1_ts - rear_g2_ts
 
-                # Sanity check: ignore impossible Δt values (outliers from video lag)
+                # Sanity check: ignore impossible dT values (outliers from video lag)
                 if abs(delta_t1) > self.delta_t_max_threshold:
                     # Throttle spam: only print if value changed significantly or 5s passed
                     current_time = time.time()
@@ -437,7 +437,7 @@ class YOLOTracker:
                         (current_time - cdata['last_ignored_delta_t1_time']) > 5.0
                     )
                     if should_print:
-                        log('[WARN]', f"C{consist_id}: Ignored Δt₁={delta_t1:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
+                        log('[WARN]', f"C{consist_id}: Ignored dT₁={delta_t1:+.3f}s (|dT| > {self.delta_t_max_threshold}s)")
                         cdata['last_ignored_delta_t1'] = delta_t1
                         cdata['last_ignored_delta_t1_time'] = current_time
                 else:
@@ -445,10 +445,10 @@ class YOLOTracker:
                     cdata['delta_t_type'] = f"L{lead_addr}G{g1}-L{rear_addr}G{g2}"
                     cdata['gate_crossing_count'] += 1
                     cdata['last_delta_t_time'] = max_t1
-                    log('[GATE]', f"C{consist_id} Cross-gate: L{lead_addr}G{g1}-L{rear_addr}G{g2} | Δt={cdata['delta_t']:+.3f}s")
+                    log('[GATE]', f"C{consist_id} Cross-gate: L{lead_addr}G{g1}-L{rear_addr}G{g2} | dT={cdata['delta_t']:+.3f}s")
                     return  # Calculated, done
 
-        # Check 2: Δt₂ = lead@G2 - rear@G1 (cross-gate timing)
+        # Check 2: dT₂ = lead@G2 - rear@G1 (cross-gate timing)
         lead_g2_ts = cdata['gate_timestamps']['lead'].get(g2)
         rear_g1_ts = cdata['gate_timestamps']['rear'].get(g1)
 
@@ -461,7 +461,7 @@ class YOLOTracker:
                 rear_g1_ts > cdata['last_delta_t_time']):
                 delta_t2 = lead_g2_ts - rear_g1_ts
 
-                # Sanity check: ignore impossible Δt values (outliers from video lag)
+                # Sanity check: ignore impossible dT values (outliers from video lag)
                 if abs(delta_t2) > self.delta_t_max_threshold:
                     # Throttle spam: only print if value changed significantly or 5s passed
                     current_time = time.time()
@@ -471,7 +471,7 @@ class YOLOTracker:
                         (current_time - cdata['last_ignored_delta_t2_time']) > 5.0
                     )
                     if should_print:
-                        log('[WARN]', f"C{consist_id}: Ignored Δt₂={delta_t2:+.3f}s (|Δt| > {self.delta_t_max_threshold}s)")
+                        log('[WARN]', f"C{consist_id}: Ignored dT₂={delta_t2:+.3f}s (|dT| > {self.delta_t_max_threshold}s)")
                         cdata['last_ignored_delta_t2'] = delta_t2
                         cdata['last_ignored_delta_t2_time'] = current_time
                 else:
@@ -479,7 +479,7 @@ class YOLOTracker:
                     cdata['delta_t_type'] = f"L{lead_addr}G{g2}-L{rear_addr}G{g1}"
                     cdata['gate_crossing_count'] += 1
                     cdata['last_delta_t_time'] = max_t2
-                    log('[GATE]', f"C{consist_id} Cross-gate: L{lead_addr}G{g2}-L{rear_addr}G{g1} | Δt={cdata['delta_t']:+.3f}s")
+                    log('[GATE]', f"C{consist_id} Cross-gate: L{lead_addr}G{g2}-L{rear_addr}G{g1} | dT={cdata['delta_t']:+.3f}s")
 
     def update(self, frame):
         """
@@ -526,7 +526,7 @@ class YOLOTracker:
             result[f'c{consist_id}_delta_t_type'] = cdata['delta_t_type']
             result[f'c{consist_id}_gate_crossings'] = cdata['gate_crossing_count']
 
-        # Backward compatibility: delta_t = C11 Δt (for now)
+        # Backward compatibility: delta_t = C11 dT (for now)
         if 11 in self.consist_data:
             result['delta_t'] = self.consist_data[11]['delta_t']
             result['delta_t_type'] = self.consist_data[11]['delta_t_type']
@@ -586,12 +586,12 @@ class YOLOTracker:
             elif not in_gate:
                 cdata['gate_states']['rear'][gate_id] = False
 
-        # Centralized Δt calculation (called once per frame after all gate detection points)
+        # Centralized dT calculation (called once per frame after all gate detection points)
         self.calculate_delta_t_centralized(consist_id)
 
     def get_delta_t_status(self, consist_id: int):
         """
-        Get Δt status: SYNCED | WARNING | CRITICAL for specified consist.
+        Get dT status: SYNCED | WARNING | CRITICAL for specified consist.
 
         Args:
             consist_id: Consist ID (10, 11, etc.)

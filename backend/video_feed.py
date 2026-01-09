@@ -317,7 +317,7 @@ def draw_debug_overlay(frame: np.ndarray, detections: List[Dict]) -> np.ndarray:
     return frame
 
 
-# Global toggle for Δt panel (can be toggled via API endpoint)
+# Global toggle for dT panel (can be toggled via API endpoint)
 SHOW_DELTA_T_PANEL = True
 
 # Global toggle for debug overlay (bounding boxes + pallini + confidence)
