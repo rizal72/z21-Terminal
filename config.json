@@ -83,8 +83,9 @@
       "max_delta_t": 10.0,
       "notes": "Thresholds in seconds: |Δt| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
     },
+    "yolo_confidence": 0.5,
     "yolo_imgsz": 640,
-    "notes_yolo": "YOLO inference image size: 640 for square models (fast, CPU), [640, 1152] for rectangular models (accurate, GPU)"
+    "notes_yolo": "YOLO confidence threshold (0.0-1.0) and inference image size: 640 for square models (fast, CPU), [640, 1152] for rectangular models (accurate, GPU)"
   },
   "cv_profiles": {
     "1": {
