@@ -204,8 +204,6 @@ function App() {
         // Z21 connection status update
         setZ21Online(lastMessage.online);
       } else if (lastMessage.type === 'consist_update') {
-        console.log('consist_update received for address:', lastMessage.address, lastMessage.data);
-
         // Update global track power state if changed
         if (typeof lastMessage.data.power !== 'undefined') {
           setTrackPower(prev => {
@@ -222,12 +220,10 @@ function App() {
         setConsists(prev => {
           const currentConsist = prev[lastMessage.address];
           if (!currentConsist) {
-            console.log('Not a consist, checking locomotives...');
             // Not a consist, will try locomotives next
             return prev;
           }
 
-          console.log('Updating consist:', lastMessage.address);
           return {
             ...prev,
             [lastMessage.address]: {
@@ -247,12 +243,10 @@ function App() {
         setLocomotives(prev => {
           const currentLoco = prev[lastMessage.address];
           if (!currentLoco) {
-            console.log('Address', lastMessage.address, 'not found in locomotives either');
             // Not a locomotive either (it was a consist handled above)
             return prev;
           }
 
-          console.log('Updating locomotive:', lastMessage.address, 'with functionStates:', lastMessage.data.functionStates);
           return {
             ...prev,
             [lastMessage.address]: {

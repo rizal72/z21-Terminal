@@ -39,8 +39,6 @@ export default function VideoFeedPanel({ apiUrl, editMode, onEditModeChange, deb
         videoHeight = videoWidth / nativeRatio;
       }
 
-      console.log(`📐 Container: ${containerWidth}x${containerHeight} (ratio ${containerRatio.toFixed(2)})`);
-      console.log(`📐 Video rendered: ${videoWidth}x${videoHeight} (ratio ${nativeRatio.toFixed(2)})`);
 
       setVideoDimensions({
         width: Math.round(videoWidth),
