@@ -386,11 +386,14 @@ async def lifespan(app: FastAPI):
                 if debug_enabled:
                     log('[INIT]', f"Initial track power: {'ON' if last_track_power_state else 'OFF'}")
                 z21_online = True
-                if debug_enabled:
-                    log('[INIT]', f"Z21 connection: ONLINE")
+                log('[OK]', 'Z21 connection: ONLINE')
+            else:
+                z21_online = False
+                log('[FAIL]', 'Z21 connection: OFFLINE')
         except (OSError, ConnectionError, TimeoutError) as e:
             log('[WARN]', f"Z21 not responding (will retry in background): {e}")
             z21_online = False
+            log('[FAIL]', 'Z21 connection: OFFLINE')
             # Backend continues startup - health check will retry connection
 
         # Start background polling tasks
