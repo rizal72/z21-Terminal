@@ -434,6 +434,18 @@ function App() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
+  // Sync debug mode with backend on mount (page reload)
+  useEffect(() => {
+    fetch(`${API_URL}/api/debug-status`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.debug_visible !== undefined) {
+          setDebugMode(data.debug_visible);
+        }
+      })
+      .catch(err => console.error('Failed to fetch debug status:', err));
+  }, []);
+
   // Wake Lock API - Keep screen awake while using the app (iOS/Android)
   const wakeLockRef = useRef(null);
 

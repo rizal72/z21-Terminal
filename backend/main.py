@@ -1071,6 +1071,15 @@ async def toggle_panel():
     }
 
 
+@app.get("/api/debug-status")
+async def get_debug_status():
+    """Get current debug overlay status (no toggle)"""
+    return {
+        "status": "success",
+        "debug_visible": video_feed_module.SHOW_DEBUG_OVERLAY
+    }
+
+
 @app.post("/api/toggle-debug")
 async def toggle_debug():
     """Toggle debug overlay in video feed (press 'B' in UI)"""
