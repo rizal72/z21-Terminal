@@ -55,6 +55,20 @@ export default function VideoFeedPanel({ apiUrl, editMode, onEditModeChange, deb
     return () => window.removeEventListener('resize', updateVideoDimensions);
   }, [isExpanded]);
 
+  // Sync debug mode with backend when panel is expanded (after reload)
+  useEffect(() => {
+    if (isExpanded) {
+      fetch(`${apiUrl}/api/debug-status`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.debug_visible !== undefined) {
+            onDebugModeChange(data.debug_visible);
+          }
+        })
+        .catch(err => console.error('Failed to fetch debug status:', err));
+    }
+  }, [isExpanded, apiUrl, onDebugModeChange]);
+
   return (
     <div className="w-full mb-6">
       {/* Collapsible Header */}
