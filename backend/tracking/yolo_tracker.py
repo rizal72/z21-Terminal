@@ -180,8 +180,8 @@ class YOLOTracker:
                 model_path = str(models_dir / 'best_obb.pt')
             else:
                 model_path = str(models_dir / 'best.pt')
-            if self.debug_enabled:
-                log('[INIT]', f"Auto-selected model: {Path(model_path).name} (yolo_obb={yolo_obb})")
+            # ALWAYS show which model was auto-selected (critical info)
+            log('[INIT]', f"Auto-selected model: {Path(model_path).name} (yolo_obb={yolo_obb})")
 
         if self.debug_enabled:
             log('[INIT]', f"Loading YOLO model: {model_path}")
