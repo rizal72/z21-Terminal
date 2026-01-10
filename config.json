@@ -36,18 +36,18 @@
     {
       "id": 1,
       "name": "Gate 1",
-      "center": [1208, 348],
-      "width": 78,
-      "height": 73,
+      "center": [927, 19],
+      "width": 65,
+      "height": 43,
       "angle": 0,
       "color": [255, 165, 0]
     },
     {
       "id": 2,
       "name": "Gate 2",
-      "center": [164, 124],
-      "width": 52,
-      "height": 50,
+      "center": [17, 311],
+      "width": 44,
+      "height": 47,
       "angle": -30,
       "color": [255, 165, 0]
     },
@@ -83,10 +83,10 @@
       "max_delta_t": 10.0,
       "notes": "Thresholds in seconds: |Δt| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
     },
-    "yolo_confidence": 0.2,
-    "yolo_iou": 0.95,
+    "yolo_confidence": 0.3,
+    "yolo_iou": 0.6,
     "yolo_imgsz": 640,
-    "yolo_obb": false,
+    "yolo_obb": true,
     "notes_yolo": "YOLO confidence threshold (0.0-1.0), IoU threshold for NMS (0.0-1.0, higher = allows more bbox overlap), inference image size (640 for square models, [640, 1152] for rectangular), and yolo_obb (true = Oriented Bounding Boxes for rotated objects, false = standard axis-aligned boxes)"
   },
   "cv_profiles": {
