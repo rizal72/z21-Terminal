@@ -307,8 +307,8 @@ def draw_debug_overlay(frame: np.ndarray, detections: List[Dict]) -> np.ndarray:
                 points = np.array(bbox, dtype=np.int32).reshape((-1, 2))
                 cv2.polylines(frame, [points], isClosed=True, color=color, thickness=2)
 
-        # Draw center point (larger hollow circle for debug visibility)
-        cv2.circle(frame, (x, y), 15, color, 2)  # Hollow circle
+        # Draw center point (small filled circle - pallino pieno)
+        cv2.circle(frame, (x, y), 8, color, -1)  # Filled circle
 
         # Draw confidence label (above bbox if available, else near center)
         label = f"{name} {confidence:.2f}"
