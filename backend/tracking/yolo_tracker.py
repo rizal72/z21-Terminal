@@ -154,9 +154,9 @@ class YOLOTracker:
     PHASE 5 COMPLETE: Generic multi-consist support (consists loaded from config.json).
     """
 
-    def __init__(self, model_path: str):
+    def __init__(self, model_path: str = None):
         """Initialize tracker with YOLO model (config-driven multi-consist support)."""
-        # Load config first to get debug mode
+        # Load config first to get debug mode and OBB flag
         config = load_config()
 
         # Load debug mode FIRST
@@ -168,6 +168,20 @@ class YOLOTracker:
             log('[INIT]', "Debug mode: ENABLED (verbose logging)")
         else:
             log('[INIT]', "Debug mode: DISABLED (only connections, dT updates, and speed corrections)")
+
+        # Auto-detect model path if not provided (based on yolo_obb flag)
+        if model_path is None:
+            tracking_config = config.get('tracking', {})
+            yolo_obb = tracking_config.get('yolo_obb', False)
+            # Get models directory (relative to this file: backend/tracking/yolo_tracker.py)
+            project_root = Path(__file__).parent.parent.parent  # z21-Terminal/ root
+            models_dir = project_root / 'scripts' / 'models'
+            if yolo_obb:
+                model_path = str(models_dir / 'best_obb.pt')
+            else:
+                model_path = str(models_dir / 'best.pt')
+            if self.debug_enabled:
+                log('[INIT]', f"Auto-selected model: {Path(model_path).name} (yolo_obb={yolo_obb})")
 
         if self.debug_enabled:
             log('[INIT]', f"Loading YOLO model: {model_path}")

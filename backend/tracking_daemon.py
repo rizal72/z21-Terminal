@@ -29,17 +29,16 @@ from log_colors import log
 
 # === CONFIGURATION ===
 project_root = Path(__file__).parent.parent  # z21-Terminal/ root
-scripts_dir = project_root / 'scripts'
-MODEL_PATH = scripts_dir / 'models' / 'best.pt'  # Symlink to current model version
 RTSP_URL = load_camera_config()  # Load RTSP URL from camera_config.json
 BACKEND_WS_URL = "ws://localhost:8000/ws/tracking"  # WebSocket to FastAPI backend
+# MODEL_PATH auto-selected by YOLOTracker based on yolo_obb flag in config.json
 
 # === TRACKING DAEMON ===
 class TrackingDaemon:
     """Main tracking daemon with WebSocket communication."""
 
     def __init__(self):
-        self.tracker = YOLOTracker(str(MODEL_PATH))
+        self.tracker = YOLOTracker()  # Auto-selects model based on config yolo_obb flag
         self.debug_enabled = self.tracker.debug_enabled  # Copy from tracker
         self.cap = None
         self.websocket = None
