@@ -58,14 +58,17 @@ export default function VideoFeedPanel({ apiUrl, editMode, onEditModeChange, deb
   // Sync debug mode with backend when panel is expanded (after reload)
   useEffect(() => {
     if (isExpanded) {
+      console.log('[VideoFeedPanel] Panel expanded, fetching debug status...');
       fetch(`${apiUrl}/api/debug-status`)
         .then(res => res.json())
         .then(data => {
+          console.log('[VideoFeedPanel] Debug status received:', data.debug_visible);
           if (data.debug_visible !== undefined) {
+            console.log('[VideoFeedPanel] Setting debugMode to:', data.debug_visible);
             onDebugModeChange(data.debug_visible);
           }
         })
-        .catch(err => console.error('Failed to fetch debug status:', err));
+        .catch(err => console.error('[VideoFeedPanel] Failed to fetch debug status:', err));
     }
   }, [isExpanded, apiUrl, onDebugModeChange]);
 

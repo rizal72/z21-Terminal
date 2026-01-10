@@ -436,14 +436,17 @@ function App() {
 
   // Sync debug mode with backend on mount (page reload)
   useEffect(() => {
+    console.log('[App] Component mounted, fetching debug status...');
     fetch(`${API_URL}/api/debug-status`)
       .then(res => res.json())
       .then(data => {
+        console.log('[App] Debug status received:', data.debug_visible);
         if (data.debug_visible !== undefined) {
+          console.log('[App] Setting debugMode to:', data.debug_visible);
           setDebugMode(data.debug_visible);
         }
       })
-      .catch(err => console.error('Failed to fetch debug status:', err));
+      .catch(err => console.error('[App] Failed to fetch debug status:', err));
   }, []);
 
   // Wake Lock API - Keep screen awake while using the app (iOS/Android)
