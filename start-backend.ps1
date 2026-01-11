@@ -1,6 +1,15 @@
 # z21-Terminal Backend Startup Script
 # This script is launched by Task Scheduler to run backend detached from SSH sessions
 
+# Fix encoding for console output (PS7 compatibility)
+# Forces codepage 850 instead of UTF-8 to display correctly in Task Scheduler console
+[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(850)
+
+# Disable ANSI colors on PS7+ (plain text for DOS console compatibility)
+if ($PSVersionTable.PSVersion.Major -ge 7) {
+    $PSStyle.OutputRendering = 'PlainText'
+}
+
 Set-Location C:\z21-Terminal\backend
 
 # Rotate old log before starting
