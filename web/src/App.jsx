@@ -5,6 +5,7 @@ import MobileMenu from './components/MobileMenu';
 import ConsistManagerModal from './components/ConsistManagerModal';
 import TrackTelemetryPopover from './components/TrackTelemetryPopover';
 import Z21HealthPopover from './components/Z21HealthPopover';
+import WebSocketStatsPopover from './components/WebSocketStatsPopover';
 import Notification from './components/Notification';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useNotification } from './hooks/useNotification.jsx';
@@ -62,6 +63,7 @@ function App() {
   const [cvProfileMode, setCvProfileMode] = useState('normal'); // CV Profile mode: 'normal' or 'testing'
   const [trackTelemetryOpen, setTrackTelemetryOpen] = useState(false); // Track telemetry popover
   const [z21HealthOpen, setZ21HealthOpen] = useState(false); // Z21 health popover
+  const [wsStatsOpen, setWsStatsOpen] = useState(false); // WebSocket stats popover
   const [telemetryWarnings, setTelemetryWarnings] = useState({ track: false, z21: false }); // Warning indicators
 
   // Dynamic controllers array (scalable UI with focus management)
@@ -92,7 +94,7 @@ function App() {
 
   const WS_URL = getWebSocketUrl();
   const API_URL = getApiUrl();
-  const { isConnected, lastMessage, sendMessage } = useWebSocket(WS_URL);
+  const { isConnected, lastMessage, sendMessage, stats: wsStats } = useWebSocket(WS_URL);
 
   // Audio feedback for power changes using Web Audio API
   const playPowerSound = (powerOn) => {
@@ -1073,10 +1075,25 @@ function App() {
                 </div>
               </div>
 
-              {/* WebSocket Status */}
+              {/* WebSocket Status - Hover on desktop, click on mobile */}
               <div
-                className="flex items-center gap-2 px-2 py-2 bg-control-dark rounded border border-control-grey cursor-default"
-                title={`WebSocket Connection: ${isConnected ? 'Connected' : 'Disconnected'}`}
+                className={`flex items-center gap-2 px-2 py-2 bg-control-dark rounded border border-control-grey transition-all duration-200 md:hover:border-signal-amber cursor-pointer`}
+                title="WebSocket Connection Statistics"
+                onMouseEnter={() => {
+                  if (window.innerWidth >= 768) {
+                    setWsStatsOpen(true);
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (window.innerWidth >= 768) {
+                    setWsStatsOpen(false);
+                  }
+                }}
+                onClick={() => {
+                  if (window.innerWidth < 768) {
+                    setWsStatsOpen(!wsStatsOpen);
+                  }
+                }}
               >
                 <i className={`fa-solid fa-wifi text-lg md:text-xl ${isConnected ? 'text-signal-green' : 'text-signal-red'}`}></i>
                 <div className="hidden md:block text-xs font-mono">
@@ -1307,6 +1324,13 @@ function App() {
         isOpen={z21HealthOpen}
         onClose={() => setZ21HealthOpen(false)}
         apiUrl={API_URL}
+        isHover={window.innerWidth >= 768}
+      />
+      <WebSocketStatsPopover
+        isOpen={wsStatsOpen}
+        onClose={() => setWsStatsOpen(false)}
+        stats={wsStats}
+        isConnected={isConnected}
         isHover={window.innerWidth >= 768}
       />
 

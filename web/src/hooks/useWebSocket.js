@@ -7,6 +7,16 @@ export function useWebSocket(url) {
   const reconnectTimeoutRef = useRef(null);
   const reconnectAttempts = useRef(0);
 
+  // WebSocket statistics tracking
+  const statsRef = useRef({
+    connectedSince: null,
+    messagesSent: 0,
+    messagesReceived: 0,
+    reconnectCount: 0,
+    lastMessageTime: null
+  });
+  const [stats, setStats] = useState(statsRef.current);
+
   const connect = useCallback(() => {
     try {
       const ws = new WebSocket(url);
@@ -15,12 +25,21 @@ export function useWebSocket(url) {
         console.log('WebSocket connected');
         setIsConnected(true);
         reconnectAttempts.current = 0;
+
+        // Track connection time
+        statsRef.current.connectedSince = Date.now();
+        setStats({ ...statsRef.current });
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           setLastMessage(data);
+
+          // Track received messages
+          statsRef.current.messagesReceived++;
+          statsRef.current.lastMessageTime = Date.now();
+          setStats({ ...statsRef.current });
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error);
         }
@@ -30,6 +49,15 @@ export function useWebSocket(url) {
         console.log('WebSocket disconnected');
         setIsConnected(false);
         wsRef.current = null;
+
+        // Track reconnect count
+        if (statsRef.current.connectedSince !== null) {
+          statsRef.current.reconnectCount++;
+          setStats({ ...statsRef.current });
+        }
+
+        // Reset connection time
+        statsRef.current.connectedSince = null;
 
         // Exponential backoff for reconnection
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
@@ -67,6 +95,11 @@ export function useWebSocket(url) {
   const sendMessage = useCallback((message) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
+
+      // Track sent messages
+      statsRef.current.messagesSent++;
+      setStats({ ...statsRef.current });
+
       return true;
     }
     console.warn('WebSocket not connected, message not sent:', message);
@@ -76,6 +109,7 @@ export function useWebSocket(url) {
   return {
     isConnected,
     lastMessage,
-    sendMessage
+    sendMessage,
+    stats
   };
 }
