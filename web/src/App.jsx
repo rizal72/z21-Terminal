@@ -205,6 +205,14 @@ function App() {
       } else if (lastMessage.type === 'z21_status') {
         // Z21 connection status update
         setZ21Online(lastMessage.online);
+
+        // If Z21 goes offline, immediately set track power to OFF
+        // (backend will also send consist_update, but this provides immediate feedback)
+        if (!lastMessage.online && trackPower) {
+          console.log('[Z21] Offline detected - forcing track power OFF');
+          setTrackPower(false);
+          playPowerSound(false);
+        }
       } else if (lastMessage.type === 'consist_update') {
         // Update global track power state if changed
         if (typeof lastMessage.data.power !== 'undefined') {
