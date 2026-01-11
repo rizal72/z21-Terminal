@@ -5,9 +5,9 @@
 # Forces codepage 850 instead of UTF-8 to display correctly in Task Scheduler console
 [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(850)
 
-# Force ANSI colors on PS7+ (try to enable VT processing in Task Scheduler console)
+# Disable ANSI colors on PS7+ (plain text for DOS console compatibility)
 if ($PSVersionTable.PSVersion.Major -ge 7) {
-    $PSStyle.OutputRendering = 'Ansi'  # Force ANSI colors instead of plain text
+    $PSStyle.OutputRendering = 'PlainText'
 }
 
 Set-Location C:\z21-Terminal\backend
