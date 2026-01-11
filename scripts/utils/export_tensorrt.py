@@ -36,7 +36,7 @@ from ultralytics import YOLO
 def load_config():
     """Load config.json to determine which model to export."""
     config_path = project_root / "config.json"
-    with open(config_path) as f:
+    with open(config_path, encoding='utf-8') as f:
         return json.load(f)
 
 
