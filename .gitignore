@@ -37,6 +37,9 @@ scripts/utils/data/
 *.mov
 *.zip
 *snapshot*
+*.onnx
+*.engine
+*.bak
 
 # Sensitive data
 config.local.py
@@ -60,4 +63,3 @@ CLAUDE.md.backup
 # Docs (private notes)
 docs/
 *.backup
-*.onnx
