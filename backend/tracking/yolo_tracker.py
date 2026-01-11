@@ -339,6 +339,8 @@ class YOLOTracker:
             if self.yolo_obb:
                 # OBB mode: Oriented Bounding Boxes
                 boxes = result.obb if hasattr(result, 'obb') else result.boxes
+                if boxes is None or len(boxes) == 0:
+                    continue  # Skip if no detections
                 for box in boxes:
                     # OBB format: box.xyxyxyxy = 4 corner points [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
                     if hasattr(box, 'xyxyxyxy'):
@@ -371,6 +373,8 @@ class YOLOTracker:
             else:
                 # Standard mode: axis-aligned bounding boxes
                 boxes = result.boxes
+                if boxes is None or len(boxes) == 0:
+                    continue  # Skip if no detections
                 for box in boxes:
                     x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
                     conf = float(box.conf[0])
