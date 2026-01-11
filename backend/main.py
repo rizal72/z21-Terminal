@@ -388,13 +388,25 @@ async def lifespan(app: FastAPI):
                 z21_online = True
                 log('[OK]', 'Z21 connection: ONLINE')
             else:
+                # Z21 not responding - force track power OFF
+                last_track_power_state = False
                 z21_online = False
-                log('[FAIL]', 'Z21 connection: OFFLINE')
+                log('[FAIL]', 'Z21 connection: OFFLINE (track power: OFF)')
         except (OSError, ConnectionError, TimeoutError) as e:
             log('[WARN]', f"Z21 not responding (will retry in background): {e}")
+            # Z21 unreachable - force track power OFF
+            last_track_power_state = False
             z21_online = False
-            log('[FAIL]', 'Z21 connection: OFFLINE')
+            log('[FAIL]', 'Z21 connection: OFFLINE (track power: OFF)')
             # Backend continues startup - health check will retry connection
+
+        # If Z21 is offline at startup, force all consist states to power: False
+        if not z21_online:
+            for address in consist_data.keys():
+                if address in z21_manager.consist_state:
+                    z21_manager.consist_state[address]['power'] = False
+            if debug_enabled:
+                log('[INIT]', f"Set all consists power to OFF (Z21 offline at startup)")
 
         # Start background polling tasks
         polling_task = asyncio.create_task(poll_track_power())
