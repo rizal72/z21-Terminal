@@ -60,3 +60,4 @@ CLAUDE.md.backup
 # Docs (private notes)
 docs/
 *.backup
+*.onnx
