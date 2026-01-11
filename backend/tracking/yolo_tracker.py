@@ -181,21 +181,27 @@ class YOLOTracker:
             else:
                 base_name = 'best'
 
-            # Check for TensorRT engine first (priority: .engine > .pt)
+            # Check for models (priority: .engine > .onnx > .pt)
             engine_path = models_dir / f'{base_name}.engine'
+            onnx_path = models_dir / f'{base_name}.onnx'
             pt_path = models_dir / f'{base_name}.pt'
 
             if engine_path.exists():
                 model_path = str(engine_path)
                 # ALWAYS show TensorRT usage (critical performance info)
                 log('[INIT]', f"Using TensorRT engine: \033[91m{engine_path.name}\033[0m (GPU-optimized, 2-5x faster)")
+            elif onnx_path.exists():
+                model_path = str(onnx_path)
+                # ALWAYS show ONNX usage (intermediate performance)
+                log('[INIT]', f"Using ONNX model: \033[91m{onnx_path.name}\033[0m (1.5-2x faster than PyTorch)")
+                log('[INIT]', f"Tip: Export to TensorRT for 2-5x faster inference: python scripts/utils/export_tensorrt.py")
             elif pt_path.exists():
                 model_path = str(pt_path)
                 # ALWAYS show which model was auto-selected (critical info)
                 log('[INIT]', f"Auto-selected model: \033[91m{pt_path.name}\033[0m (yolo_obb={yolo_obb})")
-                log('[INIT]', f"Tip: Export to TensorRT for 2-5x faster inference: python scripts/utils/export_tensorrt.py")
+                log('[INIT]', f"Tip: Export to ONNX for 1.5-2x faster inference: python scripts/utils/export_tensorrt.py")
             else:
-                raise FileNotFoundError(f"No YOLO model found: checked {engine_path} and {pt_path}")
+                raise FileNotFoundError(f"No YOLO model found: checked {engine_path}, {onnx_path}, and {pt_path}")
 
         if self.debug_enabled:
             log('[INIT]', f"Loading YOLO model: {model_path}")
