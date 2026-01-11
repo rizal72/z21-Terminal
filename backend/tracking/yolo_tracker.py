@@ -192,7 +192,7 @@ class YOLOTracker:
             elif pt_path.exists():
                 model_path = str(pt_path)
                 # ALWAYS show which model was auto-selected (critical info)
-                log('[INIT]', f"Auto-selected model: {pt_path.name} (yolo_obb={yolo_obb})")
+                log('[INIT]', f"Auto-selected model: \033[91m{pt_path.name}\033[0m (yolo_obb={yolo_obb})")
                 log('[INIT]', f"Tip: Export to TensorRT for 2-5x faster inference: python scripts/utils/export_tensorrt.py")
             else:
                 raise FileNotFoundError(f"No YOLO model found: checked {engine_path} and {pt_path}")
