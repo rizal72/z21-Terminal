@@ -177,11 +177,25 @@ class YOLOTracker:
             project_root = Path(__file__).parent.parent.parent  # z21-Terminal/ root
             models_dir = project_root / 'scripts' / 'models'
             if yolo_obb:
-                model_path = str(models_dir / 'best_obb.pt')
+                base_name = 'best_obb'
             else:
-                model_path = str(models_dir / 'best.pt')
-            # ALWAYS show which model was auto-selected (critical info)
-            log('[INIT]', f"Auto-selected model: {Path(model_path).name} (yolo_obb={yolo_obb})")
+                base_name = 'best'
+
+            # Check for TensorRT engine first (priority: .engine > .pt)
+            engine_path = models_dir / f'{base_name}.engine'
+            pt_path = models_dir / f'{base_name}.pt'
+
+            if engine_path.exists():
+                model_path = str(engine_path)
+                # ALWAYS show TensorRT usage (critical performance info)
+                log('[INIT]', f"🚀 Using TensorRT engine: {engine_path.name} (GPU-optimized, 2-5x faster)")
+            elif pt_path.exists():
+                model_path = str(pt_path)
+                # ALWAYS show which model was auto-selected (critical info)
+                log('[INIT]', f"Auto-selected model: {pt_path.name} (yolo_obb={yolo_obb})")
+                log('[INIT]', f"💡 Tip: Export to TensorRT for 2-5x faster inference: python scripts/utils/export_tensorrt.py")
+            else:
+                raise FileNotFoundError(f"No YOLO model found: checked {engine_path} and {pt_path}")
 
         if self.debug_enabled:
             log('[INIT]', f"Loading YOLO model: {model_path}")
