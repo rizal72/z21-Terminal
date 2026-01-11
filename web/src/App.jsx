@@ -1129,7 +1129,7 @@ function App() {
                 } ${
                   z21Online ? 'md:hover:border-signal-amber cursor-pointer' : 'opacity-50 cursor-not-allowed'
                 }`}
-                title={`CV Profile Mode: ${cvProfileMode === 'testing' ? 'TEST (CV3/CV4=0)' : 'NORMAL'} - Press T to toggle`}
+                title={`Test Mode: ${cvProfileMode === 'testing' ? 'ACTIVE (zero momentum) - Press T' : 'OFF (normal) - Press T'}`}
                 onClick={() => {
                   if (z21Online) {
                     const event = new KeyboardEvent('keydown', { key: 'T', bubbles: true });
@@ -1141,7 +1141,7 @@ function App() {
                 <i className={`fa-solid ${cvProfileMode === 'testing' ? 'fa-flask-vial' : 'fa-check-circle'} text-lg md:text-xl ${cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}`}></i>
                 <div className="hidden md:block text-xs font-mono">
                   <div className={cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}>
-                    {cvProfileMode === 'testing' ? 'TEST' : 'NORM'}
+                    Test
                   </div>
                 </div>
               </button>
