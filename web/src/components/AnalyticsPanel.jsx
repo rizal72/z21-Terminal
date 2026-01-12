@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
-  const [viewMode, setViewMode] = useState('session'); // 'session' or 'overview'
+  const [viewMode, setViewMode] = useState('detail'); // 'detail' or 'overview'
   const [cumulativeData, setCumulativeData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -32,16 +32,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     };
   }, [isOpen]);
 
-  // Load cumulative data on view switch (for both Session and Overview)
+  // Load cumulative data on mount
   useEffect(() => {
-    if (isOpen && (viewMode === 'session' || viewMode === 'overview')) {
+    if (isOpen) {
       loadCumulativeData();
     }
-  }, [isOpen, viewMode]);
+  }, [isOpen]);
 
-  // Auto-scroll to end when data loads (Session view only)
+  // Auto-scroll to end when data loads (Detail view only)
   useEffect(() => {
-    if (viewMode === 'session' && cumulativeData && scrollRefSession.current) {
+    if (viewMode === 'detail' && cumulativeData && scrollRefSession.current) {
       scrollRefSession.current.scrollLeft = scrollRefSession.current.scrollWidth;
     }
   }, [cumulativeData, viewMode]);
@@ -141,15 +141,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
         <div className="flex gap-2 p-4 bg-slate-800/50 border-b border-slate-700 items-center justify-between">
           <div className="flex gap-2">
             <button
-              onClick={() => handleViewToggle('session')}
+              onClick={() => handleViewToggle('detail')}
               className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                viewMode === 'session'
+                viewMode === 'detail'
                   ? 'bg-blue-600 text-white shadow-lg'
                   : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
               }`}
             >
-              <i className="fa-solid fa-database mr-2"></i>
-              Session
+              <i className="fa-solid fa-magnifying-glass-chart mr-2"></i>
+              Detail
             </button>
             <button
               onClick={() => handleViewToggle('overview')}
@@ -192,8 +192,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* Session View (All Data) */}
-          {viewMode === 'session' && cumulativeData && !loading && (
+          {/* Analytics View (Unified) */}
+          {cumulativeData && !loading && (
             <div className="space-y-6">
               {/* Overall Stats */}
               <div className="grid grid-cols-3 gap-4">
@@ -206,8 +206,20 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   <div className="text-3xl font-bold text-white mt-1">{cumulativeData.total_delta_t_events}</div>
                 </div>
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                  <div className="text-sm text-slate-400">Gate Crossings (Consist 11)</div>
-                  <div className="text-3xl font-bold text-white mt-1">{cumulativeData.gate_crossings?.[11] || 0}</div>
+                  <div className="text-sm text-slate-400">
+                    Gate Crossings
+                    {consistFilter === 'all' ? ' (All)' : consistFilter === 10 ? ' (C10)' : ' (C11)'}
+                  </div>
+                  <div className={`text-3xl font-bold mt-1 ${
+                    consistFilter === 10 ? 'text-fuchsia-400' :
+                    consistFilter === 11 ? 'text-blue-400' :
+                    'text-white'
+                  }`}>
+                    {consistFilter === 'all'
+                      ? (cumulativeData.gate_crossings?.[10] || 0) + (cumulativeData.gate_crossings?.[11] || 0)
+                      : (cumulativeData.gate_crossings?.[consistFilter] || 0)
+                    }
+                  </div>
                 </div>
               </div>
 
@@ -252,22 +264,22 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     </div>
                   </div>
 
-                  <div ref={scrollRefSession} className="overflow-x-auto">
-                    {(() => {
-                      const chartData = cumulativeData.delta_t_events
-                        .filter(event => consistFilter === 'all' || event.consist_id === consistFilter)
-                        .map((event, idx) => ({
-                          index: idx + 1,
-                          timestamp: event.timestamp,
-                          time: formatTime(event.timestamp),
-                          delta_t_c10: event.consist_id === 10 ? parseFloat(event.delta_t.toFixed(2)) : null,
-                          delta_t_c11: event.consist_id === 11 ? parseFloat(event.delta_t.toFixed(2)) : null,
-                          status: event.status,
-                          gate_type: event.gate_type
-                        }));
+                  {(() => {
+                    const chartData = cumulativeData.delta_t_events
+                      .filter(event => consistFilter === 'all' || event.consist_id === consistFilter)
+                      .map((event, idx) => ({
+                        index: idx + 1,
+                        timestamp: event.timestamp,
+                        time: formatTime(event.timestamp),
+                        delta_t_c10: event.consist_id === 10 ? parseFloat(event.delta_t.toFixed(2)) : null,
+                        delta_t_c11: event.consist_id === 11 ? parseFloat(event.delta_t.toFixed(2)) : null,
+                        status: event.status,
+                        gate_type: event.gate_type
+                      }));
 
-                      return (
-                        <ResponsiveContainer width={Math.max(chartData.length * 40, 800)} height={400}>
+                    const chartWidth = viewMode === 'detail' ? Math.max(chartData.length * 40, 800) : '100%';
+                    const chartContent = (
+                      <ResponsiveContainer width={chartWidth} height={400}>
                           <LineChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="time" stroke="#9CA3AF" />
@@ -284,138 +296,39 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
                       <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
 
-                      {/* Show both lines when 'all', single line when filtered */}
-                      {(consistFilter === 'all' || consistFilter === 10) && (
-                        <Line
-                          type="monotone"
-                          dataKey="delta_t_c10"
-                          stroke="#d946ef"
-                          strokeWidth={2}
-                          dot={{ r: 4 }}
-                          name="Consist 10"
-                          connectNulls={true}
-                        />
-                      )}
-                      {(consistFilter === 'all' || consistFilter === 11) && (
-                        <Line
-                          type="monotone"
-                          dataKey="delta_t_c11"
-                          stroke="#3b82f6"
-                          strokeWidth={2}
-                          dot={{ r: 4 }}
-                          name="Consist 11"
-                          connectNulls={true}
-                        />
-                      )}
-                    </LineChart>
-                  </ResponsiveContainer>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Overview Mode */}
-          {viewMode === 'overview' && cumulativeData && !loading && (
-            <div className="space-y-6">
-              {/* Stats Cards */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                  <div className="text-sm text-slate-400">Average Δt</div>
-                  <div className="text-2xl font-bold text-white mt-1">
-                    {cumulativeData.delta_t_events.length > 0
-                      ? (cumulativeData.delta_t_events.reduce((sum, e) => sum + Math.abs(e.delta_t), 0) / cumulativeData.delta_t_events.length).toFixed(2) + 's'
-                      : 'N/A'}
-                  </div>
-                </div>
-                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                  <div className="text-sm text-slate-400">Best Δt</div>
-                  <div className="text-2xl font-bold text-green-400 mt-1">
-                    {cumulativeData.delta_t_events.length > 0
-                      ? Math.min(...cumulativeData.delta_t_events.map(e => Math.abs(e.delta_t))).toFixed(2) + 's'
-                      : 'N/A'}
-                  </div>
-                </div>
-                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                  <div className="text-sm text-slate-400">Worst Δt</div>
-                  <div className="text-2xl font-bold text-red-400 mt-1">
-                    {cumulativeData.delta_t_events.length > 0
-                      ? Math.max(...cumulativeData.delta_t_events.map(e => Math.abs(e.delta_t))).toFixed(2) + 's'
-                      : 'N/A'}
-                  </div>
-                </div>
-                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                  <div className="text-sm text-slate-400">SYNCED Rate</div>
-                  <div className="text-2xl font-bold text-green-400 mt-1">
-                    {cumulativeData.delta_t_events.length > 0
-                      ? ((cumulativeData.delta_t_events.filter(e => e.status === 'SYNCED').length / cumulativeData.delta_t_events.length) * 100).toFixed(0) + '%'
-                      : 'N/A'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Full Overview Chart - All Events in Fixed Width */}
-              {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
-                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-bold text-white">Trend Overview (All Sessions)</h3>
-                    <div className="text-sm text-slate-400">{cumulativeData.delta_t_events.length} events</div>
-                  </div>
-
-                  {/* Fixed width chart - all events visible */}
-                  <ResponsiveContainer width="100%" height={400}>
-                    {(() => {
-                      const chartData = cumulativeData.delta_t_events.map((event, idx) => ({
-                        index: idx + 1,
-                        timestamp: event.timestamp,
-                        time: idx % Math.ceil(cumulativeData.delta_t_events.length / 20) === 0 ? formatTime(event.timestamp) : '',
-                        delta_t_c10: event.consist_id === 10 ? parseFloat(event.delta_t.toFixed(2)) : null,
-                        delta_t_c11: event.consist_id === 11 ? parseFloat(event.delta_t.toFixed(2)) : null,
-                        status: event.status,
-                        gate_type: event.gate_type
-                      }));
-
-                      return (
-                        <LineChart data={chartData}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                          <XAxis dataKey="time" stroke="#9CA3AF" />
-                          <YAxis stroke="#9CA3AF" label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
-                          <Tooltip
-                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
-                            labelStyle={{ color: '#e2e8f0' }}
-                            formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
-                          />
-                          <Legend />
-                          <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
-                          <ReferenceLine y={1} stroke="#f59e0b" strokeDasharray="3 3" label="WARNING" />
-                          <ReferenceLine y={-1} stroke="#f59e0b" strokeDasharray="3 3" />
-                          <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
-                          <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
-
-                          <Line
-                            type="monotone"
-                            dataKey="delta_t_c10"
-                            stroke="#d946ef"
-                            strokeWidth={1.5}
-                            dot={false}
-                            name="Consist 10"
-                            connectNulls={true}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="delta_t_c11"
-                            stroke="#3b82f6"
-                            strokeWidth={1.5}
-                            dot={false}
-                            name="Consist 11"
-                            connectNulls={true}
-                          />
+                          {/* Show both lines when 'all', single line when filtered */}
+                          {(consistFilter === 'all' || consistFilter === 10) && (
+                            <Line
+                              type="monotone"
+                              dataKey="delta_t_c10"
+                              stroke="#d946ef"
+                              strokeWidth={viewMode === 'detail' ? 2 : 1.5}
+                              dot={viewMode === 'detail' ? { r: 4 } : false}
+                              name="Consist 10"
+                              connectNulls={true}
+                            />
+                          )}
+                          {(consistFilter === 'all' || consistFilter === 11) && (
+                            <Line
+                              type="monotone"
+                              dataKey="delta_t_c11"
+                              stroke="#3b82f6"
+                              strokeWidth={viewMode === 'detail' ? 2 : 1.5}
+                              dot={viewMode === 'detail' ? { r: 4 } : false}
+                              name="Consist 11"
+                              connectNulls={true}
+                            />
+                          )}
                         </LineChart>
-                      );
-                    })()}
-                  </ResponsiveContainer>
+                      </ResponsiveContainer>
+                    );
+
+                    return viewMode === 'detail' ? (
+                      <div ref={scrollRefSession} className="overflow-x-auto">
+                        {chartContent}
+                      </div>
+                    ) : chartContent;
+                  })()}
                 </div>
               )}
             </div>
