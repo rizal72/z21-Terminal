@@ -77,6 +77,8 @@
       "video_feed": 30,
       "notes": "Tracking FPS (active/idle) and video feed stream FPS"
     },
+    "idle_timeout_seconds": 10,
+    "notes_idle_timeout": "Seconds of inactivity (all locomotives stopped) before switching to idle mode (1 FPS) and ending analytics session",
     "timing_thresholds": {
       "normal": 1.0,
       "warning": 1.5,

@@ -54,18 +54,20 @@ class TrackingDaemon:
         self.max_reconnect_delay = 30.0  # Max 30s
         self.last_reconnect_attempt = 0
 
-        # Load FPS settings from config (debug mode already loaded in tracker)
+        # Load FPS settings and idle timeout from config (debug mode already loaded in tracker)
         try:
             config = load_config()
             tracking_config = config.get('tracking', {})
             fps_config = tracking_config.get('fps', {'active': 30, 'idle': 1})
             self.fps_active = fps_config.get('active', 30)
             self.fps_idle = fps_config.get('idle', 1)
+            self.idle_timeout = tracking_config.get('idle_timeout_seconds', 10)
         except Exception as e:
             if self.debug_enabled:
                 log('[WARN]', f"Error loading config: {e}, using defaults")
             self.fps_active = 30
             self.fps_idle = 1
+            self.idle_timeout = 10
 
         # Dynamic FPS control
         self.consist_speeds = {}  # {consist_address: speed}
@@ -243,15 +245,15 @@ class TrackingDaemon:
             self.websocket = None  # Mark as disconnected
 
     async def _idle_timer(self):
-        """Timer che aspetta 10s prima di passare a idle mode"""
+        """Timer che aspetta idle_timeout secondi prima di passare a idle mode"""
         try:
-            await asyncio.sleep(IDLE_COOLDOWN_SECONDS)
+            await asyncio.sleep(self.idle_timeout)
 
-            # Dopo 10s, controlla se ancora tutto fermo
+            # Dopo timeout, controlla se ancora tutto fermo
             any_movement = any(s > 0 for s in self.consist_speeds.values())
             if not any_movement and self.active_tracking:
                 self.active_tracking = False
-                log('[DETECT]', f"Switched to Low-Power Mode ({self.fps_idle} FPS) (after {IDLE_COOLDOWN_SECONDS:.0f}s cooldown)")
+                log('[DETECT]', f"Switched to Low-Power Mode ({self.fps_idle} FPS) (after {self.idle_timeout:.0f}s cooldown)")
         except asyncio.CancelledError:
             # Timer cancellato (movimento ripreso)
             pass
@@ -286,9 +288,9 @@ class TrackingDaemon:
                 self.active_tracking = True
                 log('[DETECT]', f"Switched to Active Tracking ({self.fps_active} FPS)")
         else:
-            # Tutto fermo: avvia timer 10s (se non già avviato)
+            # Tutto fermo: avvia timer (se non già avviato)
             if not self.idle_timer_task and self.active_tracking:
-                log('[DETECT]', f"All consists stopped - starting {IDLE_COOLDOWN_SECONDS:.0f}s cooldown timer...")
+                log('[DETECT]', f"All consists stopped - starting {self.idle_timeout:.0f}s cooldown timer...")
                 self.idle_timer_task = asyncio.create_task(self._idle_timer())
 
     async def listen_backend_messages(self):
