@@ -225,7 +225,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
               {/* Δt Trends Chart - ALL sessions concatenated */}
               {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
-                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+                <div key={viewMode} className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-bold text-white">Δt Trends (All Sessions)</h3>
 
@@ -279,7 +279,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
                     const chartWidth = viewMode === 'detail' ? Math.max(chartData.length * 40, 800) : '100%';
                     const chartContent = (
-                      <ResponsiveContainer key={viewMode} width={chartWidth} height={400}>
+                      <ResponsiveContainer width={chartWidth} height={400}>
                           <LineChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="time" stroke="#9CA3AF" />
