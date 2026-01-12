@@ -698,6 +698,50 @@ function App() {
         return;
       }
 
+      // V key to toggle video feed panel (allow even when dropdown focused)
+      if (e.key === 'v' || e.key === 'V') {
+        e.preventDefault();
+        setVideoFeedExpanded(prev => {
+          const newState = !prev;
+          console.log(`Video feed panel toggled: ${newState ? 'expanded' : 'collapsed'}`);
+          // Show notification
+          showNotification({
+            message: `Video feed: ${newState ? 'expanded' : 'collapsed'}`,
+            type: 'info',
+            duration: 2000
+          });
+          return newState;
+        });
+        return;
+      }
+
+      // A key to toggle analytics panel (allow even when dropdown focused, desktop-only)
+      if (e.key === 'a' || e.key === 'A') {
+        e.preventDefault();
+        const isMobile = window.innerWidth < 1024;
+        if (!isMobile) {
+          setAnalyticsOpen(prev => {
+            const newState = !prev;
+            console.log(`Analytics panel toggled: ${newState ? 'open' : 'closed'}`);
+            // Show notification
+            showNotification({
+              message: `Analytics: ${newState ? 'open' : 'closed'}`,
+              type: 'info',
+              duration: 2000
+            });
+            return newState;
+          });
+        } else {
+          // Show warning on mobile
+          showNotification({
+            message: 'Analytics dashboard is optimized for desktop (1024px+)',
+            type: 'warning',
+            duration: 3000
+          });
+        }
+        return;
+      }
+
       // For other keys, don't handle if input/select/textarea is focused
       if (document.activeElement.tagName === 'INPUT' ||
           document.activeElement.tagName === 'TEXTAREA' ||
