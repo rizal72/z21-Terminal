@@ -206,11 +206,11 @@ class YOLOTracker:
         if self.debug_enabled:
             log('[INIT]', f"Loading YOLO model: {model_path}")
 
-        # Explicitly specify task for OBB models (ONNX/TensorRT don't preserve task metadata)
+        # Explicitly specify task (ONNX/TensorRT don't preserve task metadata)
         if yolo_obb:
             self.model = YOLO(model_path, task='obb')
         else:
-            self.model = YOLO(model_path)
+            self.model = YOLO(model_path, task='detect')
 
         # Load gates and thresholds from config
         self.gates = {}
