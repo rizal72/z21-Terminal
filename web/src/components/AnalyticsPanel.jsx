@@ -254,7 +254,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
               {/* Δt Trends Chart */}
               {sessionData && sessionData.events && sessionData.events.length > 0 && (
-                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700 overflow-x-hidden">
+                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-bold text-white">Δt Trends</h3>
 
@@ -293,10 +293,11 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     </div>
                   </div>
 
-                  <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={prepareChartData()}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="time" stroke="#9CA3AF" />
+                  <div className="overflow-x-auto">
+                    <ResponsiveContainer width={Math.max(prepareChartData().length * 60, 800)} height={400}>
+                      <LineChart data={prepareChartData()}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="time" stroke="#9CA3AF" />
                       <YAxis stroke="#9CA3AF" label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                       <Tooltip
                         contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
@@ -334,6 +335,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       )}
                     </LineChart>
                   </ResponsiveContainer>
+                  </div>
                 </div>
               )}
 
@@ -374,7 +376,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
               {/* Δt Trends Chart - ALL sessions concatenated */}
               {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
-                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700 overflow-x-hidden">
+                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-bold text-white">Δt Trends (All Sessions)</h3>
 
@@ -413,19 +415,24 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     </div>
                   </div>
 
-                  <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={cumulativeData.delta_t_events
-                      .filter(event => consistFilter === 'all' || event.consist_id === consistFilter)
-                      .map((event, idx) => ({
-                        index: idx + 1,
-                        timestamp: event.timestamp,
-                        time: formatTime(event.timestamp),
-                        delta_t_c10: event.consist_id === 10 ? event.delta_t : null,
-                        delta_t_c11: event.consist_id === 11 ? event.delta_t : null,
-                        status: event.status,
-                        gate_type: event.gate_type
-                      }))}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <div className="overflow-x-auto">
+                    {(() => {
+                      const chartData = cumulativeData.delta_t_events
+                        .filter(event => consistFilter === 'all' || event.consist_id === consistFilter)
+                        .map((event, idx) => ({
+                          index: idx + 1,
+                          timestamp: event.timestamp,
+                          time: formatTime(event.timestamp),
+                          delta_t_c10: event.consist_id === 10 ? event.delta_t : null,
+                          delta_t_c11: event.consist_id === 11 ? event.delta_t : null,
+                          status: event.status,
+                          gate_type: event.gate_type
+                        }));
+
+                      return (
+                        <ResponsiveContainer width={Math.max(chartData.length * 60, 800)} height={400}>
+                          <LineChart data={chartData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="time" stroke="#9CA3AF" />
                       <YAxis stroke="#9CA3AF" label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                       <Tooltip
@@ -464,6 +471,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       )}
                     </LineChart>
                   </ResponsiveContainer>
+                      );
+                    })()}
+                  </div>
                 </div>
               )}
             </div>
