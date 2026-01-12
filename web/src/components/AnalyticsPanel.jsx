@@ -46,6 +46,22 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     }
   }, [cumulativeData, viewMode]);
 
+  // Arrow key navigation between Detail/Overview
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyPress = (e) => {
+      if (e.key === 'ArrowLeft' && viewMode === 'overview') {
+        handleViewToggle('detail');
+      } else if (e.key === 'ArrowRight' && viewMode === 'detail') {
+        handleViewToggle('overview');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [isOpen, viewMode]);
+
   const loadCumulativeData = async () => {
     try {
       setLoading(true);
