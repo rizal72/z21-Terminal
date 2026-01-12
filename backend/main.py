@@ -1281,6 +1281,23 @@ async def websocket_endpoint(websocket: WebSocket):
         if debug_enabled:
             log('[INIT]', f"Sent initial state (trackPower={last_track_power_state}, z21Online={z21_online})")
 
+        # Sync tracking daemon with current speeds (critical for page reload with locos moving)
+        # Without this, daemon stays in idle mode (1 FPS) → frozen video feed
+        if tracking_daemon_ws and z21_manager:
+            for consist_address, consist_state in z21_manager.consist_state.items():
+                speed = consist_state.get('speed', 0)
+                if speed > 0:
+                    try:
+                        await tracking_daemon_ws.send_json({
+                            'type': 'consist_speed_update',
+                            'consist_address': consist_address,
+                            'speed': speed
+                        })
+                        if debug_enabled:
+                            log('[INIT]', f"Synced daemon: consist {consist_address} speed={speed}")
+                    except Exception:
+                        pass  # Daemon disconnected, will reconnect
+
         # Notify tracking manager of client connection
         if tracking_manager:
             await tracking_manager.on_client_connected()
