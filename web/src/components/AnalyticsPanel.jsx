@@ -279,7 +279,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
                     const chartWidth = viewMode === 'detail' ? Math.max(chartData.length * 40, 800) : '100%';
                     const chartContent = (
-                      <ResponsiveContainer width={chartWidth} height={400}>
+                      <ResponsiveContainer key={viewMode} width={chartWidth} height={400}>
                           <LineChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="time" stroke="#9CA3AF" />
