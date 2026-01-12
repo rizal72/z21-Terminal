@@ -318,7 +318,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           strokeWidth={2}
                           dot={{ r: 4 }}
                           name="Consist 10"
-                          connectNulls={false}
+                          connectNulls={true}
                         />
                       )}
                       {(consistFilter === 'all' || consistFilter === 11) && (
@@ -329,7 +329,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           strokeWidth={2}
                           dot={{ r: 4 }}
                           name="Consist 11"
-                          connectNulls={false}
+                          connectNulls={true}
                         />
                       )}
                     </LineChart>
@@ -448,7 +448,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           strokeWidth={2}
                           dot={{ r: 4 }}
                           name="Consist 10"
-                          connectNulls={false}
+                          connectNulls={true}
                         />
                       )}
                       {(consistFilter === 'all' || consistFilter === 11) && (
@@ -459,7 +459,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           strokeWidth={2}
                           dot={{ r: 4 }}
                           name="Consist 11"
-                          connectNulls={false}
+                          connectNulls={true}
                         />
                       )}
                     </LineChart>
