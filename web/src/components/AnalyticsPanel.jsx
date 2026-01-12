@@ -163,28 +163,47 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
         </div>
 
         {/* View Toggle */}
-        <div className="flex gap-2 p-4 bg-slate-800/50 border-b border-slate-700">
+        <div className="flex gap-2 p-4 bg-slate-800/50 border-b border-slate-700 items-center justify-between">
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleViewToggle('current')}
+              className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                viewMode === 'current'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              <i className="fa-solid fa-clock mr-2"></i>
+              Current Session
+            </button>
+            <button
+              onClick={() => handleViewToggle('cumulative')}
+              className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                viewMode === 'cumulative'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              <i className="fa-solid fa-database mr-2"></i>
+              Cumulative History
+            </button>
+          </div>
+
+          {/* Refresh Button */}
           <button
-            onClick={() => handleViewToggle('current')}
-            className={`px-6 py-2 rounded-lg font-medium transition-all ${
-              viewMode === 'current'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            }`}
+            onClick={() => {
+              if (viewMode === 'current') {
+                loadCurrentSession();
+              } else {
+                loadCumulativeData();
+              }
+            }}
+            disabled={loading}
+            className="px-4 py-2 bg-slate-700 text-slate-300 hover:bg-slate-600 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Refresh data"
           >
-            <i className="fa-solid fa-clock mr-2"></i>
-            Current Session
-          </button>
-          <button
-            onClick={() => handleViewToggle('cumulative')}
-            className={`px-6 py-2 rounded-lg font-medium transition-all ${
-              viewMode === 'cumulative'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            }`}
-          >
-            <i className="fa-solid fa-database mr-2"></i>
-            Cumulative History
+            <i className={`fa-solid fa-refresh mr-2 ${loading ? 'fa-spin' : ''}`}></i>
+            Refresh
           </button>
         </div>
 
