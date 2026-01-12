@@ -25,6 +25,7 @@ from config_loader import load_config
 # Import shared tracking modules
 from tracking.yolo_tracker import YOLOTracker
 from tracking.rtsp_handler import load_camera_config, setup_rtsp_stream, reconnect_rtsp_stream
+from analytics_logger import AnalyticsLogger
 from log_colors import log
 
 # === CONFIGURATION ===
@@ -48,6 +49,11 @@ class TrackingDaemon:
         self.last_broadcasted_delta_t = None
         self.last_broadcasted_type = None
         self.last_broadcasted_timestamp = None  # Timestamp of previous dT for time_str calculation
+
+        # Analytics logger (initialized in run() to avoid creating DB before needed)
+        self.analytics_logger = None
+        self.analytics_flush_task = None
+        self.last_yolo_perf_log = 0  # Track last YOLO performance log time
 
         # Auto-reconnect state
         self.reconnect_delay = 2.0  # Start with 2s
@@ -186,6 +192,15 @@ class TrackingDaemon:
 
             try:
                 await self.websocket.send(json.dumps(message))
+
+                # Log analytics event (async, non-blocking)
+                if self.analytics_logger:
+                    await self.analytics_logger.log_event('delta_t', {
+                        'consist_id': consist_id,
+                        'delta_t': delta_t,
+                        'status': message['status'],
+                        'gate_type': current_type
+                    })
             except Exception as e:
                 log('[WARN]', f"Backend disconnected: {e}")
                 self.websocket = None  # Mark as disconnected
@@ -341,6 +356,18 @@ class TrackingDaemon:
         log('[INIT]', f"Tracking daemon started - Low-Power Mode ({self.fps_idle} FPS)")
         log('[INIT]', f"(switches to Active Tracking {self.fps_active} FPS when movement detected)")
 
+        # Initialize analytics logger (async, zero impact on tracking)
+        try:
+            config = load_config()
+            tracking_config = config.get('tracking', {})
+            idle_timeout = tracking_config.get('idle_timeout_seconds', 10)
+            self.analytics_logger = AnalyticsLogger(idle_timeout=idle_timeout)
+            self.analytics_flush_task = asyncio.create_task(self.analytics_logger.start_flush_loop())
+            log('[ANALYTICS]', f"Analytics logging enabled (DB: {self.analytics_logger.db_path})")
+        except Exception as e:
+            log('[WARN]', f"Analytics logger init failed: {e} (tracking continues)")
+            self.analytics_logger = None
+
         # Start backend message listener in parallel
         listener_task = asyncio.create_task(self.listen_backend_messages())
 
@@ -403,6 +430,21 @@ class TrackingDaemon:
                 listener_task.cancel()
                 try:
                     await listener_task
+                except asyncio.CancelledError:
+                    pass
+
+            # Close analytics session (async cleanup)
+            if self.analytics_logger:
+                try:
+                    await self.analytics_logger.close_session()
+                except Exception as e:
+                    log('[WARN]', f"Analytics cleanup failed: {e}")
+
+            # Cancel analytics flush task
+            if self.analytics_flush_task and not self.analytics_flush_task.done():
+                self.analytics_flush_task.cancel()
+                try:
+                    await self.analytics_flush_task
                 except asyncio.CancelledError:
                     pass
 

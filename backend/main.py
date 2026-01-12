@@ -1608,6 +1608,113 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
 
 
 # ========================================
+# Analytics Endpoints
+# ========================================
+
+@app.get("/api/analytics/current")
+async def get_current_session():
+    """Get current analytics session metadata (lightweight)"""
+    # Current session info from tracking daemon (if running)
+    if tracking_manager and tracking_manager.daemon:
+        logger = tracking_manager.daemon.analytics_logger
+        if logger:
+            return logger.get_session_info()
+    return {"error": "Analytics not available"}
+
+
+@app.get("/api/analytics/session/{session_id}")
+async def get_session_data(session_id: str):
+    """Load full session data (events, Δt trends)"""
+    import sqlite3
+    db_path = Path(__file__).parent.parent / "data" / "analytics.db"
+
+    if not db_path.exists():
+        return {"error": "Analytics database not found"}
+
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+
+    # Get session metadata
+    cursor.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
+    session_row = cursor.fetchone()
+    if not session_row:
+        conn.close()
+        return {"error": "Session not found"}
+
+    session_data = {
+        'id': session_row[0],
+        'start_time': session_row[1],
+        'end_time': session_row[2],
+        'validated': bool(session_row[3]),
+        'event_count': session_row[4]
+    }
+
+    # Get all delta_t events
+    cursor.execute(
+        "SELECT timestamp, data FROM events WHERE session_id = ? AND event_type = 'delta_t' ORDER BY timestamp",
+        (session_id,)
+    )
+
+    events = []
+    for row in cursor.fetchall():
+        data = json.loads(row[1])
+        events.append({
+            'timestamp': row[0],
+            'consist_id': data['consist_id'],
+            'delta_t': data['delta_t'],
+            'status': data['status'],
+            'gate_type': data['gate_type']
+        })
+
+    conn.close()
+
+    return {
+        'session': session_data,
+        'events': events
+    }
+
+
+@app.get("/api/analytics/cumulative")
+async def get_cumulative_stats():
+    """Get all sessions aggregated statistics"""
+    import sqlite3
+    db_path = Path(__file__).parent.parent / "data" / "analytics.db"
+
+    if not db_path.exists():
+        return {"error": "Analytics database not found"}
+
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+
+    # Get all validated sessions
+    cursor.execute("SELECT id, start_time, end_time, event_count FROM sessions WHERE validated = 1 ORDER BY start_time DESC")
+    sessions = []
+    for row in cursor.fetchall():
+        sessions.append({
+            'id': row[0],
+            'start_time': row[1],
+            'end_time': row[2],
+            'event_count': row[3],
+            'duration': row[2] - row[1] if row[2] else None
+        })
+
+    # Get overall stats
+    cursor.execute("SELECT COUNT(*) FROM sessions WHERE validated = 1")
+    total_sessions = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM events WHERE event_type = 'delta_t'")
+    total_delta_t_events = cursor.fetchone()[0]
+
+    conn.close()
+
+    return {
+        'total_sessions': total_sessions,
+        'total_delta_t_events': total_delta_t_events,
+        'sessions': sessions
+    }
+
+
+# ========================================
 # Conditional Frontend Production Serving
 # ========================================
 # Serve frontend production build (web/dist/) if it exists.
