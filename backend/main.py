@@ -1687,7 +1687,7 @@ async def get_cumulative_stats():
     conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
 
-    # Get all validated sessions
+    # Get all validated sessions (closed sessions with end_time)
     cursor.execute("SELECT id, start_time, end_time, event_count FROM sessions WHERE validated = 1 ORDER BY start_time DESC")
     sessions = []
     for row in cursor.fetchall():
@@ -1699,9 +1699,20 @@ async def get_cumulative_stats():
             'duration': row[2] - row[1] if row[2] else None
         })
 
-    # Get overall stats
-    cursor.execute("SELECT COUNT(*) FROM sessions WHERE validated = 1")
-    total_sessions = cursor.fetchone()[0]
+    # Include current session if running (validated but no end_time yet)
+    if tracking_manager and tracking_manager.daemon and tracking_manager.daemon.analytics_logger:
+        current_logger = tracking_manager.daemon.analytics_logger
+        if current_logger.session_validated:
+            sessions.insert(0, {  # Add at top (most recent)
+                'id': current_logger.session_id,
+                'start_time': current_logger.session_start,
+                'end_time': None,  # Still running
+                'event_count': current_logger.event_count,
+                'duration': None  # Can't calculate yet
+            })
+
+    # Get overall stats (including current session)
+    total_sessions = len(sessions)
 
     # Get gate crossings aggregate (count per consist)
     cursor.execute("SELECT data FROM events WHERE event_type = 'gate_crossing'")
@@ -1741,6 +1752,8 @@ async def get_cumulative_stats():
 
     conn.close()
 
+    # Note: delta_t_events already includes current session events (written by flush task every 10s)
+    # Total count is accurate because query includes all events from DB
     return {
         'total_sessions': total_sessions,
         'total_delta_t_events': len(delta_t_events),

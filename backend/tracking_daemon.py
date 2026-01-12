@@ -269,23 +269,7 @@ class TrackingDaemon:
             if not any_movement and self.active_tracking:
                 self.active_tracking = False
                 log('[DETECT]', f"Switched to Low-Power Mode ({self.fps_idle} FPS) (after {self.idle_timeout:.0f}s cooldown)")
-
-                # Close analytics session (async, non-blocking)
-                if self.analytics_logger:
-                    try:
-                        await self.analytics_logger.close_session()
-                        self.analytics_logger = None  # Mark as closed
-
-                        # Cancel flush task
-                        if self.analytics_flush_task and not self.analytics_flush_task.done():
-                            self.analytics_flush_task.cancel()
-                            try:
-                                await self.analytics_flush_task
-                            except asyncio.CancelledError:
-                                pass
-                            self.analytics_flush_task = None
-                    except Exception as e:
-                        log('[WARN]', f"Analytics session close failed: {e}")
+                # Note: Analytics session stays open (closed only on daemon stop)
         except asyncio.CancelledError:
             # Timer cancellato (movimento ripreso)
             pass
@@ -319,20 +303,6 @@ class TrackingDaemon:
             if not self.active_tracking:
                 self.active_tracking = True
                 log('[DETECT]', f"Switched to Active Tracking ({self.fps_active} FPS)")
-
-                # Create new analytics session (if previous was closed)
-                if not self.analytics_logger:
-                    try:
-                        config = load_config()
-                        tracking_config = config.get('tracking', {})
-                        idle_timeout = tracking_config.get('idle_timeout_seconds', 10)
-                        db_path = project_root / 'data' / 'analytics.db'
-                        self.analytics_logger = AnalyticsLogger(db_path=str(db_path), idle_timeout=idle_timeout)
-
-                        # Recreate flush task for new session
-                        self.analytics_flush_task = asyncio.create_task(self.analytics_logger.start_flush_loop())
-                    except Exception as e:
-                        log('[WARN]', f"Analytics session creation failed: {e}")
         else:
             # Tutto fermo: avvia timer (se non già avviato)
             if not self.idle_timer_task and self.active_tracking:
