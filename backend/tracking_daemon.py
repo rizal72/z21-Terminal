@@ -361,7 +361,9 @@ class TrackingDaemon:
             config = load_config()
             tracking_config = config.get('tracking', {})
             idle_timeout = tracking_config.get('idle_timeout_seconds', 10)
-            self.analytics_logger = AnalyticsLogger(idle_timeout=idle_timeout)
+            # Use absolute path to match endpoint expectations
+            db_path = project_root / 'data' / 'analytics.db'
+            self.analytics_logger = AnalyticsLogger(db_path=str(db_path), idle_timeout=idle_timeout)
             self.analytics_flush_task = asyncio.create_task(self.analytics_logger.start_flush_loop())
             log('[ANALYTICS]', f"Analytics logging enabled (DB: {self.analytics_logger.db_path})")
         except Exception as e:
