@@ -176,6 +176,18 @@ class AnalyticsLogger:
         else:
             log('[ANALYTICS]', f"Session {self.session_id} closed ({self.event_count} events)")
 
+        # Cleanup OTHER zombie sessions (safe - current session already handled)
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("DELETE FROM events WHERE session_id IN (SELECT id FROM sessions WHERE validated = 0)")
+            cursor.execute("DELETE FROM sessions WHERE validated = 0")
+            deleted = cursor.rowcount
+            self.conn.commit()
+            if deleted > 0:
+                log('[ANALYTICS]', f"Cleaned up {deleted} zombie sessions on close")
+        except Exception as e:
+            log('[WARN]', f"Zombie session cleanup failed: {e}")
+
         # Close DB connection
         self.conn.close()
 
