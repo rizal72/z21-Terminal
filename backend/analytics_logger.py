@@ -117,7 +117,7 @@ class AnalyticsLogger:
                 (self.session_id,)
             )
             self.conn.commit()
-            log('[ANALYTICS]', f"Session {self.session_id} validated (first Δt calculation)")
+            log('[ANALYTICS]', f"Session {self.session_id} validated (first delta_t calculation)")
 
         # Flush if buffer full (non-blocking)
         if len(self.event_buffer) >= 100:
@@ -172,7 +172,7 @@ class AnalyticsLogger:
             self.conn.execute("DELETE FROM events WHERE session_id = ?", (self.session_id,))
             self.conn.execute("DELETE FROM sessions WHERE id = ?", (self.session_id,))
             self.conn.commit()
-            log('[ANALYTICS]', f"Discarded invalid session {self.session_id} (no Δt calculated)")
+            log('[ANALYTICS]', f"Discarded invalid session {self.session_id} (no delta_t calculated)")
         else:
             log('[ANALYTICS]', f"Session {self.session_id} closed ({self.event_count} events)")
 
