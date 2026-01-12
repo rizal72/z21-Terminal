@@ -364,6 +364,22 @@ class TrackingDaemon:
             idle_timeout = tracking_config.get('idle_timeout_seconds', 10)
             # Use absolute path to match endpoint expectations
             db_path = project_root / 'data' / 'analytics.db'
+
+            # Cleanup zombie sessions from previous crashes/restarts (BEFORE creating new session)
+            try:
+                import sqlite3
+                conn = sqlite3.connect(str(db_path))
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM events WHERE session_id IN (SELECT id FROM sessions WHERE validated = 0)")
+                cursor.execute("DELETE FROM sessions WHERE validated = 0")
+                deleted = cursor.rowcount
+                conn.commit()
+                conn.close()
+                if deleted > 0:
+                    log('[ANALYTICS]', f"Cleaned up {deleted} zombie sessions from previous runs")
+            except Exception as e:
+                log('[WARN]', f"Zombie cleanup failed: {e}")
+
             self.analytics_logger = AnalyticsLogger(db_path=str(db_path), idle_timeout=idle_timeout)
             self.analytics_flush_task = asyncio.create_task(self.analytics_logger.start_flush_loop())
             log('[ANALYTICS]', f"Analytics logging enabled (DB: {self.analytics_logger.db_path})")
