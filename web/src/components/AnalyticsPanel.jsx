@@ -311,7 +311,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   </div>
 
                   <div ref={scrollRefCurrent} className="overflow-x-auto">
-                    <ResponsiveContainer width={Math.max(prepareChartData().length * 60, 800)} height={400}>
+                    <ResponsiveContainer width={Math.max(prepareChartData().length * 40, 800)} height={400}>
                       <LineChart data={prepareChartData()}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                         <XAxis dataKey="time" stroke="#9CA3AF" />
@@ -448,7 +448,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         }));
 
                       return (
-                        <ResponsiveContainer width={Math.max(chartData.length * 60, 800)} height={400}>
+                        <ResponsiveContainer width={Math.max(chartData.length * 40, 800)} height={400}>
                           <LineChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="time" stroke="#9CA3AF" />
