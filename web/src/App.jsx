@@ -6,6 +6,7 @@ import ConsistManagerModal from './components/ConsistManagerModal';
 import TrackTelemetryPopover from './components/TrackTelemetryPopover';
 import Z21HealthPopover from './components/Z21HealthPopover';
 import WebSocketStatsPopover from './components/WebSocketStatsPopover';
+import AnalyticsPanel from './components/AnalyticsPanel';
 import Notification from './components/Notification';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useNotification } from './hooks/useNotification.jsx';
@@ -58,6 +59,7 @@ function App() {
   const [wakeLockActive, setWakeLockActive] = useState(false); // Wake Lock status
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // Mobile hamburger menu
   const [consistManagerOpen, setConsistManagerOpen] = useState(false); // Consist Manager modal (Phase 6B)
+  const [analyticsOpen, setAnalyticsOpen] = useState(false); // Analytics dashboard (desktop-only)
   const [editMode, setEditMode] = useState(false); // Gate editor mode
   const [debugMode, setDebugMode] = useState(false); // Debug overlay mode
   const [cvProfileMode, setCvProfileMode] = useState('normal'); // CV Profile mode: 'normal' or 'testing'
@@ -1170,6 +1172,20 @@ function App() {
                   </div>
                 </div>
               </button>
+
+              {/* Analytics Dashboard (📊) - Desktop-only (1024px+) */}
+              <button
+                className="hidden lg:flex items-center gap-2 px-2 py-2 bg-control-dark rounded border border-control-grey transition-all duration-200 md:hover:border-signal-amber cursor-pointer"
+                title="Analytics Dashboard (Desktop)"
+                onClick={() => setAnalyticsOpen(true)}
+              >
+                <i className="fa-solid fa-chart-line text-lg md:text-xl text-blue-500"></i>
+                <div className="hidden md:block text-xs font-mono">
+                  <div className="text-blue-400">
+                    Analytics
+                  </div>
+                </div>
+              </button>
             </div>
           </div>
         </div>
@@ -1198,6 +1214,10 @@ function App() {
             } else {
               requestWakeLock();
             }
+          }}
+          onAnalytics={() => {
+            setMobileMenuOpen(false);
+            setAnalyticsOpen(true);
           }}
           wakeLockActive={wakeLockActive}
           reloadingRoster={reloadingRoster}
@@ -1237,6 +1257,12 @@ function App() {
           onEditModeChange={setEditMode}
           debugMode={debugMode}
           onDebugModeChange={setDebugMode}
+        />
+
+        {/* Analytics Dashboard (desktop-only) */}
+        <AnalyticsPanel
+          isOpen={analyticsOpen}
+          onClose={() => setAnalyticsOpen(false)}
         />
 
         {/* Controllers grid - Dynamic and scalable */}
