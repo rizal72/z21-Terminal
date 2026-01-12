@@ -42,9 +42,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     }
   }, [isOpen, viewMode]);
 
-  // Load cumulative data on view switch
+  // Load cumulative data on view switch (for both All Sessions and Overview)
   useEffect(() => {
-    if (isOpen && viewMode === 'cumulative') {
+    if (isOpen && (viewMode === 'cumulative' || viewMode === 'overview')) {
       loadCumulativeData();
     }
   }, [isOpen, viewMode]);
@@ -206,7 +206,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               }`}
             >
               <i className="fa-solid fa-database mr-2"></i>
-              Cumulative History
+              All Sessions
             </button>
             <button
               onClick={() => handleViewToggle('overview')}
@@ -384,7 +384,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* Cumulative History View */}
+          {/* All Sessions View */}
           {viewMode === 'cumulative' && cumulativeData && !loading && (
             <div className="space-y-6">
               {/* Overall Stats */}
