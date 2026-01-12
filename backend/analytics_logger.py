@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from collections import deque
 from datetime import datetime
-from backend.utils.logger import log
+from log_colors import log
 
 
 class AnalyticsLogger:
