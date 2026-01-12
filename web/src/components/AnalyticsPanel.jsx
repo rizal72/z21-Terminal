@@ -16,6 +16,20 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     }
   }, [isOpen]);
 
+  // Prevent body scroll when panel is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [isOpen]);
+
   // Load current session metadata on mount
   useEffect(() => {
     if (isOpen && viewMode === 'current') {
