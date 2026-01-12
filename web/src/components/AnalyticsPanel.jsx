@@ -8,6 +8,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   const [cumulativeData, setCumulativeData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [consistFilter, setConsistFilter] = useState('all'); // 'all', 10, 11
 
   // Desktop-only enforcement
   useEffect(() => {
@@ -129,18 +130,21 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Prepare chart data from session events
+  // Prepare chart data from session events (with consist separation)
   const prepareChartData = () => {
     if (!sessionData || !sessionData.events) return [];
 
-    return sessionData.events.map((event, idx) => ({
-      index: idx + 1,
-      timestamp: event.timestamp,
-      time: formatTime(event.timestamp),
-      delta_t: event.delta_t,
-      status: event.status,
-      gate_type: event.gate_type
-    }));
+    return sessionData.events
+      .filter(event => consistFilter === 'all' || event.consist_id === consistFilter)
+      .map((event, idx) => ({
+        index: idx + 1,
+        timestamp: event.timestamp,
+        time: formatTime(event.timestamp),
+        delta_t_c10: event.consist_id === 10 ? event.delta_t : null,
+        delta_t_c11: event.consist_id === 11 ? event.delta_t : null,
+        status: event.status,
+        gate_type: event.gate_type
+      }));
   };
 
   if (!isOpen) return null;
@@ -251,7 +255,44 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               {/* Δt Trends Chart */}
               {sessionData && sessionData.events && sessionData.events.length > 0 && (
                 <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700 overflow-x-hidden">
-                  <h3 className="text-xl font-bold text-white mb-4">Δt Trends</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-white">Δt Trends</h3>
+
+                    {/* Consist Filter Toggle */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setConsistFilter('all')}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                          consistFilter === 'all'
+                            ? 'bg-slate-600 text-white'
+                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                        }`}
+                      >
+                        All Consists
+                      </button>
+                      <button
+                        onClick={() => setConsistFilter(10)}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                          consistFilter === 10
+                            ? 'bg-fuchsia-600 text-white'
+                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                        }`}
+                      >
+                        Consist 10
+                      </button>
+                      <button
+                        onClick={() => setConsistFilter(11)}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                          consistFilter === 11
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                        }`}
+                      >
+                        Consist 11
+                      </button>
+                    </div>
+                  </div>
+
                   <ResponsiveContainer width="100%" height={400}>
                     <LineChart data={prepareChartData()}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -267,7 +308,30 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <ReferenceLine y={-1} stroke="#f59e0b" strokeDasharray="3 3" />
                       <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
                       <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
-                      <Line type="monotone" dataKey="delta_t" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+
+                      {/* Show both lines when 'all', single line when filtered */}
+                      {(consistFilter === 'all' || consistFilter === 10) && (
+                        <Line
+                          type="monotone"
+                          dataKey="delta_t_c10"
+                          stroke="#d946ef"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          name="Consist 10"
+                          connectNulls={false}
+                        />
+                      )}
+                      {(consistFilter === 'all' || consistFilter === 11) && (
+                        <Line
+                          type="monotone"
+                          dataKey="delta_t_c11"
+                          stroke="#3b82f6"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          name="Consist 11"
+                          connectNulls={false}
+                        />
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -311,16 +375,56 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               {/* Δt Trends Chart - ALL sessions concatenated */}
               {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
                 <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700 overflow-x-hidden">
-                  <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-white">Δt Trends (All Sessions)</h3>
+
+                    {/* Consist Filter Toggle */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setConsistFilter('all')}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                          consistFilter === 'all'
+                            ? 'bg-slate-600 text-white'
+                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                        }`}
+                      >
+                        All Consists
+                      </button>
+                      <button
+                        onClick={() => setConsistFilter(10)}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                          consistFilter === 10
+                            ? 'bg-fuchsia-600 text-white'
+                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                        }`}
+                      >
+                        Consist 10
+                      </button>
+                      <button
+                        onClick={() => setConsistFilter(11)}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                          consistFilter === 11
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                        }`}
+                      >
+                        Consist 11
+                      </button>
+                    </div>
+                  </div>
+
                   <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={cumulativeData.delta_t_events.map((event, idx) => ({
-                      index: idx + 1,
-                      timestamp: event.timestamp,
-                      time: formatTime(event.timestamp),
-                      delta_t: event.delta_t,
-                      status: event.status,
-                      gate_type: event.gate_type
-                    }))}>
+                    <LineChart data={cumulativeData.delta_t_events
+                      .filter(event => consistFilter === 'all' || event.consist_id === consistFilter)
+                      .map((event, idx) => ({
+                        index: idx + 1,
+                        timestamp: event.timestamp,
+                        time: formatTime(event.timestamp),
+                        delta_t_c10: event.consist_id === 10 ? event.delta_t : null,
+                        delta_t_c11: event.consist_id === 11 ? event.delta_t : null,
+                        status: event.status,
+                        gate_type: event.gate_type
+                      }))}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="time" stroke="#9CA3AF" />
                       <YAxis stroke="#9CA3AF" label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
@@ -334,7 +438,30 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <ReferenceLine y={-1} stroke="#f59e0b" strokeDasharray="3 3" />
                       <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
                       <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
-                      <Line type="monotone" dataKey="delta_t" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+
+                      {/* Show both lines when 'all', single line when filtered */}
+                      {(consistFilter === 'all' || consistFilter === 10) && (
+                        <Line
+                          type="monotone"
+                          dataKey="delta_t_c10"
+                          stroke="#d946ef"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          name="Consist 10"
+                          connectNulls={false}
+                        />
+                      )}
+                      {(consistFilter === 'all' || consistFilter === 11) && (
+                        <Line
+                          type="monotone"
+                          dataKey="delta_t_c11"
+                          stroke="#3b82f6"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          name="Consist 11"
+                          connectNulls={false}
+                        />
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
