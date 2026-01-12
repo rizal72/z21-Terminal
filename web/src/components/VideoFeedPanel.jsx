@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import GateEditor from './GateEditor';
 
-export default function VideoFeedPanel({ apiUrl, editMode, onEditModeChange, debugMode, onDebugModeChange }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export default function VideoFeedPanel({ apiUrl, isExpanded, onExpandChange, editMode, onEditModeChange, debugMode, onDebugModeChange }) {
   const [isMobile, setIsMobile] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const containerRef = useRef(null);
@@ -71,7 +70,7 @@ export default function VideoFeedPanel({ apiUrl, editMode, onEditModeChange, deb
     <div className="w-full mb-6">
       {/* Collapsible Header */}
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={() => onExpandChange(!isExpanded)}
         className="w-full flex items-center justify-between p-4 bg-control-dark rounded-lg hover:bg-control-grey transition-colors"
       >
         <div className="flex items-center gap-3">

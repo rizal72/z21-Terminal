@@ -60,6 +60,7 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // Mobile hamburger menu
   const [consistManagerOpen, setConsistManagerOpen] = useState(false); // Consist Manager modal (Phase 6B)
   const [analyticsOpen, setAnalyticsOpen] = useState(false); // Analytics dashboard (desktop-only)
+  const [videoFeedExpanded, setVideoFeedExpanded] = useState(false); // Video feed panel expand/collapse
   const [editMode, setEditMode] = useState(false); // Gate editor mode
   const [debugMode, setDebugMode] = useState(false); // Debug overlay mode
   const [cvProfileMode, setCvProfileMode] = useState('normal'); // CV Profile mode: 'normal' or 'testing'
@@ -1297,6 +1298,8 @@ function App() {
         {/* Video Feed Panel - Collapsible */}
         <VideoFeedPanel
           apiUrl={API_URL}
+          isExpanded={videoFeedExpanded}
+          onExpandChange={setVideoFeedExpanded}
           editMode={editMode}
           onEditModeChange={setEditMode}
           debugMode={debugMode}
