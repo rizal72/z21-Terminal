@@ -1305,8 +1305,6 @@ async def websocket_endpoint(websocket: WebSocket):
                             await tracking_manager.on_speed_change(address, speed)
 
                         # Notify tracking daemon of speed change (for dynamic FPS)
-                        if debug_enabled:
-                            log('[DEBUG]', f"Speed change: address={address}, tracking_daemon_ws={'connected' if tracking_daemon_ws else 'None'}, in_consist_data={address in consist_data}")
                         if tracking_daemon_ws and address in consist_data:
                             try:
                                 await tracking_daemon_ws.send_json({
@@ -1314,12 +1312,9 @@ async def websocket_endpoint(websocket: WebSocket):
                                     'consist_address': address,
                                     'speed': speed
                                 })
-                                if debug_enabled:
-                                    log('[DEBUG]', f"Sent consist_speed_update: consist={address}, speed={speed}")
-                            except Exception as e:
+                            except Exception:
                                 # Daemon disconnected, will be cleared on next loop
-                                log('[WARN]', f"Failed to send consist_speed_update: {e}")
-                                tracking_daemon_ws = None
+                                pass
 
                 elif message_type == 'set_direction':
                     address = data.get('address')
