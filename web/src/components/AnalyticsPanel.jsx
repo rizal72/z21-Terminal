@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
-  const [viewMode, setViewMode] = useState('current'); // 'current' or 'cumulative'
+  const [viewMode, setViewMode] = useState('current'); // 'current', 'cumulative', or 'overview'
   const [currentSession, setCurrentSession] = useState(null);
   const [sessionData, setSessionData] = useState(null);
   const [cumulativeData, setCumulativeData] = useState(null);
@@ -208,6 +208,17 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               <i className="fa-solid fa-database mr-2"></i>
               Cumulative History
             </button>
+            <button
+              onClick={() => handleViewToggle('overview')}
+              className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                viewMode === 'overview'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              <i className="fa-solid fa-chart-area mr-2"></i>
+              Overview
+            </button>
           </div>
 
           {/* Refresh Button */}
@@ -215,7 +226,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
             onClick={() => {
               if (viewMode === 'current') {
                 loadCurrentSession();
-              } else {
+              } else if (viewMode === 'cumulative' || viewMode === 'overview') {
                 loadCumulativeData();
               }
             }}
@@ -493,6 +504,110 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       );
                     })()}
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Overview Mode */}
+          {viewMode === 'overview' && cumulativeData && !loading && (
+            <div className="space-y-6">
+              {/* Stats Cards */}
+              <div className="grid grid-cols-4 gap-4">
+                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                  <div className="text-sm text-slate-400">Average Δt</div>
+                  <div className="text-2xl font-bold text-white mt-1">
+                    {cumulativeData.delta_t_events.length > 0
+                      ? (cumulativeData.delta_t_events.reduce((sum, e) => sum + Math.abs(e.delta_t), 0) / cumulativeData.delta_t_events.length).toFixed(2) + 's'
+                      : 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                  <div className="text-sm text-slate-400">Best Δt</div>
+                  <div className="text-2xl font-bold text-green-400 mt-1">
+                    {cumulativeData.delta_t_events.length > 0
+                      ? Math.min(...cumulativeData.delta_t_events.map(e => Math.abs(e.delta_t))).toFixed(2) + 's'
+                      : 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                  <div className="text-sm text-slate-400">Worst Δt</div>
+                  <div className="text-2xl font-bold text-red-400 mt-1">
+                    {cumulativeData.delta_t_events.length > 0
+                      ? Math.max(...cumulativeData.delta_t_events.map(e => Math.abs(e.delta_t))).toFixed(2) + 's'
+                      : 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                  <div className="text-sm text-slate-400">SYNCED Rate</div>
+                  <div className="text-2xl font-bold text-green-400 mt-1">
+                    {cumulativeData.delta_t_events.length > 0
+                      ? ((cumulativeData.delta_t_events.filter(e => e.status === 'SYNCED').length / cumulativeData.delta_t_events.length) * 100).toFixed(0) + '%'
+                      : 'N/A'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Full Overview Chart - All Events in Fixed Width */}
+              {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
+                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-white">Trend Overview (All Sessions)</h3>
+                    <div className="text-sm text-slate-400">{cumulativeData.delta_t_events.length} events</div>
+                  </div>
+
+                  {/* Fixed width chart - all events visible */}
+                  <ResponsiveContainer width="100%" height={400}>
+                    {(() => {
+                      const chartData = cumulativeData.delta_t_events.map((event, idx) => ({
+                        index: idx + 1,
+                        timestamp: event.timestamp,
+                        time: idx % Math.ceil(cumulativeData.delta_t_events.length / 20) === 0 ? formatTime(event.timestamp) : '',
+                        delta_t_c10: event.consist_id === 10 ? parseFloat(event.delta_t.toFixed(2)) : null,
+                        delta_t_c11: event.consist_id === 11 ? parseFloat(event.delta_t.toFixed(2)) : null,
+                        status: event.status,
+                        gate_type: event.gate_type
+                      }));
+
+                      return (
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                          <XAxis dataKey="time" stroke="#9CA3AF" />
+                          <YAxis stroke="#9CA3AF" label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
+                            labelStyle={{ color: '#e2e8f0' }}
+                            formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
+                          />
+                          <Legend />
+                          <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
+                          <ReferenceLine y={1} stroke="#f59e0b" strokeDasharray="3 3" label="WARNING" />
+                          <ReferenceLine y={-1} stroke="#f59e0b" strokeDasharray="3 3" />
+                          <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
+                          <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
+
+                          <Line
+                            type="monotone"
+                            dataKey="delta_t_c10"
+                            stroke="#d946ef"
+                            strokeWidth={1.5}
+                            dot={false}
+                            name="Consist 10"
+                            connectNulls={true}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="delta_t_c11"
+                            stroke="#3b82f6"
+                            strokeWidth={1.5}
+                            dot={false}
+                            name="Consist 11"
+                            connectNulls={true}
+                          />
+                        </LineChart>
+                      );
+                    })()}
+                  </ResponsiveContainer>
                 </div>
               )}
             </div>
