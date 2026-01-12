@@ -70,7 +70,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
   const handleViewToggle = (newView) => {
     setViewMode(newView);
-    setCumulativeData(null);
+
+    // Auto-refresh data on view change
+    loadCumulativeData();
 
     // Force GPU cleanup after view change (Chrome rendering fix)
     requestAnimationFrame(() => {
@@ -225,7 +227,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
               {/* Δt Trends Chart - ALL sessions concatenated */}
               {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
-                <div key={viewMode} className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-bold text-white">Δt Trends (All Sessions)</h3>
 
