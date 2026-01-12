@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
@@ -9,6 +9,10 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [consistFilter, setConsistFilter] = useState('all'); // 'all', 10, 11
+
+  // Refs for auto-scroll to end
+  const scrollRefCurrent = useRef(null);
+  const scrollRefCumulative = useRef(null);
 
   // Desktop-only enforcement
   useEffect(() => {
@@ -44,6 +48,19 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       loadCumulativeData();
     }
   }, [isOpen, viewMode]);
+
+  // Auto-scroll to end when data loads
+  useEffect(() => {
+    if (viewMode === 'current' && sessionData && scrollRefCurrent.current) {
+      scrollRefCurrent.current.scrollLeft = scrollRefCurrent.current.scrollWidth;
+    }
+  }, [sessionData, viewMode]);
+
+  useEffect(() => {
+    if (viewMode === 'cumulative' && cumulativeData && scrollRefCumulative.current) {
+      scrollRefCumulative.current.scrollLeft = scrollRefCumulative.current.scrollWidth;
+    }
+  }, [cumulativeData, viewMode]);
 
   const loadCurrentSession = async () => {
     try {
@@ -293,7 +310,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto">
+                  <div ref={scrollRefCurrent} className="overflow-x-auto">
                     <ResponsiveContainer width={Math.max(prepareChartData().length * 60, 800)} height={400}>
                       <LineChart data={prepareChartData()}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -415,7 +432,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto">
+                  <div ref={scrollRefCumulative} className="overflow-x-auto">
                     {(() => {
                       const chartData = cumulativeData.delta_t_events
                         .filter(event => consistFilter === 'all' || event.consist_id === consistFilter)
