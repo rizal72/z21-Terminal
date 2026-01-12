@@ -157,8 +157,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
         index: idx + 1,
         timestamp: event.timestamp,
         time: formatTime(event.timestamp),
-        delta_t_c10: event.consist_id === 10 ? event.delta_t : null,
-        delta_t_c11: event.consist_id === 11 ? event.delta_t : null,
+        delta_t_c10: event.consist_id === 10 ? parseFloat(event.delta_t.toFixed(2)) : null,
+        delta_t_c11: event.consist_id === 11 ? parseFloat(event.delta_t.toFixed(2)) : null,
         status: event.status,
         gate_type: event.gate_type
       }));
@@ -319,6 +319,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <Tooltip
                         contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
                         labelStyle={{ color: '#e2e8f0' }}
+                        formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
                       />
                       <Legend />
                       <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
@@ -440,8 +441,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           index: idx + 1,
                           timestamp: event.timestamp,
                           time: formatTime(event.timestamp),
-                          delta_t_c10: event.consist_id === 10 ? event.delta_t : null,
-                          delta_t_c11: event.consist_id === 11 ? event.delta_t : null,
+                          delta_t_c10: event.consist_id === 10 ? parseFloat(event.delta_t.toFixed(2)) : null,
+                          delta_t_c11: event.consist_id === 11 ? parseFloat(event.delta_t.toFixed(2)) : null,
                           status: event.status,
                           gate_type: event.gate_type
                         }));
@@ -455,6 +456,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <Tooltip
                         contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
                         labelStyle={{ color: '#e2e8f0' }}
+                        formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
                       />
                       <Legend />
                       <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
