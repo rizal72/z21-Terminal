@@ -1676,8 +1676,9 @@ async def get_session_data(session_id: str):
 
 @app.get("/api/analytics/cumulative")
 async def get_cumulative_stats():
-    """Get all sessions aggregated statistics"""
+    """Get all sessions aggregated statistics with full event data for charts"""
     import sqlite3
+    from collections import defaultdict
     db_path = Path(__file__).parent.parent / "data" / "analytics.db"
 
     if not db_path.exists():
@@ -1702,15 +1703,51 @@ async def get_cumulative_stats():
     cursor.execute("SELECT COUNT(*) FROM sessions WHERE validated = 1")
     total_sessions = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM events WHERE event_type = 'delta_t'")
-    total_delta_t_events = cursor.fetchone()[0]
+    # Get gate crossings aggregate (count per consist)
+    cursor.execute("SELECT data FROM events WHERE event_type = 'gate_crossing'")
+    gate_crossings = defaultdict(int)
+    for row in cursor.fetchall():
+        data = json.loads(row[0])
+        gate_crossings[data['consist_id']] += 1
+
+    # Get ALL delta_t events (chronologically ordered for continuous timeline)
+    cursor.execute(
+        "SELECT timestamp, data FROM events WHERE event_type = 'delta_t' ORDER BY timestamp"
+    )
+    delta_t_events = []
+    for row in cursor.fetchall():
+        data = json.loads(row[1])
+        delta_t_events.append({
+            'timestamp': row[0],
+            'consist_id': data['consist_id'],
+            'delta_t': data['delta_t'],
+            'status': data['status'],
+            'gate_type': data['gate_type']
+        })
+
+    # Get ALL YOLO performance events (FPS, confidence over time)
+    cursor.execute(
+        "SELECT timestamp, data FROM events WHERE event_type = 'yolo_performance' ORDER BY timestamp"
+    )
+    yolo_performance = []
+    for row in cursor.fetchall():
+        data = json.loads(row[1])
+        yolo_performance.append({
+            'timestamp': row[0],
+            'avg_fps': data.get('avg_fps', 0),
+            'avg_confidence': data.get('avg_confidence', 0),
+            'miss_rate': data.get('miss_rate', 0)
+        })
 
     conn.close()
 
     return {
         'total_sessions': total_sessions,
-        'total_delta_t_events': total_delta_t_events,
-        'sessions': sessions
+        'total_delta_t_events': len(delta_t_events),
+        'sessions': sessions,
+        'gate_crossings': dict(gate_crossings),
+        'delta_t_events': delta_t_events,
+        'yolo_performance': yolo_performance
     }
 
 

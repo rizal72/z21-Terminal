@@ -260,7 +260,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           {viewMode === 'cumulative' && cumulativeData && !loading && (
             <div className="space-y-6">
               {/* Overall Stats */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                   <div className="text-sm text-slate-400">Total Sessions</div>
                   <div className="text-3xl font-bold text-white mt-1">{cumulativeData.total_sessions}</div>
@@ -269,41 +269,43 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   <div className="text-sm text-slate-400">Total Δt Events</div>
                   <div className="text-3xl font-bold text-white mt-1">{cumulativeData.total_delta_t_events}</div>
                 </div>
+                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                  <div className="text-sm text-slate-400">Gate Crossings (Consist 11)</div>
+                  <div className="text-3xl font-bold text-white mt-1">{cumulativeData.gate_crossings?.[11] || 0}</div>
+                </div>
               </div>
 
-              {/* Sessions Table */}
-              <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                <h3 className="text-xl font-bold text-white mb-4">Session History</h3>
-                {cumulativeData.sessions && cumulativeData.sessions.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="border-b border-slate-700">
-                          <th className="pb-3 text-slate-400 font-medium">Session ID</th>
-                          <th className="pb-3 text-slate-400 font-medium">Start Time</th>
-                          <th className="pb-3 text-slate-400 font-medium">Duration</th>
-                          <th className="pb-3 text-slate-400 font-medium">Events</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {cumulativeData.sessions.map((session) => (
-                          <tr key={session.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                            <td className="py-3 text-white font-mono text-sm">{session.id}</td>
-                            <td className="py-3 text-slate-300">{new Date(session.start_time * 1000).toLocaleString('it-IT')}</td>
-                            <td className="py-3 text-slate-300">{formatDuration(session.duration)}</td>
-                            <td className="py-3 text-slate-300">{session.event_count}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-slate-400">
-                    <i className="fa-solid fa-database text-4xl mb-4"></i>
-                    <p>No session history yet.</p>
-                  </div>
-                )}
-              </div>
+              {/* Δt Trends Chart - ALL sessions concatenated */}
+              {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
+                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+                  <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <LineChart data={cumulativeData.delta_t_events.map((event, idx) => ({
+                      index: idx + 1,
+                      timestamp: event.timestamp,
+                      time: formatTime(event.timestamp),
+                      delta_t: event.delta_t,
+                      status: event.status,
+                      gate_type: event.gate_type
+                    }))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="time" stroke="#9CA3AF" />
+                      <YAxis stroke="#9CA3AF" label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
+                        labelStyle={{ color: '#e2e8f0' }}
+                      />
+                      <Legend />
+                      <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
+                      <ReferenceLine y={1} stroke="#f59e0b" strokeDasharray="3 3" label="WARNING" />
+                      <ReferenceLine y={-1} stroke="#f59e0b" strokeDasharray="3 3" />
+                      <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
+                      <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
+                      <Line type="monotone" dataKey="delta_t" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           )}
         </div>
