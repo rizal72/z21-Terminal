@@ -66,6 +66,119 @@ const getConsistBgClass = (consistId, consistConfig) => {
   return index >= 0 ? CONSIST_BG_CLASSES[index % CONSIST_BG_CLASSES.length] : 'bg-slate-600';
 };
 
+// Helper: format timestamp for display
+const formatTime = (timestamp) => {
+  const date = new Date(timestamp * 1000);
+  return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+};
+
+// Helper: Prepare Plotly trace with session boundaries
+const preparePlotlyTrace = (events, consistId, minTimestamp) => {
+  if (!events || events.length === 0) return { x: [], y: [], text: [] };
+
+  const consistEvents = events
+    .filter(e => e.consist_id === consistId)
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  if (consistEvents.length === 0) return { x: [], y: [], text: [] };
+
+  const x = [];
+  const y = [];
+  const text = [];
+
+  for (let i = 0; i < consistEvents.length; i++) {
+    const event = consistEvents[i];
+    const prevEvent = consistEvents[i - 1];
+
+    // Insert null when session changes (line break)
+    if (prevEvent && event.session_id !== prevEvent.session_id) {
+      x.push(null);
+      y.push(null);
+      text.push('');
+    }
+
+    // Add event with RELATIVE timestamp (seconds from start)
+    const relativeSeconds = event.timestamp - minTimestamp;
+    x.push(relativeSeconds);
+    y.push(parseFloat(event.delta_t.toFixed(2)));
+    text.push(`Session ${event.session_id}<br>${formatTime(event.timestamp)}`);
+  }
+
+  return { x, y, text };
+};
+
+// Plotly Δt Chart Component (defined outside to prevent re-creation on every render)
+const PlotlyDeltaTChart = ({ data, consistFilter, trackingConfig }) => {
+  // Calculate global min timestamp for relative positioning
+  const minTimestamp = Math.min(...data.map(e => e.timestamp));
+
+  const consistIds = Object.keys(trackingConfig.consists).map(Number).sort((a, b) => a - b);
+  const renderConsistIds = consistFilter === 'all' ? consistIds : consistIds.filter(cid => cid === consistFilter);
+
+  const traces = renderConsistIds.map(consistId => {
+    const traceData = preparePlotlyTrace(data, consistId, minTimestamp);
+    return {
+      x: traceData.x,
+      y: traceData.y,
+      text: traceData.text,
+      type: 'scatter',
+      mode: 'lines+markers',
+      name: trackingConfig.consists[consistId]?.name || `Consist ${consistId}`,
+      line: { color: getConsistStrokeColor(consistId, trackingConfig.consists), width: 2 },
+      marker: { size: 4 },
+      connectgaps: false,
+      hovertemplate: '<b>%{text}</b><br>Δt: %{y:.2f}s<extra></extra>'
+    };
+  });
+
+  const layout = {
+    autosize: true,
+    height: 400,
+    margin: { l: 60, r: 40, t: 20, b: 60 },
+    plot_bgcolor: '#1e293b',
+    paper_bgcolor: '#1e293b',
+    font: { color: '#e2e8f0' },
+    xaxis: {
+      title: 'Time (seconds from start)',
+      gridcolor: '#374151',
+      color: '#9CA3AF'
+    },
+    yaxis: {
+      title: 'Δt (seconds)',
+      gridcolor: '#374151',
+      zeroline: true,
+      zerolinecolor: '#10b981',
+      color: '#9CA3AF'
+    },
+    shapes: [
+      { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1, y1: 1, line: { color: '#f59e0b', dash: 'dash' } },
+      { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: -1, y1: -1, line: { color: '#f59e0b', dash: 'dash' } },
+      { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1.5, y1: 1.5, line: { color: '#ef4444', dash: 'dash' } },
+      { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: -1.5, y1: -1.5, line: { color: '#ef4444', dash: 'dash' } }
+    ],
+    showlegend: consistFilter === 'all',
+    legend: { bgcolor: 'rgba(30,41,59,0.8)', bordercolor: '#475569', borderwidth: 1 }
+  };
+
+  const config = {
+    displayModeBar: true,
+    displaylogo: false
+  };
+
+  return (
+    <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+      <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
+      <Plot
+        data={traces}
+        layout={layout}
+        config={config}
+        style={{ width: '100%' }}
+        useResizeHandler
+      />
+    </div>
+  );
+};
+
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current' or 'overview'
   const [cumulativeData, setCumulativeData] = useState(null);
@@ -217,12 +330,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     });
   };
 
-  // Format timestamp for chart X-axis
-  const formatTime = (timestamp) => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  };
-
   // Format duration (seconds → mm:ss)
   const formatDuration = (seconds) => {
     if (!seconds) return 'N/A';
@@ -255,113 +362,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           gate_type: event.gate_type
         };
       });
-  };
-
-  // Prepare Plotly trace with session boundaries (Plotly)
-  const preparePlotlyTrace = (events, consistId, minTimestamp) => {
-    if (!events || events.length === 0) return { x: [], y: [], text: [] };
-
-    const consistEvents = events
-      .filter(e => e.consist_id === consistId)
-      .sort((a, b) => a.timestamp - b.timestamp);
-
-    if (consistEvents.length === 0) return { x: [], y: [], text: [] };
-
-    const x = [];
-    const y = [];
-    const text = [];
-
-    for (let i = 0; i < consistEvents.length; i++) {
-      const event = consistEvents[i];
-      const prevEvent = consistEvents[i - 1];
-
-      // Insert null when session changes (line break)
-      if (prevEvent && event.session_id !== prevEvent.session_id) {
-        x.push(null);
-        y.push(null);
-        text.push('');
-      }
-
-      // Add event with RELATIVE timestamp (seconds from start)
-      const relativeSeconds = event.timestamp - minTimestamp;
-      x.push(relativeSeconds);
-      y.push(parseFloat(event.delta_t.toFixed(2)));
-      text.push(`Session ${event.session_id}<br>${formatTime(event.timestamp)}`);
-    }
-
-    return { x, y, text };
-  };
-
-  // Plotly component using react-plotly.js native wrapper
-  const PlotlyDeltaTChart = ({ data, consistFilter, trackingConfig }) => {
-    // Calculate global min timestamp for relative positioning
-    const minTimestamp = Math.min(...data.map(e => e.timestamp));
-
-    const consistIds = Object.keys(trackingConfig.consists).map(Number).sort((a, b) => a - b);
-    const renderConsistIds = consistFilter === 'all' ? consistIds : consistIds.filter(cid => cid === consistFilter);
-
-    const traces = renderConsistIds.map(consistId => {
-      const traceData = preparePlotlyTrace(data, consistId, minTimestamp);
-      return {
-        x: traceData.x,
-        y: traceData.y,
-        text: traceData.text,
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: trackingConfig.consists[consistId]?.name || `Consist ${consistId}`,
-        line: { color: getConsistStrokeColor(consistId, trackingConfig.consists), width: 2 },
-        marker: { size: 4 },
-        connectgaps: false,
-        hovertemplate: '<b>%{text}</b><br>Δt: %{y:.2f}s<extra></extra>'
-      };
-    });
-
-    const layout = {
-      autosize: true,
-      height: 400,
-      margin: { l: 60, r: 40, t: 20, b: 60 },
-      plot_bgcolor: '#1e293b',
-      paper_bgcolor: '#1e293b',
-      font: { color: '#e2e8f0' },
-      xaxis: {
-        title: 'Time (seconds from start)',
-        gridcolor: '#374151',
-        color: '#9CA3AF'
-      },
-      yaxis: {
-        title: 'Δt (seconds)',
-        gridcolor: '#374151',
-        zeroline: true,
-        zerolinecolor: '#10b981',
-        color: '#9CA3AF'
-      },
-      shapes: [
-        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1, y1: 1, line: { color: '#f59e0b', dash: 'dash' } },
-        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: -1, y1: -1, line: { color: '#f59e0b', dash: 'dash' } },
-        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1.5, y1: 1.5, line: { color: '#ef4444', dash: 'dash' } },
-        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: -1.5, y1: -1.5, line: { color: '#ef4444', dash: 'dash' } }
-      ],
-      showlegend: consistFilter === 'all',
-      legend: { bgcolor: 'rgba(30,41,59,0.8)', bordercolor: '#475569', borderwidth: 1 }
-    };
-
-    const config = {
-      displayModeBar: true,
-      displaylogo: false
-    };
-
-    return (
-      <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-        <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
-        <Plot
-          data={traces}
-          layout={layout}
-          config={config}
-          style={{ width: '100%' }}
-          useResizeHandler
-        />
-      </div>
-    );
   };
 
   if (!isOpen) return null;
