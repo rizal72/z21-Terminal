@@ -9,18 +9,10 @@ const LOCO_COLORS = {
   8: '#FF0000',  // Red (E444 056)
 };
 
-// Consist to locomotive address mapping
-const CONSIST_ADDRESSES = {
-  10: [1, 5],  // Consist 10: Gr.675 017, D645 014
-  11: [7, 8]   // Consist 11: E656 239, E444 056
-};
-
-// Consist color classes for UI labels
-const CONSIST_COLORS = {
-  all: 'text-white',
-  10: 'text-fuchsia-400',
-  11: 'text-blue-400'
-};
+// Consist colors (dynamic assignment, cyclic if > colors available)
+const CONSIST_COLOR_PALETTE = ['#d946ef', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+const CONSIST_COLOR_CLASSES = ['text-fuchsia-400', 'text-blue-400', 'text-green-400', 'text-amber-400', 'text-red-400', 'text-purple-400'];
+const CONSIST_BG_CLASSES = ['bg-fuchsia-600', 'bg-blue-600', 'bg-green-600', 'bg-amber-600', 'bg-red-600', 'bg-purple-600'];
 
 // Shared chart styles (dark mode)
 const TOOLTIP_STYLES = {
@@ -42,11 +34,36 @@ const filterEventsBySession = (events, viewMode, currentSession) => {
   return events || [];
 };
 
-const getAddressFilter = (consistFilter) =>
-  consistFilter === 'all' ? [1, 5, 7, 8] : CONSIST_ADDRESSES[consistFilter];
+// Helper: get locomotive addresses for consist filter (dynamic from config)
+const getAddressFilter = (consistFilter, consistConfig) => {
+  if (consistFilter === 'all') {
+    // All consists: flatten all addresses
+    return Object.values(consistConfig).flatMap(c => c.addresses);
+  }
+  return consistConfig[consistFilter]?.addresses || [];
+};
 
-const getConsistColor = (consist, defaultColor = 'text-white') =>
-  CONSIST_COLORS[consist] || defaultColor;
+// Helper: get consist stroke color (cyclic palette)
+const getConsistStrokeColor = (consistId, consistConfig) => {
+  const consistIds = Object.keys(consistConfig).map(Number).sort((a, b) => a - b);
+  const index = consistIds.indexOf(consistId);
+  return index >= 0 ? CONSIST_COLOR_PALETTE[index % CONSIST_COLOR_PALETTE.length] : '#9CA3AF';
+};
+
+// Helper: get consist text color class (cyclic palette)
+const getConsistColorClass = (consistFilter, consistConfig, defaultColor = 'text-white') => {
+  if (consistFilter === 'all') return defaultColor;
+  const consistIds = Object.keys(consistConfig).map(Number).sort((a, b) => a - b);
+  const index = consistIds.indexOf(consistFilter);
+  return index >= 0 ? CONSIST_COLOR_CLASSES[index % CONSIST_COLOR_CLASSES.length] : defaultColor;
+};
+
+// Helper: get consist background color class for buttons (cyclic palette)
+const getConsistBgClass = (consistId, consistConfig) => {
+  const consistIds = Object.keys(consistConfig).map(Number).sort((a, b) => a - b);
+  const index = consistIds.indexOf(consistId);
+  return index >= 0 ? CONSIST_BG_CLASSES[index % CONSIST_BG_CLASSES.length] : 'bg-slate-600';
+};
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current' or 'overview'
@@ -55,8 +72,11 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   const [locoStats, setLocoStats] = useState(null); // Locomotive operating time stats
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [consistFilter, setConsistFilter] = useState('all'); // 'all', 10, 11
-  const [trackingConfig, setTrackingConfig] = useState({ idle_timeout_seconds: 10 }); // Tracking config (default fallback)
+  const [consistFilter, setConsistFilter] = useState('all'); // 'all', 10, 11, etc. (dynamic)
+  const [trackingConfig, setTrackingConfig] = useState({
+    idle_timeout_seconds: 10,
+    consists: {} // { 10: { name, lead_address, rear_address, addresses: [...] }, 11: {...} }
+  });
 
   // Refs for auto-scroll to end
   const scrollRefSession = useRef(null);
@@ -211,21 +231,28 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   };
 
   // Insert null points to break chart lines during idle periods (matches backend tracking cooldown)
-  const breakLineOnIdle = (events, idleTimeoutSeconds) => {
+  // Dynamic: generates delta_t_cXX fields based on consistConfig
+  const breakLineOnIdle = (events, idleTimeoutSeconds, consistConfig) => {
     if (!events || events.length === 0) return [];
 
+    const consistIds = Object.keys(consistConfig).map(Number);
     const result = [];
 
     for (let i = 0; i < events.length; i++) {
       const event = events[i];
+
+      // Build dynamic delta_t fields for each consist
+      const deltaFields = {};
+      consistIds.forEach(cid => {
+        deltaFields[`delta_t_c${cid}`] = event.consist_id === cid ? parseFloat(event.delta_t.toFixed(2)) : null;
+      });
 
       // Add current event
       result.push({
         index: result.length + 1,
         timestamp: event.timestamp,
         time: formatTime(event.timestamp),
-        delta_t_c10: event.consist_id === 10 ? parseFloat(event.delta_t.toFixed(2)) : null,
-        delta_t_c11: event.consist_id === 11 ? parseFloat(event.delta_t.toFixed(2)) : null,
+        ...deltaFields,
         status: event.status,
         gate_type: event.gate_type
       });
@@ -236,13 +263,17 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
         const gap = nextEvent.timestamp - event.timestamp;
 
         if (gap > idleTimeoutSeconds) {
-          // Insert null point (line break = idle period)
+          // Insert null point (line break = idle period) - all delta_t fields null
+          const nullFields = {};
+          consistIds.forEach(cid => {
+            nullFields[`delta_t_c${cid}`] = null;
+          });
+
           result.push({
             index: result.length + 1,
             timestamp: event.timestamp + gap / 2,
             time: formatTime(event.timestamp + gap / 2),
-            delta_t_c10: null,
-            delta_t_c11: null,
+            ...nullFields,
             status: 'idle',
             gate_type: null
           });
@@ -382,9 +413,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                   <div className="text-sm text-slate-400">
                     Gate Crossings
-                    {consistFilter === 'all' ? ' (All)' : consistFilter === 10 ? ' (C10)' : ' (C11)'}
+                    {consistFilter === 'all' ? ' (All)' : ` (C${consistFilter})`}
                   </div>
-                  <div className={`text-3xl font-bold mt-1 ${getConsistColor(consistFilter, 'text-white')}`}>
+                  <div className={`text-3xl font-bold mt-1 ${getConsistColorClass(consistFilter, trackingConfig.consists, 'text-white')}`}>
                     {(() => {
                       let events = cumulativeData.delta_t_events || [];
 
@@ -407,9 +438,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                   <div className="text-sm text-slate-400">
                     Critical Events
-                    {consistFilter === 'all' ? ' (All)' : consistFilter === 10 ? ' (C10)' : ' (C11)'}
+                    {consistFilter === 'all' ? ' (All)' : ` (C${consistFilter})`}
                   </div>
-                  <div className={`text-3xl font-bold mt-1 ${getConsistColor(consistFilter, 'text-red-400')}`}>
+                  <div className={`text-3xl font-bold mt-1 ${getConsistColorClass(consistFilter, trackingConfig.consists, 'text-red-400')}`}>
                     {(() => {
                       let events = cumulativeData.delta_t_events || [];
 
@@ -450,26 +481,23 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       >
                         All Consists
                       </button>
-                      <button
-                        onClick={() => setConsistFilter(10)}
-                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                          consistFilter === 10
-                            ? 'bg-fuchsia-600 text-white'
-                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
-                        }`}
-                      >
-                        Consist 10
-                      </button>
-                      <button
-                        onClick={() => setConsistFilter(11)}
-                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                          consistFilter === 11
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
-                        }`}
-                      >
-                        Consist 11
-                      </button>
+                      {/* Dynamic consist filter buttons (from config) */}
+                      {Object.keys(trackingConfig.consists)
+                        .map(Number)
+                        .sort((a, b) => a - b)
+                        .map((consistId) => (
+                          <button
+                            key={consistId}
+                            onClick={() => setConsistFilter(consistId)}
+                            className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                              consistFilter === consistId
+                                ? `${getConsistBgClass(consistId, trackingConfig.consists)} text-white`
+                                : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                            }`}
+                          >
+                            Consist {consistId}
+                          </button>
+                        ))}
                     </div>
                   </div>
 
@@ -478,23 +506,24 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
                     if (consistFilter === 'all') {
                       // For 'All' filter: apply breakLineOnIdle separately per consist, then merge chronologically
-                      // This creates double-null idle points (both delta_t_c10 and delta_t_c11 = null)
+                      // This creates double-null idle points (all delta_t_cXX = null)
                       // connectNulls={true} connects through single nulls (other consist events) but NOT double nulls (idle gaps)
-                      const eventsC10 = cumulativeData.delta_t_events.filter(e => e.consist_id === 10);
-                      const eventsC11 = cumulativeData.delta_t_events.filter(e => e.consist_id === 11);
-
-                      const c10WithBreaks = breakLineOnIdle(eventsC10, trackingConfig.idle_timeout_seconds);
-                      const c11WithBreaks = breakLineOnIdle(eventsC11, trackingConfig.idle_timeout_seconds);
+                      const consistIds = Object.keys(trackingConfig.consists).map(Number);
+                      const allEventsWithBreaks = consistIds.flatMap(cid => {
+                        const eventsForConsist = cumulativeData.delta_t_events.filter(e => e.consist_id === cid);
+                        return breakLineOnIdle(eventsForConsist, trackingConfig.idle_timeout_seconds, trackingConfig.consists);
+                      });
 
                       // Merge chronologically and re-index
-                      chartData = [...c10WithBreaks, ...c11WithBreaks]
+                      chartData = allEventsWithBreaks
                         .sort((a, b) => a.timestamp - b.timestamp)
                         .map((e, idx) => ({ ...e, index: idx + 1 }));
                     } else {
                       // For single consist filter: standard breakLineOnIdle (single-null for other consist, double-null for idle)
                       chartData = breakLineOnIdle(
                         cumulativeData.delta_t_events.filter(event => event.consist_id === consistFilter),
-                        trackingConfig.idle_timeout_seconds
+                        trackingConfig.idle_timeout_seconds,
+                        trackingConfig.consists
                       );
                     }
 
@@ -517,29 +546,23 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
                       <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
 
-                          {/* Show both lines when 'all', single line when filtered */}
-                          {(consistFilter === 'all' || consistFilter === 10) && (
-                            <Line
-                              type="monotone"
-                              dataKey="delta_t_c10"
-                              stroke="#d946ef"
-                              strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                              dot={viewMode === 'current' ? { r: 4 } : false}
-                              name="Consist 10"
-                              connectNulls={true}
-                            />
-                          )}
-                          {(consistFilter === 'all' || consistFilter === 11) && (
-                            <Line
-                              type="monotone"
-                              dataKey="delta_t_c11"
-                              stroke="#3b82f6"
-                              strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                              dot={viewMode === 'current' ? { r: 4 } : false}
-                              name="Consist 11"
-                              connectNulls={true}
-                            />
-                          )}
+                          {/* Dynamic lines: show all when 'all' filter, single when consist filter */}
+                          {Object.keys(trackingConfig.consists)
+                            .map(Number)
+                            .sort((a, b) => a - b)
+                            .filter(consistId => consistFilter === 'all' || consistFilter === consistId)
+                            .map((consistId) => (
+                              <Line
+                                key={consistId}
+                                type="monotone"
+                                dataKey={`delta_t_c${consistId}`}
+                                stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
+                                strokeWidth={viewMode === 'current' ? 2 : 1.5}
+                                dot={viewMode === 'current' ? { r: 4 } : false}
+                                name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
+                                connectNulls={true}
+                              />
+                            ))}
                         </LineChart>
                       </ResponsiveContainer>
                     );
@@ -609,7 +632,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
                         const latestEvent = events[events.length - 1];
                         const avgConfidence = latestEvent.avg_confidence;
-                        const addressFilter = getAddressFilter(consistFilter);
+                        const addressFilter = getAddressFilter(consistFilter, trackingConfig.consists);
 
                         return Object.entries(avgConfidence)
                           .filter(([addr]) => addressFilter.includes(parseInt(addr)))
@@ -634,7 +657,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
                             const latestEvent = events[events.length - 1];
                             const avgConfidence = latestEvent.avg_confidence;
-                            const addressFilter = getAddressFilter(consistFilter);
+                            const addressFilter = getAddressFilter(consistFilter, trackingConfig.consists);
 
                             return Object.entries(avgConfidence)
                               .filter(([addr]) => addressFilter.includes(parseInt(addr)))

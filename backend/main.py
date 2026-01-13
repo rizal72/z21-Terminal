@@ -1108,10 +1108,24 @@ async def get_debug_status():
 
 @app.get("/api/config/tracking")
 async def get_tracking_config():
-    """Get tracking configuration (idle timeout for YOLO tracking and chart line breaks)"""
+    """Get tracking configuration (idle timeout + consist definitions for dynamic analytics)"""
     idle_timeout = config.get('tracking', {}).get('idle_timeout_seconds', 10)
+    consists = config.get('consists', {})
+
+    # Build consist definitions (id → name, addresses)
+    consist_defs = {}
+    for cid, cdata in consists.items():
+        consist_id = int(cid)
+        consist_defs[consist_id] = {
+            "name": cdata.get('name', f'Consist {consist_id}'),
+            "lead_address": cdata.get('lead_address'),
+            "rear_address": cdata.get('rear_address'),
+            "addresses": [cdata.get('lead_address'), cdata.get('rear_address')]
+        }
+
     return {
-        "idle_timeout_seconds": idle_timeout
+        "idle_timeout_seconds": idle_timeout,
+        "consists": consist_defs
     }
 
 
