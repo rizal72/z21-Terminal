@@ -423,7 +423,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                               dataKey="delta_t_c10"
                               stroke="#d946ef"
                               strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                              dot={viewMode === 'current' ? { r: 4 } : false}
+                              dot={viewMode === 'current' ? (props) => {
+                                const { cx, cy, payload } = props;
+                                const value = Math.abs(payload.delta_t_c10 || 0);
+                                const isCritical = value > 1.5;
+                                return <circle cx={cx} cy={cy} r={4} fill={isCritical ? '#ef4444' : '#d946ef'} />;
+                              } : false}
                               name="Consist 10"
                               connectNulls={true}
                             />
@@ -434,7 +439,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                               dataKey="delta_t_c11"
                               stroke="#3b82f6"
                               strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                              dot={viewMode === 'current' ? { r: 4 } : false}
+                              dot={viewMode === 'current' ? (props) => {
+                                const { cx, cy, payload } = props;
+                                const value = Math.abs(payload.delta_t_c11 || 0);
+                                const isCritical = value > 1.5;
+                                return <circle cx={cx} cy={cy} r={4} fill={isCritical ? '#ef4444' : '#3b82f6'} />;
+                              } : false}
                               name="Consist 11"
                               connectNulls={true}
                             />
