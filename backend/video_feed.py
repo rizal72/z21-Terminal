@@ -25,6 +25,51 @@ CONFIG_PATH = project_root / 'config.json'
 CAMERA_CONFIG_PATH = project_root / 'camera_config.json'
 
 
+def hex_to_bgr(hex_color: str) -> tuple:
+    """
+    Convert hex color (#RRGGBB) to BGR tuple for OpenCV.
+
+    Args:
+        hex_color: Hex color string (e.g., "#FFFF00")
+
+    Returns:
+        BGR tuple (e.g., (0, 255, 255))
+    """
+    hex_color = hex_color.lstrip('#')
+    rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    return (rgb[2], rgb[1], rgb[0])  # Swap to BGR
+
+
+def load_locomotive_colors() -> Dict[int, tuple]:
+    """
+    Load locomotive colors from config.json and convert to BGR.
+
+    Returns:
+        Dict mapping DCC address to BGR tuple
+    """
+    try:
+        config = load_config(CONFIG_PATH)
+        loco_colors = config.get('locomotive_colors', {})
+
+        # Convert hex to BGR and int keys
+        colors = {}
+        for address, hex_color in loco_colors.items():
+            if address == 'notes':
+                continue
+            colors[int(address)] = hex_to_bgr(hex_color)
+
+        return colors
+    except Exception as e:
+        log(f"[VIDEO] Error loading locomotive colors: {e}", "error")
+        # Fallback to default colors (old hardcoded values - WRONG BGR)
+        return {
+            1: (0, 255, 255),   # Yellow
+            5: (0, 128, 255),   # Orange
+            7: (0, 255, 0),     # Green
+            8: (0, 0, 255)      # Red
+        }
+
+
 def load_camera_config() -> str:
     """Load camera configuration and build RTSP URL for video feed."""
     try:
@@ -230,13 +275,8 @@ def draw_locomotive_markers(frame: np.ndarray, detections: List[Dict]) -> np.nda
     Returns:
         Frame with locomotive markers
     """
-    # Color mapping for addresses (same as track_consist_yolo.py for consistency)
-    COLORS = {
-        1: (255, 255, 0),   # Loco 1 (Gr675) - Yellow
-        5: (255, 128, 0),   # Loco 5 (D645) - Orange
-        7: (0, 255, 0),     # Loco 7 (E656) - Green
-        8: (0, 0, 255)      # Loco 8 (E444) - Red
-    }
+    # Load colors from config (auto-converted to BGR)
+    COLORS = load_locomotive_colors()
 
     for det in detections:
         address = det.get('address')
@@ -275,13 +315,8 @@ def draw_debug_overlay(frame: np.ndarray, detections: List[Dict]) -> np.ndarray:
     Returns:
         Frame with debug overlay
     """
-    # Color mapping for addresses (same as track_consist_yolo.py for consistency)
-    COLORS = {
-        1: (255, 255, 0),   # Loco 1 (Gr675) - Yellow
-        5: (255, 128, 0),   # Loco 5 (D645) - Orange
-        7: (0, 255, 0),     # Loco 7 (E656) - Green
-        8: (0, 0, 255)      # Loco 8 (E444) - Red
-    }
+    # Load colors from config (auto-converted to BGR)
+    COLORS = load_locomotive_colors()
 
     for det in detections:
         address = det.get('address')

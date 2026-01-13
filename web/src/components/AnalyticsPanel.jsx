@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+
+// Locomotive colors (matches config.json locomotive_colors)
+const LOCO_COLORS = {
+  1: '#FFFF00',  // Yellow (Gr675 017)
+  5: '#FF8000',  // Orange (D645 014)
+  7: '#00FF00',  // Green (E656 239)
+  8: '#FF0000',  // Red (E444 056)
+};
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current' or 'overview'
@@ -520,6 +528,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           .filter(([addr]) => addressFilter.includes(parseInt(addr)))
                           .map(([dcc_addr, conf]) => ({
                             loco: `Loco ${dcc_addr}`,
+                            address: parseInt(dcc_addr),  // Store address for color mapping
                             confidence: parseFloat((conf * 100).toFixed(1)) // Convert to percentage
                           }));
                       })()}>
@@ -532,7 +541,24 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           formatter={(value) => value.toFixed(1) + '%'}
                         />
                         <ReferenceLine y={50} stroke="#ef4444" strokeDasharray="5 5" label={{ value: 'Min Threshold (50%)', position: 'top', fill: '#ef4444' }} />
-                        <Bar dataKey="confidence" fill="#f59e0b" />
+                        <Bar dataKey="confidence">
+                          {(() => {
+                            // Get filtered data to map Cell colors
+                            const consistAddresses = {
+                              10: [1, 5],
+                              11: [7, 8]
+                            };
+                            const addressFilter = consistFilter === 'all'
+                              ? [1, 5, 7, 8]
+                              : consistAddresses[consistFilter];
+
+                            return Object.entries(avgConfidence)
+                              .filter(([addr]) => addressFilter.includes(parseInt(addr)))
+                              .map(([dcc_addr], index) => (
+                                <Cell key={`cell-${index}`} fill={LOCO_COLORS[parseInt(dcc_addr)] || '#9CA3AF'} />
+                              ));
+                          })()}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>

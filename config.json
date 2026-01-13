@@ -3,6 +3,13 @@
     "enabled": false,
     "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (✅🚪⏱️🎯🚂📹), gate crossing (🚦🚪), warnings (⚠️), mode changes (🔄⏸️). SUPPRESSED when false: YOLO pause/resume verbose (🔇🔊)"
   },
+  "locomotive_colors": {
+    "1": "#FFFF00",
+    "5": "#FF8000",
+    "7": "#00FF00",
+    "8": "#FF0000",
+    "notes": "Hex color codes for locomotive visualization (RGB format). Used in video feed markers, analytics charts, and UI badges. Backend auto-converts to BGR for OpenCV."
+  },
   "consists": {
     "10": {
       "name": "Consist 10 - Tracciato Interno (Figura 8)",
