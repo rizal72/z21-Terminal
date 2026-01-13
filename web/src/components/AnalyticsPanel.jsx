@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current' or 'overview'
@@ -429,6 +429,90 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       </div>
                     ) : chartContent;
                   })()}
+                </div>
+              )}
+
+              {/* YOLO Performance Monitoring - FPS & Confidence */}
+              {cumulativeData.yolo_performance && cumulativeData.yolo_performance.length > 0 && (
+                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700 space-y-6">
+                  <h3 className="text-xl font-bold text-white">YOLO Performance Monitoring</h3>
+
+                  {/* FPS Line Chart */}
+                  <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                    <h4 className="text-lg font-semibold text-amber-400 mb-4">Inference FPS Over Time</h4>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={(() => {
+                        // Filter by session if Current view
+                        let events = cumulativeData.yolo_performance;
+                        if (viewMode === 'current' && currentSession) {
+                          events = events.filter(e => e.session_id === currentSession.session_id);
+                        }
+                        return events.map((e, idx) => ({
+                          index: idx + 1,
+                          time: formatTime(e.timestamp),
+                          fps: parseFloat(e.avg_fps.toFixed(1))
+                        }));
+                      })()}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="time" stroke="#9CA3AF" />
+                        <YAxis stroke="#9CA3AF" domain={[0, 35]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
+                          labelStyle={{ color: '#e2e8f0' }}
+                          formatter={(value) => value.toFixed(1) + ' FPS'}
+                        />
+                        <ReferenceLine y={30} stroke="#10b981" strokeDasharray="5 5" label={{ value: 'Target (30 FPS)', position: 'top', fill: '#10b981' }} />
+                        <Line type="monotone" dataKey="fps" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Inference FPS" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Confidence Bar Chart - Per Locomotive (DCC addresses) */}
+                  <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                    <h4 className="text-lg font-semibold text-amber-400 mb-4">Average Confidence per Locomotive</h4>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={(() => {
+                        // Get latest performance event (filtered by session if Current view)
+                        let events = cumulativeData.yolo_performance;
+                        if (viewMode === 'current' && currentSession) {
+                          events = events.filter(e => e.session_id === currentSession.session_id);
+                        }
+                        if (events.length === 0) return [];
+
+                        const latestEvent = events[events.length - 1];
+                        const avgConfidence = latestEvent.avg_confidence;
+
+                        // Convert to bar chart data with consist filtering
+                        // Consist 10: addresses 1, 5 | Consist 11: addresses 7, 8
+                        const consistAddresses = {
+                          10: [1, 5],
+                          11: [7, 8]
+                        };
+
+                        const addressFilter = consistFilter === 'all'
+                          ? [1, 5, 7, 8]
+                          : consistAddresses[consistFilter];
+
+                        return Object.entries(avgConfidence)
+                          .filter(([addr]) => addressFilter.includes(parseInt(addr)))
+                          .map(([dcc_addr, conf]) => ({
+                            loco: `Loco ${dcc_addr}`,
+                            confidence: parseFloat((conf * 100).toFixed(1)) // Convert to percentage
+                          }));
+                      })()}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="loco" stroke="#9CA3AF" />
+                        <YAxis stroke="#9CA3AF" domain={[0, 100]} label={{ value: 'Confidence (%)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
+                          labelStyle={{ color: '#e2e8f0' }}
+                          formatter={(value) => value.toFixed(1) + '%'}
+                        />
+                        <ReferenceLine y={50} stroke="#ef4444" strokeDasharray="5 5" label={{ value: 'Min Threshold (50%)', position: 'top', fill: '#ef4444' }} />
+                        <Bar dataKey="confidence" fill="#f59e0b" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               )}
             </div>

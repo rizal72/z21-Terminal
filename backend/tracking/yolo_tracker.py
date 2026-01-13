@@ -11,6 +11,8 @@ import cv2
 import time
 import numpy as np
 from pathlib import Path
+from collections import deque, defaultdict
+from statistics import mean
 from ultralytics import YOLO
 
 # Import centralized config loader (relative import from backend/)
@@ -34,6 +36,15 @@ ADDRESS_TO_CLASS = {
     5: 1,  # D645 014 (Consist 10 REAR - reference loco)
     7: 2,  # E656 239 (Consist 11 LEAD - sound loco)
     8: 3   # E444 056 (Consist 11 REAR - reference loco)
+}
+
+# Reverse mapping: YOLO class ID → DCC address (for performance tracking)
+# CRITICAL: Use DCC addresses for analytics to ensure consistency across model changes (OBB ↔ Standard)
+YOLO_CLASS_TO_DCC = {
+    0: 1,  # Class 0 → DCC address 1
+    1: 5,  # Class 1 → DCC address 5
+    2: 7,  # Class 2 → DCC address 7
+    3: 8   # Class 3 → DCC address 8
 }
 
 
@@ -331,6 +342,16 @@ class YOLOTracker:
                 'last_ignored_delta_t2_time': 0
             }
 
+        # === YOLO PERFORMANCE TRACKING ===
+        # Track FPS and confidence per DCC address (NOT YOLO class for model switching compatibility)
+        self.performance_stats = {
+            'fps_history': deque(maxlen=60),      # Last 60 frames (~2s at 30fps)
+            'confidence_history': defaultdict(lambda: deque(maxlen=60)),  # Per DCC address
+            'detection_count': 0,
+            'miss_count': 0,  # Expected locos not detected
+            'last_update': time.time()
+        }
+
         if self.debug_enabled:
             log('[INIT]', "YOLO model loaded")
 
@@ -341,6 +362,9 @@ class YOLOTracker:
         Returns:
             detections: dict {class_id: {'pos': (x,y), 'bbox': (x1,y1,x2,y2) or OBB points, 'conf': float, 'name': str}}
         """
+        # Performance tracking: start timer
+        start_time = time.time()
+
         # Run inference (imgsz, confidence, and IoU from config.json)
         results = self.model(frame, conf=self.confidence_threshold, iou=self.iou_threshold, imgsz=self.yolo_imgsz, verbose=False)
 
@@ -407,6 +431,28 @@ class YOLOTracker:
                             'conf': conf,
                             'name': class_name
                         }
+
+        # === PERFORMANCE TRACKING ===
+        # Calculate FPS (inference time)
+        inference_time = time.time() - start_time
+        fps = 1.0 / inference_time if inference_time > 0 else 0
+        self.performance_stats['fps_history'].append(fps)
+
+        # Track confidence per DCC address (NOT YOLO class - model switching compatibility!)
+        for cls, det in detections.items():
+            dcc_address = YOLO_CLASS_TO_DCC.get(cls)
+            if dcc_address:
+                self.performance_stats['confidence_history'][dcc_address].append(det['conf'])
+
+        # Miss detection (expected locos not detected)
+        expected_locos = set(ADDRESS_TO_CLASS.values())  # All YOLO classes we trained
+        detected_locos = set(detections.keys())
+        missed_locos = expected_locos - detected_locos
+        if missed_locos:
+            self.performance_stats['miss_count'] += 1
+
+        self.performance_stats['detection_count'] += 1
+        self.performance_stats['last_update'] = time.time()
 
         return detections
 
@@ -694,3 +740,20 @@ class YOLOTracker:
             return 'WARNING'
         else:
             return 'CRITICAL'
+
+    def get_performance_stats(self):
+        """
+        Returns performance stats with confidence keyed by DCC address.
+        This ensures analytics data remains consistent across model changes (OBB ↔ Standard).
+
+        Returns:
+            dict with avg_fps, avg_confidence (per DCC address), miss_rate
+        """
+        return {
+            'avg_fps': mean(self.performance_stats['fps_history']) if self.performance_stats['fps_history'] else 0,
+            'avg_confidence': {
+                dcc_addr: mean(hist) if hist else 0
+                for dcc_addr, hist in self.performance_stats['confidence_history'].items()
+            },  # Returns {1: 0.87, 5: 0.76, 7: 0.91, 8: 0.65} - DCC addresses, not YOLO classes
+            'miss_rate': self.performance_stats['miss_count'] / max(self.performance_stats['detection_count'], 1)
+        }

@@ -1758,15 +1758,16 @@ async def get_cumulative_stats():
 
     # Get ALL YOLO performance events (FPS, confidence over time)
     cursor.execute(
-        "SELECT timestamp, data FROM events WHERE event_type = 'yolo_performance' ORDER BY timestamp"
+        "SELECT session_id, timestamp, data FROM events WHERE event_type = 'yolo_performance' ORDER BY timestamp"
     )
     yolo_performance = []
     for row in cursor.fetchall():
-        data = json.loads(row[1])
+        data = json.loads(row[2])
         yolo_performance.append({
-            'timestamp': row[0],
+            'session_id': row[0],
+            'timestamp': row[1],
             'avg_fps': data.get('avg_fps', 0),
-            'avg_confidence': data.get('avg_confidence', 0),
+            'avg_confidence': data.get('avg_confidence', {}),
             'miss_rate': data.get('miss_rate', 0)
         })
 

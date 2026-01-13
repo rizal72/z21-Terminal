@@ -432,6 +432,20 @@ class TrackingDaemon:
                 # Broadcast updates
                 await self.broadcast_delta_t(tracking_data)
 
+                # Log YOLO performance to analytics (every 5 seconds to reduce event volume)
+                current_time = time.time()
+                if self.analytics_logger and (current_time - self.last_yolo_perf_log > 5.0):
+                    try:
+                        stats = self.tracker.get_performance_stats()
+                        await self.analytics_logger.log_event('yolo_performance', {
+                            'avg_fps': stats['avg_fps'],
+                            'avg_confidence': stats['avg_confidence'],  # {1: 0.87, 5: 0.76, 7: 0.91, 8: 0.65}
+                            'miss_rate': stats['miss_rate']
+                        })
+                        self.last_yolo_perf_log = current_time
+                    except Exception as e:
+                        log('[WARN]', f"Failed to log YOLO performance: {e}")
+
                 # Optional: broadcast positions every 10 frames (reduce traffic)
                 if self.frame_count % 10 == 0:
                     await self.broadcast_positions(tracking_data)
