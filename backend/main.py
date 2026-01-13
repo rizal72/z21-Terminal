@@ -1718,14 +1718,21 @@ def sample_events(events: list, max_points: int) -> list:
 
 
 @app.get("/api/analytics/cumulative")
-async def get_cumulative_stats(max_points: Optional[int] = None):
+async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[int] = None):
     """
     Get all sessions aggregated statistics with full event data for charts.
 
     Args:
+        tail: Optional tail parameter. If provided, returns last N events (full resolution).
+              Used by Current view to keep recent data intact.
+              Example: ?tail=1000 (last 1000 events, no sampling)
+
         max_points: Optional sampling parameter. If provided, applies uniform sampling
-                   to ALL event arrays (delta_t_events, yolo_performance, etc.)
+                   to ALL event arrays across entire history.
+                   Used by Overview view for historical trends.
                    Example: ?maxPoints=500
+
+    Note: tail and max_points are mutually exclusive (tail takes precedence)
     """
     import sqlite3
     from collections import defaultdict
@@ -1804,11 +1811,17 @@ async def get_cumulative_stats(max_points: Optional[int] = None):
 
     conn.close()
 
-    # Apply sampling if requested (transparent to frontend)
-    if max_points:
+    # Apply tail or sampling based on view mode (mutually exclusive)
+    if tail:
+        # Current view: keep last N events (full resolution, no sampling)
+        delta_t_events = delta_t_events[-tail:] if len(delta_t_events) > tail else delta_t_events
+        yolo_performance = yolo_performance[-tail:] if len(yolo_performance) > tail else yolo_performance
+        # Future event types: add here
+    elif max_points:
+        # Overview view: uniform sampling across entire history
         delta_t_events = sample_events(delta_t_events, max_points)
         yolo_performance = sample_events(yolo_performance, max_points)
-        # Future event types automatically sampled here
+        # Future event types: add here
 
     # Note: delta_t_events already includes current session events (written by flush task every 10s)
     # Total count is accurate because query includes all events from DB

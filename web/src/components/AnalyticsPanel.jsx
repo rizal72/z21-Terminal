@@ -34,12 +34,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     };
   }, [isOpen]);
 
-  // Load cumulative data on mount
+  // Load cumulative data on mount and when view mode changes
   useEffect(() => {
     if (isOpen) {
       loadCumulativeData();
     }
-  }, [isOpen]);
+  }, [isOpen, viewMode]);
 
   // Auto-scroll to END (most recent events) - ALWAYS, for all filters
   useEffect(() => {
@@ -79,9 +79,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       setLoading(true);
       setError(null);
 
+      // Build API URL with view-specific parameters
+      // Current view: tail (last N events, full resolution)
+      // Overview view: maxPoints (sampling across entire history)
+      const params = viewMode === 'current' ? 'tail=1000' : 'maxPoints=500';
+      const cumulativeUrl = `/api/analytics/cumulative?${params}`;
+
       // Fetch both cumulative data AND current session metadata in parallel
       const [cumulativeResponse, currentResponse] = await Promise.all([
-        fetch('/api/analytics/cumulative'),
+        fetch(cumulativeUrl),
         fetch('/api/analytics/current')
       ]);
 
