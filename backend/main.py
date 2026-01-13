@@ -1834,6 +1834,22 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
             'miss_rate': data.get('miss_rate', 0)
         })
 
+    # Get locomotive operating time events (for per-session filtering in Current view)
+    cursor.execute(
+        "SELECT session_id, timestamp, data FROM events WHERE event_type = 'loco_operating_time' ORDER BY timestamp"
+    )
+    loco_operating_time_events = []
+    for row in cursor.fetchall():
+        data = json.loads(row[2])
+        loco_operating_time_events.append({
+            'session_id': row[0],
+            'timestamp': row[1],
+            'address': data.get('address'),
+            'duration_seconds': data.get('duration_seconds'),
+            'start_time': data.get('start_time'),
+            'end_time': data.get('end_time')
+        })
+
     conn.close()
 
     # Apply tail or sampling based on view mode (mutually exclusive)
@@ -1841,7 +1857,7 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
         # Current view: keep last N events (full resolution, no sampling)
         delta_t_events = delta_t_events[-tail:] if len(delta_t_events) > tail else delta_t_events
         yolo_performance = yolo_performance[-tail:] if len(yolo_performance) > tail else yolo_performance
-        # Future event types: add here
+        loco_operating_time_events = loco_operating_time_events[-tail:] if len(loco_operating_time_events) > tail else loco_operating_time_events
     elif max_points:
         # Overview view: uniform sampling across entire history
         original_delta_t_count = len(delta_t_events)
@@ -1849,7 +1865,7 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
 
         delta_t_events = sample_events(delta_t_events, max_points)
         yolo_performance = sample_events(yolo_performance, max_points)
-        # Future event types: add here
+        # Note: loco_operating_time not sampled (aggregate stats chart, not timeline)
 
         # Log ONLY if debug enabled in config AND sampling reduction is significant
         if debug_enabled:
@@ -1873,7 +1889,8 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
         'sessions': sessions,
         'gate_crossings': dict(gate_crossings),
         'delta_t_events': delta_t_events,
-        'yolo_performance': yolo_performance
+        'yolo_performance': yolo_performance,
+        'loco_operating_time': loco_operating_time_events
     }
 
 

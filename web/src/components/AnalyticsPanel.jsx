@@ -584,32 +584,66 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               )}
 
               {/* Locomotive Operating Time */}
-              {locoStats && locoStats.length > 0 && (
-                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                  <h3 className="text-xl font-bold text-white mb-4">Locomotive Operating Time</h3>
+              {(() => {
+                // Filter locomotive stats by view mode
+                let displayStats;
 
-                  <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                    <h4 className="text-lg font-semibold text-amber-400 mb-4">Total Operating Hours</h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={locoStats}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                        <XAxis dataKey="name" stroke="#9CA3AF" />
-                        <YAxis stroke="#9CA3AF" label={{ value: 'Operating Hours', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
-                        <Tooltip
-                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
-                          labelStyle={{ color: '#e2e8f0' }}
-                          formatter={(value) => `${value} hours`}
-                        />
-                        <Bar dataKey="total_operating_hours">
-                          {locoStats.map((loco, index) => (
-                            <Cell key={`cell-${index}`} fill={LOCO_COLORS[loco.address] || '#9CA3AF'} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                if (viewMode === 'current' && currentSession && cumulativeData) {
+                  // Current view: Calculate from loco_operating_time events for current session
+                  const locoEvents = cumulativeData.loco_operating_time?.filter(e =>
+                    e.session_id === currentSession.session_id &&
+                    e.address !== undefined &&
+                    e.duration_seconds !== undefined
+                  ) || [];
+
+                  // Aggregate by address
+                  const statsMap = {};
+                  locoEvents.forEach(event => {
+                    const addr = event.address;
+                    if (!statsMap[addr]) {
+                      statsMap[addr] = { address: addr, name: `Loco ${addr}`, total_seconds: 0 };
+                    }
+                    statsMap[addr].total_seconds += event.duration_seconds;
+                  });
+
+                  // Convert to array and calculate hours
+                  displayStats = Object.values(statsMap).map(stat => ({
+                    address: stat.address,
+                    name: stat.name,
+                    total_operating_hours: Math.round((stat.total_seconds / 3600) * 100) / 100
+                  })).sort((a, b) => a.address - b.address);
+                } else {
+                  // Overview view: Use global stats from API
+                  displayStats = locoStats || [];
+                }
+
+                return displayStats.length > 0 && (
+                  <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+                    <h3 className="text-xl font-bold text-white mb-4">Locomotive Operating Time</h3>
+
+                    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                      <h4 className="text-lg font-semibold text-amber-400 mb-4">Total Operating Hours</h4>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={displayStats}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                          <XAxis dataKey="name" stroke="#9CA3AF" />
+                          <YAxis stroke="#9CA3AF" label={{ value: 'Operating Hours', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
+                            labelStyle={{ color: '#e2e8f0' }}
+                            formatter={(value) => `${value} hours`}
+                          />
+                          <Bar dataKey="total_operating_hours">
+                            {displayStats.map((loco, index) => (
+                              <Cell key={`cell-${index}`} fill={LOCO_COLORS[loco.address] || '#9CA3AF'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
         </div>
