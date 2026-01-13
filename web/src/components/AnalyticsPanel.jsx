@@ -477,7 +477,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <ResponsiveContainer width={chartWidth} height={400}>
                           <LineChart data={chartData}>
                             <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                      <XAxis dataKey="time" {...CHART_AXIS_STYLES.axis} />
+                      {/* XAxis: time in Current (readable), index in Overview (compressed) */}
+                      <XAxis
+                        dataKey={viewMode === 'current' ? 'time' : 'index'}
+                        {...CHART_AXIS_STYLES.axis}
+                        label={viewMode === 'overview' ? { value: 'Event #', position: 'insideBottom', offset: -5, fill: '#9CA3AF' } : undefined}
+                      />
                       <YAxis {...CHART_AXIS_STYLES.axis} label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                       <Tooltip
                         {...TOOLTIP_STYLES}
@@ -544,7 +549,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         <ResponsiveContainer width={chartWidth} height={300}>
                           <LineChart data={chartData}>
                             <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                            <XAxis dataKey="time" {...CHART_AXIS_STYLES.axis} />
+                            {/* XAxis: time in Current (readable), index in Overview (compressed) */}
+                            <XAxis
+                              dataKey={viewMode === 'current' ? 'time' : 'index'}
+                              {...CHART_AXIS_STYLES.axis}
+                              label={viewMode === 'overview' ? { value: 'Sample #', position: 'insideBottom', offset: -5, fill: '#9CA3AF' } : undefined}
+                            />
                             <YAxis {...CHART_AXIS_STYLES.axis} domain={[0, 140]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                             <Tooltip
                               {...TOOLTIP_STYLES}
