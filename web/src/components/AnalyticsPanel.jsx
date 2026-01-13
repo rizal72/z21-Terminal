@@ -40,28 +40,17 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     }
   }, [isOpen]);
 
-  // Auto-scroll to START when consist filter changes (so you see beginning of filtered line)
+  // Auto-scroll to END (most recent events) - ALWAYS, for all filters
   useEffect(() => {
     if (cumulativeData && scrollRefSession.current) {
-      // Scroll to left (start) to see beginning of filtered consist
-      requestAnimationFrame(() => {
-        if (scrollRefSession.current) {
-          scrollRefSession.current.scrollLeft = 0;
-        }
-      });
-    }
-  }, [consistFilter]);
-
-  // Auto-scroll to END when data loads (new events)
-  useEffect(() => {
-    if (cumulativeData && scrollRefSession.current) {
+      // Wait for DOM to resize chart after filter change, then scroll to end
       requestAnimationFrame(() => {
         if (scrollRefSession.current) {
           scrollRefSession.current.scrollLeft = scrollRefSession.current.scrollWidth;
         }
       });
     }
-  }, [cumulativeData, viewMode]);
+  }, [cumulativeData, viewMode, consistFilter]);
 
   // Arrow key navigation between Current/Overview
   useEffect(() => {
