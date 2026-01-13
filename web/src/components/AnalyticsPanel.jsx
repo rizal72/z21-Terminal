@@ -231,7 +231,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Prepare chart data with dynamic delta_t_cXX fields based on consist config (for Recharts charts)
+  // Prepare chart data with dynamic delta_t_cXX fields based on consist config (Recharts)
   const prepareChartData = (events, consistConfig) => {
     if (!events || events.length === 0) return [];
 
@@ -257,11 +257,10 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       });
   };
 
-  // Prepare Plotly trace data with session boundaries (null points when session changes)
+  // Prepare Plotly trace with session boundaries (Plotly)
   const preparePlotlyTrace = (events, consistId) => {
     if (!events || events.length === 0) return { x: [], y: [], text: [] };
 
-    // Filter and sort events for this consist
     const consistEvents = events
       .filter(e => e.consist_id === consistId)
       .sort((a, b) => a.timestamp - b.timestamp);
@@ -276,15 +275,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       const event = consistEvents[i];
       const prevEvent = consistEvents[i - 1];
 
-      // Insert null point when session changes (creates line break)
+      // Insert null when session changes (line break)
       if (prevEvent && event.session_id !== prevEvent.session_id) {
         x.push(null);
         y.push(null);
         text.push('');
       }
 
-      // Add event point
-      x.push(new Date(event.timestamp * 1000)); // Convert Unix to Date for Plotly
+      // Add event (timestamp in milliseconds for Plotly date axis)
+      x.push(event.timestamp * 1000);
       y.push(parseFloat(event.delta_t.toFixed(2)));
       text.push(`Session ${event.session_id}<br>${formatTime(event.timestamp)}`);
     }
@@ -501,13 +500,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
 
                   {(() => {
-                    // Get consist IDs to render
                     const consistIds = Object.keys(trackingConfig.consists).map(Number).sort((a, b) => a - b);
-                    const renderConsistIds = consistFilter === 'all'
-                      ? consistIds
-                      : consistIds.filter(cid => cid === consistFilter);
+                    const renderConsistIds = consistFilter === 'all' ? consistIds : consistIds.filter(cid => cid === consistFilter);
 
-                    // Prepare Plotly traces (one per consist)
                     const traces = renderConsistIds.map(consistId => {
                       const traceData = preparePlotlyTrace(cumulativeData.delta_t_events, consistId);
                       return {
@@ -517,127 +512,33 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         type: 'scatter',
                         mode: 'lines+markers',
                         name: trackingConfig.consists[consistId]?.name || `Consist ${consistId}`,
-                        line: {
-                          color: getConsistStrokeColor(consistId, trackingConfig.consists),
-                          width: viewMode === 'current' ? 2 : 1.5
-                        },
-                        marker: {
-                          size: viewMode === 'current' ? 6 : 4
-                        },
-                        connectgaps: false, // KEY: breaks at null (session boundaries)
+                        line: { color: getConsistStrokeColor(consistId, trackingConfig.consists), width: 2 },
+                        marker: { size: 4 },
+                        connectgaps: false,
                         hovertemplate: '<b>%{text}</b><br>Δt: %{y:.2f}s<extra></extra>'
                       };
                     });
 
-                    // Plotly layout
                     const layout = {
                       autosize: true,
                       height: 400,
                       margin: { l: 60, r: 40, t: 20, b: 60 },
                       plot_bgcolor: '#1e293b',
                       paper_bgcolor: '#1e293b',
-                      font: { color: '#e2e8f0', family: 'system-ui, -apple-system' },
-                      xaxis: {
-                        type: 'date',
-                        gridcolor: '#374151',
-                        gridwidth: 1,
-                        griddash: 'dot',
-                        zeroline: false,
-                        color: '#9CA3AF'
-                      },
-                      yaxis: {
-                        title: { text: 'Δt (seconds)', font: { color: '#9CA3AF' } },
-                        gridcolor: '#374151',
-                        gridwidth: 1,
-                        griddash: 'dot',
-                        zeroline: true,
-                        zerolinecolor: '#10b981',
-                        zerolinewidth: 1,
-                        color: '#9CA3AF'
-                      },
+                      font: { color: '#e2e8f0' },
+                      xaxis: { type: 'date', gridcolor: '#374151', color: '#9CA3AF' },
+                      yaxis: { title: 'Δt (seconds)', gridcolor: '#374151', zeroline: true, zerolinecolor: '#10b981', color: '#9CA3AF' },
                       shapes: [
-                        // WARNING lines (±1.0s)
-                        {
-                          type: 'line',
-                          xref: 'paper',
-                          x0: 0,
-                          x1: 1,
-                          y0: 1,
-                          y1: 1,
-                          line: { color: '#f59e0b', width: 1, dash: 'dash' }
-                        },
-                        {
-                          type: 'line',
-                          xref: 'paper',
-                          x0: 0,
-                          x1: 1,
-                          y0: -1,
-                          y1: -1,
-                          line: { color: '#f59e0b', width: 1, dash: 'dash' }
-                        },
-                        // CRITICAL lines (±1.5s)
-                        {
-                          type: 'line',
-                          xref: 'paper',
-                          x0: 0,
-                          x1: 1,
-                          y0: 1.5,
-                          y1: 1.5,
-                          line: { color: '#ef4444', width: 1, dash: 'dash' }
-                        },
-                        {
-                          type: 'line',
-                          xref: 'paper',
-                          x0: 0,
-                          x1: 1,
-                          y0: -1.5,
-                          y1: -1.5,
-                          line: { color: '#ef4444', width: 1, dash: 'dash' }
-                        }
+                        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1, y1: 1, line: { color: '#f59e0b', dash: 'dash' } },
+                        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: -1, y1: -1, line: { color: '#f59e0b', dash: 'dash' } },
+                        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1.5, y1: 1.5, line: { color: '#ef4444', dash: 'dash' } },
+                        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: -1.5, y1: -1.5, line: { color: '#ef4444', dash: 'dash' } }
                       ],
-                      annotations: [
-                        { x: 0.02, xref: 'paper', y: 1, yref: 'y', text: 'WARNING', showarrow: false, font: { size: 10, color: '#f59e0b' }, xanchor: 'left' },
-                        { x: 0.02, xref: 'paper', y: 1.5, yref: 'y', text: 'CRITICAL', showarrow: false, font: { size: 10, color: '#ef4444' }, xanchor: 'left' }
-                      ],
-                      hovermode: 'closest',
                       showlegend: consistFilter === 'all',
-                      legend: {
-                        x: 1.02,
-                        xanchor: 'left',
-                        y: 1,
-                        bgcolor: 'rgba(30, 41, 59, 0.8)',
-                        bordercolor: '#475569',
-                        borderwidth: 1
-                      }
+                      legend: { bgcolor: 'rgba(30,41,59,0.8)', bordercolor: '#475569', borderwidth: 1 }
                     };
 
-                    // Plotly config
-                    const config = {
-                      displayModeBar: true,
-                      modeBarButtonsToRemove: ['lasso2d', 'select2d'],
-                      displaylogo: false,
-                      toImageButtonOptions: {
-                        format: 'png',
-                        filename: 'delta-t-trends',
-                        scale: 2
-                      }
-                    };
-
-                    const chartContent = (
-                      <Plot
-                        data={traces}
-                        layout={layout}
-                        config={config}
-                        style={{ width: '100%', height: '400px' }}
-                        useResizeHandler={true}
-                      />
-                    );
-
-                    return viewMode === 'current' ? (
-                      <div key={`delta-t-${consistFilter}`} ref={scrollRefSession} className="overflow-x-auto">
-                        {chartContent}
-                      </div>
-                    ) : chartContent;
+                    return <Plot data={traces} layout={layout} config={{ displayModeBar: true, displaylogo: false }} style={{ width: '100%' }} useResizeHandler />;
                   })()}
                 </div>
               )}
