@@ -43,7 +43,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   // Auto-scroll to end when data loads or consist filter changes
   useEffect(() => {
     if (cumulativeData && scrollRefSession.current) {
-      scrollRefSession.current.scrollLeft = scrollRefSession.current.scrollWidth;
+      // Use requestAnimationFrame to wait for DOM resize after filter change
+      requestAnimationFrame(() => {
+        if (scrollRefSession.current) {
+          scrollRefSession.current.scrollLeft = scrollRefSession.current.scrollWidth;
+        }
+      });
     }
   }, [cumulativeData, viewMode, consistFilter]);
 
@@ -383,7 +388,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         labelStyle={{ color: '#e2e8f0' }}
                         formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
                       />
-                      <Legend />
+                      {/* Only show Legend when All filter (prevents chart height shift on filter change) */}
+                      {consistFilter === 'all' && <Legend />}
                       <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
                       <ReferenceLine y={1} stroke="#f59e0b" strokeDasharray="3 3" label="WARNING" />
                       <ReferenceLine y={-1} stroke="#f59e0b" strokeDasharray="3 3" />
