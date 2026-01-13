@@ -9,8 +9,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   const [error, setError] = useState(null);
   const [consistFilter, setConsistFilter] = useState('all'); // 'all', 10, 11
 
-  // Ref for auto-scroll to end
+  // Refs for auto-scroll to end
   const scrollRefSession = useRef(null);
+  const scrollRefFps = useRef(null);
 
   // Desktop-only enforcement
   useEffect(() => {
@@ -42,11 +43,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
   // Auto-scroll to END (most recent events) - ALWAYS, for all filters
   useEffect(() => {
-    if (cumulativeData && scrollRefSession.current) {
+    if (cumulativeData) {
       // Wait for DOM to resize chart after filter change, then scroll to end
       requestAnimationFrame(() => {
+        // Scroll dT chart
         if (scrollRefSession.current) {
           scrollRefSession.current.scrollLeft = scrollRefSession.current.scrollWidth;
+        }
+        // Scroll FPS chart
+        if (scrollRefFps.current) {
+          scrollRefFps.current.scrollLeft = scrollRefFps.current.scrollWidth;
         }
       });
     }
@@ -440,31 +446,42 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   {/* FPS Line Chart */}
                   <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
                     <h4 className="text-lg font-semibold text-amber-400 mb-4">Inference FPS Over Time</h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={(() => {
-                        // Filter by session if Current view
-                        let events = cumulativeData.yolo_performance;
-                        if (viewMode === 'current' && currentSession) {
-                          events = events.filter(e => e.session_id === currentSession.session_id);
-                        }
-                        return events.map((e, idx) => ({
-                          index: idx + 1,
-                          time: formatTime(e.timestamp),
-                          fps: parseFloat(e.avg_fps.toFixed(1))
-                        }));
-                      })()}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                        <XAxis dataKey="time" stroke="#9CA3AF" />
-                        <YAxis stroke="#9CA3AF" domain={[0, 35]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
-                        <Tooltip
-                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
-                          labelStyle={{ color: '#e2e8f0' }}
-                          formatter={(value) => value.toFixed(1) + ' FPS'}
-                        />
-                        <ReferenceLine y={30} stroke="#10b981" strokeDasharray="5 5" label={{ value: 'Target (30 FPS)', position: 'top', fill: '#10b981' }} />
-                        <Line type="monotone" dataKey="fps" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Inference FPS" />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    {(() => {
+                      // Filter by session if Current view
+                      let events = cumulativeData.yolo_performance;
+                      if (viewMode === 'current' && currentSession) {
+                        events = events.filter(e => e.session_id === currentSession.session_id);
+                      }
+                      const chartData = events.map((e, idx) => ({
+                        index: idx + 1,
+                        time: formatTime(e.timestamp),
+                        fps: parseFloat(e.avg_fps.toFixed(1))
+                      }));
+
+                      const chartWidth = viewMode === 'current' ? Math.max(chartData.length * 60, 800) : '100%';
+                      const chartContent = (
+                        <ResponsiveContainer width={chartWidth} height={300}>
+                          <LineChart data={chartData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                            <XAxis dataKey="time" stroke="#9CA3AF" />
+                            <YAxis stroke="#9CA3AF" domain={[0, 140]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
+                              labelStyle={{ color: '#e2e8f0' }}
+                              formatter={(value) => value.toFixed(1) + ' FPS'}
+                            />
+                            <ReferenceLine y={30} stroke="#10b981" strokeDasharray="5 5" label={{ value: 'Target (30 FPS)', position: 'top', fill: '#10b981' }} />
+                            <Line type="monotone" dataKey="fps" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Inference FPS" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      );
+
+                      return viewMode === 'current' ? (
+                        <div ref={scrollRefFps} className="overflow-x-auto">
+                          {chartContent}
+                        </div>
+                      ) : chartContent;
+                    })()}
                   </div>
 
                   {/* Confidence Bar Chart - Per Locomotive (DCC addresses) */}
