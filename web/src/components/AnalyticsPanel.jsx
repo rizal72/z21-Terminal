@@ -230,75 +230,30 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Insert null points to break chart lines during idle periods (matches backend tracking cooldown)
-  // Dynamic: generates delta_t_cXX fields based on consistConfig
-  const breakLineOnIdle = (events, idleTimeoutSeconds, consistConfig) => {
+  // Prepare chart data with dynamic delta_t_cXX fields based on consist config
+  const prepareChartData = (events, consistConfig) => {
     if (!events || events.length === 0) return [];
 
     const consistIds = Object.keys(consistConfig).map(Number);
-    const result = [];
 
-    for (let i = 0; i < events.length; i++) {
-      const event = events[i];
+    return events
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .map((event, idx) => {
+        // Build dynamic delta_t fields for each consist
+        const deltaFields = {};
+        consistIds.forEach(cid => {
+          deltaFields[`delta_t_c${cid}`] = event.consist_id === cid ? parseFloat(event.delta_t.toFixed(2)) : null;
+        });
 
-      // Build dynamic delta_t fields for each consist
-      const deltaFields = {};
-      consistIds.forEach(cid => {
-        deltaFields[`delta_t_c${cid}`] = event.consist_id === cid ? parseFloat(event.delta_t.toFixed(2)) : null;
+        return {
+          index: idx + 1,
+          timestamp: event.timestamp,
+          time: formatTime(event.timestamp),
+          ...deltaFields,
+          status: event.status,
+          gate_type: event.gate_type
+        };
       });
-
-      // Add current event
-      result.push({
-        index: result.length + 1,
-        timestamp: event.timestamp,
-        time: formatTime(event.timestamp),
-        ...deltaFields,
-        status: event.status,
-        gate_type: event.gate_type
-      });
-
-      // Check idle gap (matches backend tracking cooldown)
-      if (i < events.length - 1) {
-        const nextEvent = events[i + 1];
-        const gap = nextEvent.timestamp - event.timestamp;
-
-        if (gap > idleTimeoutSeconds) {
-          // Insert null point (line break = idle period) - all delta_t fields null
-          const nullFields = {};
-          consistIds.forEach(cid => {
-            nullFields[`delta_t_c${cid}`] = null;
-          });
-
-          result.push({
-            index: result.length + 1,
-            timestamp: event.timestamp + gap / 2,
-            time: formatTime(event.timestamp + gap / 2),
-            ...nullFields,
-            status: 'idle',
-            gate_type: null
-          });
-        }
-      }
-    }
-
-    return result;
-  };
-
-  // Prepare chart data from session events (with consist separation)
-  const prepareChartData = () => {
-    if (!sessionData || !sessionData.events) return [];
-
-    return sessionData.events
-      .filter(event => consistFilter === 'all' || event.consist_id === consistFilter)
-      .map((event, idx) => ({
-        index: idx + 1,
-        timestamp: event.timestamp,
-        time: formatTime(event.timestamp),
-        delta_t_c10: event.consist_id === 10 ? parseFloat(event.delta_t.toFixed(2)) : null,
-        delta_t_c11: event.consist_id === 11 ? parseFloat(event.delta_t.toFixed(2)) : null,
-        status: event.status,
-        gate_type: event.gate_type
-      }));
   };
 
   if (!isOpen) return null;
@@ -502,30 +457,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   </div>
 
                   {(() => {
-                    let chartData;
+                    // Prepare chart data with dynamic delta_t_cXX fields
+                    const filteredEvents = consistFilter === 'all' ?
+                      cumulativeData.delta_t_events :
+                      cumulativeData.delta_t_events.filter(e => e.consist_id === consistFilter);
 
-                    if (consistFilter === 'all') {
-                      // For 'All' filter: apply breakLineOnIdle separately per consist, then merge chronologically
-                      // This creates double-null idle points (all delta_t_cXX = null)
-                      // connectNulls={true} connects through single nulls (other consist events) but NOT double nulls (idle gaps)
-                      const consistIds = Object.keys(trackingConfig.consists).map(Number);
-                      const allEventsWithBreaks = consistIds.flatMap(cid => {
-                        const eventsForConsist = cumulativeData.delta_t_events.filter(e => e.consist_id === cid);
-                        return breakLineOnIdle(eventsForConsist, trackingConfig.idle_timeout_seconds, trackingConfig.consists);
-                      });
-
-                      // Merge chronologically and re-index
-                      chartData = allEventsWithBreaks
-                        .sort((a, b) => a.timestamp - b.timestamp)
-                        .map((e, idx) => ({ ...e, index: idx + 1 }));
-                    } else {
-                      // For single consist filter: standard breakLineOnIdle (single-null for other consist, double-null for idle)
-                      chartData = breakLineOnIdle(
-                        cumulativeData.delta_t_events.filter(event => event.consist_id === consistFilter),
-                        trackingConfig.idle_timeout_seconds,
-                        trackingConfig.consists
-                      );
-                    }
+                    const chartData = prepareChartData(filteredEvents, trackingConfig.consists);
 
                     const chartWidth = viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
                     const chartContent = (
