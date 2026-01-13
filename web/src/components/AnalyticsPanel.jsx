@@ -330,11 +330,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     Gate Crossings
                     {consistFilter === 'all' ? ' (All)' : consistFilter === 10 ? ' (C10)' : ' (C11)'}
                   </div>
-                  <div className={`text-3xl font-bold mt-1 ${
-                    consistFilter === 10 ? 'text-fuchsia-400' :
-                    consistFilter === 11 ? 'text-blue-400' :
-                    'text-white'
-                  }`}>
+                  <div className={`text-3xl font-bold mt-1 ${getConsistColor(consistFilter, 'text-white')}`}>
                     {(() => {
                       let events = cumulativeData.delta_t_events || [];
 
@@ -359,11 +355,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     Critical Events
                     {consistFilter === 'all' ? ' (All)' : consistFilter === 10 ? ' (C10)' : ' (C11)'}
                   </div>
-                  <div className={`text-3xl font-bold mt-1 ${
-                    consistFilter === 10 ? 'text-fuchsia-400' :
-                    consistFilter === 11 ? 'text-blue-400' :
-                    'text-red-400'
-                  }`}>
+                  <div className={`text-3xl font-bold mt-1 ${getConsistColor(consistFilter, 'text-red-400')}`}>
                     {(() => {
                       let events = cumulativeData.delta_t_events || [];
 
@@ -445,8 +437,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <ResponsiveContainer width={chartWidth} height={400}>
                           <LineChart data={chartData}>
                             <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                      <XAxis dataKey="time" stroke="#9CA3AF" />
-                      <YAxis stroke="#9CA3AF" label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                      <XAxis dataKey="time" {...CHART_AXIS_STYLES.axis} />
+                      <YAxis {...CHART_AXIS_STYLES.axis} label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                       <Tooltip
                         {...TOOLTIP_STYLES}
                         formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
@@ -518,8 +510,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         <ResponsiveContainer width={chartWidth} height={300}>
                           <LineChart data={chartData}>
                             <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                            <XAxis dataKey="time" stroke="#9CA3AF" />
-                            <YAxis stroke="#9CA3AF" domain={[0, 140]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                            <XAxis dataKey="time" {...CHART_AXIS_STYLES.axis} />
+                            <YAxis {...CHART_AXIS_STYLES.axis} domain={[0, 140]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                             <Tooltip
                               {...TOOLTIP_STYLES}
                               formatter={(value) => value.toFixed(1) + ' FPS'}
@@ -561,9 +553,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                             confidence: parseFloat((conf * 100).toFixed(1))
                           }));
                       })()}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                        <XAxis dataKey="loco" stroke="#9CA3AF" />
-                        <YAxis stroke="#9CA3AF" domain={[0, 100]} label={{ value: 'Confidence (%)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                        <CartesianGrid {...CHART_AXIS_STYLES.grid} />
+                        <XAxis dataKey="loco" {...CHART_AXIS_STYLES.axis} />
+                        <YAxis {...CHART_AXIS_STYLES.axis} domain={[0, 100]} label={{ value: 'Confidence (%)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                         <Tooltip
                           {...TOOLTIP_STYLES}
                           formatter={(value) => value.toFixed(1) + '%'}
@@ -601,8 +593,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={locoStats}>
                         <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                        <XAxis dataKey="name" stroke="#9CA3AF" />
-                        <YAxis stroke="#9CA3AF" label={{ value: 'Operating Hours', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                        <XAxis dataKey="name" {...CHART_AXIS_STYLES.axis} />
+                        <YAxis {...CHART_AXIS_STYLES.axis} label={{ value: 'Operating Hours', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                         <Tooltip
                           {...TOOLTIP_STYLES}
                           formatter={(value) => `${value} hours`}
