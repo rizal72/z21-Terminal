@@ -11,6 +11,7 @@ z21-Terminal/
 ├── README.md          # This file
 ├── scripts/           # Python scripts (terminal controller, YOLO tracking, utilities)
 ├── backend/           # FastAPI backend + WebSocket + Z21Manager + Tracking Daemon
+│   └── data/          # SQLite database for analytics (gitignored, auto-created)
 ├── web/               # React frontend (Vite + Tailwind CSS)
 ├── config.json        # Central configuration (consists, gates, thresholds, debug)
 └── camera_config.json # Camera credentials (gitignored)
@@ -47,6 +48,7 @@ z21-Terminal/
 - **Z21**: Roco Z21 White (IP 192.168.1.111, firmware 1.67)
 - **Camera** (optional): Tapo IP camera for YOLO tracking (720P RTSP stream)
 - **Locomotives**: 7 locomotives configured with 2 consists (dual-track operations)
+- **GPU** (optional): NVIDIA RTX 2060 for TensorRT acceleration (2-5x faster inference)
 
 ## Main Usage
 
@@ -106,20 +108,28 @@ z21-frontend     # Start frontend dev server
 - **Scalable UI**: Dynamic controller panels with [+] button (add/remove controllers on-the-fly)
 - **Virtual Consist Mode**: Automatic CV19 management + real-time speed compensation based on Δt
 - **CV Profiles**: One-click TEST/NORMAL toggle (hotkey T) for instant speed matching across all locomotives (~1.2s)
+- **Analytics Dashboard**: Session tracking with real-time charts (keyboard shortcut: A)
+  - Session statistics (duration, gate crossings, critical events)
+  - Δt trends visualization (speed matching quality over time)
+  - YOLO performance monitoring (FPS + detection confidence per locomotive)
+  - Locomotive operating time tracking (maintenance planning)
+  - Current vs Overview views (session-specific vs cumulative historical data)
 - **Touch-optimized**: Speed slider with 200ms throttling, 48px touch targets, responsive hamburger menu
 - **Real-time sync**: WebSocket multi-device support (iPad + Phone + Laptop simultaneously)
 - **PWA**: Installable on iPad/iPhone home screen (standalone app experience)
 - **Wake Lock API**: Prevent screen sleep on mobile during operations (iOS/Android)
 - **Emergency stop**: ESC keyboard shortcut + audio feedback
 - **Function control**: F0-F28 with color-coded indicators (lockable/momentary, auto-release 800ms)
-- **Z21 health monitoring**: 5s polling with online/offline status
+- **Z21 health monitoring**: 5s polling with 2-failure grace period (eliminates false positives)
 - **Elegant UI**: "Control Room Noir" dark theme, Font Awesome 6 icons
 
 ### YOLO Tracking System 🎯
 Real-time locomotive tracking via IP camera with automatic speed compensation:
 
 **Features:**
-- **YOLO Object Detection**: Custom YOLOv8 nano model trained on 4 locomotives (mAP50 = 93.1%)
+- **YOLO Object Detection**: Custom YOLOv8 nano OBB model trained on 4 locomotives (mAP50 = 91.7%)
+  - TensorRT GPU acceleration (2-5x faster inference, <0.5s bbox lag)
+  - Oriented bounding boxes for accurate overlap handling
 - **Gate Timing Detection**: Symmetric (oval track) and asymmetric (figure-8 track) timing modes
 - **Multi-Consist Support**: Config-driven tracking (supports N consists via `config.json`)
 - **Speed Compensation**: Automatic Δt-based compensation in Virtual Mode (bang-bang + decay)
@@ -151,10 +161,19 @@ python3 z21_controller.py 10            # Control consist 10
 
 ## Installation
 
-See **[INSTALL.md](INSTALL.md)** for complete setup instructions:
-- macOS Development (CPU-only)
-- Windows PC Production (GPU + CUDA)
-- Conda environment setup
+### Requirements
+- Python 3.8+ with required packages (see `requirements.txt`)
+- Node.js 18+ and npm (for frontend build)
+- NVIDIA GPU with CUDA support (optional, for TensorRT acceleration)
+- Z21 control station on the same network
+
+### Quick Start
+1. Clone repository: `git clone git@github.com:rizal72/z21-Terminal.git`
+2. Install Python dependencies: `pip install -r requirements.txt`
+3. Install frontend dependencies: `cd web && npm install`
+4. Configure `config.json` and `camera_config.json` (if using YOLO tracking)
+5. Start backend: `python backend/main.py`
+6. Start frontend: `cd web && npm run dev` (development) or `npm run build` (production)
 
 ## Features
 
@@ -179,7 +198,9 @@ See **[INSTALL.md](INSTALL.md)** for complete setup instructions:
 - [x] Safari Mac animation compatibility
 
 ### YOLO Tracking System ✅
-- [x] **YOLO Custom Training**: YOLOv8 nano model trained on 4 locomotives
+- [x] **YOLO Custom Training**: YOLOv8 nano OBB model trained on 4 locomotives (mAP50 = 91.7%)
+- [x] **TensorRT Acceleration**: GPU-optimized inference (2-5x faster, <0.5s bbox lag)
+- [x] **Oriented Bounding Boxes**: Accurate overlap handling with rotated bboxes
 - [x] **Gate Timing Detection**: Symmetric (oval) and asymmetric (figure-8) timing modes
 - [x] **Multi-Consist Support**: Config-driven tracking (supports N consists)
 - [x] **Video Feed**: Real-time MJPEG stream with gate overlay + Δt stats panels
@@ -195,6 +216,18 @@ See **[INSTALL.md](INSTALL.md)** for complete setup instructions:
 - [x] **Reference Loco Strategy**: Config-driven (never touch reference loco, adjust only unstable loco)
 - [x] **Transparent UX**: Single slider, dual locomotive control behind the scenes
 - [x] **Auto-Compensation Toggle**: Enable/disable compensation per consist (UI switch)
+
+### Analytics Dashboard ✅
+- [x] **Session Tracking**: Automatic session lifecycle (first Δt validates session, page close ends session)
+- [x] **Session Statistics**: Duration, gate crossings, critical events (|Δt| ≥ 1.5s)
+- [x] **Δt Trends Chart**: Speed matching quality visualization over time (line chart with color-coded thresholds)
+- [x] **YOLO Performance Monitoring**: FPS trends (line chart) + confidence per locomotive (bar chart)
+- [x] **Locomotive Operating Time**: Cumulative operating hours per locomotive (maintenance planning)
+- [x] **Current vs Overview Views**: Session-specific vs cumulative historical data
+- [x] **Consist Filtering**: Filter charts by All/C10/C11 (color-coded: magenta/blue)
+- [x] **Horizontal Scroll**: Navigate large datasets (1000+ events) with smooth scrolling
+- [x] **Auto-Refresh**: Current view updates every 10s when locomotives moving
+- [x] **SQLite Async Logging**: Zero impact on YOLO tracking (buffered writes)
 
 ### CV Operations (Operations Mode) ✅
 - [x] **CV Write**: Write CV while locomotives running (XpressNet E6 30 command)
@@ -320,12 +353,12 @@ Camera credentials (gitignored):
 - **Command**: `z21` (starts both in iTerm tabs)
 
 ### Production Mode (Windows PC)
-- **Environment**: Windows PC + PowerShell + GPU (NVIDIA GTX 1050 Ti)
+- **Environment**: Windows PC + PowerShell + GPU (NVIDIA RTX 2060)
 - **Backend**: Port 8000 (API + serves frontend dist/)
 - **Frontend**: Built static files (web/dist/) served by FastAPI
-- **Features**: GPU-accelerated YOLO (3-5x faster), optimized bundle, Tailscale HTTPS
+- **Features**: TensorRT GPU acceleration (2-5x faster inference), optimized bundle, Tailscale HTTPS
 - **Commands**: `z21-deploy` (build) + `z21-start` (run in background)
-- **Performance**: CPU usage 800% (Mac) → 100% (PC with GPU)
+- **Performance**: 50-130 FPS YOLO inference (vs 30 FPS CPU target)
 
 **Key Differences**:
 | Aspect | macOS (Dev) | Windows PC (Prod) |
