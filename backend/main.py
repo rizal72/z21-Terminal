@@ -5,7 +5,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 import asyncio
 import time
@@ -1693,9 +1693,40 @@ async def get_session_data(session_id: str):
     }
 
 
+def sample_events(events: list, max_points: int) -> list:
+    """
+    Uniform sampling for ANY event type.
+    Takes 1 event every N to reach max_points.
+
+    Args:
+        events: List of events (any type)
+        max_points: Target number of points (e.g., 500)
+
+    Returns:
+        Sampled events list (or original if already below max_points)
+    """
+    if len(events) <= max_points:
+        return events  # No sampling needed
+
+    step = len(events) / max_points
+    sampled = []
+    for i in range(max_points):
+        idx = int(i * step)
+        sampled.append(events[idx])
+
+    return sampled
+
+
 @app.get("/api/analytics/cumulative")
-async def get_cumulative_stats():
-    """Get all sessions aggregated statistics with full event data for charts"""
+async def get_cumulative_stats(max_points: Optional[int] = None):
+    """
+    Get all sessions aggregated statistics with full event data for charts.
+
+    Args:
+        max_points: Optional sampling parameter. If provided, applies uniform sampling
+                   to ALL event arrays (delta_t_events, yolo_performance, etc.)
+                   Example: ?maxPoints=500
+    """
     import sqlite3
     from collections import defaultdict
     db_path = Path(__file__).parent.parent / "data" / "analytics.db"
@@ -1772,6 +1803,12 @@ async def get_cumulative_stats():
         })
 
     conn.close()
+
+    # Apply sampling if requested (transparent to frontend)
+    if max_points:
+        delta_t_events = sample_events(delta_t_events, max_points)
+        yolo_performance = sample_events(yolo_performance, max_points)
+        # Future event types automatically sampled here
 
     # Note: delta_t_events already includes current session events (written by flush task every 10s)
     # Total count is accurate because query includes all events from DB
