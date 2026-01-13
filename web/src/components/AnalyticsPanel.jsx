@@ -604,7 +604,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           {...TOOLTIP_STYLES}
                           formatter={(value) => value.toFixed(1) + '%'}
                         />
-                        <ReferenceLine y={50} stroke="#ef4444" strokeDasharray="5 5" label={{ value: 'Min Threshold (50%)', position: 'top', fill: '#ef4444' }} />
+                        <ReferenceLine y={50} stroke="#ffffff" strokeDasharray="5 5" label={{ value: 'Min Threshold (50%)', position: 'top', fill: '#ffffff' }} />
                         <Bar dataKey="confidence">
                           {(() => {
                             const events = filterEventsBySession(cumulativeData.yolo_performance, viewMode, currentSession);
