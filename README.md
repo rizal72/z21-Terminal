@@ -224,7 +224,8 @@ python3 z21_controller.py 10            # Control consist 10
 - [x] **YOLO Performance Monitoring**: FPS trends (line chart) + confidence per locomotive (bar chart)
 - [x] **Locomotive Operating Time**: Cumulative operating hours per locomotive (maintenance planning)
 - [x] **Current vs Overview Views**: Session-specific vs cumulative historical data
-- [x] **Consist Filtering**: Filter charts by All/C10/C11 (color-coded: magenta/blue)
+- [x] **Consist Filtering**: Filter charts by All/C10/C11 (color-coded, sticky header)
+- [x] **Intelligent Downsampling**: LTTB algorithm preserves chart shape, critical events (|Δt| ≥ 1.5s) always visible
 - [x] **Horizontal Scroll**: Navigate large datasets (1000+ events) with smooth scrolling
 - [x] **Auto-Refresh**: Current view updates every 10s when locomotives moving
 - [x] **SQLite Async Logging**: Zero impact on YOLO tracking (buffered writes)
