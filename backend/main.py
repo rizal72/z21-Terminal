@@ -1118,6 +1118,25 @@ async def get_cv_profile_mode():
     return {"mode": config.get('cv_profile_mode', 'normal')}
 
 
+@app.post("/api/close-session")
+async def close_session():
+    """Force close current analytics session (called via sendBeacon on page unload/refresh)
+
+    This ensures deterministic session boundaries:
+    - Page refresh → daemon stops → session closes → new page load → daemon restarts → NEW session
+    - Without this: session continues if daemon doesn't stop between disconnect/reconnect
+    """
+    if tracking_manager:
+        try:
+            await tracking_manager.stop_tracking()
+            log('[SESSION]', 'Analytics session closed via page unload')
+            return {"status": "ok"}
+        except Exception as e:
+            log('[ERROR]', f'Failed to close session: {e}')
+            return {"status": "error", "message": str(e)}
+    return {"status": "ok"}  # No tracking manager = nothing to close
+
+
 @app.get("/api/gates")
 async def get_gates():
     """Get current gate configuration"""

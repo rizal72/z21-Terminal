@@ -766,6 +766,18 @@ function App() {
     return () => window.removeEventListener('keydown', handleGlobalKeyPress);
   }, [trackPower, z21Online, consists, locomotives, controllers, activeControllerId]); // Dependencies
 
+  // Close analytics session on page unload/refresh (deterministic session boundary)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // sendBeacon is reliable even during page close/refresh
+      // Forces daemon stop → session close before WebSocket reconnects
+      navigator.sendBeacon(`${API_URL}/api/close-session`);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [API_URL]);
+
   // Reload roster from JMRI without restarting backend
   const handleReloadRoster = async () => {
     if (reloadingRoster) return; // Prevent double-click
