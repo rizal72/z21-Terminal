@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo, useMemo } from 'react';
 import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import Plot from 'react-plotly.js';
 
@@ -107,31 +107,35 @@ const preparePlotlyTrace = (events, consistId, minTimestamp) => {
   return { x, y, text };
 };
 
-// Plotly Δt Chart Component (defined outside to prevent re-creation on every render)
-const PlotlyDeltaTChart = ({ data, consistFilter, trackingConfig }) => {
+// Plotly Δt Chart Component (memoized to prevent unnecessary re-renders)
+const PlotlyDeltaTChart = memo(({ data, consistFilter, trackingConfig }) => {
   // Calculate global min timestamp for relative positioning
-  const minTimestamp = Math.min(...data.map(e => e.timestamp));
+  const minTimestamp = useMemo(() => Math.min(...data.map(e => e.timestamp)), [data]);
 
   const consistIds = Object.keys(trackingConfig.consists).map(Number).sort((a, b) => a - b);
   const renderConsistIds = consistFilter === 'all' ? consistIds : consistIds.filter(cid => cid === consistFilter);
 
-  const traces = renderConsistIds.map(consistId => {
-    const traceData = preparePlotlyTrace(data, consistId, minTimestamp);
-    return {
-      x: traceData.x,
-      y: traceData.y,
-      text: traceData.text,
-      type: 'scatter',
-      mode: 'lines+markers',
-      name: trackingConfig.consists[consistId]?.name || `Consist ${consistId}`,
-      line: { color: getConsistStrokeColor(consistId, trackingConfig.consists), width: 2 },
-      marker: { size: 4 },
-      connectgaps: false,
-      hovertemplate: '<b>%{text}</b><br>Δt: %{y:.2f}s<extra></extra>'
-    };
-  });
+  // Memoize traces to avoid recalculation unless data actually changes
+  const traces = useMemo(() => {
+    return renderConsistIds.map(consistId => {
+      const traceData = preparePlotlyTrace(data, consistId, minTimestamp);
+      return {
+        x: traceData.x,
+        y: traceData.y,
+        text: traceData.text,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: trackingConfig.consists[consistId]?.name || `Consist ${consistId}`,
+        line: { color: getConsistStrokeColor(consistId, trackingConfig.consists), width: 2 },
+        marker: { size: 4 },
+        connectgaps: false,
+        hovertemplate: '<b>%{text}</b><br>Δt: %{y:.2f}s<extra></extra>'
+      };
+    });
+  }, [data, renderConsistIds, minTimestamp, trackingConfig]);
 
-  const layout = {
+  // Layout configuration
+  const layout = useMemo(() => ({
     autosize: true,
     height: 400,
     margin: { l: 60, r: 40, t: 20, b: 60 },
@@ -158,12 +162,15 @@ const PlotlyDeltaTChart = ({ data, consistFilter, trackingConfig }) => {
     ],
     showlegend: consistFilter === 'all',
     legend: { bgcolor: 'rgba(30,41,59,0.8)', bordercolor: '#475569', borderwidth: 1 }
-  };
+  }), [consistFilter]);
 
   const config = {
     displayModeBar: true,
     displaylogo: false
   };
+
+  // Use revision to preserve zoom/pan: only changes when data length changes
+  const revision = useMemo(() => data.length, [data.length]);
 
   return (
     <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
@@ -172,12 +179,13 @@ const PlotlyDeltaTChart = ({ data, consistFilter, trackingConfig }) => {
         data={traces}
         layout={layout}
         config={config}
+        revision={revision}
         style={{ width: '100%' }}
         useResizeHandler
       />
     </div>
   );
-};
+});
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current' or 'overview'
