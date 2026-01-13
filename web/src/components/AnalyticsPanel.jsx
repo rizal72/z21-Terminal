@@ -507,7 +507,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     );
 
                     return viewMode === 'current' ? (
-                      <div ref={scrollRefSession} className="overflow-x-auto">
+                      <div key={`delta-t-${consistFilter}`} ref={scrollRefSession} className="overflow-x-auto">
                         <div style={{ minWidth: chartWidth }}>
                           {chartContent}
                         </div>
@@ -551,7 +551,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       );
 
                       return viewMode === 'current' ? (
-                        <div ref={scrollRefFps} className="overflow-x-auto">
+                        <div key={`fps-${consistFilter}`} ref={scrollRefFps} className="overflow-x-auto">
                           <div style={{ minWidth: chartWidth }}>
                             {chartContent}
                           </div>
