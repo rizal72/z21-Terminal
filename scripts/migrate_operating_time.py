@@ -40,6 +40,21 @@ def migrate_existing_sessions():
     conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
 
+    # Ensure locomotive_stats table exists
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS locomotive_stats (
+            address INTEGER PRIMARY KEY,
+            name TEXT,
+            total_operating_seconds INTEGER DEFAULT 0,
+            total_sessions INTEGER DEFAULT 0,
+            last_active_time REAL,
+            created_at REAL,
+            updated_at REAL
+        )
+    ''')
+    conn.commit()
+    print("[INFO] Verified locomotive_stats table exists")
+
     # Get all validated sessions
     cursor.execute('SELECT id, start_time, end_time FROM sessions WHERE validated = 1 ORDER BY start_time')
     sessions = cursor.fetchall()
