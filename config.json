@@ -12,7 +12,7 @@
   },
   "consists": {
     "10": {
-      "name": "Consist 10 - Tracciato Interno (Figura 8)",
+      "name": "C10 Interno",
       "lead_address": 1,
       "rear_address": 5,
       "reference_loco": 5,
@@ -27,7 +27,7 @@
       "notes": "Asymmetric gate timing: only L5@G3-L1@G4 valid (figure-8 track geometry). Reference=D645 014 (ESU stable), Adjust=Gr.675 017 (ESU LokSound)."
     },
     "11": {
-      "name": "Consist 11 - Tracciato Esterno (Ovale)",
+      "name": "C11 Esterno",
       "lead_address": 7,
       "rear_address": 8,
       "reference_loco": 8,
