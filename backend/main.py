@@ -1819,9 +1819,26 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
         # Future event types: add here
     elif max_points:
         # Overview view: uniform sampling across entire history
+        original_delta_t_count = len(delta_t_events)
+        original_yolo_count = len(yolo_performance)
+
         delta_t_events = sample_events(delta_t_events, max_points)
         yolo_performance = sample_events(yolo_performance, max_points)
         # Future event types: add here
+
+        # Log ONLY if debug enabled in config AND sampling reduction is significant
+        if debug_enabled:
+            delta_reduction = original_delta_t_count - len(delta_t_events)
+            yolo_reduction = original_yolo_count - len(yolo_performance)
+
+            # Significant = reduced >10% OR reduced >100 events
+            is_significant = (delta_reduction > original_delta_t_count * 0.1 or delta_reduction > 100 or
+                            yolo_reduction > original_yolo_count * 0.1 or yolo_reduction > 100)
+
+            if is_significant:
+                print(f"[DEBUG] Sampling applied (maxPoints={max_points}) | "
+                      f"dT: {original_delta_t_count}->{len(delta_t_events)} | "
+                      f"YOLO: {original_yolo_count}->{len(yolo_performance)}")
 
     # Note: delta_t_events already includes current session events (written by flush task every 10s)
     # Total count is accurate because query includes all events from DB
