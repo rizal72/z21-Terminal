@@ -447,22 +447,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
                     <h4 className="text-lg font-semibold text-amber-400 mb-4">Inference FPS Over Time</h4>
                     {(() => {
-                      // Filter by session if Current view
-                      let events = cumulativeData.yolo_performance;
-                      if (viewMode === 'current' && currentSession) {
-                        events = events.filter(e => e.session_id === currentSession.session_id);
-                      }
-
-                      // DEBUG: Log data to console
-                      console.log('FPS Chart Debug:', {
-                        totalEvents: cumulativeData.yolo_performance.length,
-                        filteredEvents: events.length,
-                        viewMode,
-                        currentSessionId: currentSession?.session_id,
-                        sampleEvent: events[0]
-                      });
-
-                      const chartData = events.map((e, idx) => ({
+                      // NO session filtering - FPS chart shows ALL sessions like dT chart
+                      const chartData = cumulativeData.yolo_performance.map((e, idx) => ({
                         index: idx + 1,
                         time: formatTime(e.timestamp),
                         fps: parseFloat(e.avg_fps.toFixed(1))
@@ -499,11 +485,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     <h4 className="text-lg font-semibold text-amber-400 mb-4">Average Confidence per Locomotive</h4>
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={(() => {
-                        // Get latest performance event (filtered by session if Current view)
-                        let events = cumulativeData.yolo_performance;
-                        if (viewMode === 'current' && currentSession) {
-                          events = events.filter(e => e.session_id === currentSession.session_id);
-                        }
+                        // Get latest performance event (NO session filtering - always show last available data)
+                        const events = cumulativeData.yolo_performance;
                         if (events.length === 0) return [];
 
                         const latestEvent = events[events.length - 1];
