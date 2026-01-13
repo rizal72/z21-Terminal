@@ -620,7 +620,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   displayStats = locoStats || [];
                 }
 
-                return displayStats.length > 0 && (
+                // Always render chart (like Confidence chart), even with empty data
+                return (
                   <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
                     <h3 className="text-xl font-bold text-white mb-4">Locomotive Operating Time</h3>
 
