@@ -303,6 +303,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
       const traces = renderConsistIds.map(consistId => {
         const traceData = preparePlotlyTrace(data, consistId);
+
+        // DEBUG: Log trace data in detail
+        console.log(`=== C${consistId} Trace Data ===`);
+        console.log('Total points:', traceData.x.length);
+        console.log('First 5 X values:', traceData.x.slice(0, 5));
+        console.log('First 5 Y values:', traceData.y.slice(0, 5));
+        console.log('X range:', Math.min(...traceData.x.filter(v => v !== null)), '->', Math.max(...traceData.x.filter(v => v !== null)));
+        console.log('Y range:', Math.min(...traceData.y.filter(v => v !== null)), '->', Math.max(...traceData.y.filter(v => v !== null)));
+        console.log('Null count:', traceData.x.filter(v => v === null).length);
+
         return {
           x: traceData.x,
           y: traceData.y,
