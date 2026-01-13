@@ -610,31 +610,37 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               )}
 
               {/* Locomotive Operating Time - ONLY in Overview (cumulative historic data) */}
-              {viewMode === 'overview' && locoStats && locoStats.length > 0 && (
-                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                  <h3 className="text-xl font-bold text-white mb-4">Locomotive Operating Time</h3>
+              {viewMode === 'overview' && locoStats && locoStats.length > 0 && (() => {
+                // Filter locomotives by consist (All/C10/C11)
+                const addressFilter = getAddressFilter(consistFilter, trackingConfig.consists);
+                const filteredLocoStats = locoStats.filter(loco => addressFilter.includes(loco.address));
 
-                  <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                    <h4 className="text-lg font-semibold text-amber-400 mb-4">Total Operating Hours</h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={locoStats}>
-                        <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                        <XAxis dataKey="name" {...CHART_AXIS_STYLES.axis} />
-                        <YAxis {...CHART_AXIS_STYLES.axis} label={{ value: 'Operating Hours', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
-                        <Tooltip
-                          {...TOOLTIP_STYLES}
-                          formatter={(value) => `${value} hours`}
-                        />
-                        <Bar dataKey="total_operating_hours">
-                          {locoStats.map((loco, index) => (
-                            <Cell key={`cell-${index}`} fill={LOCO_COLORS[loco.address] || '#9CA3AF'} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                return filteredLocoStats.length > 0 && (
+                  <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+                    <h3 className="text-xl font-bold text-white mb-4">Locomotive Operating Time</h3>
+
+                    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                      <h4 className="text-lg font-semibold text-amber-400 mb-4">Total Operating Hours</h4>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={filteredLocoStats}>
+                          <CartesianGrid {...CHART_AXIS_STYLES.grid} />
+                          <XAxis dataKey="name" {...CHART_AXIS_STYLES.axis} />
+                          <YAxis {...CHART_AXIS_STYLES.axis} label={{ value: 'Operating Hours', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                          <Tooltip
+                            {...TOOLTIP_STYLES}
+                            formatter={(value) => `${value} hours`}
+                          />
+                          <Bar dataKey="total_operating_hours">
+                            {filteredLocoStats.map((loco, index) => (
+                              <Cell key={`cell-${index}`} fill={LOCO_COLORS[loco.address] || '#9CA3AF'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
         </div>
