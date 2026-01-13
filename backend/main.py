@@ -1670,7 +1670,7 @@ async def get_current_session():
 async def get_session_data(session_id: str):
     """Load full session data (events, Δt trends)"""
     import sqlite3
-    db_path = Path(__file__).parent.parent / "data" / "analytics.db"
+    db_path = Path(__file__).parent / "data" / "analytics.db"
 
     if not db_path.exists():
         return {"error": "Analytics database not found"}
@@ -1761,7 +1761,7 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
     """
     import sqlite3
     from collections import defaultdict
-    db_path = Path(__file__).parent.parent / "data" / "analytics.db"
+    db_path = Path(__file__).parent / "data" / "analytics.db"
 
     if not db_path.exists():
         return {"error": "Analytics database not found"}
@@ -1882,7 +1882,7 @@ async def get_locomotive_stats():
     """Get aggregated locomotive operating time statistics"""
     import sqlite3
 
-    db_path = Path(__file__).parent.parent / "data" / "analytics.db"
+    db_path = Path(__file__).parent / "data" / "analytics.db"
 
     if not db_path.exists():
         return {'locomotives': []}

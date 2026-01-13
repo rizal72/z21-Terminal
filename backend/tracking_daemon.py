@@ -363,7 +363,7 @@ class TrackingDaemon:
             tracking_config = config.get('tracking', {})
             idle_timeout = tracking_config.get('idle_timeout_seconds', 10)
             # Use absolute path to match endpoint expectations
-            db_path = project_root / 'data' / 'analytics.db'
+            db_path = project_root / 'backend' / 'data' / 'analytics.db'
 
             # Cleanup zombie sessions from previous crashes/restarts (BEFORE creating new session)
             try:

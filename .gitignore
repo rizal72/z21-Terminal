@@ -26,8 +26,8 @@ ENV/
 *~
 
 # Project specific
-data/*.db
-data/*.sqlite
+backend/data/*.db
+backend/data/*.sqlite
 *.tmp
 *.old
 
