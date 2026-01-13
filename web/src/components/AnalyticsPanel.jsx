@@ -543,7 +543,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         <ReferenceLine y={50} stroke="#ef4444" strokeDasharray="5 5" label={{ value: 'Min Threshold (50%)', position: 'top', fill: '#ef4444' }} />
                         <Bar dataKey="confidence">
                           {(() => {
-                            // Get filtered data to map Cell colors
+                            // Map Cell colors using same data preparation logic
+                            let events = cumulativeData.yolo_performance;
+                            if (viewMode === 'current' && currentSession) {
+                              events = events.filter(e => e.session_id === currentSession.session_id);
+                            }
+                            if (events.length === 0) return [];
+
+                            const latestEvent = events[events.length - 1];
+                            const avgConfidence = latestEvent.avg_confidence;
+
                             const consistAddresses = {
                               10: [1, 5],
                               11: [7, 8]
