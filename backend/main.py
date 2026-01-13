@@ -1106,6 +1106,15 @@ async def get_debug_status():
     }
 
 
+@app.get("/api/config/tracking")
+async def get_tracking_config():
+    """Get tracking configuration (idle timeout for YOLO tracking and chart line breaks)"""
+    idle_timeout = config.get('tracking', {}).get('idle_timeout_seconds', 10)
+    return {
+        "idle_timeout_seconds": idle_timeout
+    }
+
+
 @app.post("/api/toggle-debug")
 async def toggle_debug():
     """Toggle debug overlay in video feed (press 'B' in UI)"""

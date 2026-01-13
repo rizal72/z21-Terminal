@@ -56,6 +56,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [consistFilter, setConsistFilter] = useState('all'); // 'all', 10, 11
+  const [trackingConfig, setTrackingConfig] = useState({ idle_timeout_seconds: 10 }); // Tracking config (default fallback)
 
   // Refs for auto-scroll to end
   const scrollRefSession = useRef(null);
@@ -80,6 +81,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return () => {
       document.body.style.overflow = 'auto';
     };
+  }, [isOpen]);
+
+  // Fetch tracking config on mount (idle timeout for line breaks)
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/config/tracking')
+        .then(res => res.json())
+        .then(data => setTrackingConfig(data))
+        .catch(err => console.warn('Failed to load tracking config, using default 10s:', err));
+    }
   }, [isOpen]);
 
   // Load cumulative data on mount and when view mode changes
@@ -197,6 +208,49 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Insert null points to break chart lines during idle periods (matches backend tracking cooldown)
+  const breakLineOnIdle = (events, idleTimeoutSeconds) => {
+    if (!events || events.length === 0) return [];
+
+    const result = [];
+
+    for (let i = 0; i < events.length; i++) {
+      const event = events[i];
+
+      // Add current event
+      result.push({
+        index: result.length + 1,
+        timestamp: event.timestamp,
+        time: formatTime(event.timestamp),
+        delta_t_c10: event.consist_id === 10 ? parseFloat(event.delta_t.toFixed(2)) : null,
+        delta_t_c11: event.consist_id === 11 ? parseFloat(event.delta_t.toFixed(2)) : null,
+        status: event.status,
+        gate_type: event.gate_type
+      });
+
+      // Check idle gap (matches backend tracking cooldown)
+      if (i < events.length - 1) {
+        const nextEvent = events[i + 1];
+        const gap = nextEvent.timestamp - event.timestamp;
+
+        if (gap > idleTimeoutSeconds) {
+          // Insert null point (line break = idle period)
+          result.push({
+            index: result.length + 1,
+            timestamp: event.timestamp + gap / 2,
+            time: formatTime(event.timestamp + gap / 2),
+            delta_t_c10: null,
+            delta_t_c11: null,
+            status: 'idle',
+            gate_type: null
+          });
+        }
+      }
+    }
+
+    return result;
   };
 
   // Prepare chart data from session events (with consist separation)
@@ -420,17 +474,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   </div>
 
                   {(() => {
-                    const chartData = cumulativeData.delta_t_events
-                      .filter(event => consistFilter === 'all' || event.consist_id === consistFilter)
-                      .map((event, idx) => ({
-                        index: idx + 1,
-                        timestamp: event.timestamp,
-                        time: formatTime(event.timestamp),
-                        delta_t_c10: event.consist_id === 10 ? parseFloat(event.delta_t.toFixed(2)) : null,
-                        delta_t_c11: event.consist_id === 11 ? parseFloat(event.delta_t.toFixed(2)) : null,
-                        status: event.status,
-                        gate_type: event.gate_type
-                      }));
+                    const chartData = breakLineOnIdle(
+                      cumulativeData.delta_t_events.filter(event =>
+                        consistFilter === 'all' || event.consist_id === consistFilter
+                      ),
+                      trackingConfig.idle_timeout_seconds
+                    );
 
                     const chartWidth = viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
                     const chartContent = (
