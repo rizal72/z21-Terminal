@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import Plot from 'react-plotly.js';
+import Plotly from 'plotly.js/dist/plotly.min.js';
 
 // Locomotive colors (matches config.json locomotive_colors)
 const LOCO_COLORS = {
@@ -291,6 +291,86 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return { x, y, text };
   };
 
+  // Separate Plotly component using vanilla Plotly.newPlot (no React wrapper)
+  const PlotlyDeltaTChart = ({ data, consistFilter, trackingConfig }) => {
+    const chartRef = useRef(null);
+
+    useEffect(() => {
+      if (!chartRef.current || !data || data.length === 0) return;
+
+      const consistIds = Object.keys(trackingConfig.consists).map(Number).sort((a, b) => a - b);
+      const renderConsistIds = consistFilter === 'all' ? consistIds : consistIds.filter(cid => cid === consistFilter);
+
+      const traces = renderConsistIds.map(consistId => {
+        const traceData = preparePlotlyTrace(data, consistId);
+        return {
+          x: traceData.x,
+          y: traceData.y,
+          text: traceData.text,
+          type: 'scatter',
+          mode: 'lines+markers',
+          name: trackingConfig.consists[consistId]?.name || `Consist ${consistId}`,
+          line: { color: getConsistStrokeColor(consistId, trackingConfig.consists), width: 2 },
+          marker: { size: 4 },
+          connectgaps: false,
+          hovertemplate: '<b>%{text}</b><br>Δt: %{y:.2f}s<extra></extra>'
+        };
+      });
+
+      const layout = {
+        autosize: true,
+        height: 400,
+        margin: { l: 60, r: 40, t: 20, b: 60 },
+        plot_bgcolor: '#1e293b',
+        paper_bgcolor: '#1e293b',
+        font: { color: '#e2e8f0' },
+        xaxis: {
+          title: 'Timestamp',
+          gridcolor: '#374151',
+          color: '#9CA3AF',
+          tickformat: '%Y-%m-%d %H:%M:%S'
+        },
+        yaxis: {
+          title: 'Δt (seconds)',
+          gridcolor: '#374151',
+          zeroline: true,
+          zerolinecolor: '#10b981',
+          color: '#9CA3AF'
+        },
+        shapes: [
+          { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1, y1: 1, line: { color: '#f59e0b', dash: 'dash' } },
+          { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: -1, y1: -1, line: { color: '#f59e0b', dash: 'dash' } },
+          { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1.5, y1: 1.5, line: { color: '#ef4444', dash: 'dash' } },
+          { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: -1.5, y1: -1.5, line: { color: '#ef4444', dash: 'dash' } }
+        ],
+        showlegend: consistFilter === 'all',
+        legend: { bgcolor: 'rgba(30,41,59,0.8)', bordercolor: '#475569', borderwidth: 1 }
+      };
+
+      const config = {
+        displayModeBar: true,
+        displaylogo: false,
+        responsive: true
+      };
+
+      Plotly.newPlot(chartRef.current, traces, layout, config);
+
+      // Cleanup
+      return () => {
+        if (chartRef.current) {
+          Plotly.purge(chartRef.current);
+        }
+      };
+    }, [data, consistFilter, trackingConfig]);
+
+    return (
+      <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+        <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
+        <div ref={chartRef} style={{ width: '100%', height: '400px' }} />
+      </div>
+    );
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -496,56 +576,11 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
               {/* Δt Trends Chart - Plotly with Session Boundaries */}
               {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
-                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                  <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
-
-                  {(() => {
-                    const consistIds = Object.keys(trackingConfig.consists).map(Number).sort((a, b) => a - b);
-                    const renderConsistIds = consistFilter === 'all' ? consistIds : consistIds.filter(cid => cid === consistFilter);
-
-                    const traces = renderConsistIds.map(consistId => {
-                      const traceData = preparePlotlyTrace(cumulativeData.delta_t_events, consistId);
-                      return {
-                        x: traceData.x,
-                        y: traceData.y,
-                        text: traceData.text,
-                        type: 'scatter',
-                        mode: 'lines+markers',
-                        name: trackingConfig.consists[consistId]?.name || `Consist ${consistId}`,
-                        line: { color: getConsistStrokeColor(consistId, trackingConfig.consists), width: 2 },
-                        marker: { size: 4 },
-                        connectgaps: false,
-                        hovertemplate: '<b>%{text}</b><br>Δt: %{y:.2f}s<extra></extra>'
-                      };
-                    });
-
-                    const layout = {
-                      autosize: true,
-                      height: 400,
-                      margin: { l: 60, r: 40, t: 20, b: 60 },
-                      plot_bgcolor: '#1e293b',
-                      paper_bgcolor: '#1e293b',
-                      font: { color: '#e2e8f0' },
-                      xaxis: {
-                        title: 'Timestamp',
-                        gridcolor: '#374151',
-                        color: '#9CA3AF',
-                        tickformat: '%Y-%m-%d %H:%M:%S'
-                      },
-                      yaxis: { title: 'Δt (seconds)', gridcolor: '#374151', zeroline: true, zerolinecolor: '#10b981', color: '#9CA3AF' },
-                      shapes: [
-                        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1, y1: 1, line: { color: '#f59e0b', dash: 'dash' } },
-                        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: -1, y1: -1, line: { color: '#f59e0b', dash: 'dash' } },
-                        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1.5, y1: 1.5, line: { color: '#ef4444', dash: 'dash' } },
-                        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: -1.5, y1: -1.5, line: { color: '#ef4444', dash: 'dash' } }
-                      ],
-                      showlegend: consistFilter === 'all',
-                      legend: { bgcolor: 'rgba(30,41,59,0.8)', bordercolor: '#475569', borderwidth: 1 }
-                    };
-
-                    return <Plot data={traces} layout={layout} config={{ displayModeBar: true, displaylogo: false }} style={{ width: '100%' }} useResizeHandler />;
-                  })()}
-                </div>
+                <PlotlyDeltaTChart
+                  data={cumulativeData.delta_t_events}
+                  consistFilter={consistFilter}
+                  trackingConfig={trackingConfig}
+                />
               )}
 
               {/* YOLO Performance Monitoring - FPS & Confidence */}
