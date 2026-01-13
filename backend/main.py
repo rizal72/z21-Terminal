@@ -1742,13 +1742,14 @@ async def get_cumulative_stats():
 
     # Get ALL delta_t events (chronologically ordered for continuous timeline)
     cursor.execute(
-        "SELECT timestamp, data FROM events WHERE event_type = 'delta_t' ORDER BY timestamp"
+        "SELECT session_id, timestamp, data FROM events WHERE event_type = 'delta_t' ORDER BY timestamp"
     )
     delta_t_events = []
     for row in cursor.fetchall():
-        data = json.loads(row[1])
+        data = json.loads(row[2])
         delta_t_events.append({
-            'timestamp': row[0],
+            'session_id': row[0],
+            'timestamp': row[1],
             'consist_id': data['consist_id'],
             'delta_t': data['delta_t'],
             'status': data['status'],

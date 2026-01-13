@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current' or 'overview'
   const [cumulativeData, setCumulativeData] = useState(null);
+  const [currentSession, setCurrentSession] = useState(null); // Current session metadata
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [consistFilter, setConsistFilter] = useState('all'); // 'all', 10, 11
@@ -67,18 +68,28 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/analytics/cumulative');
-      const data = await response.json();
+      // Fetch both cumulative data AND current session metadata in parallel
+      const [cumulativeResponse, currentResponse] = await Promise.all([
+        fetch('/api/analytics/cumulative'),
+        fetch('/api/analytics/current')
+      ]);
 
-      if (data.error) {
-        setError(data.error);
+      const cumulativeData = await cumulativeResponse.json();
+      const currentData = await currentResponse.json();
+
+      if (cumulativeData.error) {
+        setError(cumulativeData.error);
         setCumulativeData(null);
+        setCurrentSession(null);
         return;
       }
 
-      setCumulativeData(data);
+      setCumulativeData(cumulativeData);
+      setCurrentSession(currentData.error ? null : currentData);
     } catch (err) {
-      setError(`Failed to load cumulative data: ${err.message}`);
+      setError(`Failed to load data: ${err.message}`);
+      setCumulativeData(null);
+      setCurrentSession(null);
     } finally {
       setLoading(false);
     }
@@ -213,12 +224,38 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           {/* Analytics View (Unified) */}
           {cumulativeData && !loading && (
             <div className="space-y-6">
-              {/* Overall Stats */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                  <div className="text-sm text-slate-400">Total Sessions</div>
-                  <div className="text-3xl font-bold text-white mt-1">{cumulativeData.total_sessions}</div>
+              {/* Session Not Validated Warning (Current view only) */}
+              {viewMode === 'current' && currentSession && !currentSession.validated && (
+                <div className="bg-amber-900/30 border border-amber-700 rounded-lg p-4 text-amber-300">
+                  <i className="fa-solid fa-clock mr-2"></i>
+                  Session not validated - waiting for first gate crossing
                 </div>
+              )}
+
+              {/* Stats Cards (view-dependent) */}
+              <div className="grid grid-cols-3 gap-4">
+                {/* Card 1: Session Duration (Current) or Total Sessions (Overview) */}
+                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                  <div className="text-sm text-slate-400">
+                    {viewMode === 'current' ? 'Session Duration' : 'Total Sessions'}
+                  </div>
+                  <div className="text-3xl font-bold text-white mt-1">
+                    {viewMode === 'current'
+                      ? (() => {
+                          if (!currentSession || !currentSession.start_time) return 'N/A';
+                          const duration = currentSession.end_time
+                            ? currentSession.end_time - currentSession.start_time
+                            : Date.now() / 1000 - currentSession.start_time;
+                          const minutes = Math.floor(duration / 60);
+                          const seconds = Math.floor(duration % 60);
+                          return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                        })()
+                      : cumulativeData.total_sessions
+                    }
+                  </div>
+                </div>
+
+                {/* Card 2: Gate Crossings (filtered by session in Current view) */}
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                   <div className="text-sm text-slate-400">
                     Gate Crossings
@@ -229,12 +266,25 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     consistFilter === 11 ? 'text-blue-400' :
                     'text-white'
                   }`}>
-                    {consistFilter === 'all'
-                      ? cumulativeData.delta_t_events?.length || 0
-                      : cumulativeData.delta_t_events?.filter(e => e.consist_id === consistFilter).length || 0
-                    }
+                    {(() => {
+                      let events = cumulativeData.delta_t_events || [];
+
+                      // Filter by session if Current view
+                      if (viewMode === 'current' && currentSession) {
+                        events = events.filter(e => e.session_id === currentSession.session_id);
+                      }
+
+                      // Filter by consist
+                      if (consistFilter !== 'all') {
+                        events = events.filter(e => e.consist_id === consistFilter);
+                      }
+
+                      return events.length;
+                    })()}
                   </div>
                 </div>
+
+                {/* Card 3: Critical Events (filtered by session in Current view) */}
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                   <div className="text-sm text-slate-400">
                     Critical Events
@@ -246,12 +296,22 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     'text-red-400'
                   }`}>
                     {(() => {
-                      const criticalEvents = cumulativeData.delta_t_events?.filter(e => Math.abs(e.delta_t) >= 1.5) || [];
-                      if (consistFilter === 'all') {
-                        return criticalEvents.length;
-                      } else {
-                        return criticalEvents.filter(e => e.consist_id === consistFilter).length;
+                      let events = cumulativeData.delta_t_events || [];
+
+                      // Filter by session if Current view
+                      if (viewMode === 'current' && currentSession) {
+                        events = events.filter(e => e.session_id === currentSession.session_id);
                       }
+
+                      // Filter by critical threshold (|Δt| >= 1.5s)
+                      events = events.filter(e => Math.abs(e.delta_t) >= 1.5);
+
+                      // Filter by consist
+                      if (consistFilter !== 'all') {
+                        events = events.filter(e => e.consist_id === consistFilter);
+                      }
+
+                      return events.length;
                     })()}
                   </div>
                 </div>
