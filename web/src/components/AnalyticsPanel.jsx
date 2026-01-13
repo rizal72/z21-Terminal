@@ -220,8 +220,20 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   <div className="text-3xl font-bold text-white mt-1">{cumulativeData.total_sessions}</div>
                 </div>
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                  <div className="text-sm text-slate-400">Total Δt Events</div>
-                  <div className="text-3xl font-bold text-white mt-1">{cumulativeData.total_delta_t_events}</div>
+                  <div className="text-sm text-slate-400">
+                    Δt Events
+                    {consistFilter === 'all' ? ' (All)' : consistFilter === 10 ? ' (C10)' : ' (C11)'}
+                  </div>
+                  <div className={`text-3xl font-bold mt-1 ${
+                    consistFilter === 10 ? 'text-fuchsia-400' :
+                    consistFilter === 11 ? 'text-blue-400' :
+                    'text-white'
+                  }`}>
+                    {consistFilter === 'all'
+                      ? cumulativeData.delta_t_events?.length || 0
+                      : cumulativeData.delta_t_events?.filter(e => e.consist_id === consistFilter).length || 0
+                    }
+                  </div>
                 </div>
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                   <div className="text-sm text-slate-400">
