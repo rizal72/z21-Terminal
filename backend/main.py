@@ -1109,6 +1109,7 @@ async def get_debug_status():
 @app.get("/api/config/tracking")
 async def get_tracking_config():
     """Get tracking configuration (idle timeout + consist definitions for dynamic analytics)"""
+    config = load_config()
     idle_timeout = config.get('tracking', {}).get('idle_timeout_seconds', 10)
     consists = config.get('consists', {})
 
