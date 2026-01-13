@@ -1689,6 +1689,102 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
 
 
 # ========================================
+# Analytics Downsampling Helpers
+# ========================================
+
+def lttb_downsample(data: List[Dict], max_points: int, x_key: str = 'timestamp', y_key: str = 'value') -> List[Dict]:
+    """
+    Largest Triangle Three Buckets (LTTB) downsampling algorithm.
+    Preserves visual shape by selecting points that form largest triangles.
+
+    Args:
+        data: List of dicts with x (timestamp) and y (value) keys
+        max_points: Target number of points
+        x_key: Key for x-axis value (timestamp)
+        y_key: Key for y-axis value
+
+    Returns:
+        Downsampled list with ~max_points entries
+    """
+    if len(data) <= max_points:
+        return data
+
+    # Always include first and last points
+    sampled = [data[0]]
+    bucket_size = (len(data) - 2) / (max_points - 2)
+
+    a = 0  # Initially the first point
+    for i in range(max_points - 2):
+        # Calculate bucket range
+        avg_range_start = int((i + 1) * bucket_size) + 1
+        avg_range_end = int((i + 2) * bucket_size) + 1
+        avg_range_end = min(avg_range_end, len(data))
+
+        # Calculate average point in next bucket
+        avg_x = sum(d[x_key] for d in data[avg_range_start:avg_range_end]) / (avg_range_end - avg_range_start)
+        avg_y = sum(d[y_key] for d in data[avg_range_start:avg_range_end]) / (avg_range_end - avg_range_start)
+
+        # Find point in current bucket that forms largest triangle
+        range_start = int(i * bucket_size) + 1
+        range_end = int((i + 1) * bucket_size) + 1
+
+        max_area = -1
+        max_area_point = None
+
+        point_a_x = data[a][x_key]
+        point_a_y = data[a][y_key]
+
+        for j in range(range_start, range_end):
+            # Calculate triangle area
+            point_b_x = data[j][x_key]
+            point_b_y = data[j][y_key]
+            area = abs((point_a_x - avg_x) * (point_b_y - point_a_y) -
+                      (point_a_x - point_b_x) * (avg_y - point_a_y))
+
+            if area > max_area:
+                max_area = area
+                max_area_point = j
+
+        sampled.append(data[max_area_point])
+        a = max_area_point
+
+    sampled.append(data[-1])  # Always include last point
+    return sampled
+
+
+def smart_downsample_delta_t(events: List[Dict], max_points: int, critical_threshold: float = 1.5) -> List[Dict]:
+    """
+    Smart downsampling for Δt events: preserves all critical events + LTTB on rest.
+
+    Args:
+        events: List of delta_t event dicts with 'delta_t' and 'timestamp' keys
+        max_points: Target number of points
+        critical_threshold: |Δt| threshold for critical events (default 1.5s)
+
+    Returns:
+        Downsampled list with all critical events + LTTB sampled normal events
+    """
+    if len(events) <= max_points:
+        return events
+
+    # Separate critical and normal events
+    critical = [e for e in events if abs(e['delta_t']) >= critical_threshold]
+    normal = [e for e in events if abs(e['delta_t']) < critical_threshold]
+
+    # If critical events alone exceed max_points, return all critical (rare case)
+    if len(critical) >= max_points:
+        return sorted(critical, key=lambda e: e['timestamp'])
+
+    # Apply LTTB to normal events for remaining budget
+    remaining_budget = max_points - len(critical)
+    sampled_normal = lttb_downsample(normal, remaining_budget, x_key='timestamp', y_key='delta_t')
+
+    # Merge and sort by timestamp
+    result = critical + sampled_normal
+    return sorted(result, key=lambda e: e['timestamp'])
+
+
+# ========================================
 # Analytics Endpoints
 # ========================================
 
@@ -1896,12 +1992,15 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
         yolo_performance = yolo_performance[-tail:] if len(yolo_performance) > tail else yolo_performance
         loco_operating_time_events = loco_operating_time_events[-tail:] if len(loco_operating_time_events) > tail else loco_operating_time_events
     elif max_points:
-        # Overview view: uniform sampling across entire history
+        # Overview view: intelligent downsampling (LTTB preserves shape, critical events always included)
         original_delta_t_count = len(delta_t_events)
         original_yolo_count = len(yolo_performance)
 
-        delta_t_events = sample_events(delta_t_events, max_points)
-        yolo_performance = sample_events(yolo_performance, max_points)
+        # Delta-t: Smart downsampling (all critical |Δt| ≥ 1.5s + LTTB on rest)
+        delta_t_events = smart_downsample_delta_t(delta_t_events, max_points, critical_threshold=1.5)
+
+        # YOLO FPS: LTTB downsampling (preserves peaks/valleys)
+        yolo_performance = lttb_downsample(yolo_performance, max_points, x_key='timestamp', y_key='avg_fps')
         # Note: loco_operating_time not sampled (aggregate stats chart, not timeline)
 
         # Log ONLY if debug enabled in config AND sampling reduction is significant
@@ -1914,8 +2013,8 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
                             yolo_reduction > original_yolo_count * 0.1 or yolo_reduction > 100)
 
             if is_significant:
-                print(f"[DEBUG] Sampling applied (maxPoints={max_points}) | "
-                      f"dT: {original_delta_t_count}->{len(delta_t_events)} | "
+                print(f"[DEBUG] LTTB downsampling applied (maxPoints={max_points}) | "
+                      f"dT: {original_delta_t_count}->{len(delta_t_events)} (critical preserved) | "
                       f"YOLO: {original_yolo_count}->{len(yolo_performance)}")
 
     # Note: delta_t_events already includes current session events (written by flush task every 10s)
