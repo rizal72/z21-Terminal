@@ -292,9 +292,10 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return { x, y, text };
   };
 
-  // Separate Plotly component using vanilla Plotly.newPlot (no React wrapper)
+  // Separate Plotly component using vanilla Plotly.react (preserves zoom/pan)
   const PlotlyDeltaTChart = ({ data, consistFilter, trackingConfig }) => {
     const chartRef = useRef(null);
+    const isInitialized = useRef(false);
 
     useEffect(() => {
       if (!chartRef.current || !data || data.length === 0) return;
@@ -307,16 +308,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
       const traces = renderConsistIds.map(consistId => {
         const traceData = preparePlotlyTrace(data, consistId, minTimestamp);
-
-        // DEBUG: Log trace data in detail
-        console.log(`=== C${consistId} Trace Data (RELATIVE) ===`);
-        console.log('Total points:', traceData.x.length);
-        console.log('First 5 X values:', traceData.x.slice(0, 5));
-        console.log('First 5 Y values:', traceData.y.slice(0, 5));
-        console.log('X range:', Math.min(...traceData.x.filter(v => v !== null)), '->', Math.max(...traceData.x.filter(v => v !== null)));
-        console.log('Y range:', Math.min(...traceData.y.filter(v => v !== null)), '->', Math.max(...traceData.y.filter(v => v !== null)));
-        console.log('Null count:', traceData.x.filter(v => v === null).length);
-
         return {
           x: traceData.x,
           y: traceData.y,
@@ -366,12 +357,19 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
         responsive: true
       };
 
-      Plotly.newPlot(chartRef.current, traces, layout, config);
+      // Use Plotly.react() instead of newPlot to preserve zoom/pan state
+      if (!isInitialized.current) {
+        Plotly.newPlot(chartRef.current, traces, layout, config);
+        isInitialized.current = true;
+      } else {
+        Plotly.react(chartRef.current, traces, layout, config);
+      }
 
       // Cleanup
       return () => {
-        if (chartRef.current) {
+        if (chartRef.current && !document.body.contains(chartRef.current)) {
           Plotly.purge(chartRef.current);
+          isInitialized.current = false;
         }
       };
     }, [data, consistFilter, trackingConfig]);
