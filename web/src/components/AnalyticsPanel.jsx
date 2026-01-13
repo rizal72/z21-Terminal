@@ -40,12 +40,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     }
   }, [isOpen]);
 
-  // Auto-scroll to end when data loads (Current view only)
+  // Auto-scroll to end when data loads or consist filter changes
   useEffect(() => {
-    if (viewMode === 'current' && cumulativeData && scrollRefSession.current) {
+    if (cumulativeData && scrollRefSession.current) {
       scrollRefSession.current.scrollLeft = scrollRefSession.current.scrollWidth;
     }
-  }, [cumulativeData, viewMode]);
+  }, [cumulativeData, viewMode, consistFilter]);
 
   // Arrow key navigation between Current/Overview
   useEffect(() => {
