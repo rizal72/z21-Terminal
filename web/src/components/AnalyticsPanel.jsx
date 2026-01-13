@@ -9,6 +9,45 @@ const LOCO_COLORS = {
   8: '#FF0000',  // Red (E444 056)
 };
 
+// Consist to locomotive address mapping
+const CONSIST_ADDRESSES = {
+  10: [1, 5],  // Consist 10: Gr.675 017, D645 014
+  11: [7, 8]   // Consist 11: E656 239, E444 056
+};
+
+// Consist color classes for UI labels
+const CONSIST_COLORS = {
+  all: 'text-white',
+  10: 'text-fuchsia-400',
+  11: 'text-blue-400'
+};
+
+// Shared chart styles (dark mode)
+const TOOLTIP_STYLES = {
+  contentStyle: { backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' },
+  labelStyle: { color: '#e2e8f0' },
+  itemStyle: { color: '#e2e8f0' }
+};
+
+const CHART_AXIS_STYLES = {
+  grid: { strokeDasharray: '3 3', stroke: '#374151' },
+  axis: { stroke: '#9CA3AF' }
+};
+
+// Helper functions
+const filterEventsBySession = (events, viewMode, currentSession) => {
+  if (viewMode === 'current' && currentSession && events) {
+    return events.filter(e => e.session_id === currentSession.session_id);
+  }
+  return events || [];
+};
+
+const getAddressFilter = (consistFilter) =>
+  consistFilter === 'all' ? [1, 5, 7, 8] : CONSIST_ADDRESSES[consistFilter];
+
+const getConsistColor = (consist, defaultColor = 'text-white') =>
+  CONSIST_COLORS[consist] || defaultColor;
+
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current' or 'overview'
   const [cumulativeData, setCumulativeData] = useState(null);
@@ -405,13 +444,11 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     const chartContent = (
                       <ResponsiveContainer width={chartWidth} height={400}>
                           <LineChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                            <CartesianGrid {...CHART_AXIS_STYLES.grid} />
                       <XAxis dataKey="time" stroke="#9CA3AF" />
                       <YAxis stroke="#9CA3AF" label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                       <Tooltip
-                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
-                        labelStyle={{ color: '#e2e8f0' }}
-                        itemStyle={{ color: '#e2e8f0' }}
+                        {...TOOLTIP_STYLES}
                         formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
                       />
                       {/* Only show Legend when All filter (prevents chart height shift on filter change) */}
@@ -480,13 +517,11 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       const chartContent = (
                         <ResponsiveContainer width={chartWidth} height={300}>
                           <LineChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                            <CartesianGrid {...CHART_AXIS_STYLES.grid} />
                             <XAxis dataKey="time" stroke="#9CA3AF" />
                             <YAxis stroke="#9CA3AF" domain={[0, 140]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                             <Tooltip
-                              contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
-                              labelStyle={{ color: '#e2e8f0' }}
-                              itemStyle={{ color: '#e2e8f0' }}
+                              {...TOOLTIP_STYLES}
                               formatter={(value) => value.toFixed(1) + ' FPS'}
                             />
                             <ReferenceLine y={30} stroke="#10b981" strokeDasharray="5 5" label={{ value: 'Target (30 FPS)', position: 'top', fill: '#10b981' }} />
@@ -511,67 +546,37 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={(() => {
                         // Confidence chart: snapshot view, NOT time series
-                        // Current view: only current session (empty if no data yet)
-                        // Overview view: latest event globally
-                        let events = cumulativeData.yolo_performance;
-
-                        if (viewMode === 'current' && currentSession) {
-                          events = events.filter(e => e.session_id === currentSession.session_id);
-                        }
-
+                        const events = filterEventsBySession(cumulativeData.yolo_performance, viewMode, currentSession);
                         if (events.length === 0) return [];
 
                         const latestEvent = events[events.length - 1];
                         const avgConfidence = latestEvent.avg_confidence;
-
-                        // Convert to bar chart data with consist filtering
-                        // Consist 10: addresses 1, 5 | Consist 11: addresses 7, 8
-                        const consistAddresses = {
-                          10: [1, 5],
-                          11: [7, 8]
-                        };
-
-                        const addressFilter = consistFilter === 'all'
-                          ? [1, 5, 7, 8]
-                          : consistAddresses[consistFilter];
+                        const addressFilter = getAddressFilter(consistFilter);
 
                         return Object.entries(avgConfidence)
                           .filter(([addr]) => addressFilter.includes(parseInt(addr)))
                           .map(([dcc_addr, conf]) => ({
                             loco: `Loco ${dcc_addr}`,
-                            address: parseInt(dcc_addr),  // Store address for color mapping
-                            confidence: parseFloat((conf * 100).toFixed(1)) // Convert to percentage
+                            address: parseInt(dcc_addr),
+                            confidence: parseFloat((conf * 100).toFixed(1))
                           }));
                       })()}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                         <XAxis dataKey="loco" stroke="#9CA3AF" />
                         <YAxis stroke="#9CA3AF" domain={[0, 100]} label={{ value: 'Confidence (%)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                         <Tooltip
-                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
-                          labelStyle={{ color: '#e2e8f0' }}
-                          itemStyle={{ color: '#e2e8f0' }}
+                          {...TOOLTIP_STYLES}
                           formatter={(value) => value.toFixed(1) + '%'}
                         />
                         <ReferenceLine y={50} stroke="#ef4444" strokeDasharray="5 5" label={{ value: 'Min Threshold (50%)', position: 'top', fill: '#ef4444' }} />
                         <Bar dataKey="confidence">
                           {(() => {
-                            // Map Cell colors using same data preparation logic
-                            let events = cumulativeData.yolo_performance;
-                            if (viewMode === 'current' && currentSession) {
-                              events = events.filter(e => e.session_id === currentSession.session_id);
-                            }
+                            const events = filterEventsBySession(cumulativeData.yolo_performance, viewMode, currentSession);
                             if (events.length === 0) return [];
 
                             const latestEvent = events[events.length - 1];
                             const avgConfidence = latestEvent.avg_confidence;
-
-                            const consistAddresses = {
-                              10: [1, 5],
-                              11: [7, 8]
-                            };
-                            const addressFilter = consistFilter === 'all'
-                              ? [1, 5, 7, 8]
-                              : consistAddresses[consistFilter];
+                            const addressFilter = getAddressFilter(consistFilter);
 
                             return Object.entries(avgConfidence)
                               .filter(([addr]) => addressFilter.includes(parseInt(addr)))
@@ -633,9 +638,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           <XAxis dataKey="name" stroke="#9CA3AF" />
                           <YAxis stroke="#9CA3AF" label={{ value: 'Operating Hours', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                           <Tooltip
-                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
-                            labelStyle={{ color: '#e2e8f0' }}
-                            itemStyle={{ color: '#e2e8f0' }}
+                            {...TOOLTIP_STYLES}
                             formatter={(value) => `${value} hours`}
                           />
                           <Bar dataKey="total_operating_hours">
