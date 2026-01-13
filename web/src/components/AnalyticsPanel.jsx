@@ -40,17 +40,28 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     }
   }, [isOpen]);
 
-  // Auto-scroll to end when data loads or consist filter changes
+  // Auto-scroll to START when consist filter changes (so you see beginning of filtered line)
   useEffect(() => {
     if (cumulativeData && scrollRefSession.current) {
-      // Use requestAnimationFrame to wait for DOM resize after filter change
+      // Scroll to left (start) to see beginning of filtered consist
+      requestAnimationFrame(() => {
+        if (scrollRefSession.current) {
+          scrollRefSession.current.scrollLeft = 0;
+        }
+      });
+    }
+  }, [consistFilter]);
+
+  // Auto-scroll to END when data loads (new events)
+  useEffect(() => {
+    if (cumulativeData && scrollRefSession.current) {
       requestAnimationFrame(() => {
         if (scrollRefSession.current) {
           scrollRefSession.current.scrollLeft = scrollRefSession.current.scrollWidth;
         }
       });
     }
-  }, [cumulativeData, viewMode, consistFilter]);
+  }, [cumulativeData, viewMode]);
 
   // Arrow key navigation between Current/Overview
   useEffect(() => {
