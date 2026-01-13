@@ -411,6 +411,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <Tooltip
                         contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
                         labelStyle={{ color: '#e2e8f0' }}
+                        itemStyle={{ color: '#e2e8f0' }}
                         formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
                       />
                       {/* Only show Legend when All filter (prevents chart height shift on filter change) */}
@@ -485,6 +486,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                             <Tooltip
                               contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
                               labelStyle={{ color: '#e2e8f0' }}
+                              itemStyle={{ color: '#e2e8f0' }}
                               formatter={(value) => value.toFixed(1) + ' FPS'}
                             />
                             <ReferenceLine y={30} stroke="#10b981" strokeDasharray="5 5" label={{ value: 'Target (30 FPS)', position: 'top', fill: '#10b981' }} />
@@ -547,6 +549,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         <Tooltip
                           contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
                           labelStyle={{ color: '#e2e8f0' }}
+                          itemStyle={{ color: '#e2e8f0' }}
                           formatter={(value) => value.toFixed(1) + '%'}
                         />
                         <ReferenceLine y={50} stroke="#ef4444" strokeDasharray="5 5" label={{ value: 'Min Threshold (50%)', position: 'top', fill: '#ef4444' }} />
@@ -631,6 +634,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           <Tooltip
                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
                             labelStyle={{ color: '#e2e8f0' }}
+                            itemStyle={{ color: '#e2e8f0' }}
                             formatter={(value) => `${value} hours`}
                           />
                           <Bar dataKey="total_operating_hours">
