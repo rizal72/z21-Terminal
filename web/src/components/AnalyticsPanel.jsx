@@ -474,12 +474,29 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   </div>
 
                   {(() => {
-                    const chartData = breakLineOnIdle(
-                      cumulativeData.delta_t_events.filter(event =>
-                        consistFilter === 'all' || event.consist_id === consistFilter
-                      ),
-                      trackingConfig.idle_timeout_seconds
-                    );
+                    let chartData;
+
+                    if (consistFilter === 'all') {
+                      // For 'All' filter: apply breakLineOnIdle separately per consist, then merge chronologically
+                      // This creates double-null idle points (both delta_t_c10 and delta_t_c11 = null)
+                      // connectNulls={true} connects through single nulls (other consist events) but NOT double nulls (idle gaps)
+                      const eventsC10 = cumulativeData.delta_t_events.filter(e => e.consist_id === 10);
+                      const eventsC11 = cumulativeData.delta_t_events.filter(e => e.consist_id === 11);
+
+                      const c10WithBreaks = breakLineOnIdle(eventsC10, trackingConfig.idle_timeout_seconds);
+                      const c11WithBreaks = breakLineOnIdle(eventsC11, trackingConfig.idle_timeout_seconds);
+
+                      // Merge chronologically and re-index
+                      chartData = [...c10WithBreaks, ...c11WithBreaks]
+                        .sort((a, b) => a.timestamp - b.timestamp)
+                        .map((e, idx) => ({ ...e, index: idx + 1 }));
+                    } else {
+                      // For single consist filter: standard breakLineOnIdle (single-null for other consist, double-null for idle)
+                      chartData = breakLineOnIdle(
+                        cumulativeData.delta_t_events.filter(event => event.consist_id === consistFilter),
+                        trackingConfig.idle_timeout_seconds
+                      );
+                    }
 
                     const chartWidth = viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
                     const chartContent = (
