@@ -452,6 +452,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       if (viewMode === 'current' && currentSession) {
                         events = events.filter(e => e.session_id === currentSession.session_id);
                       }
+
+                      // DEBUG: Log data to console
+                      console.log('FPS Chart Debug:', {
+                        totalEvents: cumulativeData.yolo_performance.length,
+                        filteredEvents: events.length,
+                        viewMode,
+                        currentSessionId: currentSession?.session_id,
+                        sampleEvent: events[0]
+                      });
+
                       const chartData = events.map((e, idx) => ({
                         index: idx + 1,
                         time: formatTime(e.timestamp),
