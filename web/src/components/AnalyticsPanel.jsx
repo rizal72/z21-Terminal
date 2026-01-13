@@ -485,8 +485,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     <h4 className="text-lg font-semibold text-amber-400 mb-4">Average Confidence per Locomotive</h4>
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={(() => {
-                        // Get latest performance event (NO session filtering - always show last available data)
-                        const events = cumulativeData.yolo_performance;
+                        // Confidence chart: snapshot view, NOT time series
+                        // Current view: only current session (empty if no data yet)
+                        // Overview view: latest event globally
+                        let events = cumulativeData.yolo_performance;
+
+                        if (viewMode === 'current' && currentSession) {
+                          events = events.filter(e => e.session_id === currentSession.session_id);
+                        }
+
                         if (events.length === 0) return [];
 
                         const latestEvent = events[events.length - 1];
