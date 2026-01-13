@@ -1884,10 +1884,7 @@ async def get_locomotive_stats():
 
     db_path = Path(__file__).parent.parent / "data" / "analytics.db"
 
-    log('[DEBUG]', f"Locomotive stats - DB path: {db_path.absolute()}, exists: {db_path.exists()}")
-
     if not db_path.exists():
-        log('[DEBUG]', f"Locomotive stats - DB not found, returning empty")
         return {'locomotives': []}
 
     try:
@@ -1907,7 +1904,6 @@ async def get_locomotive_stats():
         ''')
 
         rows = cursor.fetchall()
-        log('[DEBUG]', f"Locomotive stats - Query returned {len(rows)} rows")
         conn.close()
 
         return {
