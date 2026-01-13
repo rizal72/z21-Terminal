@@ -445,7 +445,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
                     return viewMode === 'current' ? (
                       <div ref={scrollRefSession} className="overflow-x-auto">
-                        {chartContent}
+                        <div style={{ minWidth: chartWidth }}>
+                          {chartContent}
+                        </div>
                       </div>
                     ) : chartContent;
                   })()}
@@ -488,7 +490,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
                       return viewMode === 'current' ? (
                         <div ref={scrollRefFps} className="overflow-x-auto">
-                          {chartContent}
+                          <div style={{ minWidth: chartWidth }}>
+                            {chartContent}
+                          </div>
                         </div>
                       ) : chartContent;
                     })()}
