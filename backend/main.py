@@ -41,6 +41,7 @@ yolo_detections: Dict[str, Any] = {}  # Latest YOLO detections for video overlay
 timing_thresholds: Dict[str, float] = DEFAULT_TIMING_THRESHOLDS.copy()  # Dynamic thresholds from config.json
 reference_locos: Dict[str, Dict[str, int]] = {}  # Reference loco strategy from config.json
 tracked_consist_ids: List[int] = []  # Consist IDs with gate tracking configured (from tracking_assignments)
+loco_start_times: Dict[int, float] = {}  # Track locomotive movement start times (address -> timestamp)
 
 
 polling_task = None
@@ -1319,6 +1320,30 @@ async def websocket_endpoint(websocket: WebSocket):
                         z21_manager.set_speed(address, speed, forward)
                         await broadcast_state_update(address)
 
+                        # Track locomotive operating time (individual locos only, not consists)
+                        if address in locomotive_data and tracking_manager and tracking_manager.analytics_logger:
+                            current_time = time.time()
+
+                            # Movement started (speed > 0 and was stopped)
+                            if speed > 0 and address not in loco_start_times:
+                                loco_start_times[address] = current_time
+                                log('[TRACK]', f"Loco {address} movement started")
+
+                            # Movement stopped (speed == 0 and was moving)
+                            elif speed == 0 and address in loco_start_times:
+                                start_time = loco_start_times.pop(address)
+                                duration = current_time - start_time
+
+                                # Log operating time event
+                                tracking_manager.analytics_logger.log_loco_operating_time(
+                                    address=address,
+                                    start_time=start_time,
+                                    end_time=current_time,
+                                    duration_seconds=duration
+                                )
+
+                                log('[TRACK]', f"Loco {address} movement stopped (duration: {duration:.1f}s)")
+
                         # Notify tracking manager of speed change
                         if tracking_manager and address in consist_data:
                             await tracking_manager.on_speed_change(address, speed)
@@ -1850,6 +1875,52 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
         'delta_t_events': delta_t_events,
         'yolo_performance': yolo_performance
     }
+
+
+@app.get("/api/analytics/locomotive-stats")
+async def get_locomotive_stats():
+    """Get aggregated locomotive operating time statistics"""
+    db_path = Path('data/analytics.db')
+
+    if not db_path.exists():
+        return {'locomotives': []}
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT
+                address,
+                name,
+                total_operating_seconds,
+                total_sessions,
+                last_active_time,
+                created_at
+            FROM locomotive_stats
+            ORDER BY address
+        ''')
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return {
+            'locomotives': [
+                {
+                    'address': row[0],
+                    'name': row[1] or f"Loco {row[0]}",
+                    'total_operating_hours': round(row[2] / 3600, 2) if row[2] else 0,
+                    'total_operating_seconds': row[2],
+                    'total_sessions': row[3],
+                    'last_active_time': row[4],
+                    'created_at': row[5]
+                }
+                for row in rows
+            ]
+        }
+    except Exception as e:
+        log('[ERROR]', f"Failed to load locomotive stats: {e}")
+        return {'error': str(e), 'locomotives': []}
 
 
 # ========================================

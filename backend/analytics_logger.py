@@ -75,6 +75,16 @@ class AnalyticsLogger:
                 FOREIGN KEY (session_id) REFERENCES sessions(id)
             );
 
+            CREATE TABLE IF NOT EXISTS locomotive_stats (
+                address INTEGER PRIMARY KEY,
+                name TEXT,
+                total_operating_seconds INTEGER DEFAULT 0,
+                total_sessions INTEGER DEFAULT 0,
+                last_active_time REAL,
+                created_at REAL,
+                updated_at REAL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_session_type
                 ON events(session_id, event_type);
             CREATE INDEX IF NOT EXISTS idx_timestamp
@@ -190,6 +200,48 @@ class AnalyticsLogger:
 
         # Close DB connection
         self.conn.close()
+
+    def log_loco_operating_time(self, address: int, start_time: float, end_time: float, duration_seconds: float, consist_id: int = None):
+        """
+        Log locomotive operating time event (both events table + stats table)
+
+        Args:
+            address: DCC address of locomotive
+            start_time: Movement start timestamp
+            end_time: Movement end timestamp
+            duration_seconds: Total duration in seconds
+            consist_id: Optional consist ID (10 or 11)
+        """
+        # Prepare event data
+        event_data = {
+            'address': address,
+            'start_time': start_time,
+            'end_time': end_time,
+            'duration_seconds': duration_seconds,
+            'session_id': self.session_id
+        }
+        if consist_id:
+            event_data['consist_id'] = consist_id
+
+        # Add to events buffer (async logging)
+        asyncio.create_task(self.log_event('loco_operating_time', event_data))
+
+        # Update aggregate stats table immediately (no buffering for aggregates)
+        try:
+            current_time = time.time()
+            self.conn.execute('''
+                INSERT INTO locomotive_stats (address, total_operating_seconds, total_sessions, last_active_time, created_at, updated_at)
+                VALUES (?, ?, 1, ?, ?, ?)
+                ON CONFLICT(address) DO UPDATE SET
+                    total_operating_seconds = total_operating_seconds + ?,
+                    total_sessions = total_sessions + 1,
+                    last_active_time = MAX(last_active_time, ?),
+                    updated_at = ?
+            ''', (address, duration_seconds, end_time, start_time, current_time,
+                  duration_seconds, end_time, current_time))
+            self.conn.commit()
+        except Exception as e:
+            log('[WARN]', f"Error updating locomotive stats for address {address}: {e}")
 
     def get_session_info(self):
         """Return current session metadata (lightweight)"""

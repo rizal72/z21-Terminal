@@ -13,6 +13,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current' or 'overview'
   const [cumulativeData, setCumulativeData] = useState(null);
   const [currentSession, setCurrentSession] = useState(null); // Current session metadata
+  const [locoStats, setLocoStats] = useState(null); // Locomotive operating time stats
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [consistFilter, setConsistFilter] = useState('all'); // 'all', 10, 11
@@ -93,14 +94,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       const params = viewMode === 'current' ? 'tail=1000' : 'maxPoints=500';
       const cumulativeUrl = `/api/analytics/cumulative?${params}`;
 
-      // Fetch both cumulative data AND current session metadata in parallel
-      const [cumulativeResponse, currentResponse] = await Promise.all([
+      // Fetch cumulative data, current session, AND locomotive stats in parallel
+      const [cumulativeResponse, currentResponse, locoStatsResponse] = await Promise.all([
         fetch(cumulativeUrl),
-        fetch('/api/analytics/current')
+        fetch('/api/analytics/current'),
+        fetch('/api/analytics/locomotive-stats')
       ]);
 
       const cumulativeData = await cumulativeResponse.json();
       const currentData = await currentResponse.json();
+      const locoStatsData = await locoStatsResponse.json();
 
       if (cumulativeData.error) {
         setError(cumulativeData.error);
@@ -111,10 +114,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
       setCumulativeData(cumulativeData);
       setCurrentSession(currentData.error ? null : currentData);
+      setLocoStats(locoStatsData.error ? null : locoStatsData.locomotives);
     } catch (err) {
       setError(`Failed to load data: ${err.message}`);
       setCumulativeData(null);
       setCurrentSession(null);
+      setLocoStats(null);
     } finally {
       setLoading(false);
     }
@@ -571,6 +576,34 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                                 <Cell key={`cell-${index}`} fill={LOCO_COLORS[parseInt(dcc_addr)] || '#9CA3AF'} />
                               ));
                           })()}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Locomotive Operating Time */}
+              {locoStats && locoStats.length > 0 && (
+                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+                  <h3 className="text-xl font-bold text-white mb-4">Locomotive Operating Time</h3>
+
+                  <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                    <h4 className="text-lg font-semibold text-amber-400 mb-4">Total Operating Hours</h4>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={locoStats}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <XAxis dataKey="name" stroke="#9CA3AF" />
+                        <YAxis stroke="#9CA3AF" label={{ value: 'Operating Hours', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
+                          labelStyle={{ color: '#e2e8f0' }}
+                          formatter={(value) => `${value} hours`}
+                        />
+                        <Bar dataKey="total_operating_hours">
+                          {locoStats.map((loco, index) => (
+                            <Cell key={`cell-${index}`} fill={LOCO_COLORS[loco.address] || '#9CA3AF'} />
+                          ))}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
