@@ -1715,7 +1715,7 @@ async def get_cumulative_stats():
     total_sessions = len(sessions)
 
     # Get gate crossings aggregate (count per consist)
-    cursor.execute("SELECT data FROM events WHERE event_type = 'gate_crossing'")
+    cursor.execute("SELECT data FROM events WHERE event_type = 'delta_t'")
     gate_crossings = defaultdict(int)
     for row in cursor.fetchall():
         data = json.loads(row[0])
