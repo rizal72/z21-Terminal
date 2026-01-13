@@ -258,7 +258,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   };
 
   // Prepare Plotly trace with session boundaries (Plotly)
-  const preparePlotlyTrace = (events, consistId) => {
+  const preparePlotlyTrace = (events, consistId, minTimestamp) => {
     if (!events || events.length === 0) return { x: [], y: [], text: [] };
 
     const consistEvents = events
@@ -282,8 +282,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
         text.push('');
       }
 
-      // Add event (timestamp in milliseconds for Plotly date axis)
-      x.push(event.timestamp * 1000);
+      // Add event with RELATIVE timestamp (seconds from start)
+      const relativeSeconds = event.timestamp - minTimestamp;
+      x.push(relativeSeconds);
       y.push(parseFloat(event.delta_t.toFixed(2)));
       text.push(`Session ${event.session_id}<br>${formatTime(event.timestamp)}`);
     }
@@ -298,14 +299,17 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     useEffect(() => {
       if (!chartRef.current || !data || data.length === 0) return;
 
+      // Calculate global min timestamp for relative positioning
+      const minTimestamp = Math.min(...data.map(e => e.timestamp));
+
       const consistIds = Object.keys(trackingConfig.consists).map(Number).sort((a, b) => a - b);
       const renderConsistIds = consistFilter === 'all' ? consistIds : consistIds.filter(cid => cid === consistFilter);
 
       const traces = renderConsistIds.map(consistId => {
-        const traceData = preparePlotlyTrace(data, consistId);
+        const traceData = preparePlotlyTrace(data, consistId, minTimestamp);
 
         // DEBUG: Log trace data in detail
-        console.log(`=== C${consistId} Trace Data ===`);
+        console.log(`=== C${consistId} Trace Data (RELATIVE) ===`);
         console.log('Total points:', traceData.x.length);
         console.log('First 5 X values:', traceData.x.slice(0, 5));
         console.log('First 5 Y values:', traceData.y.slice(0, 5));
@@ -335,10 +339,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
         paper_bgcolor: '#1e293b',
         font: { color: '#e2e8f0' },
         xaxis: {
-          title: 'Timestamp',
+          title: 'Time (seconds from start)',
           gridcolor: '#374151',
-          color: '#9CA3AF',
-          tickformat: '%Y-%m-%d %H:%M:%S'
+          color: '#9CA3AF'
         },
         yaxis: {
           title: 'Δt (seconds)',
