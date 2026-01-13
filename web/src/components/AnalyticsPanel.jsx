@@ -275,43 +275,78 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* View Toggle - Sticky below header */}
-        <div className="sticky top-[88px] z-10 flex gap-2 p-4 bg-slate-800/50 border-b border-slate-700 items-center justify-between shadow-lg">
-          <div className="flex gap-2">
+        {/* View Toggle & Filters - Sticky below header */}
+        <div className="sticky top-[88px] z-10 p-4 bg-slate-800/50 border-b border-slate-700 shadow-lg space-y-3">
+          {/* Row 1: View tabs + Refresh button */}
+          <div className="flex gap-2 items-center justify-between">
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleViewToggle('current')}
+                className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                  viewMode === 'current'
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                <i className="fa-solid fa-magnifying-glass-chart mr-2"></i>
+                Current
+              </button>
+              <button
+                onClick={() => handleViewToggle('overview')}
+                className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                  viewMode === 'overview'
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                <i className="fa-solid fa-chart-area mr-2"></i>
+                Overview
+              </button>
+            </div>
+
+            {/* Refresh Button */}
             <button
-              onClick={() => handleViewToggle('current')}
-              className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                viewMode === 'current'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              }`}
+              onClick={() => loadCumulativeData()}
+              disabled={loading}
+              className="px-4 py-2 bg-slate-700 text-slate-300 hover:bg-slate-600 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Refresh data"
             >
-              <i className="fa-solid fa-magnifying-glass-chart mr-2"></i>
-              Current
-            </button>
-            <button
-              onClick={() => handleViewToggle('overview')}
-              className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                viewMode === 'overview'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              }`}
-            >
-              <i className="fa-solid fa-chart-area mr-2"></i>
-              Overview
+              <i className={`fa-solid fa-refresh mr-2 ${loading ? 'fa-spin' : ''}`}></i>
+              Refresh
             </button>
           </div>
 
-          {/* Refresh Button */}
-          <button
-            onClick={() => loadCumulativeData()}
-            disabled={loading}
-            className="px-4 py-2 bg-slate-700 text-slate-300 hover:bg-slate-600 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Refresh data"
-          >
-            <i className={`fa-solid fa-refresh mr-2 ${loading ? 'fa-spin' : ''}`}></i>
-            Refresh
-          </button>
+          {/* Row 2: Consist filters */}
+          <div className="flex gap-2 items-center">
+            <span className="text-sm text-slate-400 mr-2">Filter:</span>
+            <button
+              onClick={() => setConsistFilter('all')}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                consistFilter === 'all'
+                  ? 'bg-slate-600 text-white'
+                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              All Consists
+            </button>
+            {/* Dynamic consist filter buttons (from config) */}
+            {Object.keys(trackingConfig.consists)
+              .map(Number)
+              .sort((a, b) => a - b)
+              .map((consistId) => (
+                <button
+                  key={consistId}
+                  onClick={() => setConsistFilter(consistId)}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                    consistFilter === consistId
+                      ? `${getConsistBgClass(consistId, trackingConfig.consists)} text-white`
+                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                  }`}
+                >
+                  Consist {consistId}
+                </button>
+              ))}
+          </div>
         </div>
 
         {/* Content */}
@@ -421,40 +456,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               {/* Δt Trends Chart - ALL sessions concatenated */}
               {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
                 <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-bold text-white">Δt Trends (All Sessions)</h3>
-
-                    {/* Consist Filter Toggle */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setConsistFilter('all')}
-                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                          consistFilter === 'all'
-                            ? 'bg-slate-600 text-white'
-                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
-                        }`}
-                      >
-                        All Consists
-                      </button>
-                      {/* Dynamic consist filter buttons (from config) */}
-                      {Object.keys(trackingConfig.consists)
-                        .map(Number)
-                        .sort((a, b) => a - b)
-                        .map((consistId) => (
-                          <button
-                            key={consistId}
-                            onClick={() => setConsistFilter(consistId)}
-                            className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                              consistFilter === consistId
-                                ? `${getConsistBgClass(consistId, trackingConfig.consists)} text-white`
-                                : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
-                            }`}
-                          >
-                            Consist {consistId}
-                          </button>
-                        ))}
-                    </div>
-                  </div>
+                  <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
 
                   {(() => {
                     // Prepare chart data with dynamic delta_t_cXX fields
