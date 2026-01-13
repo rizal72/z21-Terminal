@@ -221,7 +221,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                 </div>
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                   <div className="text-sm text-slate-400">
-                    Δt Events
+                    Gate Crossings
                     {consistFilter === 'all' ? ' (All)' : consistFilter === 10 ? ' (C10)' : ' (C11)'}
                   </div>
                   <div className={`text-3xl font-bold mt-1 ${
@@ -237,18 +237,22 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                 </div>
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                   <div className="text-sm text-slate-400">
-                    Gate Crossings
+                    Critical Events
                     {consistFilter === 'all' ? ' (All)' : consistFilter === 10 ? ' (C10)' : ' (C11)'}
                   </div>
                   <div className={`text-3xl font-bold mt-1 ${
                     consistFilter === 10 ? 'text-fuchsia-400' :
                     consistFilter === 11 ? 'text-blue-400' :
-                    'text-white'
+                    'text-red-400'
                   }`}>
-                    {consistFilter === 'all'
-                      ? (cumulativeData.gate_crossings?.[10] || 0) + (cumulativeData.gate_crossings?.[11] || 0)
-                      : (cumulativeData.gate_crossings?.[consistFilter] || 0)
-                    }
+                    {(() => {
+                      const criticalEvents = cumulativeData.delta_t_events?.filter(e => Math.abs(e.delta_t) >= 1.5) || [];
+                      if (consistFilter === 'all') {
+                        return criticalEvents.length;
+                      } else {
+                        return criticalEvents.filter(e => e.consist_id === consistFilter).length;
+                      }
+                    })()}
                   </div>
                 </div>
               </div>
