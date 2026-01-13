@@ -48,6 +48,7 @@ polling_task = None
 health_check_task = None
 last_track_power_state = True
 z21_online = False
+z21_consecutive_failures = 0  # Track consecutive health check failures (requires 2 before marking offline)
 debug_enabled = False  # Debug mode flag (loaded from config.json)
 
 
@@ -86,10 +87,10 @@ async def poll_track_power():
 
 
 async def health_check_z21():
-    """Background task to monitor Z21 connection health"""
-    global z21_online, last_track_power_state
+    """Background task to monitor Z21 connection health (requires 2 consecutive failures)"""
+    global z21_online, last_track_power_state, z21_consecutive_failures
 
-    log('[INIT]', f"Starting Z21 health check (5s interval)")
+    log('[INIT]', f"Starting Z21 health check (5s interval, 2 failures grace period)")
 
     while True:
         await asyncio.sleep(5)  # Check every 5 seconds
@@ -104,14 +105,26 @@ async def health_check_z21():
             status = z21_manager.z21.get_status()
 
             if status is not None:
+                # Success - reset failure counter and mark online
+                z21_consecutive_failures = 0
                 z21_online = True
             else:
-                z21_online = False
+                # Failed - increment failure counter
+                z21_consecutive_failures += 1
+                if z21_consecutive_failures >= 2:
+                    z21_online = False
+                elif z21_consecutive_failures == 1:
+                    log('[WARN]', f"Z21 health check failed (1/2) - grace period")
 
         except Exception as e:
-            z21_online = False
-            if previous_state:  # Only log when transitioning to offline
-                log('[WARN]', f"Z21 connection lost: {e}")
+            # Exception - increment failure counter
+            z21_consecutive_failures += 1
+            if z21_consecutive_failures >= 2:
+                z21_online = False
+                if previous_state:  # Only log when transitioning to offline
+                    log('[WARN]', f"Z21 connection lost after 2 failures: {e}")
+            elif z21_consecutive_failures == 1:
+                log('[WARN]', f"Z21 health check exception (1/2) - grace period: {e}")
 
         # If state changed, broadcast to all clients
         if z21_online != previous_state:
