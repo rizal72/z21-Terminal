@@ -1880,7 +1880,7 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
 @app.get("/api/analytics/locomotive-stats")
 async def get_locomotive_stats():
     """Get aggregated locomotive operating time statistics"""
-    db_path = Path('data/analytics.db')
+    db_path = Path(__file__).parent.parent / "data" / "analytics.db"
 
     log('[DEBUG]', f"Locomotive stats - DB path: {db_path.absolute()}, exists: {db_path.exists()}")
 
