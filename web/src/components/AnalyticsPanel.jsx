@@ -526,7 +526,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       plot_bgcolor: '#1e293b',
                       paper_bgcolor: '#1e293b',
                       font: { color: '#e2e8f0' },
-                      xaxis: { type: 'date', gridcolor: '#374151', color: '#9CA3AF' },
+                      xaxis: {
+                        title: 'Timestamp',
+                        gridcolor: '#374151',
+                        color: '#9CA3AF',
+                        tickformat: '%Y-%m-%d %H:%M:%S'
+                      },
                       yaxis: { title: 'Δt (seconds)', gridcolor: '#374151', zeroline: true, zerolinecolor: '#10b981', color: '#9CA3AF' },
                       shapes: [
                         { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1, y1: 1, line: { color: '#f59e0b', dash: 'dash' } },
