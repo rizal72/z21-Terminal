@@ -171,8 +171,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* View Toggle */}
-        <div className="flex gap-2 p-4 bg-slate-800/50 border-b border-slate-700 items-center justify-between">
+        {/* View Toggle - Sticky below header */}
+        <div className="sticky top-[88px] z-10 flex gap-2 p-4 bg-slate-800/50 border-b border-slate-700 items-center justify-between shadow-lg">
           <div className="flex gap-2">
             <button
               onClick={() => handleViewToggle('current')}
