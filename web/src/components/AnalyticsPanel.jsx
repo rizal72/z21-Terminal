@@ -82,6 +82,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   const [refAreaLeft, setRefAreaLeft] = useState(null);
   const [refAreaRight, setRefAreaRight] = useState(null);
   const [zoomDomain, setZoomDomain] = useState(null); // { x: [min, max], y: [min, max] }
+  const [showSessionBreaks, setShowSessionBreaks] = useState(false); // Toggle for session boundary visualization
 
   // Refs for auto-scroll to end
   const scrollRefSession = useRef(null);
@@ -312,43 +313,57 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       cumulativeData.delta_t_events.filter(e => e.consist_id === consistFilter);
   }, [cumulativeData?.delta_t_events, consistFilter]);
 
-  // Memoize chart data preparation with session segments
+  // Memoize chart data preparation (with optional session segments)
   const { chartData, segmentCount } = useMemo(() => {
     if (!filteredDeltaTEvents || filteredDeltaTEvents.length === 0) return { chartData: [], segmentCount: 0 };
 
     const consistIds = Object.keys(trackingConfig.consists).map(Number);
     const sortedEvents = [...filteredDeltaTEvents].sort((a, b) => a.timestamp - b.timestamp);
 
-    // Identify segment boundaries (session_id changes)
+    // FAST PATH: No session breaks (default) - simple dataset
+    if (!showSessionBreaks) {
+      const result = sortedEvents.map((event, idx) => {
+        const deltaFields = {};
+        consistIds.forEach(cid => {
+          deltaFields[`delta_t_c${cid}`] = event.consist_id === cid ? parseFloat(event.delta_t.toFixed(2)) : null;
+        });
+
+        return {
+          index: idx + 1,
+          timestamp: event.timestamp,
+          time: formatTime(event.timestamp),
+          ...deltaFields,
+          status: event.status,
+          gate_type: event.gate_type
+        };
+      });
+
+      return { chartData: result, segmentCount: 0 };
+    }
+
+    // SLOW PATH: Session breaks enabled - segmented dataset
     let currentSegment = 0;
-    const eventSegments = []; // Array to track which segment each event belongs to
+    const eventSegments = [];
 
     sortedEvents.forEach((event, idx) => {
       const prevEvent = idx > 0 ? sortedEvents[idx - 1] : null;
-
-      // Detect session boundary
       if (prevEvent && event.session_id !== prevEvent.session_id) {
         currentSegment++;
       }
-
       eventSegments.push(currentSegment);
     });
 
     const totalSegments = currentSegment + 1;
-
-    // Build unified dataset with segmented dataKeys
     const result = [];
     let eventIndex = 1;
 
     sortedEvents.forEach((event, idx) => {
       const segment = eventSegments[idx];
-
-      // Create fields for ALL consist+segment combinations (mostly null)
       const deltaFields = {};
+
       consistIds.forEach(cid => {
         for (let seg = 0; seg < totalSegments; seg++) {
           const dataKey = `delta_t_c${cid}_seg${seg}`;
-          // Value only if this event belongs to this consist AND this segment
           deltaFields[dataKey] = (event.consist_id === cid && segment === seg)
             ? parseFloat(event.delta_t.toFixed(2))
             : null;
@@ -366,7 +381,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     });
 
     return { chartData: result, segmentCount: totalSegments };
-  }, [filteredDeltaTEvents, trackingConfig.consists]);
+  }, [filteredDeltaTEvents, trackingConfig.consists, showSessionBreaks]);
 
   // Apply zoom filter if zoomDomain is set (Overview mode only)
   const displayData = useMemo(() => {
@@ -407,77 +422,100 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* View Toggle & Filters - Sticky below header */}
-        <div className="sticky top-[88px] z-10 p-4 bg-slate-800/50 border-b border-slate-700 shadow-lg space-y-3">
-          {/* Row 1: View tabs + Refresh button */}
-          <div className="flex gap-2 items-center justify-between">
-            <div className="flex gap-2">
+        {/* Compact Controls - Sticky below header */}
+        <div className="sticky top-[88px] z-10 px-4 py-2.5 bg-slate-800/50 border-b border-slate-700 shadow-lg">
+          <div className="flex gap-3 items-center">
+            {/* View Toggle */}
+            <div className="flex gap-1.5">
               <button
                 onClick={() => handleViewToggle('current')}
-                className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
                   viewMode === 'current'
                     ? 'bg-blue-600 text-white shadow-lg'
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                 }`}
+                title="Current Session"
               >
-                <i className="fa-solid fa-magnifying-glass-chart mr-2"></i>
+                <i className="fa-solid fa-magnifying-glass-chart mr-1.5"></i>
                 Current
               </button>
               <button
                 onClick={() => handleViewToggle('overview')}
-                className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
                   viewMode === 'overview'
                     ? 'bg-blue-600 text-white shadow-lg'
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                 }`}
+                title="Historical Overview"
               >
-                <i className="fa-solid fa-chart-area mr-2"></i>
+                <i className="fa-solid fa-chart-area mr-1.5"></i>
                 Overview
               </button>
             </div>
 
-            {/* Refresh Button */}
+            {/* Divider */}
+            <div className="h-6 w-px bg-slate-600"></div>
+
+            {/* Consist Filters */}
+            <div className="flex gap-1.5 items-center">
+              <span className="text-xs text-slate-400 mr-1">Filter:</span>
+              <button
+                onClick={() => setConsistFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  consistFilter === 'all'
+                    ? 'bg-slate-600 text-white'
+                    : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                }`}
+              >
+                All
+              </button>
+              {Object.keys(trackingConfig.consists)
+                .map(Number)
+                .sort((a, b) => a - b)
+                .map((consistId) => (
+                  <button
+                    key={consistId}
+                    onClick={() => setConsistFilter(consistId)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      consistFilter === consistId
+                        ? `${getConsistBgClass(consistId, trackingConfig.consists)} text-white`
+                        : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                    }`}
+                  >
+                    C{consistId}
+                  </button>
+                ))}
+            </div>
+
+            {/* Divider */}
+            <div className="h-6 w-px bg-slate-600"></div>
+
+            {/* Session Breaks Toggle */}
+            <label className="flex items-center gap-2 cursor-pointer" title="Show line breaks at session boundaries">
+              <input
+                type="checkbox"
+                checked={showSessionBreaks}
+                onChange={(e) => setShowSessionBreaks(e.target.checked)}
+                className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+              />
+              <span className="text-xs text-slate-300">
+                <i className="fa-solid fa-pause mr-1.5"></i>
+                Session Breaks
+              </span>
+            </label>
+
+            {/* Spacer */}
+            <div className="flex-grow"></div>
+
+            {/* Refresh Button (icon only) */}
             <button
               onClick={() => loadCumulativeData()}
               disabled={loading}
-              className="px-4 py-2 bg-slate-700 text-slate-300 hover:bg-slate-600 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 bg-slate-700 text-slate-300 hover:bg-slate-600 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               title="Refresh data"
             >
-              <i className={`fa-solid fa-refresh mr-2 ${loading ? 'fa-spin' : ''}`}></i>
-              Refresh
+              <i className={`fa-solid fa-refresh ${loading ? 'fa-spin' : ''}`}></i>
             </button>
-          </div>
-
-          {/* Row 2: Consist filters */}
-          <div className="flex gap-2 items-center">
-            <span className="text-sm text-slate-400 mr-2">Filter:</span>
-            <button
-              onClick={() => setConsistFilter('all')}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                consistFilter === 'all'
-                  ? 'bg-slate-600 text-white'
-                  : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
-              }`}
-            >
-              All Consists
-            </button>
-            {/* Dynamic consist filter buttons (from config) */}
-            {Object.keys(trackingConfig.consists)
-              .map(Number)
-              .sort((a, b) => a - b)
-              .map((consistId) => (
-                <button
-                  key={consistId}
-                  onClick={() => setConsistFilter(consistId)}
-                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                    consistFilter === consistId
-                      ? `${getConsistBgClass(consistId, trackingConfig.consists)} text-white`
-                      : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
-                  }`}
-                >
-                  Consist {consistId}
-                </button>
-              ))}
           </div>
         </div>
 
@@ -629,13 +667,29 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
                       <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
 
-                          {/* Dynamic lines: one Line per consist+segment (session breaks) */}
+                          {/* Dynamic lines: simple or segmented based on showSessionBreaks */}
                           {Object.keys(trackingConfig.consists)
                             .map(Number)
                             .sort((a, b) => a - b)
                             .filter(consistId => consistFilter === 'all' || consistFilter === consistId)
                             .flatMap((consistId) => {
-                              // Create one Line per segment for this consist
+                              // SIMPLE MODE: One Line per consist (no session breaks)
+                              if (segmentCount === 0) {
+                                return (
+                                  <Line
+                                    key={consistId}
+                                    type="monotone"
+                                    dataKey={`delta_t_c${consistId}`}
+                                    stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
+                                    strokeWidth={viewMode === 'current' ? 2 : 1.5}
+                                    dot={viewMode === 'current' ? { r: 4 } : false}
+                                    name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
+                                    connectNulls={true}
+                                  />
+                                );
+                              }
+
+                              // SEGMENTED MODE: One Line per segment (session breaks enabled)
                               return Array.from({ length: segmentCount }, (_, segIdx) => (
                                 <Line
                                   key={`${consistId}_seg${segIdx}`}
