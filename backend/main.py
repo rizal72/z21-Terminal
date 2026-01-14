@@ -1695,6 +1695,32 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
 
 
 # ========================================
+# Analytics Helper Functions
+# ========================================
+
+def format_duration_hms(seconds: float) -> str:
+    """
+    Format duration in seconds as HH:MM:SS.
+
+    Args:
+        seconds: Duration in seconds (float or int)
+
+    Returns:
+        Formatted string "HH:MM:SS"
+
+    Examples:
+        >>> format_duration_hms(3661.5)
+        '01:01:01'
+        >>> format_duration_hms(90)
+        '00:01:30'
+    """
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+# ========================================
 # Analytics Downsampling Helpers
 # ========================================
 
@@ -2034,6 +2060,194 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
         'yolo_performance': yolo_performance,
         'loco_operating_time': loco_operating_time_events
     }
+
+
+@app.get("/api/analytics/reports")
+async def get_analytics_reports(
+    limit: int = 30,
+    consist_filter: Optional[int] = None
+):
+    """
+    Get session-by-session analysis reports for historical trend analysis.
+
+    Returns per-session aggregated statistics (avg dT, range, status distribution)
+    for the last N validated sessions.
+
+    Args:
+        limit: Number of sessions to return (default 30, max 100)
+        consist_filter: Optional consist ID to filter by (10, 11, etc.)
+
+    Returns:
+        {
+            "sessions": [
+                {
+                    "id": "20250114_143022",
+                    "date": "2025-01-14",
+                    "start_time": timestamp,
+                    "end_time": timestamp,
+                    "duration_seconds": 3600,
+                    "duration_formatted": "01:00:00",
+                    "total_events": 145,
+                    "consists": {
+                        "10": {
+                            "total_crossings": 72,
+                            "avg_delta_t": 0.52,
+                            "min_delta_t": -0.15,
+                            "max_delta_t": 1.82,
+                            "trend": "LEAD FASTER" | "REAR FASTER" | "BALANCED",
+                            "synced_count": 58,
+                            "warning_count": 10,
+                            "critical_count": 4,
+                            "synced_percent": 80.6
+                        },
+                        ...
+                    }
+                },
+                ...
+            ]
+        }
+    """
+    import sqlite3
+    import json
+    from datetime import datetime
+    from collections import defaultdict
+
+    # Cap limit to prevent abuse
+    if limit > 100:
+        limit = 100
+
+    db_path = Path(__file__).parent / "data" / "analytics.db"
+
+    if not db_path.exists():
+        return {"error": "Analytics database not found", "sessions": []}
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        # Get validated sessions (exclude running sessions with NULL end_time)
+        cursor.execute("""
+            SELECT id, start_time, end_time, event_count
+            FROM sessions
+            WHERE validated = 1 AND end_time IS NOT NULL
+            ORDER BY start_time DESC
+            LIMIT ?
+        """, (limit,))
+
+        sessions = cursor.fetchall()
+
+        if not sessions:
+            conn.close()
+            return {"sessions": []}
+
+        result_sessions = []
+
+        for session_id, start_time, end_time, event_count in sessions:
+            # Get all delta_t events for this session
+            cursor.execute("""
+                SELECT data
+                FROM events
+                WHERE session_id = ? AND event_type = 'delta_t'
+                ORDER BY timestamp
+            """, (session_id,))
+
+            event_rows = cursor.fetchall()
+
+            if not event_rows:
+                # Skip sessions with no delta_t events
+                continue
+
+            # Parse events and group by consist
+            consist_data = defaultdict(lambda: {
+                'delta_t_values': [],
+                'synced_count': 0,
+                'warning_count': 0,
+                'critical_count': 0
+            })
+
+            for (data_json,) in event_rows:
+                data = json.loads(data_json)
+                consist_id = data.get('consist_id')
+                delta_t = data.get('delta_t')
+                status = data.get('status')
+
+                if consist_id is None or delta_t is None:
+                    continue
+
+                # Apply consist filter if specified
+                if consist_filter is not None and consist_id != consist_filter:
+                    continue
+
+                consist_data[consist_id]['delta_t_values'].append(delta_t)
+
+                if status == 'SYNCED':
+                    consist_data[consist_id]['synced_count'] += 1
+                elif status == 'WARNING':
+                    consist_data[consist_id]['warning_count'] += 1
+                elif status == 'CRITICAL':
+                    consist_data[consist_id]['critical_count'] += 1
+
+            # Calculate statistics for each consist
+            consists = {}
+            for consist_id, data in consist_data.items():
+                values = data['delta_t_values']
+                total_crossings = len(values)
+
+                if total_crossings == 0:
+                    continue
+
+                avg_delta_t = sum(values) / total_crossings
+                min_delta_t = min(values)
+                max_delta_t = max(values)
+
+                # Calculate trend indicator
+                if avg_delta_t > 0.2:
+                    trend = 'LEAD FASTER'
+                elif avg_delta_t < -0.2:
+                    trend = 'REAR FASTER'
+                else:
+                    trend = 'BALANCED'
+
+                # Calculate synced percentage
+                synced_percent = (data['synced_count'] / total_crossings) * 100
+
+                consists[str(consist_id)] = {
+                    'total_crossings': total_crossings,
+                    'avg_delta_t': round(avg_delta_t, 3),
+                    'min_delta_t': round(min_delta_t, 3),
+                    'max_delta_t': round(max_delta_t, 3),
+                    'trend': trend,
+                    'synced_count': data['synced_count'],
+                    'warning_count': data['warning_count'],
+                    'critical_count': data['critical_count'],
+                    'synced_percent': round(synced_percent, 1)
+                }
+
+            # Only include sessions that have consist data after filtering
+            if not consists:
+                continue
+
+            # Format session data
+            duration_seconds = end_time - start_time
+            session_date = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d')
+
+            result_sessions.append({
+                'id': session_id,
+                'date': session_date,
+                'start_time': start_time,
+                'end_time': end_time,
+                'duration_seconds': int(duration_seconds),
+                'duration_formatted': format_duration_hms(duration_seconds),
+                'total_events': event_count,
+                'consists': consists
+            })
+
+        conn.close()
+
+        return {"sessions": result_sessions}
+
+    except Exception as e:
+        return {"error": f"Failed to load reports: {str(e)}", "sessions": []}
 
 
 @app.get("/api/analytics/locomotive-stats")

@@ -66,7 +66,7 @@ const getConsistBgClass = (consistId, consistConfig) => {
 };
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
-  const [viewMode, setViewMode] = useState('current'); // 'current' or 'overview'
+  const [viewMode, setViewMode] = useState('current'); // 'current', 'overview', or 'reports'
   const [cumulativeData, setCumulativeData] = useState(null);
   const [currentSession, setCurrentSession] = useState(null); // Current session metadata
   const [locoStats, setLocoStats] = useState(null); // Locomotive operating time stats
@@ -77,6 +77,11 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     idle_timeout_seconds: 10,
     consists: {} // { 10: { name, lead_address, rear_address, addresses: [...] }, 11: {...} }
   });
+
+  // Reports tab state
+  const [reportsData, setReportsData] = useState(null); // Session history data for Reports tab
+  const [selectedSession, setSelectedSession] = useState(null); // Session selected for detail modal
+  const [showSessionDetail, setShowSessionDetail] = useState(false); // Session detail modal visibility
 
   // Zoom state for Overview mode (box-select)
   const [refAreaLeft, setRefAreaLeft] = useState(null);
@@ -122,10 +127,14 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     }
   }, [isOpen]);
 
-  // Load cumulative data on mount and when view mode changes
+  // Load data on mount and when view mode changes
   useEffect(() => {
     if (isOpen) {
-      loadCumulativeData();
+      if (viewMode === 'reports') {
+        loadReportsData();
+      } else {
+        loadCumulativeData();
+      }
     }
   }, [isOpen, viewMode]);
 
@@ -146,15 +155,32 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     }
   }, [cumulativeData, viewMode, consistFilter]);
 
-  // Arrow key navigation between Current/Overview
+  // Reload Reports data when consist filter changes (Reports tab only)
+  useEffect(() => {
+    if (isOpen && viewMode === 'reports') {
+      loadReportsData();
+    }
+  }, [consistFilter]);
+
+  // Arrow key navigation between Current/Overview/Reports
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyPress = (e) => {
-      if (e.key === 'ArrowLeft' && viewMode === 'overview') {
-        handleViewToggle('current');
-      } else if (e.key === 'ArrowRight' && viewMode === 'current') {
-        handleViewToggle('overview');
+      if (e.key === 'ArrowLeft') {
+        // Cycle backward: Reports → Overview → Current
+        if (viewMode === 'overview') {
+          handleViewToggle('current');
+        } else if (viewMode === 'reports') {
+          handleViewToggle('overview');
+        }
+      } else if (e.key === 'ArrowRight') {
+        // Cycle forward: Current → Overview → Reports
+        if (viewMode === 'current') {
+          handleViewToggle('overview');
+        } else if (viewMode === 'overview') {
+          handleViewToggle('reports');
+        }
       }
     };
 
@@ -204,11 +230,40 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     }
   };
 
+  const loadReportsData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Build API URL with consist filter if specified
+      const params = consistFilter === 'all' ? '' : `?consist_filter=${consistFilter}`;
+      const response = await fetch(`/api/analytics/reports${params}`);
+      const data = await response.json();
+
+      if (data.error) {
+        setError(data.error);
+        setReportsData(null);
+        return;
+      }
+
+      setReportsData(data);
+    } catch (err) {
+      setError(`Failed to load reports: ${err.message}`);
+      setReportsData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleViewToggle = (newView) => {
     setViewMode(newView);
 
     // Auto-refresh data on view change
-    loadCumulativeData();
+    if (newView === 'reports') {
+      loadReportsData();
+    } else {
+      loadCumulativeData();
+    }
 
     // Force GPU cleanup after view change (Chrome rendering fix)
     requestAnimationFrame(() => {
@@ -517,6 +572,18 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               >
                 <i className="fa-solid fa-chart-area mr-1.5"></i>
                 Overview
+              </button>
+              <button
+                onClick={() => handleViewToggle('reports')}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  viewMode === 'reports'
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+                title="Session Analysis Reports"
+              >
+                <i className="fa-solid fa-file-chart-line mr-1.5"></i>
+                Reports
               </button>
             </div>
 
