@@ -1100,6 +1100,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                                 orientation="right"
                                 {...CHART_AXIS_STYLES.axis}
                                 domain={[0, 140]}
+                                allowDataOverflow={true}
                                 label={{ value: 'FPS', angle: 90, position: 'insideRight', fill: '#9CA3AF' }}
                               />
                             )}
