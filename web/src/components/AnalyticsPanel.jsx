@@ -238,30 +238,64 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       cumulativeData.delta_t_events.filter(e => e.consist_id === consistFilter);
   }, [cumulativeData?.delta_t_events, consistFilter]);
 
-  // Memoize chart data preparation
+  // Memoize chart data preparation with session boundary markers
   const chartData = useMemo(() => {
     if (!filteredDeltaTEvents || filteredDeltaTEvents.length === 0) return [];
 
     const consistIds = Object.keys(trackingConfig.consists).map(Number);
+    const sortedEvents = [...filteredDeltaTEvents].sort((a, b) => a.timestamp - b.timestamp);
+    const result = [];
+    let eventIndex = 1;
 
-    return filteredDeltaTEvents
-      .sort((a, b) => a.timestamp - b.timestamp)
-      .map((event, idx) => {
-        // Build dynamic delta_t fields for each consist
-        const deltaFields = {};
-        consistIds.forEach(cid => {
-          deltaFields[`delta_t_c${cid}`] = event.consist_id === cid ? parseFloat(event.delta_t.toFixed(2)) : null;
-        });
+    sortedEvents.forEach((event, idx) => {
+      const prevEvent = idx > 0 ? sortedEvents[idx - 1] : null;
 
-        return {
-          index: idx + 1,
-          timestamp: event.timestamp,
-          time: formatTime(event.timestamp),
-          ...deltaFields,
-          status: event.status,
-          gate_type: event.gate_type
+      // Detect session boundary
+      if (prevEvent && event.session_id !== prevEvent.session_id) {
+        // Insert END marker for previous session (undefined values = unplottable)
+        const endMarker = {
+          index: eventIndex++,
+          timestamp: prevEvent.timestamp + 0.1,
+          time: formatTime(prevEvent.timestamp + 0.1),
+          isSessionBoundary: true,
+          boundaryType: 'end'
         };
+        consistIds.forEach(cid => {
+          endMarker[`delta_t_c${cid}`] = undefined;
+        });
+        result.push(endMarker);
+
+        // Insert START marker for new session (undefined values = unplottable)
+        const startMarker = {
+          index: eventIndex++,
+          timestamp: event.timestamp - 0.1,
+          time: formatTime(event.timestamp - 0.1),
+          isSessionBoundary: true,
+          boundaryType: 'start'
+        };
+        consistIds.forEach(cid => {
+          startMarker[`delta_t_c${cid}`] = undefined;
+        });
+        result.push(startMarker);
+      }
+
+      // Add normal event
+      const deltaFields = {};
+      consistIds.forEach(cid => {
+        deltaFields[`delta_t_c${cid}`] = event.consist_id === cid ? parseFloat(event.delta_t.toFixed(2)) : null;
       });
+
+      result.push({
+        index: eventIndex++,
+        timestamp: event.timestamp,
+        time: formatTime(event.timestamp),
+        ...deltaFields,
+        status: event.status,
+        gate_type: event.gate_type
+      });
+    });
+
+    return result;
   }, [filteredDeltaTEvents, trackingConfig.consists]);
 
   // Memoize chart width calculation
