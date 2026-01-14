@@ -414,6 +414,51 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return chartData.filter(d => d.index >= xMin && d.index <= xMax);
   }, [chartData, zoomDomain, viewMode]);
 
+  // Calculate Y domain to ensure all points are visible (10% padding)
+  const yDomain = useMemo(() => {
+    if (zoomDomain) return zoomDomain.y; // Use zoom domain if active
+
+    if (displayData.length === 0) return ['auto', 'auto'];
+
+    const consistIds = Object.keys(trackingConfig.consists).map(Number);
+    let yMin = Infinity, yMax = -Infinity;
+
+    // Scan all data to find min/max
+    if (segmentCount === 0) {
+      // SIMPLE MODE
+      displayData.forEach(d => {
+        consistIds.forEach(cid => {
+          const value = d[`delta_t_c${cid}`];
+          if (value !== null && value !== undefined && !isNaN(value)) {
+            yMin = Math.min(yMin, value);
+            yMax = Math.max(yMax, value);
+          }
+        });
+      });
+    } else {
+      // SEGMENTED MODE
+      displayData.forEach(d => {
+        for (let seg = 0; seg < segmentCount; seg++) {
+          consistIds.forEach(cid => {
+            const value = d[`delta_t_c${cid}_seg${seg}`];
+            if (value !== null && value !== undefined && !isNaN(value)) {
+              yMin = Math.min(yMin, value);
+              yMax = Math.max(yMax, value);
+            }
+          });
+        }
+      });
+    }
+
+    // No valid data found
+    if (yMin === Infinity || yMax === -Infinity) return ['auto', 'auto'];
+
+    // Add 10% padding
+    const range = yMax - yMin;
+    const padding = range * 0.1;
+    return [yMin - padding, yMax + padding];
+  }, [displayData, segmentCount, trackingConfig.consists, zoomDomain]);
+
   // Memoize chart width calculation
   const chartWidth = useMemo(() => {
     return viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
@@ -672,11 +717,22 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         label={viewMode === 'overview' ? { value: 'Event #', position: 'insideBottom', offset: -5, fill: '#9CA3AF' } : undefined}
                       />
                       <YAxis
+                        yAxisId="left"
                         {...CHART_AXIS_STYLES.axis}
-                        domain={zoomDomain ? zoomDomain.y : ['auto', 'auto']}
+                        domain={yDomain}
                         allowDataOverflow={true}
                         label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
                       />
+                      {/* Duplicate YAxis on right for Current mode (always visible when scrolling) */}
+                      {viewMode === 'current' && (
+                        <YAxis
+                          yAxisId="right"
+                          orientation="right"
+                          {...CHART_AXIS_STYLES.axis}
+                          domain={yDomain}
+                          allowDataOverflow={true}
+                        />
+                      )}
                       <Tooltip
                         {...TOOLTIP_STYLES}
                         formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
@@ -700,6 +756,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                                 return (
                                   <Line
                                     key={consistId}
+                                    yAxisId="left"
                                     type="monotone"
                                     dataKey={`delta_t_c${consistId}`}
                                     stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
@@ -715,6 +772,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                               return Array.from({ length: segmentCount }, (_, segIdx) => (
                                 <Line
                                   key={`${consistId}_seg${segIdx}`}
+                                  yAxisId="left"
                                   type="monotone"
                                   dataKey={`delta_t_c${consistId}_seg${segIdx}`}
                                   stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
