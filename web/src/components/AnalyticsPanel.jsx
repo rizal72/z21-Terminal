@@ -1244,7 +1244,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           value={sessionLimit}
                           onChange={(e) => setSessionLimit(Number(e.target.value))}
                           onClick={(e) => e.stopPropagation()}
-                          className="bg-slate-700 text-slate-300 text-sm px-2 py-1 rounded border border-slate-600 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="bg-slate-700 text-slate-300 text-sm pl-2 pr-7 py-1 rounded border border-slate-600 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value={30}>Last 30</option>
                           <option value={50}>Last 50</option>
