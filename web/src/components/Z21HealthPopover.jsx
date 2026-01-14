@@ -40,7 +40,7 @@ export default function Z21HealthPopover({ isOpen, onClose, apiUrl, isHover = fa
       )}
 
       {/* Popover */}
-      <div className={`fixed top-20 right-4 md:right-24 w-80 bg-control-dark border-2 border-control-grey rounded-lg shadow-2xl z-[100] ${
+      <div className={`fixed top-20 right-4 md:right-40 w-80 bg-control-dark border-2 border-control-grey rounded-lg shadow-2xl z-[100] ${
         isHover ? '' : 'animate-slide-in'
       }`}>
         {/* Header */}
