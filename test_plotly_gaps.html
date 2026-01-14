@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Plotly Session Gaps Test</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body>
+    <h2>Test: Plotly connectgaps behavior con session boundaries</h2>
+    <p>
+        <strong>Scenario</strong>: 2 consist (C10, C11) con eventi su timeline unica<br>
+        <strong>Obiettivo</strong>: Linee continue DENTRO sessione, break ALLE session boundaries<br>
+        <strong>Implementazione</strong>: null point quando session_id cambia
+    </p>
+
+    <div id="chart" style="width:100%;height:600px;"></div>
+
+    <script>
+        // Simulate events with session boundaries
+        // Session 1: timestamps 0-10 (session_id: 1)
+        // Session 2: timestamps 20-30 (session_id: 2) - gap at timestamp ~15
+
+        // C10 Trace (Magenta)
+        const c10_data = {
+            x: [0, 2, 4, 6, 8, 10, null, 20, 22, 24, 26, 28, 30],
+            y: [0.5, 0.6, 0.4, 0.7, 0.5, 0.8, null, 1.0, 0.9, 1.1, 0.8, 1.2, 1.0],
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'C10 Interno',
+            line: {
+                color: '#d946ef',
+                width: 2
+            },
+            marker: {
+                size: 6
+            },
+            connectgaps: false  // KEY: should break at null
+        };
+
+        // C11 Trace (Blue)
+        const c11_data = {
+            x: [1, 3, 5, 7, 9, null, 21, 23, 25, 27, 29],
+            y: [-0.3, -0.4, -0.2, -0.5, -0.4, null, -0.6, -0.5, -0.7, -0.6, -0.8],
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'C11 Esterno',
+            line: {
+                color: '#3b82f6',
+                width: 2
+            },
+            marker: {
+                size: 6
+            },
+            connectgaps: false  // KEY: should break at null
+        };
+
+        const layout = {
+            title: 'Δt Trends - Session Boundaries Test',
+            xaxis: {
+                title: 'Timestamp',
+                showgrid: true,
+                zeroline: true
+            },
+            yaxis: {
+                title: 'Δt (seconds)',
+                showgrid: true,
+                zeroline: true
+            },
+            shapes: [
+                // Visual marker for session boundary
+                {
+                    type: 'line',
+                    x0: 15,
+                    x1: 15,
+                    y0: -1,
+                    y1: 1.5,
+                    line: {
+                        color: 'red',
+                        width: 2,
+                        dash: 'dash'
+                    }
+                }
+            ],
+            annotations: [
+                {
+                    x: 5,
+                    y: 1.4,
+                    text: 'Session 1',
+                    showarrow: false,
+                    font: { size: 14, color: 'white' },
+                    bgcolor: 'rgba(0,0,0,0.5)',
+                    borderpad: 4
+                },
+                {
+                    x: 25,
+                    y: 1.4,
+                    text: 'Session 2',
+                    showarrow: false,
+                    font: { size: 14, color: 'white' },
+                    bgcolor: 'rgba(0,0,0,0.5)',
+                    borderpad: 4
+                },
+                {
+                    x: 15,
+                    y: -0.9,
+                    text: 'Session Boundary (null point)',
+                    showarrow: true,
+                    arrowhead: 2,
+                    ax: 0,
+                    ay: -40,
+                    font: { size: 12, color: 'red' }
+                }
+            ],
+            hovermode: 'closest',
+            plot_bgcolor: '#1e293b',
+            paper_bgcolor: '#0f172a',
+            font: { color: '#e2e8f0' }
+        };
+
+        const config = {
+            displayModeBar: true,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+            displaylogo: false
+        };
+
+        Plotly.newPlot('chart', [c10_data, c11_data], layout, config);
+    </script>
+
+    <div style="margin-top: 20px; padding: 20px; background: #1e293b; color: #e2e8f0; border-radius: 8px;">
+        <h3>Expected Behavior</h3>
+        <ul>
+            <li>✅ C10 (magenta): Linea continua da 0→10, poi <strong>BREAK</strong>, poi continua da 20→30</li>
+            <li>✅ C11 (blue): Linea continua da 1→9, poi <strong>BREAK</strong>, poi continua da 21→29</li>
+            <li>✅ Nessuna linea attraversa il boundary rosso (timestamp 15)</li>
+            <li>✅ Pan/zoom funzionano smooth</li>
+            <li>✅ Legend clickable (hide/show traces)</li>
+        </ul>
+
+        <h3>If This Works:</h3>
+        <p><strong>🚀 Plotly migration is THE solution!</strong></p>
+        <ul>
+            <li>Session boundaries = natural line breaks (deterministici)</li>
+            <li>Due trace separati = zero problemi null naturali</li>
+            <li>Timeline unica = manteniamo l'approccio desiderato</li>
+            <li>Pan/zoom/interactive legend = bonus gratis</li>
+        </ul>
+    </div>
+</body>
+</html>

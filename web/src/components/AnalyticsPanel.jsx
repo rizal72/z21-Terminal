@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef, memo, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import Plot from 'react-plotly.js';
 
 // Locomotive colors (matches config.json locomotive_colors)
 const LOCO_COLORS = {
@@ -65,127 +64,6 @@ const getConsistBgClass = (consistId, consistConfig) => {
   const index = consistIds.indexOf(consistId);
   return index >= 0 ? CONSIST_BG_CLASSES[index % CONSIST_BG_CLASSES.length] : 'bg-slate-600';
 };
-
-// Helper: format timestamp for display
-const formatTime = (timestamp) => {
-  const date = new Date(timestamp * 1000);
-  return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-};
-
-// Helper: Prepare Plotly trace with session boundaries
-const preparePlotlyTrace = (events, consistId, minTimestamp) => {
-  if (!events || events.length === 0) return { x: [], y: [], text: [] };
-
-  const consistEvents = events
-    .filter(e => e.consist_id === consistId)
-    .sort((a, b) => a.timestamp - b.timestamp);
-
-  if (consistEvents.length === 0) return { x: [], y: [], text: [] };
-
-  const x = [];
-  const y = [];
-  const text = [];
-
-  for (let i = 0; i < consistEvents.length; i++) {
-    const event = consistEvents[i];
-    const prevEvent = consistEvents[i - 1];
-
-    // Insert null when session changes (line break)
-    if (prevEvent && event.session_id !== prevEvent.session_id) {
-      x.push(null);
-      y.push(null);
-      text.push('');
-    }
-
-    // Add event with RELATIVE timestamp (seconds from start)
-    const relativeSeconds = event.timestamp - minTimestamp;
-    x.push(relativeSeconds);
-    y.push(parseFloat(event.delta_t.toFixed(2)));
-    text.push(`Session ${event.session_id}<br>${formatTime(event.timestamp)}`);
-  }
-
-  return { x, y, text };
-};
-
-// Plotly Δt Chart Component (memoized to prevent unnecessary re-renders)
-const PlotlyDeltaTChart = memo(({ data, consistFilter, trackingConfig }) => {
-  // Calculate global min timestamp for relative positioning
-  const minTimestamp = useMemo(() => Math.min(...data.map(e => e.timestamp)), [data]);
-
-  const consistIds = Object.keys(trackingConfig.consists).map(Number).sort((a, b) => a - b);
-  const renderConsistIds = consistFilter === 'all' ? consistIds : consistIds.filter(cid => cid === consistFilter);
-
-  // Memoize traces to avoid recalculation unless data actually changes
-  const traces = useMemo(() => {
-    return renderConsistIds.map(consistId => {
-      const traceData = preparePlotlyTrace(data, consistId, minTimestamp);
-      return {
-        x: traceData.x,
-        y: traceData.y,
-        text: traceData.text,
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: trackingConfig.consists[consistId]?.name || `Consist ${consistId}`,
-        line: { color: getConsistStrokeColor(consistId, trackingConfig.consists), width: 2 },
-        marker: { size: 4 },
-        connectgaps: false,
-        hovertemplate: '<b>%{text}</b><br>Δt: %{y:.2f}s<extra></extra>'
-      };
-    });
-  }, [data, renderConsistIds, minTimestamp, trackingConfig]);
-
-  // Layout configuration
-  const layout = useMemo(() => ({
-    autosize: true,
-    height: 400,
-    margin: { l: 60, r: 40, t: 20, b: 60 },
-    plot_bgcolor: '#1e293b',
-    paper_bgcolor: '#1e293b',
-    font: { color: '#e2e8f0' },
-    xaxis: {
-      title: 'Time (seconds from start)',
-      gridcolor: '#374151',
-      color: '#9CA3AF'
-    },
-    yaxis: {
-      title: 'Δt (seconds)',
-      gridcolor: '#374151',
-      zeroline: true,
-      zerolinecolor: '#10b981',
-      color: '#9CA3AF'
-    },
-    shapes: [
-      { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1, y1: 1, line: { color: '#f59e0b', dash: 'dash' } },
-      { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: -1, y1: -1, line: { color: '#f59e0b', dash: 'dash' } },
-      { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1.5, y1: 1.5, line: { color: '#ef4444', dash: 'dash' } },
-      { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: -1.5, y1: -1.5, line: { color: '#ef4444', dash: 'dash' } }
-    ],
-    showlegend: consistFilter === 'all',
-    legend: { bgcolor: 'rgba(30,41,59,0.8)', bordercolor: '#475569', borderwidth: 1 }
-  }), [consistFilter]);
-
-  const config = {
-    displayModeBar: true,
-    displaylogo: false
-  };
-
-  // Use revision to preserve zoom/pan: only changes when data length changes
-  const revision = useMemo(() => data.length, [data.length]);
-
-  return (
-    <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-      <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
-      <Plot
-        data={traces}
-        layout={layout}
-        config={config}
-        revision={revision}
-        style={{ width: '100%' }}
-        useResizeHandler
-      />
-    </div>
-  );
-});
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current' or 'overview'
@@ -338,6 +216,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     });
   };
 
+  // Format timestamp for chart X-axis
+  const formatTime = (timestamp) => {
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
+
   // Format duration (seconds → mm:ss)
   const formatDuration = (seconds) => {
     if (!seconds) return 'N/A';
@@ -346,7 +230,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Prepare chart data with dynamic delta_t_cXX fields based on consist config (Recharts)
+  // Prepare chart data with dynamic delta_t_cXX fields based on consist config
   const prepareChartData = (events, consistConfig) => {
     if (!events || events.length === 0) return [];
 
@@ -575,13 +459,73 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                 </div>
               </div>
 
-              {/* Δt Trends Chart - Plotly with Session Boundaries */}
+              {/* Δt Trends Chart - ALL sessions concatenated */}
               {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
-                <PlotlyDeltaTChart
-                  data={cumulativeData.delta_t_events}
-                  consistFilter={consistFilter}
-                  trackingConfig={trackingConfig}
-                />
+                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+                  <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
+
+                  {(() => {
+                    // Prepare chart data with dynamic delta_t_cXX fields
+                    const filteredEvents = consistFilter === 'all' ?
+                      cumulativeData.delta_t_events :
+                      cumulativeData.delta_t_events.filter(e => e.consist_id === consistFilter);
+
+                    const chartData = prepareChartData(filteredEvents, trackingConfig.consists);
+
+                    const chartWidth = viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
+                    const chartContent = (
+                      <ResponsiveContainer width={chartWidth} height={400}>
+                          <LineChart data={chartData}>
+                            <CartesianGrid {...CHART_AXIS_STYLES.grid} />
+                      {/* XAxis: time in Current (readable), index in Overview (compressed) */}
+                      <XAxis
+                        dataKey={viewMode === 'current' ? 'time' : 'index'}
+                        {...CHART_AXIS_STYLES.axis}
+                        label={viewMode === 'overview' ? { value: 'Event #', position: 'insideBottom', offset: -5, fill: '#9CA3AF' } : undefined}
+                      />
+                      <YAxis {...CHART_AXIS_STYLES.axis} label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                      <Tooltip
+                        {...TOOLTIP_STYLES}
+                        formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
+                      />
+                      {/* Only show Legend when All filter (prevents chart height shift on filter change) */}
+                      {consistFilter === 'all' && <Legend />}
+                      <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
+                      <ReferenceLine y={1} stroke="#f59e0b" strokeDasharray="3 3" label="WARNING" />
+                      <ReferenceLine y={-1} stroke="#f59e0b" strokeDasharray="3 3" />
+                      <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
+                      <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
+
+                          {/* Dynamic lines: show all when 'all' filter, single when consist filter */}
+                          {Object.keys(trackingConfig.consists)
+                            .map(Number)
+                            .sort((a, b) => a - b)
+                            .filter(consistId => consistFilter === 'all' || consistFilter === consistId)
+                            .map((consistId) => (
+                              <Line
+                                key={consistId}
+                                type="monotone"
+                                dataKey={`delta_t_c${consistId}`}
+                                stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
+                                strokeWidth={viewMode === 'current' ? 2 : 1.5}
+                                dot={viewMode === 'current' ? { r: 4 } : false}
+                                name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
+                                connectNulls={true}
+                              />
+                            ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    );
+
+                    return viewMode === 'current' ? (
+                      <div key={`delta-t-${consistFilter}`} ref={scrollRefSession} className="overflow-x-auto">
+                        <div style={{ minWidth: chartWidth }}>
+                          {chartContent}
+                        </div>
+                      </div>
+                    ) : chartContent;
+                  })()}
+                </div>
               )}
 
               {/* YOLO Performance Monitoring - FPS & Confidence */}

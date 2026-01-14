@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Recharts Separate Traces Test</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.10.3/dist/Recharts.js"></script>
+</head>
+<body>
+    <h2>Test: Recharts con dataset separati per ogni consist</h2>
+    <p>
+        <strong>Approccio</strong>: Due Line components con data prop separati<br>
+        <strong>Obiettivo</strong>: Line breaks alle session boundaries (null points)
+    </p>
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } = Recharts;
+
+        // C10 data (magenta) - separate array
+        const c10_data = [
+            {timestamp: 0, delta_t: 0.5},
+            {timestamp: 2, delta_t: 0.6},
+            {timestamp: 4, delta_t: 0.4},
+            {timestamp: 6, delta_t: 0.7},
+            {timestamp: 8, delta_t: 0.5},
+            {timestamp: 10, delta_t: 0.8},
+            {timestamp: null, delta_t: null}, // Session boundary
+            {timestamp: 20, delta_t: 1.0},
+            {timestamp: 22, delta_t: 0.9},
+            {timestamp: 24, delta_t: 1.1},
+            {timestamp: 26, delta_t: 0.8},
+            {timestamp: 28, delta_t: 1.2},
+            {timestamp: 30, delta_t: 1.0}
+        ];
+
+        // C11 data (blue) - separate array
+        const c11_data = [
+            {timestamp: 1, delta_t: -0.3},
+            {timestamp: 3, delta_t: -0.4},
+            {timestamp: 5, delta_t: -0.2},
+            {timestamp: 7, delta_t: -0.5},
+            {timestamp: 9, delta_t: -0.4},
+            {timestamp: null, delta_t: null}, // Session boundary
+            {timestamp: 21, delta_t: -0.6},
+            {timestamp: 23, delta_t: -0.5},
+            {timestamp: 25, delta_t: -0.7},
+            {timestamp: 27, delta_t: -0.6},
+            {timestamp: 29, delta_t: -0.8}
+        ];
+
+        function App() {
+            return (
+                <div style={{width: '100%', height: '600px', background: '#0f172a', padding: '20px'}}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                            <XAxis
+                                dataKey="timestamp"
+                                type="number"
+                                domain={[0, 30]}
+                                stroke="#9CA3AF"
+                            />
+                            <YAxis
+                                stroke="#9CA3AF"
+                                label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
+                            />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569' }}
+                                labelStyle={{ color: '#e2e8f0' }}
+                            />
+                            <Legend />
+                            <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
+                            <ReferenceLine x={15} stroke="red" strokeDasharray="5 5" label="Session Boundary" />
+
+                            {/* C10 Line with separate data */}
+                            <Line
+                                data={c10_data}
+                                type="monotone"
+                                dataKey="delta_t"
+                                stroke="#d946ef"
+                                strokeWidth={2}
+                                dot={{ r: 4 }}
+                                name="C10 Interno"
+                                connectNulls={false}
+                            />
+
+                            {/* C11 Line with separate data */}
+                            <Line
+                                data={c11_data}
+                                type="monotone"
+                                dataKey="delta_t"
+                                stroke="#3b82f6"
+                                strokeWidth={2}
+                                dot={{ r: 4 }}
+                                name="C11 Esterno"
+                                connectNulls={false}
+                            />
+                        </LineChart>
+                    </ResponsiveContainer>
+
+                    <div style={{marginTop: '20px', padding: '20px', background: '#1e293b', color: '#e2e8f0', borderRadius: '8px'}}>
+                        <h3>Expected Behavior (same as Plotly test)</h3>
+                        <ul>
+                            <li>✅ C10 (magenta): Linea continua da 0→10, poi <strong>BREAK</strong>, poi continua da 20→30</li>
+                            <li>✅ C11 (blue): Linea continua da 1→9, poi <strong>BREAK</strong>, poi continua da 21→29</li>
+                            <li>✅ Nessuna linea attraversa il boundary rosso (timestamp 15)</li>
+                        </ul>
+
+                        <h3>If This Works:</h3>
+                        <p><strong>🤔 Maybe we don't need Plotly migration!</strong></p>
+                        <p>Current Recharts + separate data arrays potrebbe essere sufficiente.</p>
+
+                        <h3>Recharts Limitations to Check:</h3>
+                        <ul>
+                            <li>⚠️ <code>data</code> prop on Line: Recharts potrebbe non supportarlo (usa solo parent LineChart data)</li>
+                            <li>⚠️ XAxis domain: Con data separati, come gestisce la scala temporale?</li>
+                            <li>⚠️ Tooltip: Funziona su data separati?</li>
+                        </ul>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
