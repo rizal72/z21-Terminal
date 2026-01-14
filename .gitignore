@@ -1,5 +1,4 @@
-# Claude private notes - NEVER commit to git
-CLAUDE.md
+# Claude Code settings (local permissions)
 .claude/
 
 # Python
@@ -59,8 +58,4 @@ web/dist/
 web/.vite/
 npm-debug.log*
 package-lock.json
-CLAUDE.md.backup
-
-# Docs (private notes)
-docs/
 *.backup
