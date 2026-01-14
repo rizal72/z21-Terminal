@@ -1158,8 +1158,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           <XAxis dataKey="name" {...CHART_AXIS_STYLES.axis} />
                           <YAxis
                             {...CHART_AXIS_STYLES.axis}
-                            tickFormatter={(value) => formatOperatingTime(value)}
-                            label={{ value: 'Operating Time', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
+                            tickFormatter={(value) => Math.floor(value / 60)}
+                            label={{ value: 'Operating Time (minutes)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
                           />
                           <Tooltip
                             {...TOOLTIP_STYLES}
