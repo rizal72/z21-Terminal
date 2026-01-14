@@ -32,13 +32,16 @@ export default function MobileMenu({
 
         {/* Menu Items */}
         <div className="p-4 space-y-3">
-          {/* Consist Manager */}
+          {/* Reload Roster */}
           <button
-            onClick={onConsistManager}
-            className="w-full flex items-center gap-3 p-3 bg-control-black rounded hover:bg-control-grey transition-colors text-left"
+            onClick={onReloadRoster}
+            disabled={reloadingRoster}
+            className="w-full flex items-center gap-3 p-3 bg-control-black rounded hover:bg-control-grey transition-colors text-left disabled:opacity-50"
           >
-            <i className="fa-solid fa-gears text-signal-amber text-xl"></i>
-            <span className="font-sans text-sm">Consist Manager</span>
+            <i className={`fa-solid ${reloadingRoster ? 'fa-spinner fa-spin' : 'fa-rotate-right'} text-track-steel text-xl`}></i>
+            <span className="font-sans text-sm">
+              {reloadingRoster ? 'Reloading...' : 'Reload Roster'}
+            </span>
           </button>
 
           {/* Add Controller */}
@@ -50,16 +53,13 @@ export default function MobileMenu({
             <span className="font-sans text-sm">Add Controller</span>
           </button>
 
-          {/* Reload Roster */}
+          {/* Consist Manager */}
           <button
-            onClick={onReloadRoster}
-            disabled={reloadingRoster}
-            className="w-full flex items-center gap-3 p-3 bg-control-black rounded hover:bg-control-grey transition-colors text-left disabled:opacity-50"
+            onClick={onConsistManager}
+            className="w-full flex items-center gap-3 p-3 bg-control-black rounded hover:bg-control-grey transition-colors text-left"
           >
-            <i className={`fa-solid ${reloadingRoster ? 'fa-spinner fa-spin' : 'fa-rotate-right'} text-track-steel text-xl`}></i>
-            <span className="font-sans text-sm">
-              {reloadingRoster ? 'Reloading...' : 'Reload Roster'}
-            </span>
+            <i className="fa-solid fa-gears text-signal-amber text-xl"></i>
+            <span className="font-sans text-sm">Consist Manager</span>
           </button>
 
           {/* Keep Screen Awake */}
