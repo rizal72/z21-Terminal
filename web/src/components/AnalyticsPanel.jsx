@@ -242,8 +242,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       setLoading(true);
       setError(null);
 
-      // Build API URL with consist filter if specified
-      const params = consistFilter === 'all' ? '' : `?consist_filter=${consistFilter}`;
+      // Build API URL with consist filter if specified (temporarily use limit=100 for debugging)
+      const baseParams = 'limit=100';
+      const params = consistFilter === 'all' ? `?${baseParams}` : `?${baseParams}&consist_filter=${consistFilter}`;
       const response = await fetch(`/api/analytics/reports${params}`);
       const data = await response.json();
 
@@ -545,7 +546,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   // Reports chart data (historical trend)
   const reportsChartData = useMemo(() => {
     if (!reportsData?.sessions || !trackingConfig?.consists) return [];
-    return [...reportsData.sessions].reverse().map(session => {
+    const chartData = [...reportsData.sessions].reverse().map(session => {
       const dataPoint = {
         session_id: session.id,
         date: session.date,
@@ -557,6 +558,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       });
       return dataPoint;
     });
+
+    // Debug: check if any session has C10 non-null
+    const withC10 = chartData.filter(d => d.avg_delta_t_c10 !== null && d.avg_delta_t_c10 !== undefined);
+    console.log(`Reports chart: ${chartData.length} sessions, ${withC10.length} have C10 data`);
+    if (withC10.length > 0) {
+      console.log('First session with C10:', withC10[0]);
+    }
+
+    return chartData;
   }, [reportsData, trackingConfig]);
 
   // Filtered sessions for Reports table (filter by consist)
