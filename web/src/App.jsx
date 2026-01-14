@@ -1048,7 +1048,7 @@ function App() {
                   reloadSuccess ? 'fa-check' :
                   'fa-rotate-right'
                 } text-lg md:text-xl`}></i>
-                <div className="hidden md:block text-xs font-mono">
+                <div className="hidden lg:block text-xs font-mono">
                   <div className={reloadSuccess ? 'text-signal-green' : 'text-track-steel'}>
                     Reload
                   </div>
@@ -1063,7 +1063,7 @@ function App() {
                 title="Add controller panel"
               >
                 <i className="fa-solid fa-plus text-lg md:text-xl"></i>
-                <div className="hidden md:block text-xs font-mono text-track-steel">
+                <div className="hidden lg:block text-xs font-mono text-track-steel">
                   Add
                 </div>
               </button>
@@ -1076,7 +1076,7 @@ function App() {
                 title="Manage consists"
               >
                 <i className="fa-solid fa-gears text-lg md:text-xl"></i>
-                <div className="hidden md:block text-xs font-mono text-track-steel">
+                <div className="hidden lg:block text-xs font-mono text-track-steel">
                   Consists
                 </div>
               </button>
@@ -1088,7 +1088,7 @@ function App() {
                 onClick={() => setAnalyticsOpen(true)}
               >
                 <i className="fa-solid fa-chart-line text-lg md:text-xl text-blue-500"></i>
-                <div className="hidden md:block text-xs font-mono">
+                <div className="hidden lg:block text-xs font-mono">
                   <div className="text-blue-400">
                     Analytics
                   </div>
@@ -1120,7 +1120,7 @@ function App() {
                 disabled={!z21Online}
               >
                 <i className={`fa-solid ${cvProfileMode === 'testing' ? 'fa-flask-vial' : 'fa-check-circle'} text-lg md:text-xl ${cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}`}></i>
-                <div className="hidden md:block text-xs font-mono">
+                <div className="hidden lg:block text-xs font-mono">
                   <div className={cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}>
                     Test
                   </div>
