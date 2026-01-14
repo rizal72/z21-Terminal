@@ -257,8 +257,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       setLoading(true);
       setError(null);
 
-      // Build API URL with consist filter if specified (temporarily use limit=100 for debugging)
-      const baseParams = 'limit=100';
+      // Build API URL with consist filter if specified (limit 30 sessions)
+      const baseParams = 'limit=30';
       const params = consistFilter === 'all' ? `?${baseParams}` : `?${baseParams}&consist_filter=${consistFilter}`;
       const response = await fetch(`/api/analytics/reports${params}`);
       const data = await response.json();
@@ -943,9 +943,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
                       />
                       <ReferenceLine yAxisId="left" y={0} stroke="#10b981" strokeDasharray="3 3" />
-                      <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.normal || 1.0} stroke="#f59e0b" strokeDasharray="3 3" label="WARNING" />
+                      <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.normal || 1.0} stroke="#f59e0b" strokeDasharray="3 3" />
                       <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.normal || 1.0)} stroke="#f59e0b" strokeDasharray="3 3" />
-                      <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.warning || 1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
+                      <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.warning || 1.5} stroke="#ef4444" strokeDasharray="3 3" />
                       <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.warning || 1.5)} stroke="#ef4444" strokeDasharray="3 3" />
 
                           {/* Dynamic lines: simple or segmented based on showSessionBreaks */}
