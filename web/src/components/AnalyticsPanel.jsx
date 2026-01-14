@@ -36,16 +36,18 @@ const filterEventsBySession = (events, viewMode, currentSession) => {
 
 // Helper: get locomotive addresses for consist filter (dynamic from config)
 const getAddressFilter = (consistFilter, consistConfig) => {
+  const config = consistConfig || {};
   if (consistFilter === 'all') {
     // All consists: flatten all addresses
-    return Object.values(consistConfig).flatMap(c => c.addresses);
+    return Object.values(config).flatMap(c => c.addresses);
   }
-  return consistConfig[consistFilter]?.addresses || [];
+  return config[consistFilter]?.addresses || [];
 };
 
 // Helper: get consist stroke color (cyclic palette)
 const getConsistStrokeColor = (consistId, consistConfig) => {
-  const consistIds = Object.keys(consistConfig).map(Number).sort((a, b) => a - b);
+  const config = consistConfig || {};
+  const consistIds = Object.keys(config).map(Number).sort((a, b) => a - b);
   const index = consistIds.indexOf(consistId);
   return index >= 0 ? CONSIST_COLOR_PALETTE[index % CONSIST_COLOR_PALETTE.length] : '#9CA3AF';
 };
@@ -53,14 +55,16 @@ const getConsistStrokeColor = (consistId, consistConfig) => {
 // Helper: get consist text color class (cyclic palette)
 const getConsistColorClass = (consistFilter, consistConfig, defaultColor = 'text-white') => {
   if (consistFilter === 'all') return defaultColor;
-  const consistIds = Object.keys(consistConfig).map(Number).sort((a, b) => a - b);
+  const config = consistConfig || {};
+  const consistIds = Object.keys(config).map(Number).sort((a, b) => a - b);
   const index = consistIds.indexOf(consistFilter);
   return index >= 0 ? CONSIST_COLOR_CLASSES[index % CONSIST_COLOR_CLASSES.length] : defaultColor;
 };
 
 // Helper: get consist background color class for buttons (cyclic palette)
 const getConsistBgClass = (consistId, consistConfig) => {
-  const consistIds = Object.keys(consistConfig).map(Number).sort((a, b) => a - b);
+  const config = consistConfig || {};
+  const consistIds = Object.keys(config).map(Number).sort((a, b) => a - b);
   const index = consistIds.indexOf(consistId);
   return index >= 0 ? CONSIST_BG_CLASSES[index % CONSIST_BG_CLASSES.length] : 'bg-slate-600';
 };
