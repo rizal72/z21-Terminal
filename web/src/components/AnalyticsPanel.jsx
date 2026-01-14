@@ -254,6 +254,13 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     let [left, right] = [refAreaLeft, refAreaRight];
     if (left > right) [left, right] = [right, left];
 
+    // Ignore single-click (no drag) - minimum 5 events difference
+    if (Math.abs(right - left) < 5) {
+      setRefAreaLeft(null);
+      setRefAreaRight(null);
+      return;
+    }
+
     // Calculate Y domain from visible data in selected X range
     const visibleData = chartData.filter(d => {
       const x = viewMode === 'current' ? d.time : d.index;
@@ -263,17 +270,32 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     const consistIds = Object.keys(trackingConfig.consists).map(Number);
     let yMin = Infinity, yMax = -Infinity;
 
-    visibleData.forEach(d => {
-      for (let seg = 0; seg < segmentCount; seg++) {
+    // Different dataKey structure based on session breaks mode
+    if (segmentCount === 0) {
+      // SIMPLE MODE: delta_t_c10, delta_t_c11
+      visibleData.forEach(d => {
         consistIds.forEach(cid => {
-          const value = d[`delta_t_c${cid}_seg${seg}`];
+          const value = d[`delta_t_c${cid}`];
           if (value !== null && value !== undefined && !isNaN(value)) {
             yMin = Math.min(yMin, value);
             yMax = Math.max(yMax, value);
           }
         });
-      }
-    });
+      });
+    } else {
+      // SEGMENTED MODE: delta_t_c10_seg0, delta_t_c10_seg1, etc.
+      visibleData.forEach(d => {
+        for (let seg = 0; seg < segmentCount; seg++) {
+          consistIds.forEach(cid => {
+            const value = d[`delta_t_c${cid}_seg${seg}`];
+            if (value !== null && value !== undefined && !isNaN(value)) {
+              yMin = Math.min(yMin, value);
+              yMax = Math.max(yMax, value);
+            }
+          });
+        }
+      });
+    }
 
     // Add 10% padding to Y axis
     const yPadding = (yMax - yMin) * 0.1;
