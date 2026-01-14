@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, memo, useMemo } from 'react';
-import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea, Brush } from 'recharts';
+import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
 
 // Locomotive colors (matches config.json locomotive_colors)
 const LOCO_COLORS = {
@@ -78,11 +78,10 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     consists: {} // { 10: { name, lead_address, rear_address, addresses: [...] }, 11: {...} }
   });
 
-  // Zoom state for Overview mode (box-select + brush)
+  // Zoom state for Overview mode (box-select)
   const [refAreaLeft, setRefAreaLeft] = useState(null);
   const [refAreaRight, setRefAreaRight] = useState(null);
   const [zoomDomain, setZoomDomain] = useState(null); // { x: [min, max], y: [min, max] }
-  const [brushIndexes, setBrushIndexes] = useState(null); // { startIndex, endIndex }
 
   // Refs for auto-scroll to end
   const scrollRefSession = useRef(null);
@@ -271,18 +270,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     yMin -= yPadding;
     yMax += yPadding;
 
-    const newZoomDomain = { x: [left, right], y: [yMin, yMax] };
-    console.log('[DEBUG] Box-select zoom:', newZoomDomain, 'visibleData:', visibleData.length);
-    setZoomDomain(newZoomDomain);
+    setZoomDomain({ x: [left, right], y: [yMin, yMax] });
     setRefAreaLeft(null);
     setRefAreaRight(null);
   };
 
   const handleDoubleClick = () => {
     if (viewMode !== 'overview') return;
-    // Reset zoom domain and brush
+    // Reset zoom to full view
     setZoomDomain(null);
-    setBrushIndexes(null);
   };
 
   // Format timestamp for chart X-axis
@@ -656,21 +652,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                                 fillOpacity={0.3}
                               />
                             )}
-
-                            {/* Brush for zoom/pan - only in Overview mode */}
-                            {/* TEMPORARILY DISABLED FOR DEBUGGING BOX-SELECT
-                            {viewMode === 'overview' && (
-                              <Brush
-                                dataKey="index"
-                                height={30}
-                                stroke="#3b82f6"
-                                fill="#1e293b"
-                                startIndex={brushIndexes?.startIndex}
-                                endIndex={brushIndexes?.endIndex}
-                                onChange={(newIndexes) => setBrushIndexes(newIndexes)}
-                              />
-                            )}
-                            */}
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
