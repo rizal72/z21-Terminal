@@ -651,7 +651,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                 }`}
                 title="Session Analysis Reports"
               >
-                <i className="fa-solid fa-file-chart-line mr-1.5"></i>
+                <i className="fa-solid fa-table-list mr-1.5"></i>
                 Reports
               </button>
             </div>
@@ -1367,7 +1367,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           }
                         }
                       }}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 35 }}
                     >
                       <CartesianGrid {...CHART_AXIS_STYLES.grid} />
                       <XAxis
@@ -1375,7 +1375,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         {...CHART_AXIS_STYLES.axis}
                         angle={-40}
                         textAnchor="end"
-                        height={30}
+                        height={35}
                         interval="preserveStartEnd"
                         tickFormatter={(index) => {
                           const item = reportsChartData[index - 1];
