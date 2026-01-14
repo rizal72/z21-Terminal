@@ -1048,17 +1048,21 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       }));
 
                       // Calculate average FPS: Current = session only, Overview = all data
+                      // IMPORTANT: Filter out idle mode (FPS <= 10) to measure real tracking performance
                       let avgFps = 'N/A';
                       if (viewMode === 'current' && currentSession) {
-                        // Filter by current session for badge
-                        const sessionEvents = cumulativeData.yolo_performance.filter(e => e.session_id === currentSession.session_id);
+                        // Filter by current session + exclude idle (FPS > 10)
+                        const sessionEvents = cumulativeData.yolo_performance.filter(e =>
+                          e.session_id === currentSession.session_id && e.avg_fps > 10
+                        );
                         if (sessionEvents.length > 0) {
                           avgFps = (sessionEvents.reduce((sum, e) => sum + e.avg_fps, 0) / sessionEvents.length).toFixed(1);
                         }
                       } else {
-                        // Overview: all data
-                        avgFps = chartData.length > 0
-                          ? (chartData.reduce((sum, d) => sum + d.fps, 0) / chartData.length).toFixed(1)
+                        // Overview: all data, exclude idle (FPS > 10)
+                        const activeEvents = cumulativeData.yolo_performance.filter(e => e.avg_fps > 10);
+                        avgFps = activeEvents.length > 0
+                          ? (activeEvents.reduce((sum, e) => sum + e.avg_fps, 0) / activeEvents.length).toFixed(1)
                           : 'N/A';
                       }
 
