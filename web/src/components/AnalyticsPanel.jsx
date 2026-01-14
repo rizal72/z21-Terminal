@@ -721,6 +721,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         {...CHART_AXIS_STYLES.axis}
                         domain={yDomain}
                         allowDataOverflow={true}
+                        tickFormatter={(value) => value.toFixed(2)}
                         label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
                       />
                       {/* Duplicate YAxis on right for Current mode (always visible when scrolling) */}
@@ -731,6 +732,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           {...CHART_AXIS_STYLES.axis}
                           domain={yDomain}
                           allowDataOverflow={true}
+                          tickFormatter={(value) => value.toFixed(2)}
                         />
                       )}
                       <Tooltip
@@ -739,11 +741,11 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       />
                       {/* Only show Legend when All filter (prevents chart height shift on filter change) */}
                       {consistFilter === 'all' && <Legend />}
-                      <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
-                      <ReferenceLine y={1} stroke="#f59e0b" strokeDasharray="3 3" label="WARNING" />
-                      <ReferenceLine y={-1} stroke="#f59e0b" strokeDasharray="3 3" />
-                      <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
-                      <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
+                      <ReferenceLine yAxisId="left" y={0} stroke="#10b981" strokeDasharray="3 3" />
+                      <ReferenceLine yAxisId="left" y={1} stroke="#f59e0b" strokeDasharray="3 3" label="WARNING" />
+                      <ReferenceLine yAxisId="left" y={-1} stroke="#f59e0b" strokeDasharray="3 3" />
+                      <ReferenceLine yAxisId="left" y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
+                      <ReferenceLine yAxisId="left" y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
 
                           {/* Dynamic lines: simple or segmented based on showSessionBreaks */}
                           {Object.keys(trackingConfig.consists)
