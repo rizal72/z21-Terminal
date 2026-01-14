@@ -1092,7 +1092,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                               dataKey={viewMode === 'current' ? 'time' : 'index'}
                               {...CHART_AXIS_STYLES.axis}
                             />
-                            <YAxis {...CHART_AXIS_STYLES.axis} domain={[0, 140]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                            <YAxis yAxisId="left" {...CHART_AXIS_STYLES.axis} domain={[0, 140]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                             {/* Duplicate YAxis on right for Current mode (always visible when scrolling) */}
                             {viewMode === 'current' && (
                               <YAxis
@@ -1107,8 +1107,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                               {...TOOLTIP_STYLES}
                               formatter={(value) => value.toFixed(1) + ' FPS'}
                             />
-                            <ReferenceLine y={30} stroke="#10b981" strokeDasharray="5 5" label={{ value: 'Target (30 FPS)', position: 'top', fill: '#10b981' }} />
-                            <Line type="monotone" dataKey="fps" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Inference FPS" />
+                            <ReferenceLine yAxisId="left" y={30} stroke="#10b981" strokeDasharray="5 5" label={{ value: 'Target (30 FPS)', position: 'top', fill: '#10b981' }} />
+                            <Line yAxisId="left" type="monotone" dataKey="fps" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Inference FPS" />
                           </LineChart>
                         </ResponsiveContainer>
                       );
