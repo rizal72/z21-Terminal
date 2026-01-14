@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo, useMemo } from 'react';
+import { useState, useEffect, useRef, memo, useMemo, Fragment } from 'react';
 import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
 
 // Locomotive colors (matches config.json locomotive_colors)
@@ -1057,10 +1057,10 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           {Object.keys(trackingConfig.consists || {}).sort((a, b) => a - b).map(cid => {
                             if (consistFilter === 'all' || consistFilter == cid) {
                               return (
-                                <React.Fragment key={cid}>
+                                <Fragment key={cid}>
                                   <th className="px-4 py-3 text-sm font-semibold text-slate-300">C{cid} Avg Δt</th>
                                   <th className="px-4 py-3 text-sm font-semibold text-slate-300">C{cid} Synced%</th>
-                                </React.Fragment>
+                                </Fragment>
                               );
                             }
                             return null;
@@ -1089,21 +1089,21 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                                   const absAvg = Math.abs(avgDt);
                                   const colorClass = absAvg < 1.0 ? 'text-green-400' : absAvg < 1.5 ? 'text-amber-400' : 'text-red-400';
                                   return (
-                                    <React.Fragment key={cid}>
+                                    <Fragment key={cid}>
                                       <td className={`px-4 py-3 text-sm font-medium ${colorClass}`}>
                                         {avgDt.toFixed(2)}s
                                       </td>
                                       <td className="px-4 py-3 text-sm text-slate-300">
                                         {stats.synced_percent.toFixed(1)}%
                                       </td>
-                                    </React.Fragment>
+                                    </Fragment>
                                   );
                                 } else {
                                   return (
-                                    <React.Fragment key={cid}>
+                                    <Fragment key={cid}>
                                       <td className="px-4 py-3 text-sm text-slate-500">N/A</td>
                                       <td className="px-4 py-3 text-sm text-slate-500">N/A</td>
-                                    </React.Fragment>
+                                    </Fragment>
                                   );
                                 }
                               }
