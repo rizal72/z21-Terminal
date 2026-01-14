@@ -734,7 +734,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <XAxis
                         dataKey={viewMode === 'current' ? 'time' : 'index'}
                         {...CHART_AXIS_STYLES.axis}
-                        label={viewMode === 'overview' ? { value: 'Event #', position: 'insideBottom', offset: -15, fill: '#9CA3AF' } : undefined}
+                        label={viewMode === 'overview' ? { value: 'Event #', position: 'insideBottom', offset: 10, fill: '#9CA3AF' } : undefined}
                       />
                       <YAxis
                         yAxisId="left"
