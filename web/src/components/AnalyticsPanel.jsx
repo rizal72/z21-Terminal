@@ -93,6 +93,21 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   const [zoomDomain, setZoomDomain] = useState(null); // { x: [min, max], y: [min, max] }
   const [showSessionBreaks, setShowSessionBreaks] = useState(false); // Toggle for session boundary visualization
 
+  // Collapsible panels state (all expanded by default)
+  const [collapsedPanels, setCollapsedPanels] = useState({
+    statsCards: false,
+    deltaTrends: false,
+    yoloPerformance: false,
+    locoOperatingTime: false,
+    sessionHistory: false,
+    historicalTrend: false
+  });
+
+  // Toggle collapse for a panel
+  const togglePanel = (panelName) => {
+    setCollapsedPanels(prev => ({ ...prev, [panelName]: !prev[panelName] }));
+  };
+
   // Refs for auto-scroll to end
   const scrollRefSession = useRef(null);
   const scrollRefFps = useRef(null);
@@ -740,7 +755,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               )}
 
               {/* Stats Cards (view-dependent) */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                <div
+                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
+                  onClick={() => togglePanel('statsCards')}
+                >
+                  <h3 className="text-lg font-semibold text-white">Session Statistics</h3>
+                  <i className={`fa-solid fa-chevron-${collapsedPanels.statsCards ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
+                </div>
+                {!collapsedPanels.statsCards && (
+                  <div className="grid grid-cols-3 gap-4 p-4 pt-0">
                 {/* Card 1: Session Duration (Current) or Total Sessions (Overview) */}
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                   <div className="text-sm text-slate-400">
@@ -814,16 +838,44 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     })()}
                   </div>
                 </div>
+                  </div>
+                )}
               </div>
 
               {/* Δt Trends Chart - ALL sessions concatenated */}
               {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
-                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-bold text-white">Δt Trends (All Sessions)</h3>
-                    <span className="text-xs text-slate-400">
-                      Click & drag to zoom • Double-click to reset
-                    </span>
+                <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                  <div
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
+                    onClick={() => togglePanel('deltaTrends')}
+                  >
+                    <h3 className="text-lg font-semibold text-white">Δt Trends (All Sessions)</h3>
+                    <div className="flex items-center gap-4">
+                      {!collapsedPanels.deltaTrends && (
+                        <span className="text-xs text-slate-400">
+                          Click & drag to zoom • Double-click to reset
+                        </span>
+                      )}
+                      <i className={`fa-solid fa-chevron-${collapsedPanels.deltaTrends ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
+                    </div>
+                  </div>
+                  {!collapsedPanels.deltaTrends && (
+                    <div className="p-6 pt-0">
+
+                  {/* Threshold Legend - SYNCED/WARNING/CRITICAL */}
+                  <div className="flex gap-6 justify-center mb-3 pb-3 border-b border-slate-700/50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                      <span className="text-xs text-slate-400">SYNCED (&lt;1.0s)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                      <span className="text-xs text-slate-400">WARNING (1.0-1.5s)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                      <span className="text-xs text-slate-400">CRITICAL (≥1.5s)</span>
+                    </div>
                   </div>
 
                   {/* Custom Legend (always shown when All filter, both Current and Overview) */}
@@ -951,13 +1003,23 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       </ResponsiveContainer>
                     </div>
                   )}
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* YOLO Performance Monitoring - FPS & Confidence */}
               {cumulativeData.yolo_performance && cumulativeData.yolo_performance.length > 0 && (
-                <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700 space-y-6">
-                  <h3 className="text-xl font-bold text-white">YOLO Performance Monitoring</h3>
+                <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                  <div
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
+                    onClick={() => togglePanel('yoloPerformance')}
+                  >
+                    <h3 className="text-lg font-semibold text-white">YOLO Performance Monitoring</h3>
+                    <i className={`fa-solid fa-chevron-${collapsedPanels.yoloPerformance ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
+                  </div>
+                  {!collapsedPanels.yoloPerformance && (
+                    <div className="p-6 pt-0 space-y-6">
 
                   {/* FPS Line Chart */}
                   <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
@@ -1049,6 +1111,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1059,8 +1123,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                 const filteredLocoStats = locoStats.filter(loco => addressFilter.includes(loco.address));
 
                 return filteredLocoStats.length > 0 && (
-                  <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                    <h3 className="text-xl font-bold text-white mb-4">Locomotive Operating Time</h3>
+                  <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                    <div
+                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
+                      onClick={() => togglePanel('locoOperatingTime')}
+                    >
+                      <h3 className="text-lg font-semibold text-white">Locomotive Operating Time</h3>
+                      <i className={`fa-solid fa-chevron-${collapsedPanels.locoOperatingTime ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
+                    </div>
+                    {!collapsedPanels.locoOperatingTime && (
+                      <div className="p-6 pt-0">
 
                     <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
                       <h4 className="text-lg font-semibold text-amber-400 mb-4">Total Operating Hours</h4>
@@ -1081,6 +1153,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -1090,14 +1164,86 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           {/* Reports Tab Content */}
           {viewMode === 'reports' && reportsData && !loading && trackingConfig?.consists && (
             <div className="space-y-6">
-              {/* Session History Table */}
-              <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-semibold text-white">Session History</h3>
-                  <span className="text-slate-400 text-sm">
-                    {filteredReportsSessions.length} sessions
-                  </span>
+              {/* Overview Stats Cards (same as Overview tab) */}
+              {cumulativeData && (
+                <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                  <div
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
+                    onClick={() => togglePanel('statsCards')}
+                  >
+                    <h3 className="text-lg font-semibold text-white">Overview Statistics</h3>
+                    <i className={`fa-solid fa-chevron-${collapsedPanels.statsCards ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
+                  </div>
+                  {!collapsedPanels.statsCards && (
+                    <div className="grid grid-cols-3 gap-4 p-4 pt-0">
+                  {/* Card 1: Total Sessions */}
+                  <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                    <div className="text-sm text-slate-400">Total Sessions</div>
+                    <div className="text-3xl font-bold text-white mt-1">
+                      {cumulativeData.total_sessions}
+                    </div>
+                  </div>
+
+                  {/* Card 2: Gate Crossings (filtered by consist) */}
+                  <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                    <div className="text-sm text-slate-400">
+                      Gate Crossings
+                      {consistFilter === 'all' ? ' (All)' : ` (C${consistFilter})`}
+                    </div>
+                    <div className={`text-3xl font-bold mt-1 ${getConsistColorClass(consistFilter, trackingConfig.consists, 'text-white')}`}>
+                      {(() => {
+                        let events = cumulativeData.delta_t_events || [];
+                        // Filter by consist
+                        if (consistFilter !== 'all') {
+                          events = events.filter(e => e.consist_id === consistFilter);
+                        }
+                        return events.length;
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Card 3: Critical Events (filtered by consist) */}
+                  <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                    <div className="text-sm text-slate-400">
+                      Critical Events
+                      {consistFilter === 'all' ? ' (All)' : ` (C${consistFilter})`}
+                    </div>
+                    <div className={`text-3xl font-bold mt-1 ${getConsistColorClass(consistFilter, trackingConfig.consists, 'text-red-400')}`}>
+                      {(() => {
+                        let events = cumulativeData.delta_t_events || [];
+                        // Filter by critical threshold (|Δt| >= 1.5s)
+                        events = events.filter(e => Math.abs(e.delta_t) >= 1.5);
+                        // Filter by consist
+                        if (consistFilter !== 'all') {
+                          events = events.filter(e => e.consist_id === consistFilter);
+                        }
+                        return events.length;
+                      })()}
+                    </div>
+                  </div>
+                    </div>
+                  )}
                 </div>
+              )}
+
+              {/* Session History Table */}
+              <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                <div
+                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
+                  onClick={() => togglePanel('sessionHistory')}
+                >
+                  <h3 className="text-lg font-semibold text-white">Session History</h3>
+                  <div className="flex items-center gap-4">
+                    {!collapsedPanels.sessionHistory && (
+                      <span className="text-slate-400 text-sm">
+                        {filteredReportsSessions.length} sessions
+                      </span>
+                    )}
+                    <i className={`fa-solid fa-chevron-${collapsedPanels.sessionHistory ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
+                  </div>
+                </div>
+                {!collapsedPanels.sessionHistory && (
+                  <div className="p-6 pt-0">
 
                 {filteredReportsSessions.length > 0 ? (
                   <div className="overflow-x-auto">
@@ -1175,11 +1321,37 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     <p>No sessions found</p>
                   </div>
                 )}
+                  </div>
+                )}
               </div>
 
               {/* Historical Trend Chart */}
-              <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                <h3 className="text-xl font-semibold text-white mb-4">Historical Trend - Avg Δt</h3>
+              <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                <div
+                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
+                  onClick={() => togglePanel('historicalTrend')}
+                >
+                  <h3 className="text-lg font-semibold text-white">Historical Trend - Avg Δt</h3>
+                  <i className={`fa-solid fa-chevron-${collapsedPanels.historicalTrend ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
+                </div>
+                {!collapsedPanels.historicalTrend && (
+                  <div className="p-6 pt-0">
+
+                {/* Threshold Legend */}
+                <div className="flex gap-6 justify-center mb-4 pb-3 border-b border-slate-700/50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span className="text-xs text-slate-400">SYNCED (&lt;1.0s)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                    <span className="text-xs text-slate-400">WARNING (1.0-1.5s)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                    <span className="text-xs text-slate-400">CRITICAL (≥1.5s)</span>
+                  </div>
+                </div>
 
                 {reportsChartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={400}>
@@ -1272,6 +1444,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   <div className="text-center py-12 text-slate-400">
                     <i className="fa-solid fa-chart-line text-4xl mb-4"></i>
                     <p>No trend data available</p>
+                  </div>
+                )}
                   </div>
                 )}
               </div>
