@@ -1034,48 +1034,99 @@ function App() {
             <div className="hidden md:flex items-center gap-3">
               {/* Reload Roster Button */}
               <button
-              onClick={handleReloadRoster}
-              disabled={reloadingRoster || !isConnected}
-              className={`px-2 py-2 md:px-3 bg-control-dark border rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                reloadSuccess
-                  ? 'border-signal-green text-signal-green'
-                  : 'border-control-grey text-track-steel hover:border-signal-amber hover:text-signal-amber'
-              }`}
-              title="Reload roster from JMRI XML files"
-            >
-              <i className={`fa-solid ${
-                reloadingRoster ? 'fa-spinner fa-spin' :
-                reloadSuccess ? 'fa-check' :
-                'fa-rotate-right'
-              } text-base md:text-lg`}></i>
-            </button>
+                onClick={handleReloadRoster}
+                disabled={reloadingRoster || !isConnected}
+                className={`flex items-center gap-2 px-2 py-2 bg-control-dark border rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  reloadSuccess
+                    ? 'border-signal-green text-signal-green'
+                    : 'border-control-grey text-track-steel hover:border-signal-amber hover:text-signal-amber'
+                }`}
+                title="Reload roster from JMRI XML files"
+              >
+                <i className={`fa-solid ${
+                  reloadingRoster ? 'fa-spinner fa-spin' :
+                  reloadSuccess ? 'fa-check' :
+                  'fa-rotate-right'
+                } text-lg md:text-xl`}></i>
+                <div className="hidden md:block text-xs font-mono">
+                  <div className={reloadSuccess ? 'text-signal-green' : 'text-track-steel'}>
+                    Reload
+                  </div>
+                </div>
+              </button>
 
               {/* Add Controller Button - desktop only */}
               <button
                 onClick={addController}
                 disabled={!isConnected}
-                className="px-2 py-2 md:px-3 bg-control-dark border border-control-grey rounded hover:border-signal-amber hover:text-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-2 py-2 bg-control-dark border border-control-grey rounded hover:border-signal-amber hover:text-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Add controller panel"
               >
-                <i className="fa-solid fa-plus text-base md:text-lg"></i>
+                <i className="fa-solid fa-plus text-lg md:text-xl"></i>
+                <div className="hidden md:block text-xs font-mono text-track-steel">
+                  Add
+                </div>
               </button>
 
               {/* Consist Manager Button - desktop only (Phase 6B) */}
               <button
                 onClick={() => setConsistManagerOpen(true)}
                 disabled={!isConnected}
-                className="px-2 py-2 md:px-3 bg-control-dark border border-control-grey rounded hover:border-signal-amber hover:text-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-2 py-2 bg-control-dark border border-control-grey rounded hover:border-signal-amber hover:text-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Manage consists"
               >
-                <i className="fa-solid fa-gears text-base md:text-lg"></i>
+                <i className="fa-solid fa-gears text-lg md:text-xl"></i>
+                <div className="hidden md:block text-xs font-mono text-track-steel">
+                  Consists
+                </div>
+              </button>
+
+              {/* Analytics Dashboard (📊) - Desktop-only (1024px+) */}
+              <button
+                className="hidden lg:flex items-center gap-2 px-2 py-2 bg-control-dark rounded border border-control-grey transition-all duration-200 md:hover:border-signal-amber cursor-pointer"
+                title="Analytics Dashboard (Desktop)"
+                onClick={() => setAnalyticsOpen(true)}
+              >
+                <i className="fa-solid fa-chart-line text-lg md:text-xl text-blue-500"></i>
+                <div className="hidden md:block text-xs font-mono">
+                  <div className="text-blue-400">
+                    Analytics
+                  </div>
+                </div>
               </button>
             </div>
 
             {/* Spacer */}
             <div className="flex-grow"></div>
 
-            {/* Right: Emergency + Status Icons */}
+            {/* Right: Test + Emergency + Status Badges */}
             <div className="flex items-center gap-2 md:gap-2 lg:gap-3">
+              {/* CV Profile Mode Badge (🎚️) - Click to toggle Test/Normal */}
+              <button
+                className={`flex items-center gap-2 px-2 py-2 bg-control-dark rounded border transition-all duration-200 ${
+                  cvProfileMode === 'testing'
+                    ? 'border-amber-500 ring-2 ring-amber-500/50'
+                    : 'border-control-grey'
+                } ${
+                  z21Online ? 'md:hover:border-signal-amber cursor-pointer' : 'opacity-50 cursor-not-allowed'
+                }`}
+                title={`Test Mode: ${cvProfileMode === 'testing' ? 'ACTIVE (zero momentum) - Press T' : 'OFF (normal) - Press T'}`}
+                onClick={() => {
+                  if (z21Online) {
+                    const event = new KeyboardEvent('keydown', { key: 'T', bubbles: true });
+                    window.dispatchEvent(event);
+                  }
+                }}
+                disabled={!z21Online}
+              >
+                <i className={`fa-solid ${cvProfileMode === 'testing' ? 'fa-flask-vial' : 'fa-check-circle'} text-lg md:text-xl ${cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}`}></i>
+                <div className="hidden md:block text-xs font-mono">
+                  <div className={cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}>
+                    Test
+                  </div>
+                </div>
+              </button>
+
               {/* Global Emergency Stop */}
               <button
                 onClick={handleEmergencyStop}
@@ -1203,46 +1254,6 @@ function App() {
                   </div>
                 </div>
               </div>
-
-              {/* CV Profile Mode Badge (🎚️) - Click to toggle Test/Normal */}
-              <button
-                className={`flex items-center gap-2 px-2 py-2 bg-control-dark rounded border transition-all duration-200 ${
-                  cvProfileMode === 'testing'
-                    ? 'border-amber-500 ring-2 ring-amber-500/50'
-                    : 'border-control-grey'
-                } ${
-                  z21Online ? 'md:hover:border-signal-amber cursor-pointer' : 'opacity-50 cursor-not-allowed'
-                }`}
-                title={`Test Mode: ${cvProfileMode === 'testing' ? 'ACTIVE (zero momentum) - Press T' : 'OFF (normal) - Press T'}`}
-                onClick={() => {
-                  if (z21Online) {
-                    const event = new KeyboardEvent('keydown', { key: 'T', bubbles: true });
-                    window.dispatchEvent(event);
-                  }
-                }}
-                disabled={!z21Online}
-              >
-                <i className={`fa-solid ${cvProfileMode === 'testing' ? 'fa-flask-vial' : 'fa-check-circle'} text-lg md:text-xl ${cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}`}></i>
-                <div className="hidden md:block text-xs font-mono">
-                  <div className={cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}>
-                    Test
-                  </div>
-                </div>
-              </button>
-
-              {/* Analytics Dashboard (📊) - Desktop-only (1024px+) */}
-              <button
-                className="hidden lg:flex items-center gap-2 px-2 py-2 bg-control-dark rounded border border-control-grey transition-all duration-200 md:hover:border-signal-amber cursor-pointer"
-                title="Analytics Dashboard (Desktop)"
-                onClick={() => setAnalyticsOpen(true)}
-              >
-                <i className="fa-solid fa-chart-line text-lg md:text-xl text-blue-500"></i>
-                <div className="hidden md:block text-xs font-mono">
-                  <div className="text-blue-400">
-                    Analytics
-                  </div>
-                </div>
-              </button>
             </div>
           </div>
         </div>
