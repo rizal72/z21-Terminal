@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo, useMemo } from 'react';
 import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 // Locomotive colors (matches config.json locomotive_colors)
@@ -230,13 +230,21 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Prepare chart data with dynamic delta_t_cXX fields based on consist config
-  const prepareChartData = (events, consistConfig) => {
-    if (!events || events.length === 0) return [];
+  // Memoize filtered events to avoid recalculation on every render
+  const filteredDeltaTEvents = useMemo(() => {
+    if (!cumulativeData?.delta_t_events) return [];
+    return consistFilter === 'all' ?
+      cumulativeData.delta_t_events :
+      cumulativeData.delta_t_events.filter(e => e.consist_id === consistFilter);
+  }, [cumulativeData?.delta_t_events, consistFilter]);
 
-    const consistIds = Object.keys(consistConfig).map(Number);
+  // Memoize chart data preparation
+  const chartData = useMemo(() => {
+    if (!filteredDeltaTEvents || filteredDeltaTEvents.length === 0) return [];
 
-    return events
+    const consistIds = Object.keys(trackingConfig.consists).map(Number);
+
+    return filteredDeltaTEvents
       .sort((a, b) => a.timestamp - b.timestamp)
       .map((event, idx) => {
         // Build dynamic delta_t fields for each consist
@@ -254,7 +262,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           gate_type: event.gate_type
         };
       });
-  };
+  }, [filteredDeltaTEvents, trackingConfig.consists]);
+
+  // Memoize chart width calculation
+  const chartWidth = useMemo(() => {
+    return viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
+  }, [chartData.length, viewMode]);
 
   if (!isOpen) return null;
 
@@ -464,16 +477,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                 <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
                   <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
 
-                  {(() => {
-                    // Prepare chart data with dynamic delta_t_cXX fields
-                    const filteredEvents = consistFilter === 'all' ?
-                      cumulativeData.delta_t_events :
-                      cumulativeData.delta_t_events.filter(e => e.consist_id === consistFilter);
-
-                    const chartData = prepareChartData(filteredEvents, trackingConfig.consists);
-
-                    const chartWidth = viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
-                    const chartContent = (
+                  {chartData.length > 0 && (
+                    <div
+                      key={consistFilter}
+                      ref={viewMode === 'current' ? scrollRefSession : null}
+                      style={{ width: '100%', overflowX: viewMode === 'current' ? 'auto' : 'visible' }}
+                    >
                       <ResponsiveContainer width={chartWidth} height={400}>
                           <LineChart data={chartData}>
                             <CartesianGrid {...CHART_AXIS_STYLES.grid} />
@@ -515,16 +524,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                             ))}
                         </LineChart>
                       </ResponsiveContainer>
-                    );
-
-                    return viewMode === 'current' ? (
-                      <div key={`delta-t-${consistFilter}`} ref={scrollRefSession} className="overflow-x-auto">
-                        <div style={{ minWidth: chartWidth }}>
-                          {chartContent}
-                        </div>
-                      </div>
-                    ) : chartContent;
-                  })()}
+                    </div>
+                  )}
                 </div>
               )}
 
