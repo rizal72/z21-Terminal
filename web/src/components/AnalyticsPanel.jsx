@@ -87,6 +87,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   const scrollRefSession = useRef(null);
   const scrollRefFps = useRef(null);
 
+  // Ref for throttling mouseMove during box-select
+  const lastMouseMoveTime = useRef(0);
+
   // Desktop-only enforcement
   useEffect(() => {
     if (isOpen && window.innerWidth < 1024) {
@@ -230,6 +233,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
   const handleMouseMove = (e) => {
     if (viewMode !== 'overview' || !refAreaLeft || !e) return;
+
+    // Throttle to 50ms (20 updates/sec max) to reduce re-renders during drag
+    const now = Date.now();
+    if (now - lastMouseMoveTime.current < 50) return;
+    lastMouseMoveTime.current = now;
+
     setRefAreaRight(e.activeLabel);
   };
 
