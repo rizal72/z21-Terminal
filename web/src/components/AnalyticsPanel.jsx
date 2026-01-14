@@ -271,7 +271,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     yMin -= yPadding;
     yMax += yPadding;
 
-    setZoomDomain({ x: [left, right], y: [yMin, yMax] });
+    const newZoomDomain = { x: [left, right], y: [yMin, yMax] };
+    console.log('[DEBUG] Box-select zoom:', newZoomDomain, 'visibleData:', visibleData.length);
+    setZoomDomain(newZoomDomain);
     setRefAreaLeft(null);
     setRefAreaRight(null);
   };
@@ -649,6 +651,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                             )}
 
                             {/* Brush for zoom/pan - only in Overview mode */}
+                            {/* TEMPORARILY DISABLED FOR DEBUGGING BOX-SELECT
                             {viewMode === 'overview' && (
                               <Brush
                                 dataKey="index"
@@ -660,6 +663,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                                 onChange={(newIndexes) => setBrushIndexes(newIndexes)}
                               />
                             )}
+                            */}
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
