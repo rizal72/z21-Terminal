@@ -790,6 +790,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                             {/* ReferenceArea for box-select zoom - only during drag in Overview */}
                             {refAreaLeft && refAreaRight && (
                               <ReferenceArea
+                                yAxisId="left"
                                 x1={refAreaLeft}
                                 x2={refAreaRight}
                                 strokeOpacity={0.3}
