@@ -92,9 +92,27 @@ YOLO Tracking → Gate Crossing Detected → Analytics Logger (async)
 
 **Result**: **One session = one page load (from open to refresh/close)**
 
-**Zombie Cleanup** (two phases):
-1. **Daemon startup** (`tracking_daemon.py:369-381`): Deletes orphaned sessions from crashes
-2. **Session close** (`analytics_logger.py:180-189`): Purges OTHER zombie sessions (safe - current already handled)
+**Orphaned Session Cleanup** (✅ GUARANTEED CONSISTENCY - Updated 2025-01-14):
+- **Mechanism**: Single-session guarantee enforced at session creation
+- **When**: Every time a new session is created (`_create_session()`)
+- **How**: Closes ALL orphaned sessions (end_time = NULL) before creating new one
+- **Result**: ALWAYS exactly 1 open session (or 0 if idle), never multiple orphans
+
+**Orphaned Session Handling**:
+1. Query: `SELECT id FROM sessions WHERE end_time IS NULL`
+2. For each orphaned session:
+   - If has delta_t events (valid session) → close and validate (set end_time, validated=1)
+   - If NO delta_t events (invalid session) → delete session + all events
+3. Then create new session
+
+**Why this approach**:
+- ✅ **Proactive**: Catches orphans before they accumulate (not reactive cleanup)
+- ✅ **Consistent**: Guaranteed single open session (no timing dependencies)
+- ✅ **Robust**: Handles crashes, force-kills, network disconnects automatically
+- ✅ **Simple**: One cleanup point (session creation), not scattered across codebase
+
+**Code Evidence**:
+- `analytics_logger.py:95-140` - `_create_session()` with orphan cleanup
 
 ### Database Schema
 
@@ -136,22 +154,41 @@ if event_type == 'delta_t' and not self.session_validated:
     # Update DB: validated = 1
 ```
 
-**Zombie Session Cleanup** (2025-01-12):
+**Orphaned Session Cleanup** (2025-01-14):
 ```python
-async def close_session(self):
-    # 1. Handle current session first (end_time or delete)
-    if not self.session_validated:
-        DELETE FROM events/sessions WHERE session_id = self.session_id
+def _create_session(self):
+    """Close ALL orphaned sessions before creating new one"""
 
-    # 2. Cleanup OTHER zombie sessions (safe - current already done)
-    DELETE FROM events WHERE session_id IN (SELECT id FROM sessions WHERE validated = 0)
-    DELETE FROM sessions WHERE validated = 0
+    # 1. Find all sessions with end_time = NULL
+    cursor.execute("SELECT id FROM sessions WHERE end_time IS NULL")
+    orphaned_sessions = cursor.fetchall()
+
+    # 2. Close or delete each orphan
+    for orphan_id in orphaned_sessions:
+        # Check if session has delta_t events (valid session)
+        cursor.execute(
+            "SELECT COUNT(*) FROM events WHERE session_id = ? AND event_type = 'delta_t'",
+            (orphan_id,)
+        )
+        delta_t_count = cursor.fetchone()[0]
+
+        if delta_t_count > 0:
+            # Valid session - close and validate
+            UPDATE sessions SET end_time = ?, validated = 1 WHERE id = ?
+        else:
+            # Invalid session - delete completely
+            DELETE FROM events WHERE session_id = ?
+            DELETE FROM sessions WHERE id = ?
+
+    # 3. Now create new session (guaranteed single open session)
+    INSERT INTO sessions (id, start_time, validated, event_count) VALUES (?, ?, 0, 0)
 ```
 
-**Why cleanup on close, not startup**:
-- ✅ Zero race conditions (current session finalized first)
-- ✅ Works with sessions of any duration
-- ✅ Safe from timing bugs
+**Why cleanup on session creation**:
+- ✅ **Proactive**: Prevents orphan accumulation (catches at root cause)
+- ✅ **Single-session guarantee**: Enforced structurally, not by timing
+- ✅ **Crash-proof**: Handles ANY abnormal termination (crash, kill -9, network loss)
+- ✅ **Simple**: One cleanup point, clear logic, no race conditions
 
 ---
 
@@ -1035,15 +1072,24 @@ VALUES (?, ?, 'loco_fault', '{"address": 7, "fault_type": "derailment", "gate_id
 4. **Refresh button** → Reload data from API, cards update, chart extends right
 5. **Close Analytics (X or A key)** → Nothing closes on backend (session continues)
 
-### Known Behavior & Limitations (UPDATED 2025-01-13)
+### Known Behavior & Limitations (UPDATED 2025-01-14)
 
 1. **Session closes on page close/refresh** ✅ DETERMINISTIC
    - **Every refresh = NEW session** (100% guaranteed via sendBeacon)
    - If you keep page open: ONE long session (same session_id)
    - If you refresh/close/reopen: NEW session ALWAYS (daemon forced to stop)
    - Cards in Current view show data from current page load
-2. **No auto-refresh** → Must manually click Refresh to see new events
-3. **Session duration in Current** → Shows N/A if session not validated yet (no Δt calculated)
+
+2. **Orphaned session recovery** ✅ AUTOMATIC (NEW 2025-01-14)
+   - **Every new session closes ALL orphans** (end_time = NULL) before starting
+   - Handles crashes, force-kills, network disconnects automatically
+   - Valid orphans (with delta_t events) → closed and validated
+   - Invalid orphans (no delta_t events) → deleted completely
+   - Result: **ALWAYS exactly 1 open session (or 0 if idle)**, never orphans accumulate
+
+3. **No auto-refresh** → Must manually click Refresh to see new events
+
+4. **Session duration in Current** → Shows N/A if session not validated yet (no Δt calculated)
 
 ---
 
@@ -1455,7 +1501,44 @@ if (viewMode === 'current' && currentSession) {
 
 ---
 
-**Last Updated**: 2025-01-14 (box-select zoom + Y-axis improvements)
+**Investigation 3** (orphaned session recovery mechanism - 2025-01-14):
+
+**PROBLEM DISCOVERED**: Orphaned sessions still possible despite sendBeacon
+- Crash scenarios: power loss, kill -9, OS force-quit, network disconnect
+- Result: Sessions left with `end_time = NULL` in database
+- Reports tab didn't show these orphaned sessions (filtered by end_time IS NOT NULL)
+
+**SOLUTION IMPLEMENTED** (2025-01-14):
+- **Proactive cleanup at session creation** (not reactive cleanup on close)
+- **Mechanism**: `_create_session()` closes ALL orphans before creating new session
+- **Guarantee**: ALWAYS exactly 1 open session (or 0 if idle), never multiple orphans
+
+**Algorithm**:
+1. Query database: `SELECT id FROM sessions WHERE end_time IS NULL`
+2. For each orphaned session:
+   - Check if has delta_t events (valid coordinated operation)
+   - **Valid orphan** → Set end_time, validated=1 (preserve historical data)
+   - **Invalid orphan** → DELETE session + events (no useful data)
+3. Create new session (now guaranteed to be the ONLY open session)
+
+**Code Changes**:
+- `backend/analytics_logger.py:95-140` - `_create_session()` with orphan cleanup
+- Removed old zombie cleanup from `close_session()` (no longer needed)
+
+**Why this approach**:
+- ✅ **Structural guarantee**: Enforced at creation, not by timing
+- ✅ **Crash-proof**: Handles ANY abnormal termination automatically
+- ✅ **No accumulation**: Orphans cleaned up immediately on next session start
+- ✅ **Data preservation**: Valid orphans (with delta_t) are recovered, not lost
+
+**VERIFIED BEHAVIOR** (after implementation):
+- Backend restart → finds orphaned session → closes it → creates new session
+- Reports tab → shows recovered orphaned session in history
+- Analytics → correct session count, no duplicate open sessions
+
+---
+
+**Last Updated**: 2025-01-14 (orphaned session recovery + Reports tab UX improvements)
 **Working State**: Interactive zoom, rotated labels, sticky legend
 
 ---

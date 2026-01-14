@@ -412,5 +412,125 @@ return reportsData.sessions.filter(session =>
 
 ---
 
-**Last Updated**: 2026-01-14
+## Changelog - 2026-01-14 UX Improvements
+
+### Orphaned Session Recovery (CRITICAL FIX)
+
+**Problem**: Sessioni rimaste con `end_time = NULL` dopo crash/force-quit non apparivano in Reports
+
+**Solution**: Proactive cleanup in `_create_session()`
+- Ogni nuova sessione chiude TUTTE le orphaned sessions (end_time = NULL)
+- Valid orphans (con delta_t events) → chiuse e validate (dati preservati)
+- Invalid orphans (no delta_t) → eliminate completamente
+- **Guarantee**: SEMPRE 1 sola sessione aperta (o 0 se idle)
+
+**Code**: `backend/analytics_logger.py:95-140`
+
+**Impact**: Reports tab ora mostra TUTTE le sessioni storiche, incluse quelle recuperate da crash
+
+---
+
+### Italian Date Format
+
+**Change**: Backend date format da `YYYY-MM-DD` a `DD-MM-YYYY`
+- `backend/main.py:2232` - strftime('%d-%m-%Y')
+- Frontend parsing aggiornato per split su `[day, month, year]`
+
+**Impact**: Date più leggibili per utente italiano
+
+---
+
+### Historical Trend Chart Improvements
+
+**1. X-axis Spacing Optimization**
+- Margin bottom: 60px → 35px (finale dopo test)
+- XAxis height: 60px → 35px
+- Date format compatto: "14-01 10:16" invece di "2026-01-14 10:16"
+- **Result**: +25px spazio verticale chart, label leggibili
+
+**2. Consistent Consist Colors**
+- Fix: `getConsistStrokeColor()` non riceveva `trackingConfig.consists`
+- Linee ora usano colori corretti: C10 fuchsia, C11 blue (come altre chart)
+
+**3. Threshold Legend**
+- Aggiunta legenda SYNCED (<1.0s) / WARNING (1.0-1.5s) / CRITICAL (≥1.5s)
+- Cerchi colorati: verde/ambra/rosso
+- Presente anche su Δt Trends chart (Current/Overview)
+
+---
+
+### Collapsible Panels (ALL TABS)
+
+**Feature**: Tutti i pannelli ora collapsabili con click su header
+
+**Panels affected**:
+- Session Statistics cards
+- Δt Trends Chart
+- YOLO Performance Monitoring
+- Locomotive Operating Time
+- Session History Table (Reports)
+- Historical Trend Chart (Reports)
+
+**Implementation**:
+- Header clickable con hover transition
+- Chevron icon: → collapsed, ↓ expanded
+- State in `useState` (non localStorage - keep it simple)
+- All expanded by default
+
+**Impact**: Migliore organizzazione per sessioni lunghe con molti dati
+
+---
+
+### Reports Tab - Overview Stats Cards
+
+**Feature**: Card Overview (Total Sessions, Gate Crossings, Critical Events) ora anche in Reports tab
+
+**Why**: Utile vedere statistiche globali mentre si analizzano sessioni individuali
+
+**Implementation**: Riutilizzo codice Overview tab, filtrate per consist (All/C10/C11)
+
+**Result**: Coerenza tra Overview e Reports, context switching più facile
+
+---
+
+### Tab Icons
+
+**Fix**: Reports tab icon `fa-file-chart-line` (non esisteva) → `fa-table-list`
+
+**Result**: Tutti e 3 i tab ora hanno icona visibile:
+- Current: `fa-magnifying-glass-chart`
+- Overview: `fa-chart-area`
+- Reports: `fa-table-list`
+
+---
+
+### Event Count Fix
+
+**Problem**: Events column mostrava count di TUTTI gli event types (delta_t + yolo_fps + yolo_confidence + loco_operating_time)
+
+**Solution**: Calcola `total_events` come sum di `total_crossings` da tutti i consist
+
+**Code**: `backend/main.py:2234-2235`
+
+**Impact**: Events count ora accurato (solo gate crossings)
+
+---
+
+### Session Index X-axis (MAJOR FIX)
+
+**Problem**: Historical Trend con date duplicate (2+ sessioni stessa data) mostrava tooltip solo per UNA sessione
+
+**Root cause**: Recharts overlappava punti con stesso `dataKey="date"` (X-coordinate identica)
+
+**Solution**: X-axis usa `dataKey="index"` (1, 2, 3...), `tickFormatter` mostra date
+
+**Impact**: Ogni sessione ha X-coordinate unica, tooltip funziona sempre
+
+---
+
+**Summary**: 28 commits oggi, focus su robustezza (orphaned sessions), UX (collapsible panels, legends), e fix critici (tooltip, event count).
+
+---
+
+**Last Updated**: 2026-01-14 (post UX improvements)
 **Author**: Riccardo Sallusti + Claude Sonnet 4.5
