@@ -453,9 +453,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     // No valid data found
     if (yMin === Infinity || yMax === -Infinity) return ['auto', 'auto'];
 
-    // Add 10% padding
+    // Add 5% padding
     const range = yMax - yMin;
-    const padding = range * 0.1;
+    const padding = range * 0.05;
     return [yMin - padding, yMax + padding];
   }, [displayData, segmentCount, trackingConfig.consists, zoomDomain]);
 
