@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, memo, useMemo } from 'react';
-import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Brush } from 'recharts';
+import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea, Brush } from 'recharts';
 
 // Locomotive colors (matches config.json locomotive_colors)
 const LOCO_COLORS = {
@@ -77,6 +77,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     idle_timeout_seconds: 10,
     consists: {} // { 10: { name, lead_address, rear_address, addresses: [...] }, 11: {...} }
   });
+
+  // Zoom state for Overview mode (box-select + brush)
+  const [refAreaLeft, setRefAreaLeft] = useState(null);
+  const [refAreaRight, setRefAreaRight] = useState(null);
+  const [zoomDomain, setZoomDomain] = useState(null); // { x: [min, max], y: [min, max] }
+  const [brushIndexes, setBrushIndexes] = useState(null); // { startIndex, endIndex }
 
   // Refs for auto-scroll to end
   const scrollRefSession = useRef(null);
@@ -214,6 +220,67 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     requestAnimationFrame(() => {
       document.body.offsetHeight;
     });
+  };
+
+  // Zoom handlers for Overview mode (box-select + brush + double-click reset)
+  const handleMouseDown = (e) => {
+    if (viewMode !== 'overview' || !e) return;
+    setRefAreaLeft(e.activeLabel);
+    setRefAreaRight(e.activeLabel);
+  };
+
+  const handleMouseMove = (e) => {
+    if (viewMode !== 'overview' || !refAreaLeft || !e) return;
+    setRefAreaRight(e.activeLabel);
+  };
+
+  const handleMouseUp = () => {
+    if (viewMode !== 'overview' || !refAreaLeft || !refAreaRight) {
+      setRefAreaLeft(null);
+      setRefAreaRight(null);
+      return;
+    }
+
+    // Determine zoom direction (left-to-right or right-to-left)
+    let [left, right] = [refAreaLeft, refAreaRight];
+    if (left > right) [left, right] = [right, left];
+
+    // Calculate Y domain from visible data in selected X range
+    const visibleData = chartData.filter(d => {
+      const x = viewMode === 'current' ? d.time : d.index;
+      return x >= left && x <= right;
+    });
+
+    const consistIds = Object.keys(trackingConfig.consists).map(Number);
+    let yMin = Infinity, yMax = -Infinity;
+
+    visibleData.forEach(d => {
+      for (let seg = 0; seg < segmentCount; seg++) {
+        consistIds.forEach(cid => {
+          const value = d[`delta_t_c${cid}_seg${seg}`];
+          if (value !== null && value !== undefined && !isNaN(value)) {
+            yMin = Math.min(yMin, value);
+            yMax = Math.max(yMax, value);
+          }
+        });
+      }
+    });
+
+    // Add 10% padding to Y axis
+    const yPadding = (yMax - yMin) * 0.1;
+    yMin -= yPadding;
+    yMax += yPadding;
+
+    setZoomDomain({ x: [left, right], y: [yMin, yMax] });
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
+  };
+
+  const handleDoubleClick = () => {
+    if (viewMode !== 'overview') return;
+    // Reset zoom domain and brush
+    setZoomDomain(null);
+    setBrushIndexes(null);
   };
 
   // Format timestamp for chart X-axis
@@ -514,15 +581,28 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       style={{ width: '100%', overflowX: viewMode === 'current' ? 'auto' : 'visible' }}
                     >
                       <ResponsiveContainer width={chartWidth} height={400}>
-                          <LineChart data={chartData}>
+                          <LineChart
+                            data={chartData}
+                            onMouseDown={handleMouseDown}
+                            onMouseMove={handleMouseMove}
+                            onMouseUp={handleMouseUp}
+                            onDoubleClick={handleDoubleClick}
+                          >
                             <CartesianGrid {...CHART_AXIS_STYLES.grid} />
                       {/* XAxis: time in Current (readable), index in Overview (compressed) */}
                       <XAxis
                         dataKey={viewMode === 'current' ? 'time' : 'index'}
                         {...CHART_AXIS_STYLES.axis}
+                        domain={zoomDomain ? zoomDomain.x : ['auto', 'auto']}
+                        allowDataOverflow={true}
                         label={viewMode === 'overview' ? { value: 'Event #', position: 'insideBottom', offset: -5, fill: '#9CA3AF' } : undefined}
                       />
-                      <YAxis {...CHART_AXIS_STYLES.axis} label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                      <YAxis
+                        {...CHART_AXIS_STYLES.axis}
+                        domain={zoomDomain ? zoomDomain.y : ['auto', 'auto']}
+                        allowDataOverflow={true}
+                        label={{ value: 'Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
+                      />
                       <Tooltip
                         {...TOOLTIP_STYLES}
                         formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
@@ -557,6 +637,17 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                               ));
                             })}
 
+                            {/* ReferenceArea for box-select zoom - only during drag in Overview */}
+                            {refAreaLeft && refAreaRight && (
+                              <ReferenceArea
+                                x1={refAreaLeft}
+                                x2={refAreaRight}
+                                strokeOpacity={0.3}
+                                fill="#3b82f6"
+                                fillOpacity={0.3}
+                              />
+                            )}
+
                             {/* Brush for zoom/pan - only in Overview mode */}
                             {viewMode === 'overview' && (
                               <Brush
@@ -564,6 +655,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                                 height={30}
                                 stroke="#3b82f6"
                                 fill="#1e293b"
+                                startIndex={brushIndexes?.startIndex}
+                                endIndex={brushIndexes?.endIndex}
+                                onChange={(newIndexes) => setBrushIndexes(newIndexes)}
                               />
                             )}
                         </LineChart>
