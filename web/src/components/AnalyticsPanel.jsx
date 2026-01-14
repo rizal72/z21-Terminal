@@ -559,6 +559,14 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     });
   }, [reportsData, trackingConfig]);
 
+  // Filtered sessions for Reports table (filter by consist)
+  const filteredReportsSessions = useMemo(() => {
+    if (!reportsData?.sessions) return [];
+    if (consistFilter === 'all') return reportsData.sessions;
+    // Show only sessions that have data for the selected consist
+    return reportsData.sessions.filter(session => session.consists?.[consistFilter] !== undefined);
+  }, [reportsData, consistFilter]);
+
   if (!isOpen) return null;
 
   return (
@@ -1081,11 +1089,11 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-xl font-semibold text-white">Session History</h3>
                   <span className="text-slate-400 text-sm">
-                    {reportsData.sessions?.length || 0} sessions
+                    {filteredReportsSessions.length} sessions
                   </span>
                 </div>
 
-                {reportsData.sessions && reportsData.sessions.length > 0 ? (
+                {filteredReportsSessions.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="min-w-full">
                       <thead>
@@ -1108,7 +1116,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {reportsData.sessions.map(session => (
+                        {filteredReportsSessions.map(session => (
                           <tr
                             key={session.id}
                             onClick={() => {
