@@ -1131,6 +1131,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                             <td className="px-4 py-3 text-sm text-slate-300">{session.total_events}</td>
                             {Object.keys(trackingConfig.consists || {}).sort((a, b) => a - b).map(cid => {
                               if (consistFilter === 'all' || consistFilter == cid) {
+                                console.log(`[Reports Table] consistFilter=${consistFilter}, cid=${cid} (type: ${typeof cid}), session.consists keys:`, Object.keys(session.consists || {}));
                                 const stats = session.consists?.[cid];
                                 if (stats) {
                                   const avgDt = stats.avg_delta_t;
