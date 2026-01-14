@@ -122,7 +122,10 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     if (isOpen) {
       fetch('/api/config/tracking')
         .then(res => res.json())
-        .then(data => setTrackingConfig(data))
+        .then(data => setTrackingConfig({
+          idle_timeout_seconds: data.idle_timeout_seconds || 10,
+          consists: data.consists || {}
+        }))
         .catch(err => console.warn('Failed to load tracking config, using default 10s:', err));
     }
   }, [isOpen]);
@@ -246,7 +249,23 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
         return;
       }
 
-      setReportsData(data);
+      // Validate response structure
+      if (!data.sessions || !Array.isArray(data.sessions)) {
+        setError('Invalid reports data format');
+        setReportsData(null);
+        return;
+      }
+
+      // Ensure each session has a consists object (even if empty)
+      const validatedData = {
+        ...data,
+        sessions: data.sessions.map(session => ({
+          ...session,
+          consists: session.consists || {}
+        }))
+      };
+
+      setReportsData(validatedData);
     } catch (err) {
       setError(`Failed to load reports: ${err.message}`);
       setReportsData(null);
@@ -521,14 +540,14 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
   // Reports chart data (historical trend)
   const reportsChartData = useMemo(() => {
-    if (!reportsData?.sessions) return [];
+    if (!reportsData?.sessions || !trackingConfig?.consists) return [];
     return [...reportsData.sessions].reverse().map(session => {
       const dataPoint = {
         session_id: session.id,
         date: session.date,
         timestamp: session.start_time
       };
-      Object.keys(trackingConfig.consists || {}).forEach(cid => {
+      Object.keys(trackingConfig.consists).forEach(cid => {
         const stats = session.consists?.[cid];
         dataPoint[`avg_delta_t_c${cid}`] = stats ? stats.avg_delta_t : null;
       });
