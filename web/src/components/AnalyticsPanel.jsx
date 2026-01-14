@@ -1070,7 +1070,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           )}
 
           {/* Reports Tab Content */}
-          {viewMode === 'reports' && reportsData && !loading && (
+          {viewMode === 'reports' && reportsData && !loading && trackingConfig?.consists && (
             <div className="space-y-6">
               {/* Session History Table */}
               <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
@@ -1223,6 +1223,14 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Reports Tab - Loading trackingConfig */}
+          {viewMode === 'reports' && !trackingConfig?.consists && !loading && (
+            <div className="text-center py-12">
+              <i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i>
+              <p className="mt-4 text-slate-400">Loading configuration...</p>
             </div>
           )}
 
