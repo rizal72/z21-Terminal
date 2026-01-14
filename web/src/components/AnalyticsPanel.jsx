@@ -742,7 +742,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         domain={yDomain}
                         allowDataOverflow={true}
                         tickFormatter={(value) => value.toFixed(2)}
-                        label={{ value: 'Δt (seconds)', angle: 90, position: 'insideLeft', offset: -10, fill: '#9CA3AF' }}
+                        label={{ value: 'Δt (seconds)', angle: 90, position: 'insideLeft', fill: '#9CA3AF' }}
                       />
                       {/* Duplicate YAxis on right for Current mode (always visible when scrolling) */}
                       {viewMode === 'current' && (
@@ -753,7 +753,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           domain={yDomain}
                           allowDataOverflow={true}
                           tickFormatter={(value) => value.toFixed(2)}
-                          label={{ value: 'Δt (seconds)', angle: 90, position: 'insideRight', offset: 10, fill: '#9CA3AF' }}
+                          label={{ value: 'Δt (seconds)', angle: 90, position: 'insideRight', fill: '#9CA3AF' }}
                         />
                       )}
                       <Tooltip
