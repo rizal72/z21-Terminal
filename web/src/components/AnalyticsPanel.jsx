@@ -69,6 +69,13 @@ const getConsistBgClass = (consistId, consistConfig) => {
   return index >= 0 ? CONSIST_BG_CLASSES[index % CONSIST_BG_CLASSES.length] : 'bg-slate-600';
 };
 
+// Helper: format delta t with sign (always show + for positive values)
+const formatDeltaT = (value, decimals = 2) => {
+  if (value === null || value === undefined || isNaN(value)) return 'N/A';
+  const sign = value >= 0 ? '+' : '';
+  return `${sign}${value.toFixed(decimals)}`;
+};
+
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current', 'overview', or 'reports'
   const [cumulativeData, setCumulativeData] = useState(null);
@@ -924,7 +931,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         {...CHART_AXIS_STYLES.axis}
                         domain={yDomain}
                         allowDataOverflow={true}
-                        tickFormatter={(value) => value.toFixed(2)}
+                        tickFormatter={(value) => formatDeltaT(value)}
                         label={{ value: 'Δt (seconds)', angle: 90, position: 'insideLeft', fill: '#9CA3AF' }}
                       />
                       {/* Duplicate YAxis on right for Current mode (always visible when scrolling) */}
@@ -935,13 +942,13 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           {...CHART_AXIS_STYLES.axis}
                           domain={yDomain}
                           allowDataOverflow={true}
-                          tickFormatter={(value) => value.toFixed(2)}
+                          tickFormatter={(value) => formatDeltaT(value)}
                           label={{ value: 'Δt (seconds)', angle: 90, position: 'insideRight', fill: '#9CA3AF' }}
                         />
                       )}
                       <Tooltip
                         {...TOOLTIP_STYLES}
-                        formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
+                        formatter={(value) => value !== null ? formatDeltaT(value) + 's' : 'N/A'}
                       />
                       <ReferenceLine yAxisId="left" y={0} stroke="#10b981" strokeDasharray="3 3" />
                       <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.normal || 1.0} stroke="#f59e0b" strokeDasharray="3 3" />
@@ -1306,7 +1313,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                                   return (
                                     <Fragment key={cid}>
                                       <td className={`px-4 py-3 text-sm font-medium ${colorClass}`}>
-                                        {avgDt.toFixed(2)}s
+                                        {formatDeltaT(avgDt)}s
                                       </td>
                                       <td className="px-4 py-3 text-sm text-slate-300">
                                         {stats.synced_percent.toFixed(1)}%
@@ -1421,7 +1428,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                                 if (entry.value === null || entry.value === undefined) return null;
                                 return (
                                   <p key={index} style={{ color: entry.color, margin: '4px 0' }}>
-                                    {entry.name}: {entry.value.toFixed(2)}s
+                                    {entry.name}: {formatDeltaT(entry.value)}s
                                   </p>
                                 );
                               })}
@@ -1540,13 +1547,13 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                                 Math.abs(stats.avg_delta_t) < 1.0 ? 'text-green-400' :
                                 Math.abs(stats.avg_delta_t) < 1.5 ? 'text-amber-400' : 'text-red-400'
                               }`}>
-                                {stats.avg_delta_t.toFixed(3)}s
+                                {formatDeltaT(stats.avg_delta_t, 3)}s
                               </span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-slate-400">Range:</span>
                               <span className="font-mono text-sm text-white">
-                                {stats.min_delta_t.toFixed(2)}s to {stats.max_delta_t.toFixed(2)}s
+                                {formatDeltaT(stats.min_delta_t)}s to {formatDeltaT(stats.max_delta_t)}s
                               </span>
                             </div>
                             <div className="flex justify-between">
