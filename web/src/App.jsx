@@ -1099,40 +1099,8 @@ function App() {
             {/* Spacer */}
             <div className="flex-grow"></div>
 
-            {/* Right: Emergency + Test + Status Badges */}
+            {/* Right: Test + Status Badges + Emergency */}
             <div className="flex items-center gap-2 md:gap-2 lg:gap-3">
-              {/* Global Emergency Stop */}
-              <button
-                onClick={handleEmergencyStop}
-                disabled={!z21Online}
-                className={`emergency-stop ${!trackPower ? 'active' : ''} disabled:opacity-50 disabled:cursor-not-allowed aspect-square md:aspect-auto md:w-[140px]`}
-                title={
-                  !z21Online
-                    ? 'Z21 offline - Cannot control power'
-                    : trackPower
-                      ? 'Cut track power (Emergency Stop) - Press ESC'
-                      : 'Restore track power - Press ESC'
-                }
-              >
-                <div className="flex items-center justify-center px-2 py-2 md:px-6 md:py-3">
-                  {/* Contenuto raggruppato: icona + testo come blocco unico */}
-                  <div className="flex items-center gap-2">
-                    {trackPower ? (
-                      <i className="fa-solid fa-triangle-exclamation text-2xl md:text-3xl"></i>
-                    ) : (
-                      <i className="fa-solid fa-power-off text-2xl md:text-3xl"></i>
-                    )}
-                    {/* Testo su tablet/desktop */}
-                    <div className="hidden md:flex flex-col items-start text-left h-[44px] justify-center">
-                      <span className="uppercase tracking-wider text-sm font-bold w-full text-left leading-tight">
-                        {trackPower ? 'Stop All' : 'Restart'}
-                      </span>
-                      <span className="text-[10px] md:text-xs opacity-70 w-full text-left leading-tight">{trackPower ? <kbd className="pl-0 pr-1 bg-white/10 rounded text-[10px]">ESC</kbd> : <>Power On <kbd className="pl-0 pr-1 bg-white/10 rounded text-[10px]">ESC</kbd></>}</span>
-                    </div>
-                  </div>
-                </div>
-              </button>
-
               {/* CV Profile Mode Badge (🎚️) - Click to toggle Test/Normal */}
               <button
                 className={`flex items-center gap-2 px-2 py-2 bg-control-dark rounded border transition-all duration-200 ${
@@ -1254,6 +1222,38 @@ function App() {
                   </div>
                 </div>
               </div>
+
+              {/* Global Emergency Stop - Rightmost */}
+              <button
+                onClick={handleEmergencyStop}
+                disabled={!z21Online}
+                className={`emergency-stop ${!trackPower ? 'active' : ''} disabled:opacity-50 disabled:cursor-not-allowed aspect-square md:aspect-auto md:w-[140px]`}
+                title={
+                  !z21Online
+                    ? 'Z21 offline - Cannot control power'
+                    : trackPower
+                      ? 'Cut track power (Emergency Stop) - Press ESC'
+                      : 'Restore track power - Press ESC'
+                }
+              >
+                <div className="flex items-center justify-center px-2 py-2 md:px-6 md:py-3">
+                  {/* Contenuto raggruppato: icona + testo come blocco unico */}
+                  <div className="flex items-center gap-2">
+                    {trackPower ? (
+                      <i className="fa-solid fa-triangle-exclamation text-2xl md:text-3xl"></i>
+                    ) : (
+                      <i className="fa-solid fa-power-off text-2xl md:text-3xl"></i>
+                    )}
+                    {/* Testo su tablet/desktop */}
+                    <div className="hidden md:flex flex-col items-start text-left h-[44px] justify-center">
+                      <span className="uppercase tracking-wider text-sm font-bold w-full text-left leading-tight">
+                        {trackPower ? 'Stop All' : 'Restart'}
+                      </span>
+                      <span className="text-[10px] md:text-xs opacity-70 w-full text-left leading-tight">{trackPower ? <kbd className="pl-0 pr-1 bg-white/10 rounded text-[10px]">ESC</kbd> : <>Power On <kbd className="pl-0 pr-1 bg-white/10 rounded text-[10px]">ESC</kbd></>}</span>
+                    </div>
+                  </div>
+                </div>
+              </button>
             </div>
           </div>
         </div>

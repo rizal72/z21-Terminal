@@ -73,7 +73,7 @@ export default function WebSocketStatsPopover({ isOpen, onClose, stats, isConnec
       )}
 
       {/* Popover */}
-      <div className={`fixed top-20 right-4 w-80 bg-control-dark border-2 border-control-grey rounded-lg shadow-2xl z-[100] ${
+      <div className={`fixed top-16 right-12 w-80 bg-control-dark border-2 border-control-grey rounded-lg shadow-2xl z-[100] ${
         isHover ? '' : 'animate-slide-in'
       }`}>
         {/* Header */}
