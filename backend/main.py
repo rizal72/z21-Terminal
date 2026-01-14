@@ -2231,6 +2231,9 @@ async def get_analytics_reports(
             duration_seconds = end_time - start_time
             session_date = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d')
 
+            # Count ONLY delta_t events (gate crossings), not all event types
+            total_delta_t_events = sum(cd['total_crossings'] for cd in consists.values())
+
             result_sessions.append({
                 'id': session_id,
                 'date': session_date,
@@ -2238,7 +2241,7 @@ async def get_analytics_reports(
                 'end_time': end_time,
                 'duration_seconds': int(duration_seconds),
                 'duration_formatted': format_duration_hms(duration_seconds),
-                'total_events': event_count,
+                'total_events': total_delta_t_events,  # Only gate crossings, not all event types
                 'consists': consists
             })
 
