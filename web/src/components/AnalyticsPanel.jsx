@@ -1093,6 +1093,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                               {...CHART_AXIS_STYLES.axis}
                             />
                             <YAxis {...CHART_AXIS_STYLES.axis} domain={[0, 140]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                            {/* Duplicate YAxis on right for Current mode (always visible when scrolling) */}
+                            {viewMode === 'current' && (
+                              <YAxis
+                                yAxisId="right"
+                                orientation="right"
+                                {...CHART_AXIS_STYLES.axis}
+                                domain={[0, 140]}
+                                label={{ value: 'FPS', angle: 90, position: 'insideRight', fill: '#9CA3AF' }}
+                              />
+                            )}
                             <Tooltip
                               {...TOOLTIP_STYLES}
                               formatter={(value) => value.toFixed(1) + ' FPS'}
