@@ -553,7 +553,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                                 strokeWidth={viewMode === 'current' ? 2 : 1.5}
                                 dot={viewMode === 'current' ? { r: 4 } : false}
                                 name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
-                                connectNulls={false}
+                                connectNulls={true}
                               />
                             ))}
 
