@@ -341,7 +341,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       return x >= left && x <= right;
     });
 
-    const consistIds = Object.keys(trackingConfig.consists).map(Number);
+    const consistIds = Object.keys(trackingConfig.consists || {}).map(Number);
     let yMin = Infinity, yMax = -Infinity;
 
     // Different dataKey structure based on session breaks mode
@@ -413,7 +413,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   const { chartData, segmentCount } = useMemo(() => {
     if (!filteredDeltaTEvents || filteredDeltaTEvents.length === 0) return { chartData: [], segmentCount: 0 };
 
-    const consistIds = Object.keys(trackingConfig.consists).map(Number);
+    const consistIds = Object.keys(trackingConfig.consists || {}).map(Number);
     const sortedEvents = [...filteredDeltaTEvents].sort((a, b) => a.timestamp - b.timestamp);
 
     // FAST PATH: No session breaks (default) - simple dataset
@@ -494,7 +494,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
     if (displayData.length === 0) return ['auto', 'auto'];
 
-    const consistIds = Object.keys(trackingConfig.consists).map(Number);
+    const consistIds = Object.keys(trackingConfig.consists || {}).map(Number);
     let yMin = Infinity, yMax = -Infinity;
 
     // Scan all data to find min/max
@@ -547,7 +547,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
         date: session.date,
         timestamp: session.start_time
       };
-      Object.keys(trackingConfig.consists).forEach(cid => {
+      Object.keys(trackingConfig.consists || {}).forEach(cid => {
         const stats = session.consists?.[cid];
         dataPoint[`avg_delta_t_c${cid}`] = stats ? stats.avg_delta_t : null;
       });
@@ -639,7 +639,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               >
                 All
               </button>
-              {Object.keys(trackingConfig.consists)
+              {Object.keys(trackingConfig.consists || {})
                 .map(Number)
                 .sort((a, b) => a - b)
                 .map((consistId) => (
@@ -811,7 +811,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   {/* Custom Legend (always shown when All filter, both Current and Overview) */}
                   {chartData.length > 0 && consistFilter === 'all' && (
                     <div className="flex gap-4 justify-center mb-4 pb-3 border-b border-slate-700">
-                      {Object.keys(trackingConfig.consists)
+                      {Object.keys(trackingConfig.consists || {})
                         .map(Number)
                         .sort((a, b) => a - b)
                         .map((consistId) => (
@@ -879,7 +879,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.warning || 1.5)} stroke="#ef4444" strokeDasharray="3 3" />
 
                           {/* Dynamic lines: simple or segmented based on showSessionBreaks */}
-                          {Object.keys(trackingConfig.consists)
+                          {Object.keys(trackingConfig.consists || {})
                             .map(Number)
                             .sort((a, b) => a - b)
                             .filter(consistId => consistFilter === 'all' || consistFilter === consistId)
