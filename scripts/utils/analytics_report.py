@@ -41,7 +41,7 @@ def get_sessions(conn, limit=10):
 
 
 def analyze_session(conn, session_id):
-    """Analyze Δt patterns for a specific session"""
+    """Analyze dT patterns for a specific session"""
     cursor = conn.cursor()
 
     # Get all delta_t events for this session
@@ -124,13 +124,13 @@ def print_report(sessions, analysis):
     print("RECENT SESSIONS:")
     print("-" * 80)
     for i, session in enumerate(sessions, 1):
-        status = "✓ CLOSED" if session['end_time'] else "⏱ RUNNING"
+        status = "[CLOSED]" if session['end_time'] else "[RUNNING]"
         duration = f"{session['duration_min']:.1f} min" if session['duration_min'] else "N/A"
         print(f"{i}. {session['id']} | {status} | Duration: {duration} | Events: {session['event_count']}")
     print()
 
     if not analysis:
-        print("No Δt events found in selected session.")
+        print("No dT events found in selected session.")
         return
 
     # Detailed analysis
@@ -142,7 +142,7 @@ def print_report(sessions, analysis):
     for consist_id, stats in sorted(analysis['consists'].items()):
         print(f"CONSIST {consist_id}:")
         print(f"  Total Crossings: {stats['count']}")
-        print(f"  Average Δt: {stats['avg_delta_t']:+.3f}s")
+        print(f"  Average dT: {stats['avg_delta_t']:+.3f}s")
         print(f"  Range: {stats['min_delta_t']:+.3f}s to {stats['max_delta_t']:+.3f}s")
         print(f"  Trend: {stats['trend']}")
         print(f"  Status Distribution:")
@@ -153,8 +153,8 @@ def print_report(sessions, analysis):
 
     print("=" * 80)
     print("INTERPRETATION:")
-    print("- Positive Δt: Lead locomotive arrives first (rear is slower)")
-    print("- Negative Δt: Rear locomotive arrives first (lead is slower)")
+    print("- Positive dT: Lead locomotive arrives first (rear is slower)")
+    print("- Negative dT: Rear locomotive arrives first (lead is slower)")
     print("- Consist 11: Loco 7 (lead) + Loco 8 (rear)")
     print("=" * 80)
 
