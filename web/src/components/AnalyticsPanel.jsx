@@ -695,6 +695,26 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                 <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
                   <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
 
+                  {/* Custom Legend (outside scroll area in Current mode, only when All filter) */}
+                  {chartData.length > 0 && viewMode === 'current' && consistFilter === 'all' && (
+                    <div className="flex gap-4 justify-center mb-4 pb-3 border-b border-slate-700">
+                      {Object.keys(trackingConfig.consists)
+                        .map(Number)
+                        .sort((a, b) => a - b)
+                        .map((consistId) => (
+                          <div key={consistId} className="flex items-center gap-2">
+                            <div
+                              className="w-4 h-1"
+                              style={{ backgroundColor: getConsistStrokeColor(consistId, trackingConfig.consists) }}
+                            ></div>
+                            <span className="text-sm text-slate-300">
+                              {trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
                   {chartData.length > 0 && (
                     <div
                       key={consistFilter}
@@ -739,8 +759,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         {...TOOLTIP_STYLES}
                         formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
                       />
-                      {/* Only show Legend when All filter (prevents chart height shift on filter change) */}
-                      {consistFilter === 'all' && <Legend />}
+                      {/* Legend inside chart only in Overview mode with All filter (Current mode has it outside) */}
+                      {viewMode === 'overview' && consistFilter === 'all' && <Legend />}
                       <ReferenceLine yAxisId="left" y={0} stroke="#10b981" strokeDasharray="3 3" />
                       <ReferenceLine yAxisId="left" y={1} stroke="#f59e0b" strokeDasharray="3 3" label="WARNING" />
                       <ReferenceLine yAxisId="left" y={-1} stroke="#f59e0b" strokeDasharray="3 3" />
