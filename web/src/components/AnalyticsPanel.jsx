@@ -1195,7 +1195,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           }
                         }
                       }}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 45 }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
                     >
                       <CartesianGrid {...CHART_AXIS_STYLES.grid} />
                       <XAxis
@@ -1203,7 +1203,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         {...CHART_AXIS_STYLES.axis}
                         angle={-40}
                         textAnchor="end"
-                        height={45}
+                        height={30}
                         interval="preserveStartEnd"
                         tickFormatter={(index) => {
                           const item = reportsChartData[index - 1];
@@ -1255,7 +1255,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                             <Line
                               key={cid}
                               dataKey={`avg_delta_t_c${cid}`}
-                              stroke={getConsistStrokeColor(Number(cid))}
+                              stroke={getConsistStrokeColor(Number(cid), trackingConfig.consists)}
                               strokeWidth={2}
                               dot={{ r: 5 }}
                               activeDot={{ r: 7 }}
