@@ -86,6 +86,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   const [reportsData, setReportsData] = useState(null); // Session history data for Reports tab
   const [selectedSession, setSelectedSession] = useState(null); // Session selected for detail modal
   const [showSessionDetail, setShowSessionDetail] = useState(false); // Session detail modal visibility
+  const [sessionLimit, setSessionLimit] = useState(30); // Number of sessions to display (30, 50, 100, 200)
 
   // Zoom state for Overview mode (box-select)
   const [refAreaLeft, setRefAreaLeft] = useState(null);
@@ -177,12 +178,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     }
   }, [cumulativeData, viewMode, consistFilter]);
 
-  // Reload Reports data when consist filter changes (Reports tab only)
+  // Reload Reports data when consist filter or session limit changes (Reports tab only)
   useEffect(() => {
     if (isOpen && viewMode === 'reports') {
       loadReportsData();
     }
-  }, [consistFilter]);
+  }, [consistFilter, sessionLimit]);
 
   // Arrow key navigation between Current/Overview/Reports
   useEffect(() => {
@@ -257,8 +258,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       setLoading(true);
       setError(null);
 
-      // Build API URL with consist filter if specified (limit 30 sessions)
-      const baseParams = 'limit=30';
+      // Build API URL with consist filter if specified (limit from sessionLimit state)
+      const baseParams = `limit=${sessionLimit}`;
       const params = consistFilter === 'all' ? `?${baseParams}` : `?${baseParams}&consist_filter=${consistFilter}`;
       const response = await fetch(`/api/analytics/reports${params}`);
       const data = await response.json();
@@ -1235,9 +1236,22 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   <h3 className="text-lg font-semibold text-white">Session History</h3>
                   <div className="flex items-center gap-4">
                     {!collapsedPanels.sessionHistory && (
-                      <span className="text-slate-400 text-sm">
-                        {filteredReportsSessions.length} sessions
-                      </span>
+                      <>
+                        <span className="text-slate-400 text-sm">
+                          {filteredReportsSessions.length} sessions
+                        </span>
+                        <select
+                          value={sessionLimit}
+                          onChange={(e) => setSessionLimit(Number(e.target.value))}
+                          onClick={(e) => e.stopPropagation()}
+                          className="bg-slate-700 text-slate-300 text-sm px-2 py-1 rounded border border-slate-600 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value={30}>Last 30</option>
+                          <option value={50}>Last 50</option>
+                          <option value={100}>Last 100</option>
+                          <option value={200}>Last 200</option>
+                        </select>
+                      </>
                     )}
                     <i className={`fa-solid fa-chevron-${collapsedPanels.sessionHistory ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
                   </div>
