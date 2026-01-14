@@ -1204,7 +1204,26 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         {...CHART_AXIS_STYLES.axis}
                         label={{ value: 'Avg Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
                       />
-                      <Tooltip {...TOOLTIP_STYLES} />
+                      <Tooltip
+                        {...TOOLTIP_STYLES}
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+
+                          return (
+                            <div style={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px', padding: '12px' }}>
+                              <p style={{ color: '#e2e8f0', marginBottom: '8px', fontWeight: 'bold' }}>{label}</p>
+                              {payload.map((entry, index) => {
+                                if (entry.value === null || entry.value === undefined) return null;
+                                return (
+                                  <p key={index} style={{ color: entry.color, margin: '4px 0' }}>
+                                    {entry.name}: {entry.value.toFixed(2)}s
+                                  </p>
+                                );
+                              })}
+                            </div>
+                          );
+                        }}
+                      />
                       <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
                       <ReferenceLine y={1.0} stroke="#f59e0b" strokeDasharray="3 3" />
                       <ReferenceLine y={-1.0} stroke="#f59e0b" strokeDasharray="3 3" />
