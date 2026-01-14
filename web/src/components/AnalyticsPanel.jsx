@@ -1032,6 +1032,322 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               })()}
             </div>
           )}
+
+          {/* Reports Tab Content */}
+          {viewMode === 'reports' && reportsData && !loading && (
+            <div className="space-y-6">
+              {/* Session History Table */}
+              <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-semibold text-white">Session History</h3>
+                  <span className="text-slate-400 text-sm">
+                    {reportsData.sessions?.length || 0} sessions
+                  </span>
+                </div>
+
+                {reportsData.sessions && reportsData.sessions.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                      <thead>
+                        <tr className="border-b border-slate-700 text-left">
+                          <th className="px-4 py-3 text-sm font-semibold text-slate-300">Session ID</th>
+                          <th className="px-4 py-3 text-sm font-semibold text-slate-300">Date</th>
+                          <th className="px-4 py-3 text-sm font-semibold text-slate-300">Duration</th>
+                          <th className="px-4 py-3 text-sm font-semibold text-slate-300">Events</th>
+                          {Object.keys(trackingConfig.consists || {}).sort((a, b) => a - b).map(cid => {
+                            if (consistFilter === 'all' || consistFilter == cid) {
+                              return (
+                                <React.Fragment key={cid}>
+                                  <th className="px-4 py-3 text-sm font-semibold text-slate-300">C{cid} Avg Δt</th>
+                                  <th className="px-4 py-3 text-sm font-semibold text-slate-300">C{cid} Synced%</th>
+                                </React.Fragment>
+                              );
+                            }
+                            return null;
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportsData.sessions.map(session => (
+                          <tr
+                            key={session.id}
+                            onClick={() => {
+                              setSelectedSession(session);
+                              setShowSessionDetail(true);
+                            }}
+                            className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer transition-colors"
+                          >
+                            <td className="px-4 py-3 text-sm font-mono text-slate-300">{session.id}</td>
+                            <td className="px-4 py-3 text-sm text-slate-300">{session.date}</td>
+                            <td className="px-4 py-3 text-sm text-slate-300">{session.duration_formatted}</td>
+                            <td className="px-4 py-3 text-sm text-slate-300">{session.total_events}</td>
+                            {Object.keys(trackingConfig.consists || {}).sort((a, b) => a - b).map(cid => {
+                              if (consistFilter === 'all' || consistFilter == cid) {
+                                const stats = session.consists?.[cid];
+                                if (stats) {
+                                  const avgDt = stats.avg_delta_t;
+                                  const absAvg = Math.abs(avgDt);
+                                  const colorClass = absAvg < 1.0 ? 'text-green-400' : absAvg < 1.5 ? 'text-amber-400' : 'text-red-400';
+                                  return (
+                                    <React.Fragment key={cid}>
+                                      <td className={`px-4 py-3 text-sm font-medium ${colorClass}`}>
+                                        {avgDt.toFixed(2)}s
+                                      </td>
+                                      <td className="px-4 py-3 text-sm text-slate-300">
+                                        {stats.synced_percent.toFixed(1)}%
+                                      </td>
+                                    </React.Fragment>
+                                  );
+                                } else {
+                                  return (
+                                    <React.Fragment key={cid}>
+                                      <td className="px-4 py-3 text-sm text-slate-500">N/A</td>
+                                      <td className="px-4 py-3 text-sm text-slate-500">N/A</td>
+                                    </React.Fragment>
+                                  );
+                                }
+                              }
+                              return null;
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-slate-400">
+                    <i className="fa-solid fa-inbox text-4xl mb-4"></i>
+                    <p>No sessions found</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Historical Trend Chart */}
+              {(() => {
+                const chartData = useMemo(() => {
+                  if (!reportsData?.sessions) return [];
+                  return [...reportsData.sessions].reverse().map(session => {
+                    const dataPoint = {
+                      session_id: session.id,
+                      date: session.date,
+                      timestamp: session.start_time
+                    };
+                    Object.keys(trackingConfig.consists || {}).forEach(cid => {
+                      const stats = session.consists?.[cid];
+                      dataPoint[`avg_delta_t_c${cid}`] = stats ? stats.avg_delta_t : null;
+                    });
+                    return dataPoint;
+                  });
+                }, [reportsData, trackingConfig]);
+
+                const handleChartClick = (data) => {
+                  if (data?.activePayload?.[0]) {
+                    const sessionId = data.activePayload[0].payload.session_id;
+                    const session = reportsData.sessions.find(s => s.id === sessionId);
+                    if (session) {
+                      setSelectedSession(session);
+                      setShowSessionDetail(true);
+                    }
+                  }
+                };
+
+                return (
+                  <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+                    <h3 className="text-xl font-semibold text-white mb-4">Historical Trend</h3>
+
+                    {chartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={400}>
+                        <LineChart
+                          data={chartData}
+                          onClick={handleChartClick}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+                        >
+                          <CartesianGrid {...CHART_AXIS_STYLES.grid} />
+                          <XAxis
+                            dataKey="date"
+                            {...CHART_AXIS_STYLES.axis}
+                            angle={-45}
+                            textAnchor="end"
+                            height={80}
+                          />
+                          <YAxis
+                            {...CHART_AXIS_STYLES.axis}
+                            label={{ value: 'Avg Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
+                          />
+                          <Tooltip {...TOOLTIP_STYLES} />
+                          <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
+                          <ReferenceLine y={1.0} stroke="#f59e0b" strokeDasharray="3 3" />
+                          <ReferenceLine y={-1.0} stroke="#f59e0b" strokeDasharray="3 3" />
+                          <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" />
+                          <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
+
+                          {Object.keys(trackingConfig.consists || {}).map(cid => {
+                            if (consistFilter === 'all' || consistFilter == cid) {
+                              return (
+                                <Line
+                                  key={cid}
+                                  dataKey={`avg_delta_t_c${cid}`}
+                                  stroke={getConsistStrokeColor(Number(cid))}
+                                  strokeWidth={2}
+                                  dot={{ r: 5 }}
+                                  activeDot={{ r: 7 }}
+                                  connectNulls={false}
+                                  name={`C${cid}`}
+                                />
+                              );
+                            }
+                            return null;
+                          })}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="text-center py-12 text-slate-400">
+                        <i className="fa-solid fa-chart-line text-4xl mb-4"></i>
+                        <p>No trend data available</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Session Detail Modal */}
+          {showSessionDetail && selectedSession && (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+              onClick={() => setShowSessionDetail(false)}
+            >
+              <div
+                className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-slate-900 rounded-xl border-2 border-slate-700 shadow-2xl p-8"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close Button */}
+                <button
+                  onClick={() => setShowSessionDetail(false)}
+                  className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+                >
+                  <i className="fa-solid fa-xmark text-2xl"></i>
+                </button>
+
+                {/* Session Header */}
+                <h2 className="text-2xl font-bold text-white mb-6">Session Analysis</h2>
+
+                {/* Session Info Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div>
+                    <div className="text-slate-400 text-sm mb-1">Session ID</div>
+                    <div className="font-mono text-white">{selectedSession.id}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-400 text-sm mb-1">Date</div>
+                    <div className="text-white">{selectedSession.date}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-400 text-sm mb-1">Duration</div>
+                    <div className="text-white">{selectedSession.duration_formatted}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-400 text-sm mb-1">Total Events</div>
+                    <div className="text-white">{selectedSession.total_events}</div>
+                  </div>
+                </div>
+
+                {/* Per-Consist Breakdown */}
+                <div className="space-y-4">
+                  {Object.entries(selectedSession.consists || {}).map(([cid, stats]) => {
+                    const consistName = trackingConfig.consists?.[cid]?.name || `Consist ${cid}`;
+                    const consistColor = getConsistStrokeColor(Number(cid));
+
+                    return (
+                      <div key={cid} className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+                        <h3 className="text-lg font-semibold mb-4" style={{ color: consistColor }}>
+                          {consistName}
+                        </h3>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Left: Statistics */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Total Crossings:</span>
+                              <span className="font-medium text-white">{stats.total_crossings}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Average Δt:</span>
+                              <span className={`font-medium ${
+                                Math.abs(stats.avg_delta_t) < 1.0 ? 'text-green-400' :
+                                Math.abs(stats.avg_delta_t) < 1.5 ? 'text-amber-400' : 'text-red-400'
+                              }`}>
+                                {stats.avg_delta_t.toFixed(3)}s
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Range:</span>
+                              <span className="font-mono text-sm text-white">
+                                {stats.min_delta_t.toFixed(2)}s to {stats.max_delta_t.toFixed(2)}s
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Trend:</span>
+                              <span className={`px-2 py-1 rounded text-sm ${
+                                stats.trend === 'LEAD FASTER' ? 'bg-blue-900/50 text-blue-300' :
+                                stats.trend === 'REAR FASTER' ? 'bg-purple-900/50 text-purple-300' :
+                                'bg-slate-700 text-slate-300'
+                              }`}>
+                                {stats.trend}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Right: Status Distribution */}
+                          <div className="space-y-2">
+                            <div className="text-slate-400 mb-2 text-sm">Status Distribution:</div>
+                            <div className="flex justify-between items-center">
+                              <span className="flex items-center gap-2 text-sm">
+                                <span className="w-3 h-3 rounded-full bg-green-500"></span>
+                                SYNCED
+                              </span>
+                              <span className="font-medium text-white text-sm">
+                                {stats.synced_count} ({stats.synced_percent.toFixed(1)}%)
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="flex items-center gap-2 text-sm">
+                                <span className="w-3 h-3 rounded-full bg-amber-500"></span>
+                                WARNING
+                              </span>
+                              <span className="font-medium text-white text-sm">
+                                {stats.warning_count} ({((stats.warning_count / stats.total_crossings) * 100).toFixed(1)}%)
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="flex items-center gap-2 text-sm">
+                                <span className="w-3 h-3 rounded-full bg-red-500"></span>
+                                CRITICAL
+                              </span>
+                              <span className="font-medium text-white text-sm">
+                                {stats.critical_count} ({((stats.critical_count / stats.total_crossings) * 100).toFixed(1)}%)
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Interpretation */}
+                <div className="mt-6 p-4 bg-blue-900/20 border border-blue-700 rounded-lg">
+                  <h4 className="font-semibold text-white mb-2">Interpretation:</h4>
+                  <ul className="text-sm text-slate-300 space-y-1 list-disc list-inside">
+                    <li>Positive Δt: Lead locomotive arrives first (rear is slower)</li>
+                    <li>Negative Δt: Rear locomotive arrives first (lead is slower)</li>
+                    <li>SYNCED: |Δt| &lt; 1.0s, WARNING: 1.0-1.5s, CRITICAL: ≥ 1.5s</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
