@@ -10,6 +10,80 @@
 
 ---
 
+## Testing Workflow (Mac Development → PC Production)
+
+**Branch**: `refactor` (isolated from `develop`)
+
+### Mac (Development)
+```bash
+# Create refactor branch (one-time)
+git checkout -b refactor
+git push -u origin refactor
+
+# Development cycle
+# 1. Make changes
+# 2. Commit frequently
+git add <files>
+git commit -m "refactor: <description>"
+
+# 3. Push to test on PC
+git push
+```
+
+### PC (Production Testing)
+
+**Manual deploy to refactor branch** (repeat after each Mac push):
+
+```powershell
+# Open PowerShell 7, SSH to PC, run these commands:
+cd C:\z21-Terminal
+git fetch origin
+git checkout refactor
+git reset --hard origin/refactor
+npm install --prefix web
+npm run build --prefix web
+z21-restart
+```
+
+**Testing checklist after deploy**:
+1. Backend starts without errors: Check `z21-log` (no Python exceptions)
+2. Frontend loads: Open browser `https://gaming-pc.tail9350d7.ts.net`
+3. Locomotive control works: Speed/direction/functions respond
+4. Analytics opens: Click Analytics button
+5. WebSocket connected: Check badges (WS, Z21 green)
+
+**Rollback to develop** (if major issues):
+```powershell
+cd C:\z21-Terminal
+git checkout develop
+git reset --hard origin/develop
+npm install --prefix web
+npm run build --prefix web
+z21-restart
+```
+
+### After Refactor Complete
+
+**Merge to develop**:
+```bash
+# On Mac
+git checkout develop
+git merge refactor
+git push
+
+# On PC - use normal deploy
+z21-deploy-dev  # Back to standard workflow
+```
+
+**Delete refactor branch**:
+```bash
+# On Mac (after successful merge)
+git branch -d refactor
+git push origin --delete refactor
+```
+
+---
+
 ## Phase 1: Backend Refactoring (4-6 hours)
 
 ### Step 1.1: Create Router Structure (1 hour)
