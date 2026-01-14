@@ -1179,7 +1179,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
               {/* Historical Trend Chart */}
               <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                <h3 className="text-xl font-semibold text-white mb-4">Historical Trend</h3>
+                <h3 className="text-xl font-semibold text-white mb-4">Historical Trend - Avg Δt</h3>
 
                 {reportsChartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={400}>
@@ -1195,7 +1195,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           }
                         }
                       }}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
                     >
                       <CartesianGrid {...CHART_AXIS_STYLES.grid} />
                       <XAxis
@@ -1203,10 +1203,14 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         {...CHART_AXIS_STYLES.axis}
                         angle={-45}
                         textAnchor="end"
-                        height={80}
+                        height={60}
+                        interval="preserveStartEnd"
                         tickFormatter={(index) => {
                           const item = reportsChartData[index - 1];
-                          return item ? `${item.date} ${item.time}` : index;
+                          if (!item) return index;
+                          // Format: DD-MM HH:MM (backend sends DD-MM-YYYY)
+                          const [day, month, year] = item.date.split('-');
+                          return `${day}-${month} ${item.time}`;
                         }}
                       />
                       <YAxis

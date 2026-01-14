@@ -2229,7 +2229,7 @@ async def get_analytics_reports(
 
             # Format session data
             duration_seconds = end_time - start_time
-            session_date = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d')
+            session_date = datetime.fromtimestamp(start_time).strftime('%d-%m-%Y')
 
             # Count ONLY delta_t events (gate crossings), not all event types
             total_delta_t_events = sum(cd['total_crossings'] for cd in consists.values())
