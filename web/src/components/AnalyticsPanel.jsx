@@ -252,7 +252,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
       // Detect session boundary
       if (prevEvent && event.session_id !== prevEvent.session_id) {
-        // Insert END marker for previous session (undefined values = unplottable)
+        // Insert END marker for previous session (NaN values = unplottable)
         const endMarker = {
           index: eventIndex++,
           timestamp: prevEvent.timestamp + 0.1,
@@ -261,11 +261,11 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           boundaryType: 'end'
         };
         consistIds.forEach(cid => {
-          endMarker[`delta_t_c${cid}`] = undefined;
+          endMarker[`delta_t_c${cid}`] = NaN;
         });
         result.push(endMarker);
 
-        // Insert START marker for new session (undefined values = unplottable)
+        // Insert START marker for new session (NaN values = unplottable)
         const startMarker = {
           index: eventIndex++,
           timestamp: event.timestamp - 0.1,
@@ -274,7 +274,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           boundaryType: 'start'
         };
         consistIds.forEach(cid => {
-          startMarker[`delta_t_c${cid}`] = undefined;
+          startMarker[`delta_t_c${cid}`] = NaN;
         });
         result.push(startMarker);
       }
