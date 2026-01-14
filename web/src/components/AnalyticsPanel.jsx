@@ -363,6 +363,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return { chartData: result, segmentCount: totalSegments };
   }, [filteredDeltaTEvents, trackingConfig.consists]);
 
+  // Apply zoom filter if zoomDomain is set (Overview mode only)
+  const displayData = useMemo(() => {
+    if (viewMode !== 'overview' || !zoomDomain) return chartData;
+
+    // Filter data to show only zoomed range
+    const [xMin, xMax] = zoomDomain.x;
+    return chartData.filter(d => d.index >= xMin && d.index <= xMax);
+  }, [chartData, zoomDomain, viewMode]);
+
   // Memoize chart width calculation
   const chartWidth = useMemo(() => {
     return viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
@@ -584,7 +593,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     >
                       <ResponsiveContainer width={chartWidth} height={400}>
                           <LineChart
-                            data={chartData}
+                            data={displayData}
                             onMouseDown={handleMouseDown}
                             onMouseMove={handleMouseMove}
                             onMouseUp={handleMouseUp}
@@ -595,8 +604,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <XAxis
                         dataKey={viewMode === 'current' ? 'time' : 'index'}
                         {...CHART_AXIS_STYLES.axis}
-                        domain={zoomDomain ? zoomDomain.x : ['auto', 'auto']}
-                        allowDataOverflow={true}
                         label={viewMode === 'overview' ? { value: 'Event #', position: 'insideBottom', offset: -5, fill: '#9CA3AF' } : undefined}
                       />
                       <YAxis
