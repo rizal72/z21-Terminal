@@ -546,10 +546,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   // Reports chart data (historical trend)
   const reportsChartData = useMemo(() => {
     if (!reportsData?.sessions || !trackingConfig?.consists) return [];
-    const chartData = [...reportsData.sessions].reverse().map(session => {
+    const chartData = [...reportsData.sessions].reverse().map((session, idx) => {
       const dataPoint = {
+        index: idx + 1, // Session number for X-axis (unique)
         session_id: session.id,
         date: session.date,
+        time: new Date(session.start_time * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
         timestamp: session.start_time
       };
       Object.keys(trackingConfig.consists || {}).forEach(cid => {
@@ -558,13 +560,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       });
       return dataPoint;
     });
-
-    // Debug: check if any session has C10 non-null
-    const withC10 = chartData.filter(d => d.avg_delta_t_c10 !== null && d.avg_delta_t_c10 !== undefined);
-    console.log(`Reports chart: ${chartData.length} sessions, ${withC10.length} have C10 data`);
-    if (withC10.length > 0) {
-      console.log('First session with C10:', withC10[0]);
-    }
 
     return chartData;
   }, [reportsData, trackingConfig]);
@@ -1204,11 +1199,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     >
                       <CartesianGrid {...CHART_AXIS_STYLES.grid} />
                       <XAxis
-                        dataKey="date"
+                        dataKey="index"
                         {...CHART_AXIS_STYLES.axis}
                         angle={-45}
                         textAnchor="end"
                         height={80}
+                        tickFormatter={(index) => {
+                          const item = reportsChartData[index - 1];
+                          return item ? `${item.date} ${item.time}` : index;
+                        }}
                       />
                       <YAxis
                         {...CHART_AXIS_STYLES.axis}
@@ -1219,9 +1218,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         content={({ active, payload, label }) => {
                           if (!active || !payload || payload.length === 0) return null;
 
+                          // Get session data from payload
+                          const sessionData = payload[0]?.payload;
+                          if (!sessionData) return null;
+
                           return (
                             <div style={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px', padding: '12px' }}>
-                              <p style={{ color: '#e2e8f0', marginBottom: '8px', fontWeight: 'bold' }}>{label}</p>
+                              <p style={{ color: '#e2e8f0', marginBottom: '8px', fontWeight: 'bold' }}>
+                                {sessionData.date} {sessionData.time}
+                              </p>
                               {payload.map((entry, index) => {
                                 if (entry.value === null || entry.value === undefined) return null;
                                 return (
