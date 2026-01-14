@@ -1050,13 +1050,19 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       // Calculate average FPS: Current = session only, Overview = all data
                       // IMPORTANT: Filter out idle mode (FPS <= 10) to measure real tracking performance
                       let avgFps = 'N/A';
-                      if (viewMode === 'current' && currentSession) {
-                        // Filter by current session + exclude idle (FPS > 10)
-                        const sessionEvents = cumulativeData.yolo_performance.filter(e =>
-                          e.session_id === currentSession.session_id && e.avg_fps > 10
-                        );
-                        if (sessionEvents.length > 0) {
-                          avgFps = (sessionEvents.reduce((sum, e) => sum + e.avg_fps, 0) / sessionEvents.length).toFixed(1);
+                      if (viewMode === 'current') {
+                        // Current mode: session-specific or N/A if not loaded
+                        if (!currentSession) {
+                          avgFps = 'N/A';  // Session not loaded yet
+                        } else {
+                          // Filter by current session + exclude idle (FPS > 10)
+                          const sessionEvents = cumulativeData.yolo_performance.filter(e =>
+                            e.session_id === currentSession.session_id && e.avg_fps > 10
+                          );
+                          if (sessionEvents.length > 0) {
+                            avgFps = (sessionEvents.reduce((sum, e) => sum + e.avg_fps, 0) / sessionEvents.length).toFixed(1);
+                          }
+                          // else: sessionEvents empty → avgFps stays 'N/A'
                         }
                       } else {
                         // Overview: all data, exclude idle (FPS > 10)
