@@ -688,10 +688,8 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 8. Session filtering by consist (`filteredReportsSessions` useMemo)
 9. Custom tooltip per mostrare tutti consist per data
 
-**Known Limitation**:
-- **Multiple sessions same date**: Chart mostra 2 punti verticalmente allineati (es. C10 mattina, C11 sera) ma tooltip mostra solo UNA sessione (quella su cui hover)
-- **Possibili soluzioni future**: Aggregate by date (backend), Custom tooltip con date-based lookup, Group sessions in chart data
-- **Frequenza**: Bassa (raramente 2+ sessioni stesso giorno con consist diversi)
+**Known Limitation**: ✅ RISOLTO
+- ~~Multiple sessions same date: Custom tooltip mostra correttamente tutti i consist per data~~
 
 **Documentation**:
 - `docs/REPORTS_TAB.md` - Documentazione completa implementazione (architecture, components, API, fixes, testing, future enhancements)
@@ -701,7 +699,6 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 **Commits**: `0f8c6f8` → `f55bc8f` (13 commits totali, 6 fix critici per crash/rendering)
 
 **Next Steps** (future releases):
-- v1.2.1: Multi-session same date tooltip fix
 - v1.3: Speed setting tracking (HIGH PRIORITY)
 - v1.3+: Sortable columns, pagination, CSV export, date range filter
 
@@ -757,7 +754,6 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 **Next Steps** (v1.3):
 - **HIGH PRIORITY**: Speed setting tracking in Analytics
 - Refactor `main.py` and `AnalyticsPanel.jsx` (componentization)
-- Multi-session same date tooltip fix (Reports tab)
 
 ---
 
