@@ -1039,7 +1039,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
                   {/* FPS Line Chart */}
                   <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                    <h4 className="text-lg font-semibold text-amber-400 mb-4">Inference FPS Over Time</h4>
                     {(() => {
                       // NO session filtering - FPS chart shows ALL sessions like dT chart
                       const chartData = cumulativeData.yolo_performance.map((e, idx) => ({
@@ -1047,6 +1046,21 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         time: formatTime(e.timestamp),
                         fps: parseFloat(e.avg_fps.toFixed(1))
                       }));
+
+                      // Calculate average FPS
+                      const avgFps = chartData.length > 0
+                        ? (chartData.reduce((sum, d) => sum + d.fps, 0) / chartData.length).toFixed(1)
+                        : 'N/A';
+
+                      return (
+                        <>
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-lg font-semibold text-amber-400">Inference FPS Over Time</h4>
+                            <span className="px-3 py-1 bg-slate-800 border border-slate-600 rounded text-sm font-mono text-green-400">
+                              FPS avg: {avgFps}
+                            </span>
+                          </div>
+                          {(() => {
 
                       const chartWidth = viewMode === 'current' ? Math.max(chartData.length * 60, 800) : '100%';
                       const chartContent = (
@@ -1076,6 +1090,9 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           </div>
                         </div>
                       ) : chartContent;
+                    })()}
+                        </>
+                      );
                     })()}
                   </div>
 
