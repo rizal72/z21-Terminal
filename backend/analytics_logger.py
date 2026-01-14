@@ -93,7 +93,46 @@ class AnalyticsLogger:
         self.conn.commit()
 
     def _create_session(self):
-        """Create session record in DB"""
+        """Create session record in DB
+
+        CRITICAL: Close ALL orphaned sessions (end_time = NULL) before creating new one.
+        This ensures there's ALWAYS exactly 1 open session (or 0 if idle).
+        """
+        current_time = time.time()
+
+        # Find orphaned sessions (never closed properly)
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT id FROM sessions WHERE end_time IS NULL")
+        orphaned_sessions = [row[0] for row in cursor.fetchall()]
+
+        if orphaned_sessions:
+            log('[ANALYTICS]', f"Found {len(orphaned_sessions)} orphaned session(s), closing now...")
+
+            # Close each orphaned session
+            for orphan_id in orphaned_sessions:
+                # Check if session has any delta_t events (valid session)
+                cursor.execute(
+                    "SELECT COUNT(*) FROM events WHERE session_id = ? AND event_type = 'delta_t'",
+                    (orphan_id,)
+                )
+                delta_t_count = cursor.fetchone()[0]
+
+                if delta_t_count > 0:
+                    # Valid session - close and validate it
+                    self.conn.execute(
+                        "UPDATE sessions SET end_time = ?, validated = 1 WHERE id = ?",
+                        (current_time, orphan_id)
+                    )
+                    log('[ANALYTICS]', f"Closed orphaned session {orphan_id} ({delta_t_count} delta_t events)")
+                else:
+                    # Invalid session - delete it
+                    self.conn.execute("DELETE FROM events WHERE session_id = ?", (orphan_id,))
+                    self.conn.execute("DELETE FROM sessions WHERE id = ?", (orphan_id,))
+                    log('[ANALYTICS]', f"Discarded orphaned session {orphan_id} (no delta_t events)")
+
+            self.conn.commit()
+
+        # Now create new session
         self.conn.execute(
             "INSERT INTO sessions (id, start_time, validated, event_count) VALUES (?, ?, 0, 0)",
             (self.session_id, self.session_start)
