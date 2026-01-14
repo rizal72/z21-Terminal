@@ -707,6 +707,60 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2025-01-15 - 🎉 **MILESTONE 1.2 COMPLETATA**
+
+**Status**: ✅ **v1.2 RELEASED** - Analytics UX improvements & data quality fixes
+
+**Features Implemented**:
+
+1. **Delta T Sign Display** (commit `7f63e57`):
+   - Added `formatDeltaT()` helper: always show "+" prefix for positive values
+   - Applied to ALL 6 display locations: Y-axis, tooltips, Reports table, Historical chart, Session detail modal
+   - Semantic clarity: "+" explicitly shows which loco is faster
+
+2. **Locomotive Operating Time Data Fix**:
+   - **Problem**: 22 anomalous events (10-14 hour durations) from bad migration showing 22-73 hours instead of minutes
+   - **Solution**: Created `fix_loco_events.py` script to delete anomalous events (duration > 3600s)
+   - **Result**: Correct data: Loco 1/5: 9.5 min, Loco 7/8: 249 min (4.15 hours over 11 movements)
+
+3. **Operating Time Format** (commits `7cd7efb`, `c240196`):
+   - Added `formatOperatingTime()` helper: "Xh Ym" format (e.g., "4h 9m")
+   - Changed Y-axis from decimal hours (0.16h) to integer minutes
+   - Tooltip shows human-readable "Xh Ym" format
+   - Chart title: "Total Operating Hours" → "Total Operating Time"
+
+4. **FPS Average Badge** (commits `344a135`, `fea3714`, `49d3ace`, `a07772f`):
+   - Added top-right badge on Inference FPS chart: "FPS avg: XX.X"
+   - Visible in both Current and Overview modes
+   - **Idle filtering**: Excludes FPS ≤ 10 to measure real tracking performance (not idle 1 FPS)
+   - **Session-specific logic**: Current mode shows session average or N/A if not loaded, Overview shows global average
+
+5. **Duplicate Right Y-Axis for FPS Chart** (commits `15a9b58`, `5f26ac9`, `dc4c754`):
+   - Added conditional right Y-axis in Current mode (always visible when scrolled right)
+   - Matches Δt chart implementation: `yAxisId="left"/"right"`, `allowDataOverflow={true}`
+   - Consistent UX across both time-series charts
+
+**Failed Experiments** (7 commits reverted):
+- **Date display on X-axis** (commits `f3c40da` → `8037997`, all reverted to `a07772f`):
+  - Attempted to show date (DD-MM in amber) at start of each day, followed by times
+  - 7 different strategies tried, all failed due to Recharts unpredictable tick sampling
+  - Cost: 76 lines of code written and deleted, ~1 hour development time
+  - Feature abandoned per user request
+
+**Key Insights**:
+- ✅ **Read complete implementation before modifying**: Avoid incremental commits by studying existing code patterns first
+- ⚠️ **Files becoming enormous**: `AnalyticsPanel.jsx` 1600+ lines, `main.py` needs refactoring (planned for future milestone)
+- 🎯 **Data quality matters**: Bad migration data corrupted statistics, manual cleanup required
+
+**Commits**: `7f63e57` (delta T sign) → `dc4c754` (FPS right Y-axis) - 8 feature commits + 7 reverted experiments
+
+**Next Steps** (v1.3):
+- **HIGH PRIORITY**: Speed setting tracking in Analytics
+- Refactor `main.py` and `AnalyticsPanel.jsx` (componentization)
+- Multi-session same date tooltip fix (Reports tab)
+
+---
+
 ## 📋 TODO / Future Enhancements
 
 ### Header UI Consistency (2025-01-14)
