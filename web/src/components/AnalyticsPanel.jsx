@@ -714,8 +714,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* Analytics View (Unified) */}
-          {cumulativeData && !loading && (
+          {/* Analytics View (Current / Overview) */}
+          {cumulativeData && !loading && viewMode !== 'reports' && (
             <div className="space-y-6">
               {/* Session Not Validated Warning (Current view only) */}
               {viewMode === 'current' && currentSession && !currentSession.validated && (
