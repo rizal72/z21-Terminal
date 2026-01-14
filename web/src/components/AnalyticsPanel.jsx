@@ -519,6 +519,23 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
   }, [chartData.length, viewMode]);
 
+  // Reports chart data (historical trend)
+  const reportsChartData = useMemo(() => {
+    if (!reportsData?.sessions) return [];
+    return [...reportsData.sessions].reverse().map(session => {
+      const dataPoint = {
+        session_id: session.id,
+        date: session.date,
+        timestamp: session.start_time
+      };
+      Object.keys(trackingConfig.consists || {}).forEach(cid => {
+        const stats = session.consists?.[cid];
+        dataPoint[`avg_delta_t_c${cid}`] = stats ? stats.avg_delta_t : null;
+      });
+      return dataPoint;
+    });
+  }, [reportsData, trackingConfig]);
+
   if (!isOpen) return null;
 
   return (
@@ -1123,92 +1140,70 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               </div>
 
               {/* Historical Trend Chart */}
-              {(() => {
-                const chartData = useMemo(() => {
-                  if (!reportsData?.sessions) return [];
-                  return [...reportsData.sessions].reverse().map(session => {
-                    const dataPoint = {
-                      session_id: session.id,
-                      date: session.date,
-                      timestamp: session.start_time
-                    };
-                    Object.keys(trackingConfig.consists || {}).forEach(cid => {
-                      const stats = session.consists?.[cid];
-                      dataPoint[`avg_delta_t_c${cid}`] = stats ? stats.avg_delta_t : null;
-                    });
-                    return dataPoint;
-                  });
-                }, [reportsData, trackingConfig]);
+              <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
+                <h3 className="text-xl font-semibold text-white mb-4">Historical Trend</h3>
 
-                const handleChartClick = (data) => {
-                  if (data?.activePayload?.[0]) {
-                    const sessionId = data.activePayload[0].payload.session_id;
-                    const session = reportsData.sessions.find(s => s.id === sessionId);
-                    if (session) {
-                      setSelectedSession(session);
-                      setShowSessionDetail(true);
-                    }
-                  }
-                };
+                {reportsChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={400}>
+                    <LineChart
+                      data={reportsChartData}
+                      onClick={(data) => {
+                        if (data?.activePayload?.[0]) {
+                          const sessionId = data.activePayload[0].payload.session_id;
+                          const session = reportsData.sessions.find(s => s.id === sessionId);
+                          if (session) {
+                            setSelectedSession(session);
+                            setShowSessionDetail(true);
+                          }
+                        }
+                      }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+                    >
+                      <CartesianGrid {...CHART_AXIS_STYLES.grid} />
+                      <XAxis
+                        dataKey="date"
+                        {...CHART_AXIS_STYLES.axis}
+                        angle={-45}
+                        textAnchor="end"
+                        height={80}
+                      />
+                      <YAxis
+                        {...CHART_AXIS_STYLES.axis}
+                        label={{ value: 'Avg Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
+                      />
+                      <Tooltip {...TOOLTIP_STYLES} />
+                      <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
+                      <ReferenceLine y={1.0} stroke="#f59e0b" strokeDasharray="3 3" />
+                      <ReferenceLine y={-1.0} stroke="#f59e0b" strokeDasharray="3 3" />
+                      <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" />
+                      <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
 
-                return (
-                  <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                    <h3 className="text-xl font-semibold text-white mb-4">Historical Trend</h3>
-
-                    {chartData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={400}>
-                        <LineChart
-                          data={chartData}
-                          onClick={handleChartClick}
-                          margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
-                        >
-                          <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                          <XAxis
-                            dataKey="date"
-                            {...CHART_AXIS_STYLES.axis}
-                            angle={-45}
-                            textAnchor="end"
-                            height={80}
-                          />
-                          <YAxis
-                            {...CHART_AXIS_STYLES.axis}
-                            label={{ value: 'Avg Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
-                          />
-                          <Tooltip {...TOOLTIP_STYLES} />
-                          <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
-                          <ReferenceLine y={1.0} stroke="#f59e0b" strokeDasharray="3 3" />
-                          <ReferenceLine y={-1.0} stroke="#f59e0b" strokeDasharray="3 3" />
-                          <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" />
-                          <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
-
-                          {Object.keys(trackingConfig.consists || {}).map(cid => {
-                            if (consistFilter === 'all' || consistFilter == cid) {
-                              return (
-                                <Line
-                                  key={cid}
-                                  dataKey={`avg_delta_t_c${cid}`}
-                                  stroke={getConsistStrokeColor(Number(cid))}
-                                  strokeWidth={2}
-                                  dot={{ r: 5 }}
-                                  activeDot={{ r: 7 }}
-                                  connectNulls={false}
-                                  name={`C${cid}`}
-                                />
-                              );
-                            }
-                            return null;
-                          })}
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="text-center py-12 text-slate-400">
-                        <i className="fa-solid fa-chart-line text-4xl mb-4"></i>
-                        <p>No trend data available</p>
-                      </div>
-                    )}
+                      {Object.keys(trackingConfig.consists || {}).map(cid => {
+                        if (consistFilter === 'all' || consistFilter == cid) {
+                          return (
+                            <Line
+                              key={cid}
+                              dataKey={`avg_delta_t_c${cid}`}
+                              stroke={getConsistStrokeColor(Number(cid))}
+                              strokeWidth={2}
+                              dot={{ r: 5 }}
+                              activeDot={{ r: 7 }}
+                              connectNulls={false}
+                              name={`C${cid}`}
+                            />
+                          );
+                        }
+                        return null;
+                      })}
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center py-12 text-slate-400">
+                    <i className="fa-solid fa-chart-line text-4xl mb-4"></i>
+                    <p>No trend data available</p>
                   </div>
-                );
-              })()}
+                )}
+              </div>
             </div>
           )}
 
