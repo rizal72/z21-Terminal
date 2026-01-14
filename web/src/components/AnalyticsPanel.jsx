@@ -1195,15 +1195,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                           }
                         }
                       }}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 45 }}
                     >
                       <CartesianGrid {...CHART_AXIS_STYLES.grid} />
                       <XAxis
                         dataKey="index"
                         {...CHART_AXIS_STYLES.axis}
-                        angle={-45}
+                        angle={-40}
                         textAnchor="end"
-                        height={60}
+                        height={45}
                         interval="preserveStartEnd"
                         tickFormatter={(index) => {
                           const item = reportsChartData[index - 1];
