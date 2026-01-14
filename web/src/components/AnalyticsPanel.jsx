@@ -1040,17 +1040,27 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   {/* FPS Line Chart */}
                   <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
                     {(() => {
-                      // NO session filtering - FPS chart shows ALL sessions like dT chart
+                      // NO session filtering for CHART - FPS chart shows ALL sessions like dT chart
                       const chartData = cumulativeData.yolo_performance.map((e, idx) => ({
                         index: idx + 1,
                         time: formatTime(e.timestamp),
                         fps: parseFloat(e.avg_fps.toFixed(1))
                       }));
 
-                      // Calculate average FPS
-                      const avgFps = chartData.length > 0
-                        ? (chartData.reduce((sum, d) => sum + d.fps, 0) / chartData.length).toFixed(1)
-                        : 'N/A';
+                      // Calculate average FPS: Current = session only, Overview = all data
+                      let avgFps = 'N/A';
+                      if (viewMode === 'current' && currentSession) {
+                        // Filter by current session for badge
+                        const sessionEvents = cumulativeData.yolo_performance.filter(e => e.session_id === currentSession.session_id);
+                        if (sessionEvents.length > 0) {
+                          avgFps = (sessionEvents.reduce((sum, e) => sum + e.avg_fps, 0) / sessionEvents.length).toFixed(1);
+                        }
+                      } else {
+                        // Overview: all data
+                        avgFps = chartData.length > 0
+                          ? (chartData.reduce((sum, d) => sum + d.fps, 0) / chartData.length).toFixed(1)
+                          : 'N/A';
+                      }
 
                       return (
                         <>
