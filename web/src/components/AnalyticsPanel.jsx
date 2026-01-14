@@ -76,6 +76,14 @@ const formatDeltaT = (value, decimals = 2) => {
   return `${sign}${value.toFixed(decimals)}`;
 };
 
+// Helper: format operating time seconds to "Xh Ym" format
+const formatOperatingTime = (seconds) => {
+  if (!seconds || seconds === 0) return '0h 0m';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${hours}h ${minutes}m`;
+};
+
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current', 'overview', or 'reports'
   const [cumulativeData, setCumulativeData] = useState(null);
@@ -1143,17 +1151,21 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <div className="p-6 pt-0">
 
                     <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                      <h4 className="text-lg font-semibold text-amber-400 mb-4">Total Operating Hours</h4>
+                      <h4 className="text-lg font-semibold text-amber-400 mb-4">Total Operating Time</h4>
                       <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={filteredLocoStats}>
                           <CartesianGrid {...CHART_AXIS_STYLES.grid} />
                           <XAxis dataKey="name" {...CHART_AXIS_STYLES.axis} />
-                          <YAxis {...CHART_AXIS_STYLES.axis} label={{ value: 'Operating Hours', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
+                          <YAxis
+                            {...CHART_AXIS_STYLES.axis}
+                            tickFormatter={(value) => formatOperatingTime(value)}
+                            label={{ value: 'Operating Time', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
+                          />
                           <Tooltip
                             {...TOOLTIP_STYLES}
-                            formatter={(value) => `${value} hours`}
+                            formatter={(value) => formatOperatingTime(value)}
                           />
-                          <Bar dataKey="total_operating_hours">
+                          <Bar dataKey="total_operating_seconds">
                             {filteredLocoStats.map((loco, index) => (
                               <Cell key={`cell-${index}`} fill={LOCO_COLORS[loco.address] || '#9CA3AF'} />
                             ))}
