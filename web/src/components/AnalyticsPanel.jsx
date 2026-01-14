@@ -238,51 +238,47 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       cumulativeData.delta_t_events.filter(e => e.consist_id === consistFilter);
   }, [cumulativeData?.delta_t_events, consistFilter]);
 
-  // Memoize chart data preparation with session boundary markers
-  const chartData = useMemo(() => {
-    if (!filteredDeltaTEvents || filteredDeltaTEvents.length === 0) return [];
+  // Memoize chart data preparation with session segments
+  const { chartData, segmentCount } = useMemo(() => {
+    if (!filteredDeltaTEvents || filteredDeltaTEvents.length === 0) return { chartData: [], segmentCount: 0 };
 
     const consistIds = Object.keys(trackingConfig.consists).map(Number);
     const sortedEvents = [...filteredDeltaTEvents].sort((a, b) => a.timestamp - b.timestamp);
-    const result = [];
-    let eventIndex = 1;
+
+    // Identify segment boundaries (session_id changes)
+    let currentSegment = 0;
+    const eventSegments = []; // Array to track which segment each event belongs to
 
     sortedEvents.forEach((event, idx) => {
       const prevEvent = idx > 0 ? sortedEvents[idx - 1] : null;
 
       // Detect session boundary
       if (prevEvent && event.session_id !== prevEvent.session_id) {
-        // Insert END marker for previous session (NaN values = unplottable)
-        const endMarker = {
-          index: eventIndex++,
-          timestamp: prevEvent.timestamp + 0.1,
-          time: formatTime(prevEvent.timestamp + 0.1),
-          isSessionBoundary: true,
-          boundaryType: 'end'
-        };
-        consistIds.forEach(cid => {
-          endMarker[`delta_t_c${cid}`] = NaN;
-        });
-        result.push(endMarker);
-
-        // Insert START marker for new session (NaN values = unplottable)
-        const startMarker = {
-          index: eventIndex++,
-          timestamp: event.timestamp - 0.1,
-          time: formatTime(event.timestamp - 0.1),
-          isSessionBoundary: true,
-          boundaryType: 'start'
-        };
-        consistIds.forEach(cid => {
-          startMarker[`delta_t_c${cid}`] = NaN;
-        });
-        result.push(startMarker);
+        currentSegment++;
       }
 
-      // Add normal event
+      eventSegments.push(currentSegment);
+    });
+
+    const totalSegments = currentSegment + 1;
+
+    // Build unified dataset with segmented dataKeys
+    const result = [];
+    let eventIndex = 1;
+
+    sortedEvents.forEach((event, idx) => {
+      const segment = eventSegments[idx];
+
+      // Create fields for ALL consist+segment combinations (mostly null)
       const deltaFields = {};
       consistIds.forEach(cid => {
-        deltaFields[`delta_t_c${cid}`] = event.consist_id === cid ? parseFloat(event.delta_t.toFixed(2)) : null;
+        for (let seg = 0; seg < totalSegments; seg++) {
+          const dataKey = `delta_t_c${cid}_seg${seg}`;
+          // Value only if this event belongs to this consist AND this segment
+          deltaFields[dataKey] = (event.consist_id === cid && segment === seg)
+            ? parseFloat(event.delta_t.toFixed(2))
+            : null;
+        }
       });
 
       result.push({
@@ -295,7 +291,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       });
     });
 
-    return result;
+    return { chartData: result, segmentCount: totalSegments };
   }, [filteredDeltaTEvents, trackingConfig.consists]);
 
   // Memoize chart width calculation
@@ -539,23 +535,27 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
                       <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
 
-                          {/* Dynamic lines: show all when 'all' filter, single when consist filter */}
+                          {/* Dynamic lines: one Line per consist+segment (session breaks) */}
                           {Object.keys(trackingConfig.consists)
                             .map(Number)
                             .sort((a, b) => a - b)
                             .filter(consistId => consistFilter === 'all' || consistFilter === consistId)
-                            .map((consistId) => (
-                              <Line
-                                key={consistId}
-                                type="monotone"
-                                dataKey={`delta_t_c${consistId}`}
-                                stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
-                                strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                                dot={viewMode === 'current' ? { r: 4 } : false}
-                                name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
-                                connectNulls={true}
-                              />
-                            ))}
+                            .flatMap((consistId) => {
+                              // Create one Line per segment for this consist
+                              return Array.from({ length: segmentCount }, (_, segIdx) => (
+                                <Line
+                                  key={`${consistId}_seg${segIdx}`}
+                                  type="monotone"
+                                  dataKey={`delta_t_c${consistId}_seg${segIdx}`}
+                                  stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
+                                  strokeWidth={viewMode === 'current' ? 2 : 1.5}
+                                  dot={viewMode === 'current' ? { r: 4 } : false}
+                                  name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
+                                  legendType={segIdx === 0 ? undefined : 'none'}
+                                  connectNulls={true}
+                                />
+                              ));
+                            })}
 
                             {/* Brush for zoom/pan - only in Overview mode */}
                             {viewMode === 'overview' && (
