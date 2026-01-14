@@ -1084,7 +1084,7 @@ function App() {
               {/* Analytics Dashboard (📊) - Desktop-only (1024px+) */}
               <button
                 className="hidden lg:flex items-center gap-2 px-2 py-2 bg-control-dark rounded border border-control-grey transition-all duration-200 md:hover:border-signal-amber cursor-pointer"
-                title="Analytics Dashboard (Desktop)"
+                title="Analytics Dashboard - Press A"
                 onClick={() => setAnalyticsOpen(true)}
               >
                 <i className="fa-solid fa-chart-line text-lg md:text-xl text-blue-500"></i>
@@ -1099,34 +1099,8 @@ function App() {
             {/* Spacer */}
             <div className="flex-grow"></div>
 
-            {/* Right: Test + Emergency + Status Badges */}
+            {/* Right: Emergency + Test + Status Badges */}
             <div className="flex items-center gap-2 md:gap-2 lg:gap-3">
-              {/* CV Profile Mode Badge (🎚️) - Click to toggle Test/Normal */}
-              <button
-                className={`flex items-center gap-2 px-2 py-2 bg-control-dark rounded border transition-all duration-200 ${
-                  cvProfileMode === 'testing'
-                    ? 'border-amber-500 ring-2 ring-amber-500/50'
-                    : 'border-control-grey'
-                } ${
-                  z21Online ? 'md:hover:border-signal-amber cursor-pointer' : 'opacity-50 cursor-not-allowed'
-                }`}
-                title={`Test Mode: ${cvProfileMode === 'testing' ? 'ACTIVE (zero momentum) - Press T' : 'OFF (normal) - Press T'}`}
-                onClick={() => {
-                  if (z21Online) {
-                    const event = new KeyboardEvent('keydown', { key: 'T', bubbles: true });
-                    window.dispatchEvent(event);
-                  }
-                }}
-                disabled={!z21Online}
-              >
-                <i className={`fa-solid ${cvProfileMode === 'testing' ? 'fa-flask-vial' : 'fa-check-circle'} text-lg md:text-xl ${cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}`}></i>
-                <div className="hidden md:block text-xs font-mono">
-                  <div className={cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}>
-                    Test
-                  </div>
-                </div>
-              </button>
-
               {/* Global Emergency Stop */}
               <button
                 onClick={handleEmergencyStop}
@@ -1155,6 +1129,32 @@ function App() {
                       </span>
                       <span className="text-[10px] md:text-xs opacity-70 w-full text-left leading-tight">{trackPower ? <kbd className="pl-0 pr-1 bg-white/10 rounded text-[10px]">ESC</kbd> : <>Power On <kbd className="pl-0 pr-1 bg-white/10 rounded text-[10px]">ESC</kbd></>}</span>
                     </div>
+                  </div>
+                </div>
+              </button>
+
+              {/* CV Profile Mode Badge (🎚️) - Click to toggle Test/Normal */}
+              <button
+                className={`flex items-center gap-2 px-2 py-2 bg-control-dark rounded border transition-all duration-200 ${
+                  cvProfileMode === 'testing'
+                    ? 'border-amber-500 ring-2 ring-amber-500/50'
+                    : 'border-control-grey'
+                } ${
+                  z21Online ? 'md:hover:border-signal-amber cursor-pointer' : 'opacity-50 cursor-not-allowed'
+                }`}
+                title={`Test Mode: ${cvProfileMode === 'testing' ? 'ACTIVE (zero momentum) - Press T' : 'OFF (normal) - Press T'}`}
+                onClick={() => {
+                  if (z21Online) {
+                    const event = new KeyboardEvent('keydown', { key: 'T', bubbles: true });
+                    window.dispatchEvent(event);
+                  }
+                }}
+                disabled={!z21Online}
+              >
+                <i className={`fa-solid ${cvProfileMode === 'testing' ? 'fa-flask-vial' : 'fa-check-circle'} text-lg md:text-xl ${cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}`}></i>
+                <div className="hidden md:block text-xs font-mono">
+                  <div className={cvProfileMode === 'testing' ? 'text-amber-500' : 'text-signal-green'}>
+                    Test
                   </div>
                 </div>
               </button>

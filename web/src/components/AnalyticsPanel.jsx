@@ -558,18 +558,23 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
             <div className="h-6 w-px bg-slate-600"></div>
 
             {/* Session Breaks Toggle */}
-            <label className="flex items-center gap-2 cursor-pointer" title="Show line breaks at session boundaries">
+            <div
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={() => setShowSessionBreaks(!showSessionBreaks)}
+              title="Show line breaks at session boundaries"
+            >
               <input
                 type="checkbox"
                 checked={showSessionBreaks}
-                onChange={(e) => setShowSessionBreaks(e.target.checked)}
-                className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+                onChange={() => {}}
+                className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer pointer-events-none"
+                readOnly
               />
               <span className="text-xs text-slate-300">
                 <i className="fa-solid fa-pause mr-1.5"></i>
                 Session Breaks
               </span>
-            </label>
+            </div>
 
             {/* Spacer */}
             <div className="flex-grow"></div>
