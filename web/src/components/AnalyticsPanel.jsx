@@ -1209,6 +1209,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         content={({ active, payload, label }) => {
                           if (!active || !payload || payload.length === 0) return null;
 
+                          console.log('[Reports Tooltip] label:', label, 'payload:', payload);
+
                           return (
                             <div style={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px', padding: '12px' }}>
                               <p style={{ color: '#e2e8f0', marginBottom: '8px', fontWeight: 'bold' }}>{label}</p>
