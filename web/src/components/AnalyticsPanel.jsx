@@ -698,10 +698,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               {/* Δt Trends Chart - ALL sessions concatenated */}
               {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
                 <div className="bg-slate-800/50 rounded-lg p-6 border border-slate-700">
-                  <h3 className="text-xl font-bold text-white mb-4">Δt Trends (All Sessions)</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-white">Δt Trends (All Sessions)</h3>
+                    <span className="text-xs text-slate-400">
+                      Click & drag to zoom • Double-click to reset
+                    </span>
+                  </div>
 
-                  {/* Custom Legend (outside scroll area in Current mode, only when All filter) */}
-                  {chartData.length > 0 && viewMode === 'current' && consistFilter === 'all' && (
+                  {/* Custom Legend (always shown when All filter, both Current and Overview) */}
+                  {chartData.length > 0 && consistFilter === 'all' && (
                     <div className="flex gap-4 justify-center mb-4 pb-3 border-b border-slate-700">
                       {Object.keys(trackingConfig.consists)
                         .map(Number)
@@ -739,7 +744,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       <XAxis
                         dataKey={viewMode === 'current' ? 'time' : 'index'}
                         {...CHART_AXIS_STYLES.axis}
-                        label={viewMode === 'overview' ? { value: 'Event #', position: 'insideBottom', offset: 10, fill: '#9CA3AF' } : undefined}
                       />
                       <YAxis
                         yAxisId="left"
@@ -765,13 +769,11 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         {...TOOLTIP_STYLES}
                         formatter={(value) => value !== null ? value.toFixed(2) + 's' : 'N/A'}
                       />
-                      {/* Legend inside chart only in Overview mode with All filter (Current mode has it outside) */}
-                      {viewMode === 'overview' && consistFilter === 'all' && <Legend />}
                       <ReferenceLine yAxisId="left" y={0} stroke="#10b981" strokeDasharray="3 3" />
-                      <ReferenceLine yAxisId="left" y={1} stroke="#f59e0b" strokeDasharray="3 3" label="WARNING" />
-                      <ReferenceLine yAxisId="left" y={-1} stroke="#f59e0b" strokeDasharray="3 3" />
-                      <ReferenceLine yAxisId="left" y={1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
-                      <ReferenceLine yAxisId="left" y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
+                      <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.normal || 1.0} stroke="#f59e0b" strokeDasharray="3 3" label="WARNING" />
+                      <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.normal || 1.0)} stroke="#f59e0b" strokeDasharray="3 3" />
+                      <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.warning || 1.5} stroke="#ef4444" strokeDasharray="3 3" label="CRITICAL" />
+                      <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.warning || 1.5)} stroke="#ef4444" strokeDasharray="3 3" />
 
                           {/* Dynamic lines: simple or segmented based on showSessionBreaks */}
                           {Object.keys(trackingConfig.consists)
@@ -856,7 +858,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                             <XAxis
                               dataKey={viewMode === 'current' ? 'time' : 'index'}
                               {...CHART_AXIS_STYLES.axis}
-                              label={viewMode === 'overview' ? { value: 'Sample #', position: 'insideBottom', offset: -5, fill: '#9CA3AF' } : undefined}
                             />
                             <YAxis {...CHART_AXIS_STYLES.axis} domain={[0, 140]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
                             <Tooltip

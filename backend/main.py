@@ -1108,9 +1108,14 @@ async def get_debug_status():
 
 @app.get("/api/config/tracking")
 async def get_tracking_config():
-    """Get tracking configuration (idle timeout + consist definitions for dynamic analytics)"""
+    """Get tracking configuration (idle timeout + consist definitions + timing thresholds for dynamic analytics)"""
     config = load_config()
     idle_timeout = config.get('tracking', {}).get('idle_timeout_seconds', 10)
+    timing_thresholds = config.get('tracking', {}).get('timing_thresholds', {
+        'normal': 1.0,
+        'warning': 1.5,
+        'max_delta_t': 10.0
+    })
     consists = config.get('consists', {})
 
     # Build consist definitions (id → name, addresses)
@@ -1126,6 +1131,7 @@ async def get_tracking_config():
 
     return {
         "idle_timeout_seconds": idle_timeout,
+        "timing_thresholds": timing_thresholds,
         "consists": consist_defs
     }
 
