@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, memo, useMemo } from 'react';
-import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Brush } from 'recharts';
 
 // Locomotive colors (matches config.json locomotive_colors)
 const LOCO_COLORS = {
@@ -522,6 +522,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                                 connectNulls={true}
                               />
                             ))}
+
+                            {/* Brush for zoom/pan - only in Overview mode */}
+                            {viewMode === 'overview' && (
+                              <Brush
+                                dataKey="index"
+                                height={30}
+                                stroke="#3b82f6"
+                                fill="#1e293b"
+                              />
+                            )}
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
