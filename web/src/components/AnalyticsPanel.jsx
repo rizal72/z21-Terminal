@@ -564,7 +564,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     if (!reportsData?.sessions) return [];
     if (consistFilter === 'all') return reportsData.sessions;
     // Show only sessions that have data for the selected consist
-    return reportsData.sessions.filter(session => session.consists?.[consistFilter] !== undefined);
+    // Backend returns consist IDs as strings, convert consistFilter to string
+    return reportsData.sessions.filter(session => session.consists?.[String(consistFilter)] !== undefined);
   }, [reportsData, consistFilter]);
 
   if (!isOpen) return null;
@@ -1131,8 +1132,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                             <td className="px-4 py-3 text-sm text-slate-300">{session.total_events}</td>
                             {Object.keys(trackingConfig.consists || {}).sort((a, b) => a - b).map(cid => {
                               if (consistFilter === 'all' || consistFilter == cid) {
-                                console.log(`[Reports Table] consistFilter=${consistFilter}, cid=${cid} (type: ${typeof cid}), session.consists keys:`, Object.keys(session.consists || {}));
-                                const stats = session.consists?.[cid];
+                                // Backend returns consist IDs as strings, but trackingConfig has numeric keys
+                                const stats = session.consists?.[String(cid)];
                                 if (stats) {
                                   const avgDt = stats.avg_delta_t;
                                   const absAvg = Math.abs(avgDt);
