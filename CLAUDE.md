@@ -719,6 +719,13 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 **Deployment**: Tested on PC Windows production after each phase (same workflow as backend refactoring)
 
+**Git Workflow**:
+- Merged: `refactor-frontend` → `develop` (--no-ff, preserve history)
+- Tagged: `frontend-refactor-complete`
+- Branch deleted: Local and remote cleaned up
+
+**Production Ready**: Deploy via `z21-deploy-dev` on PC Windows
+
 ---
 
 ### 2025-01-15 - 🎉 **BACKEND REFACTORING COMPLETATO** (Phase 4)
