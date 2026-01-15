@@ -8,64 +8,15 @@ import {
   TOOLTIP_STYLES,
   CHART_AXIS_STYLES
 } from '../constants/analyticsConstants';
-
-// Helper functions
-const filterEventsBySession = (events, viewMode, currentSession) => {
-  if (viewMode === 'current' && currentSession && events) {
-    return events.filter(e => e.session_id === currentSession.session_id);
-  }
-  return events || [];
-};
-
-// Helper: get locomotive addresses for consist filter (dynamic from config)
-const getAddressFilter = (consistFilter, consistConfig) => {
-  const config = consistConfig || {};
-  if (consistFilter === 'all') {
-    // All consists: flatten all addresses
-    return Object.values(config).flatMap(c => c.addresses);
-  }
-  return config[consistFilter]?.addresses || [];
-};
-
-// Helper: get consist stroke color (cyclic palette)
-const getConsistStrokeColor = (consistId, consistConfig) => {
-  const config = consistConfig || {};
-  const consistIds = Object.keys(config).map(Number).sort((a, b) => a - b);
-  const index = consistIds.indexOf(consistId);
-  return index >= 0 ? CONSIST_COLOR_PALETTE[index % CONSIST_COLOR_PALETTE.length] : '#9CA3AF';
-};
-
-// Helper: get consist text color class (cyclic palette)
-const getConsistColorClass = (consistFilter, consistConfig, defaultColor = 'text-white') => {
-  if (consistFilter === 'all') return defaultColor;
-  const config = consistConfig || {};
-  const consistIds = Object.keys(config).map(Number).sort((a, b) => a - b);
-  const index = consistIds.indexOf(consistFilter);
-  return index >= 0 ? CONSIST_COLOR_CLASSES[index % CONSIST_COLOR_CLASSES.length] : defaultColor;
-};
-
-// Helper: get consist background color class for buttons (cyclic palette)
-const getConsistBgClass = (consistId, consistConfig) => {
-  const config = consistConfig || {};
-  const consistIds = Object.keys(config).map(Number).sort((a, b) => a - b);
-  const index = consistIds.indexOf(consistId);
-  return index >= 0 ? CONSIST_BG_CLASSES[index % CONSIST_BG_CLASSES.length] : 'bg-slate-600';
-};
-
-// Helper: format delta t with sign (always show + for positive values)
-const formatDeltaT = (value, decimals = 2) => {
-  if (value === null || value === undefined || isNaN(value)) return 'N/A';
-  const sign = value >= 0 ? '+' : '';
-  return `${sign}${value.toFixed(decimals)}`;
-};
-
-// Helper: format operating time seconds to "Xh Ym" format
-const formatOperatingTime = (seconds) => {
-  if (!seconds || seconds === 0) return '0h 0m';
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return `${hours}h ${minutes}m`;
-};
+import {
+  filterEventsBySession,
+  getAddressFilter,
+  getConsistStrokeColor,
+  getConsistColorClass,
+  getConsistBgClass,
+  formatDeltaT,
+  formatOperatingTime
+} from '../utils/analyticsHelpers';
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current', 'overview', or 'reports'
