@@ -15,13 +15,13 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from config_loader import load_config
+from config_loader import load_config, get_config_path
 from log_colors import log
 
 
 # Configuration paths (all in project root)
 project_root = Path(__file__).parent.parent  # z21-Terminal/ root
-CONFIG_PATH = project_root / 'config.json'
+CONFIG_PATH = get_config_path()  # Use centralized config path
 CAMERA_CONFIG_PATH = project_root / 'camera_config.json'
 
 

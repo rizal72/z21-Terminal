@@ -20,7 +20,7 @@ scripts_dir = Path(__file__).parent.parent / 'scripts'
 sys.path.insert(0, str(scripts_dir))
 
 from z21 import Z21
-from config_loader import load_config, save_config
+from config_loader import load_config, save_config, get_config_path
 from log_colors import log, colorize_status
 
 
@@ -45,7 +45,7 @@ class Z21Manager:
         self.verbose = verbose
         self.debug_enabled = debug_enabled
         self.z21 = None
-        self.config_path = config_path or (Path(__file__).parent.parent / 'config.json')
+        self.config_path = config_path or get_config_path()  # Use centralized config path
         self.consist_state = {}  # {address: {'speed': 0, 'direction': 'forward', 'power': True, 'functions': {}}}
         self.persisted_state = self._load_persisted_state()  # Load virtual_mode from file
         self.reference_locos = reference_locos or {}  # Reference loco strategy from config
