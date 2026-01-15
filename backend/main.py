@@ -21,6 +21,22 @@ import video_feed as video_feed_module
 from video_feed import generate_video_frames
 from config_loader import load_config, save_config, get_config_path
 from log_colors import log, colorize_status
+from services.broadcast import (
+    init_broadcast_service,
+    update_z21_status,
+    update_track_power,
+    broadcast_z21_status,
+    broadcast_controllers_update,
+    broadcast_state_update,
+    broadcast_initial_state,
+    build_consist_response
+)
+from services.config_manager import ConfigManager
+import dependencies
+from routers import analytics, config, roster, status
+from routers.roster import get_full_roster
+from websocket_handlers.ws_control import handle_ws_control
+from websocket_handlers.ws_tracking import handle_ws_tracking
 
 # Default constants (single source of truth)
 DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}
@@ -32,12 +48,10 @@ CONFIG_PATH = get_config_path()  # Centralized config path
 # Global instances
 z21_manager: Z21Manager = None
 tracking_manager: TrackingManager = None
-tracking_daemon_ws: WebSocket = None  # WebSocket connection to tracking daemon
 connected_clients: List[WebSocket] = []
 consist_data: Dict[int, Dict[str, Any]] = {}
 locomotive_data: Dict[int, Dict[str, Any]] = {}
 controllers_config: List[Dict[str, Any]] = []  # Shared controller configuration
-yolo_detections: Dict[str, Any] = {}  # Latest YOLO detections for video overlay
 timing_thresholds: Dict[str, float] = DEFAULT_TIMING_THRESHOLDS.copy()  # Dynamic thresholds from config.json
 reference_locos: Dict[str, Dict[str, int]] = {}  # Reference loco strategy from config.json
 tracked_consist_ids: List[int] = []  # Consist IDs with gate tracking configured (from tracking_assignments)
@@ -75,6 +89,7 @@ async def poll_track_power():
                 if current_power != last_track_power_state:
                     log('[INIT]', f"Track power changed: {'ON' if current_power else 'OFF'}")
                     last_track_power_state = current_power
+                    update_track_power(current_power)
 
                     # Update all consist states
                     for address in consist_data.keys():
@@ -108,11 +123,13 @@ async def health_check_z21():
                 # Success - reset failure counter and mark online
                 z21_consecutive_failures = 0
                 z21_online = True
+                update_z21_status(True)
             else:
                 # Failed - increment failure counter
                 z21_consecutive_failures += 1
                 if z21_consecutive_failures >= 2:
                     z21_online = False
+                    update_z21_status(False)
                 elif z21_consecutive_failures == 1:
                     log('[WARN]', f"Z21 health check failed (1/2) - grace period")
 
@@ -121,6 +138,7 @@ async def health_check_z21():
             z21_consecutive_failures += 1
             if z21_consecutive_failures >= 2:
                 z21_online = False
+                update_z21_status(False)
                 if previous_state:  # Only log when transitioning to offline
                     log('[WARN]', f"Z21 connection lost after 2 failures: {e}")
             elif z21_consecutive_failures == 1:
@@ -136,6 +154,7 @@ async def health_check_z21():
             if not z21_online:
                 log('[INIT]', f"Setting track power to OFF (Z21 offline)")
                 last_track_power_state = False
+                update_track_power(False)
                 # Update all consist states
                 for address in consist_data.keys():
                     if address in z21_manager.consist_state:
@@ -145,50 +164,10 @@ async def health_check_z21():
             await broadcast_z21_status()
 
 
-async def broadcast_z21_status():
-    """Broadcast Z21 connection status to all connected clients"""
-    message = {
-        'type': 'z21_status',
-        'online': z21_online
-    }
-
-    disconnected_clients = []
-    for client in connected_clients:
-        try:
-            await client.send_json(message)
-        except Exception as e:
-            disconnected_clients.append(client)
-
-    # Remove disconnected clients
-    for client in disconnected_clients:
-        if client in connected_clients:
-            connected_clients.remove(client)
-
-
-async def broadcast_controllers_update():
-    """Broadcast controllers configuration to all connected clients"""
-    message = {
-        'type': 'controllers_update',
-        'controllers': controllers_config
-    }
-
-    disconnected_clients = []
-    for client in connected_clients:
-        try:
-            await client.send_json(message)
-        except Exception as e:
-            disconnected_clients.append(client)
-
-    # Remove disconnected clients
-    for client in disconnected_clients:
-        if client in connected_clients:
-            connected_clients.remove(client)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    global z21_manager, tracking_manager, tracking_daemon_ws, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config, timing_thresholds, reference_locos, tracked_consist_ids, debug_enabled
+    global z21_manager, tracking_manager, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config, timing_thresholds, reference_locos, tracked_consist_ids, debug_enabled
 
     # Filter out repetitive telemetry GET logs (called every 5s)
     import logging
@@ -200,23 +179,12 @@ async def lifespan(app: FastAPI):
     log('[INIT]', f"z21-Terminal Backend Starting...")
 
     # Load debug mode configuration FIRST
-    try:
-        config = load_config()
-        debug_config = config.get('debug', {'enabled': False})
-        debug_enabled = debug_config.get('enabled', False)
-    except Exception:
-        debug_enabled = False
+    debug_enabled = ConfigManager.get_debug_enabled()
 
     # Load timing thresholds from config.json
     log('[INIT]', f"Loading timing thresholds from config.json...")
     try:
-        config = load_config()
-        tracking_config = config.get('tracking', {})
-        thresholds = tracking_config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
-        timing_thresholds = {
-            'normal': thresholds.get('normal', DEFAULT_TIMING_THRESHOLDS['normal']),
-            'warning': thresholds.get('warning', DEFAULT_TIMING_THRESHOLDS['warning'])
-        }
+        timing_thresholds = ConfigManager.get_timing_thresholds()
         if debug_enabled:
             log('[INIT]', f"Timing thresholds: SYNCED < {timing_thresholds['normal']}s, WARNING < {timing_thresholds['warning']}s")
     except FileNotFoundError:
@@ -229,49 +197,32 @@ async def lifespan(app: FastAPI):
     # Load reference loco configuration (from consists)
     log('[INIT]', f"Loading reference loco configuration...")
     try:
-        config = load_config()
-        consists = config.get('consists', {})
-        # Extract reference info from each consist
-        reference_locos = {}
-        for consist_addr, consist_info in consists.items():
-            reference_locos[consist_addr] = {
-                'reference': consist_info.get('reference_loco'),
-                'adjust': consist_info.get('adjust_loco')
-            }
+        reference_locos = ConfigManager.get_reference_locos()
         if debug_enabled:
             log('[INIT]', f"Reference locos: {len(reference_locos)} consists configured")
             for consist_addr, ref_config in reference_locos.items():
                 print(f"    Consist {consist_addr}: reference={ref_config['reference']}, adjust={ref_config['adjust']}")
     except Exception as e:
         log('[WARN]', f"Error loading reference locos: {e}")
+        reference_locos = {}
 
     # Load tracked consist IDs (only consists with gate tracking configured)
     log('[INIT]', f"Loading tracked consist IDs...")
     try:
-        config = load_config()
-        consists = config.get('consists', {})
-        # Filter only consist IDs with gate_ids configured
-        for consist_key, consist_info in consists.items():
-            consist_id = int(consist_key)
-            gate_ids = consist_info.get('gate_ids', [])
-            if gate_ids:  # Only add if gates configured
-                tracked_consist_ids.append(consist_id)
-        tracked_consist_ids.sort()
+        tracked_consist_ids = ConfigManager.get_tracked_consist_ids()
         if debug_enabled:
             log('[INIT]', f"Tracked consists: {tracked_consist_ids}")
     except Exception as e:
         log('[WARN]', f"Error loading tracked consists: {e}")
-        reference_locos = {}
-        consists = {}
+        tracked_consist_ids = []
 
     # Load consist configuration
     # Priority: config.json consists → JMRI (bootstrap only)
-    if not consists:
-        try:
-            config = load_config()
-            consists = config.get('consists', {})
-        except Exception:
-            consists = {}
+    try:
+        config = load_config()
+        consists = config.get('consists', {})
+    except Exception:
+        consists = {}
 
     if consists:
         # Load from config.json (source of truth)
@@ -436,6 +387,32 @@ async def lifespan(app: FastAPI):
         log('[FAIL]', "Failed to connect to Z21")
         z21_online = False
 
+    # Initialize broadcast service with global references
+    init_broadcast_service(
+        clients=connected_clients,
+        z21_mgr=z21_manager,
+        consist_dict=consist_data,
+        locomotive_dict=locomotive_data,
+        controllers=controllers_config
+    )
+    # Set initial runtime values
+    update_z21_status(z21_online)
+    update_track_power(last_track_power_state)
+
+    # Initialize dependency injection system for routers
+    dependencies.init_dependencies(
+        z21_mgr=z21_manager,
+        tracking_mgr=tracking_manager,
+        clients=connected_clients,
+        consists=consist_data,
+        locomotives=locomotive_data,
+        controllers=controllers_config,
+        thresholds=timing_thresholds,
+        ref_locos=reference_locos,
+        tracked_ids=tracked_consist_ids,
+        debug=debug_enabled
+    )
+
     log('[INIT]', f"Backend ready!")
     log('[INIT]', f"WebSocket endpoint: ws://localhost:8000/ws")
     log('[INIT]', f"WebSocket tracking endpoint: ws://localhost:8000/ws/tracking")
@@ -480,99 +457,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-async def broadcast_state_update(address: int):
-    """Broadcast consist/locomotive state update to all connected clients"""
-    # Check if address exists in either consists or locomotives
-    is_consist = address in consist_data
-    is_locomotive = address in locomotive_data
-
-    if not (is_consist or is_locomotive):
-        log('[WARN]', f"Address {address} not found in consists or locomotives")
-        return
-
-    state = z21_manager.get_consist_state(address)
-
-    # Get function definitions from roster data
-    if is_consist:
-        function_definitions = consist_data[address].get('functions', [])
-    else:
-        function_definitions = locomotive_data[address].get('functions', [])
-
-    message = {
-        'type': 'consist_update',  # Same type for both (backwards compatible)
-        'address': address,
-        'data': {
-            'speed': state.get('speed', 0),
-            'direction': state.get('direction', 'forward'),
-            'power': state.get('power', True),
-            'functions': function_definitions,  # Function definitions (array)
-            'functionStates': state.get('functions', {}),  # Function states (object)
-            'virtual_mode': state.get('virtual_mode', False),  # NEW: Virtual Mode status
-            'auto_compensation_enabled': state.get('auto_compensation_enabled', False),  # NEW: Auto-compensation flag
-            'delta_t': state.get('delta_t'),  # NEW: Latest dT from tracking (or None)
-            'delta_t_timestamp': state.get('delta_t_timestamp')  # NEW: Timestamp
-        }
-    }
-
-    # Send to all connected clients
-    disconnected_clients = []
-    for client in connected_clients:
-        try:
-            await client.send_json(message)
-        except Exception:
-            disconnected_clients.append(client)
-
-    # Remove disconnected clients
-    for client in disconnected_clients:
-        if client in connected_clients:
-            connected_clients.remove(client)
-
-
-async def broadcast_initial_state():
-    """Broadcast complete initial state to all connected clients"""
-    # Build consists state using helper function (DRY principle)
-    consists_state = {}
-    for address, data in consist_data.items():
-        state = z21_manager.get_consist_state(address) if z21_manager else {}
-        consists_state[address] = build_consist_response(address, data, state)
-
-    # Build locomotives state
-    locomotives_state = {}
-    for address, data in locomotive_data.items():
-        state = z21_manager.get_consist_state(address) if z21_manager else {}
-        locomotives_state[address] = {
-            'address': address,
-            'name': data.get('name', ''),
-            'in_consist': data.get('in_consist'),
-            'speed': state.get('speed', 0),
-            'direction': state.get('direction', 'forward'),
-            'functions': data.get('functions', []),
-            'functionStates': state.get('functions', {})
-        }
-
-    message = {
-        'type': 'initial_state',
-        'consists': consists_state,
-        'locomotives': locomotives_state,
-        'controllers': controllers_config,
-        'trackPower': last_track_power_state,
-        'z21Online': z21_online
-    }
-
-    # Send to all connected clients
-    disconnected_clients = []
-    for client in connected_clients:
-        try:
-            await client.send_json(message)
-        except Exception as e:
-            print(f"Error broadcasting initial state: {e}")
-            disconnected_clients.append(client)
-
-    # Remove disconnected clients
-    for client in disconnected_clients:
-        if client in connected_clients:
-            connected_clients.remove(client)
+# Include routers
+app.include_router(analytics.router)
+app.include_router(analytics.router_no_prefix)  # For endpoints outside /api/analytics prefix
+app.include_router(config.router)
+app.include_router(roster.router)
+app.include_router(status.router)
 
 
 async def reload_roster_data():
@@ -641,371 +531,6 @@ async def reload_roster_data():
     return True
 
 
-@app.get("/api/status")
-async def api_status():
-    """API status endpoint"""
-    return {
-        "name": "z21-Terminal Backend",
-        "version": "1.0.0",
-        "status": "running",
-        "z21_connected": z21_manager is not None and z21_manager.z21 is not None,
-        "consists_loaded": len(consist_data),
-        "connected_clients": len(connected_clients)
-    }
-
-
-@app.get("/api/z21/telemetry")
-async def get_z21_telemetry():
-    """
-    Get Z21 track-level telemetry (Phase 9 - Motor Load Monitoring).
-
-    Returns:
-        - status: success/error
-        - telemetry: dict with current, voltage, temperature data
-        - timestamp: Unix timestamp
-        - quality_checks: dict with warnings/alerts
-    """
-    if not z21_manager or not z21_manager.z21:
-        return {
-            "status": "error",
-            "message": "Z21 not connected"
-        }
-
-    try:
-        status = z21_manager.z21.get_status()
-
-        if status and 'telemetry' in status:
-            t = status['telemetry']
-
-            # Quality checks
-            checks = {
-                'voltage_ok': 14.0 <= t['supply_voltage_v'] <= 18.0,
-                'voltage_warning': t['supply_voltage_v'] < 14.0 or t['supply_voltage_v'] > 18.0,
-                'current_high': t['main_current_ma'] > 2000,
-                'temperature_high': t['temperature_c'] > 60.0,
-                'temperature_elevated': 50.0 < t['temperature_c'] <= 60.0
-            }
-
-            # Generate warnings
-            warnings = []
-            if not checks['voltage_ok']:
-                if t['supply_voltage_v'] < 14.0:
-                    warnings.append("Supply voltage low - Check power supply or track resistance")
-                else:
-                    warnings.append("Supply voltage high - Check power supply")
-
-            if checks['current_high']:
-                warnings.append(f"High track current ({t['main_current_ma']}mA) - Possible short circuit")
-
-            if checks['temperature_high']:
-                warnings.append(f"Z21 temperature critical ({t['temperature_c']:.1f}°C) - Check ventilation")
-            elif checks['temperature_elevated']:
-                warnings.append(f"Z21 temperature elevated ({t['temperature_c']:.1f}°C) - Monitor closely")
-
-            return {
-                "status": "success",
-                "telemetry": t,
-                "track_power_on": status['track_power_on'],
-                "emergency_stop": status['emergency_stop'],
-                "short_circuit": status['short_circuit'],
-                "timestamp": time.time(),
-                "quality_checks": checks,
-                "warnings": warnings
-            }
-        else:
-            return {
-                "status": "error",
-                "message": "No telemetry data available from Z21"
-            }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Failed to get telemetry: {str(e)}"
-        }
-
-
-def build_consist_response(address, data, state):
-    """
-    Single source of truth for consist response structure.
-    Use this for ALL WebSocket/API responses to avoid duplication.
-    """
-    locomotives = data.get('locomotives', [])
-    lead_name = locomotives[0]['name'] if locomotives else ''
-    rear_names = [loco['name'] for loco in locomotives[1:]] if len(locomotives) > 1 else []
-    rear_name = ' + '.join(rear_names) if rear_names else None
-
-    # Load gate_ids from config consists
-    gate_ids = []
-    try:
-        config = load_config()
-        consists = config.get('consists', {})
-        consist_info = consists.get(str(address), {})
-        gate_ids = consist_info.get('gate_ids', [])
-    except Exception:
-        pass  # If config load fails, gate_ids stays empty
-
-    return {
-        'address': address,
-        'type': 'consist',
-        'trackName': 'INTERNAL TRACK' if address == 10 else 'EXTERNAL TRACK',
-        'locomotives': locomotives,
-        'lead_name': lead_name,
-        'rear_name': rear_name,
-        'functions': data['functions'],
-        'gate_ids': gate_ids,  # Include gate_ids for frontend
-        # Spread ALL state fields automatically (speed, direction, power, virtual_mode, etc.)
-        # CRITICAL: Exclude 'functions' from spread to avoid overwriting function definitions with states
-        **{k: v for k, v in state.items() if k not in ['address', 'locomotives', 'functions']},
-        # Rename 'functions' state dict to 'functionStates' for clarity
-        'functionStates': state.get('functions', {})
-    }
-
-
-@app.get("/api/consists")
-async def get_consists():
-    """Get all consists configuration and available gates"""
-    # Load config to get gates
-    config = load_config()
-
-    consists_result = {}
-    for address, data in consist_data.items():
-        state = z21_manager.get_consist_state(address) if z21_manager else {}
-        consists_result[address] = build_consist_response(address, data, state)
-
-    # Get consists configuration
-    consists_config = config.get("consists", {})
-
-    # Extract reference_locos from consists for backward compatibility
-    reference_locos = {}
-    for consist_addr, consist_info in consists_config.items():
-        reference_locos[consist_addr] = {
-            'reference': consist_info.get('reference_loco'),
-            'adjust': consist_info.get('adjust_loco')
-        }
-
-    return {
-        "consists": consists_result,
-        "gates": config.get("gates", []),
-        "tracking_assignments": consists_config,  # For frontend compatibility (renamed but same structure)
-        "reference_locos": reference_locos
-    }
-
-
-@app.post("/api/consists")
-async def create_consist(request: dict):
-    """Create a new consist in config.json"""
-    global consist_data
-
-    try:
-        consist_address = str(request.get("address"))
-        lead_address = request.get("lead_address")
-        rear_address = request.get("rear_address")
-        gate_ids = request.get("gate_ids", [])
-        reference_loco = request.get("reference_loco", "rear")  # "lead" or "rear"
-        virtual_mode = request.get("virtual_mode", True)  # Default: Virtual Mode (safe)
-
-        if not consist_address or not lead_address or not rear_address:
-            return {"success": False, "error": "Missing required fields"}
-
-        # Load config
-        config = load_config()
-
-        # Check if consist already exists
-        if consist_address in config.get("consists", {}):
-            return {"success": False, "error": f"Consist {consist_address} already exists"}
-
-        # Add to consists
-        if "consists" not in config:
-            config["consists"] = {}
-
-        config["consists"][consist_address] = {
-            "name": f"Consist {consist_address}",
-            "lead_address": lead_address,
-            "rear_address": rear_address,
-            "reference_loco": rear_address if reference_loco == "rear" else lead_address,
-            "adjust_loco": lead_address if reference_loco == "rear" else rear_address,
-            "gate_ids": gate_ids,
-            "gate_assignment": None,  # Default: symmetric cross-gate mode
-            "virtual_mode": virtual_mode,
-            "auto_compensation_enabled": False,
-            "notes": ""
-        }
-
-        # Save config
-        save_config(config)
-
-        # Write CV19 based on mode
-        if z21_manager and z21_manager.z21:
-            consist_addr_int = int(consist_address)
-
-            if virtual_mode:
-                # Virtual Mode: write CV19=0 (disable hardware consist)
-                log('[CV]', f"Creating consist {consist_address} in Virtual Mode - writing CV19=0")
-                cv_value = 0
-            else:
-                # DCC Mode: write CV19=consist_address (enable hardware consist)
-                log('[CV]', f"Creating consist {consist_address} in DCC Mode - writing CV19={consist_addr_int}")
-                cv_value = consist_addr_int
-
-            success_lead = z21_manager.z21.write_cv_ops_mode(lead_address, 19, cv_value)
-            success_rear = z21_manager.z21.write_cv_ops_mode(rear_address, 19, cv_value)
-
-            if not (success_lead and success_rear):
-                mode_str = "Virtual" if virtual_mode else "DCC"
-                return {"success": False, "error": f"Consist created in config but failed to write CV19 to locomotives ({mode_str} Mode)"}
-
-        mode_str = "Virtual" if virtual_mode else "DCC"
-
-        # Reload consist_data from updated config before broadcasting
-        consist_data = load_consists_from_config(CONFIG_PATH)
-
-        # Broadcast updated state to all connected clients (refresh dropdowns)
-        await broadcast_initial_state()
-
-        return {"success": True, "message": f"Consist {consist_address} created in {mode_str} Mode (CV19 written)"}
-
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-@app.put("/api/consists/{address}")
-async def update_consist(address: str, request: dict):
-    """Update an existing consist in config.json"""
-    global consist_data
-
-    try:
-        # Load config
-        config = load_config()
-
-        # Check if consist exists
-        if address not in config.get("consists", {}):
-            return {"success": False, "error": f"Consist {address} not found"}
-
-        # Update consists fields
-        consist = config["consists"][address]
-        old_virtual_mode = consist.get("virtual_mode", True)
-
-        if "lead_address" in request:
-            consist["lead_address"] = request["lead_address"]
-        if "rear_address" in request:
-            consist["rear_address"] = request["rear_address"]
-        if "gate_ids" in request:
-            consist["gate_ids"] = request["gate_ids"]
-
-        # Handle virtual_mode change (if present in request)
-        virtual_mode_changed = False
-        new_virtual_mode = old_virtual_mode
-        if "virtual_mode" in request:
-            new_virtual_mode = request["virtual_mode"]
-            if new_virtual_mode != old_virtual_mode:
-                virtual_mode_changed = True
-                consist["virtual_mode"] = new_virtual_mode
-
-        # Update reference if reference_loco specified
-        if "reference_loco" in request:
-            lead_address = consist["lead_address"]
-            rear_address = consist["rear_address"]
-
-            if request["reference_loco"] == "lead":
-                consist["reference_loco"] = lead_address
-                consist["adjust_loco"] = rear_address
-            else:  # rear
-                consist["reference_loco"] = rear_address
-                consist["adjust_loco"] = lead_address
-
-        # Save config
-        save_config(config)
-
-        # If virtual_mode changed, write CV19 accordingly
-        if virtual_mode_changed and z21_manager and z21_manager.z21:
-            consist_addr_int = int(address)
-            lead_address = consist["lead_address"]
-            rear_address = consist["rear_address"]
-
-            if new_virtual_mode:
-                # Switched to Virtual Mode: write CV19=0
-                log('[CV]', f"Switching consist {address} to Virtual Mode - writing CV19=0")
-                cv_value = 0
-            else:
-                # Switched to DCC Mode: write CV19=consist_address
-                log('[CV]', f"Switching consist {address} to DCC Mode - writing CV19={consist_addr_int}")
-                cv_value = consist_addr_int
-
-            success_lead = z21_manager.z21.write_cv_ops_mode(lead_address, 19, cv_value)
-            success_rear = z21_manager.z21.write_cv_ops_mode(rear_address, 19, cv_value)
-
-            if not (success_lead and success_rear):
-                mode_str = "Virtual" if new_virtual_mode else "DCC"
-                return {"success": False, "error": f"Consist updated in config but failed to write CV19 ({mode_str} Mode)"}
-
-            mode_str = "Virtual" if new_virtual_mode else "DCC"
-
-            # Reload consist_data from updated config before broadcasting
-            consist_data = load_consists_from_config(CONFIG_PATH)
-
-            # Broadcast updated state to all connected clients (refresh dropdowns)
-            await broadcast_initial_state()
-
-            return {"success": True, "message": f"Consist {address} updated and switched to {mode_str} Mode (CV19 written)"}
-
-        # Reload consist_data from updated config before broadcasting
-        consist_data = load_consists_from_config(CONFIG_PATH)
-
-        # Broadcast updated state to all connected clients (refresh dropdowns)
-        await broadcast_initial_state()
-
-        return {"success": True, "message": f"Consist {address} updated"}
-
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-@app.delete("/api/consists/{address}")
-async def delete_consist(address: str):
-    """
-    Delete a consist from config.json
-    If consist is in DCC mode (virtual_mode=false), writes CV19=0 first
-    """
-    global consist_data
-
-    try:
-        # Load config
-        config = load_config()
-
-        # Check if consist exists
-        if address not in config.get("consists", {}):
-            return {"success": False, "error": f"Consist {address} not found"}
-
-        consist_config = config["consists"][address]
-
-        # If consist is in DCC mode (virtual_mode=false), disable consist on locomotives first
-        virtual_mode = consist_config.get("virtual_mode", False)
-        if not virtual_mode and z21_manager:
-            # Write CV19=0 to both locomotives to disable DCC consist
-            log('[WARN]', f"Consist {address} is in DCC mode - writing CV19=0 to disable consist on locomotives")
-            consist_address_int = int(address)
-            # Use enable_virtual_mode() which writes CV19=0 (disables consist)
-            # disable_virtual_mode() would write CV19=consist_address (restores consist)
-            z21_manager.enable_virtual_mode(consist_address_int)
-
-        # Delete from consists
-        del config["consists"][address]
-
-        # Save config
-        save_config(config)
-
-        # Reload consist_data from updated config before broadcasting
-        consist_data = load_consists_from_config(CONFIG_PATH)
-
-        # Broadcast updated state to all connected clients (refresh dropdowns)
-        await broadcast_initial_state()
-
-        return {"success": True, "message": f"Consist {address} deleted"}
-
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
 @app.post("/api/restart-daemon")
 async def restart_tracking_daemon():
     """Restart tracking daemon to reload config changes"""
@@ -1021,68 +546,6 @@ async def restart_tracking_daemon():
             return {"success": False, "error": "Tracking manager not initialized"}
     except Exception as e:
         return {"success": False, "error": str(e)}
-
-
-@app.get("/api/locomotives")
-async def get_locomotives():
-    """Get all locomotives"""
-    result = {}
-
-    for address, data in locomotive_data.items():
-        # Get state from z21_manager if available
-        state = z21_manager.get_consist_state(address) if z21_manager else {}
-
-        result[address] = {
-            'address': address,
-            'type': 'locomotive',
-            'name': data['name'],
-            'functions': data['functions'],
-            'in_consist': data.get('in_consist'),
-            'speed': state.get('speed', 0),
-            'direction': state.get('direction', 'forward'),
-            'power': state.get('power', True),
-            'functionStates': state.get('functions', {})  # Actual function states from Z21
-        }
-
-    return result
-
-
-@app.get("/api/roster")
-async def get_full_roster():
-    """Get full roster: consists + locomotives"""
-    consists_data = await get_consists()
-    # Extract only the consists dict (backward compatibility)
-    # get_consists() now returns {consists: {...}, gates: [...], ...}
-    return {
-        'consists': consists_data.get('consists', {}),
-        'locomotives': await get_locomotives()
-    }
-
-
-@app.post("/api/reload-roster")
-async def reload_roster():
-    """Reload roster and consists from JMRI XML files without restarting backend"""
-    try:
-        success = await reload_roster_data()
-        if success:
-            return {
-                "status": "success",
-                "message": "Roster reloaded successfully",
-                "consists_loaded": len(consist_data),
-                "locomotives_loaded": len(locomotive_data),
-                "clients_notified": len(connected_clients)
-            }
-        else:
-            return {
-                "status": "error",
-                "message": "Failed to reload roster (Z21 not connected)"
-            }
-    except Exception as e:
-        log('[WARN]', f"Error reloading roster: {e}")
-        return {
-            "status": "error",
-            "message": f"Exception during reload: {str(e)}"
-        }
 
 
 @app.post("/api/toggle-panel")
@@ -1103,36 +566,6 @@ async def get_debug_status():
     return {
         "status": "success",
         "debug_visible": video_feed_module.SHOW_DEBUG_OVERLAY
-    }
-
-
-@app.get("/api/config/tracking")
-async def get_tracking_config():
-    """Get tracking configuration (idle timeout + consist definitions + timing thresholds for dynamic analytics)"""
-    config = load_config()
-    idle_timeout = config.get('tracking', {}).get('idle_timeout_seconds', 10)
-    timing_thresholds = config.get('tracking', {}).get('timing_thresholds', {
-        'normal': 1.0,
-        'warning': 1.5,
-        'max_delta_t': 10.0
-    })
-    consists = config.get('consists', {})
-
-    # Build consist definitions (id → name, addresses)
-    consist_defs = {}
-    for cid, cdata in consists.items():
-        consist_id = int(cid)
-        consist_defs[consist_id] = {
-            "name": cdata.get('name', f'Consist {consist_id}'),
-            "lead_address": cdata.get('lead_address'),
-            "rear_address": cdata.get('rear_address'),
-            "addresses": [cdata.get('lead_address'), cdata.get('rear_address')]
-        }
-
-    return {
-        "idle_timeout_seconds": idle_timeout,
-        "timing_thresholds": timing_thresholds,
-        "consists": consist_defs
     }
 
 
@@ -1160,87 +593,6 @@ async def get_cv_profile_mode():
     """Get current CV profile mode ('normal' or 'testing')"""
     config = load_config()
     return {"mode": config.get('cv_profile_mode', 'normal')}
-
-
-@app.post("/api/close-session")
-async def close_session():
-    """Force close current analytics session (called via sendBeacon on page unload/refresh)
-
-    This ensures deterministic session boundaries:
-    - Page refresh → daemon stops → session closes → new page load → daemon restarts → NEW session
-    - Without this: session continues if daemon doesn't stop between disconnect/reconnect
-    """
-    if tracking_manager:
-        try:
-            await tracking_manager.stop_tracking()
-            log('[SESSION]', 'Analytics session closed via page unload')
-            return {"status": "ok"}
-        except Exception as e:
-            log('[ERROR]', f'Failed to close session: {e}')
-            return {"status": "error", "message": str(e)}
-    return {"status": "ok"}  # No tracking manager = nothing to close
-
-
-@app.get("/api/gates")
-async def get_gates():
-    """Get current gate configuration"""
-    config = load_config()
-    return config.get('gates', [])
-
-
-@app.post("/api/save-gates")
-async def save_gates(gates: List[Dict[str, Any]]):
-    """Save gate configuration from web editor (press 'E' in UI)"""
-    try:
-        # Load current config
-        config = load_config()
-
-        # Validate gates format
-        for gate in gates:
-            required_fields = ['id', 'name', 'center', 'width', 'height', 'angle', 'color']
-            if not all(field in gate for field in required_fields):
-                return {
-                    "status": "error",
-                    "message": f"Invalid gate format, missing required fields"
-                }
-
-        # Create backup before saving
-        import shutil
-        from datetime import datetime
-        from pathlib import Path
-
-        config_path = Path(__file__).parent.parent / 'config.json'
-        backup_name = "config.json.backup"
-        backup_path = config_path.parent / backup_name
-
-        shutil.copy(config_path, backup_path)
-        log('[INIT]', f"Config backup created: {backup_name}")
-
-        # Round all numeric values to integers (OpenCV requires int for coordinates)
-        for gate in gates:
-            gate['center'] = [int(round(gate['center'][0])), int(round(gate['center'][1]))]
-            gate['width'] = int(round(gate['width']))
-            gate['height'] = int(round(gate['height']))
-            gate['angle'] = int(round(gate['angle']))
-            gate['color'] = [int(round(c)) for c in gate['color']]
-
-        # Update gates in config
-        config['gates'] = gates
-
-        # Save config (with inline array formatting)
-        save_config(config)
-
-        log('[INIT]', f"Gates configuration saved ({len(gates)} gates)")
-        return {
-            "status": "success",
-            "message": f"Saved {len(gates)} gates (backup: {backup_name})"
-        }
-    except Exception as e:
-        log('[WARN]', f"Error saving gates: {e}")
-        return {
-            "status": "error",
-            "message": str(e)
-        }
 
 
 @app.get("/api/video_feed")
@@ -1309,8 +661,8 @@ async def video_feed():
 
     def get_yolo_detections():
         """Callback to get latest YOLO detections for locomotive markers"""
-        global yolo_detections
-        return yolo_detections.get('detections', [])
+        detections = dependencies.get_yolo_detections()
+        return detections.get('detections', [])
 
     return StreamingResponse(
         generate_video_frames(
@@ -1323,982 +675,32 @@ async def video_feed():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time control"""
-    global tracking_daemon_ws  # CRITICAL: needed for speed update broadcast
-    await websocket.accept()
-    connected_clients.append(websocket)
-
-    log('[WS]', f"Client connected (total: {len(connected_clients)})")
-
-    try:
-        # Send initial state to new client
-        roster_data = await get_full_roster()
-        await websocket.send_json({
-            'type': 'initial_state',
-            'consists': roster_data['consists'],
-            'locomotives': roster_data['locomotives'],
-            'controllers': controllers_config,
-            'trackPower': last_track_power_state,
-            'z21Online': z21_online
-        })
-        if debug_enabled:
-            log('[INIT]', f"Sent initial state (trackPower={last_track_power_state}, z21Online={z21_online})")
-
-        # Notify tracking manager of client connection
-        if tracking_manager:
-            await tracking_manager.on_client_connected()
-
-        # Handle incoming messages
-        while True:
-            try:
-                data = await websocket.receive_json()
-                message_type = data.get('type')
-
-                if message_type == 'set_speed':
-                    address = data.get('address')
-                    speed = data.get('speed', 0)
-                    forward = data.get('forward', True)
-
-                    if z21_manager and (address in consist_data or address in locomotive_data):
-                        z21_manager.set_speed(address, speed, forward)
-                        await broadcast_state_update(address)
-
-                        # Track locomotive operating time (individual locos only, not consists)
-                        if address in locomotive_data and tracking_manager and tracking_manager.analytics_logger:
-                            current_time = time.time()
-
-                            # Movement started (speed > 0 and was stopped)
-                            if speed > 0 and address not in loco_start_times:
-                                loco_start_times[address] = current_time
-                                log('[TRACK]', f"Loco {address} movement started")
-
-                            # Movement stopped (speed == 0 and was moving)
-                            elif speed == 0 and address in loco_start_times:
-                                start_time = loco_start_times.pop(address)
-                                duration = current_time - start_time
-
-                                # Log operating time event
-                                tracking_manager.analytics_logger.log_loco_operating_time(
-                                    address=address,
-                                    start_time=start_time,
-                                    end_time=current_time,
-                                    duration_seconds=duration
-                                )
-
-                                log('[TRACK]', f"Loco {address} movement stopped (duration: {duration:.1f}s)")
-
-                        # Notify tracking manager of speed change
-                        if tracking_manager and address in consist_data:
-                            await tracking_manager.on_speed_change(address, speed)
-
-                        # Notify tracking daemon of speed change (for dynamic FPS)
-                        if tracking_daemon_ws and address in consist_data:
-                            try:
-                                await tracking_daemon_ws.send_json({
-                                    'type': 'consist_speed_update',
-                                    'consist_address': address,
-                                    'speed': speed
-                                })
-                            except Exception:
-                                # Daemon disconnected, will be cleared on next loop
-                                pass
-
-                elif message_type == 'set_direction':
-                    address = data.get('address')
-                    direction = data.get('direction', 'forward')
-                    forward = direction == 'forward'
-
-                    if z21_manager and (address in consist_data or address in locomotive_data):
-                        # Get current speed (from consist_state or default)
-                        state = z21_manager.get_consist_state(address) if address in consist_data else {}
-                        current_speed = state.get('speed', 0)
-                        z21_manager.set_speed(address, current_speed, forward)
-                        await broadcast_state_update(address)
-
-                elif message_type == 'set_function':
-                    address = data.get('address')
-                    function_num = data.get('function')
-                    state = data.get('state', False)
-
-                    is_consist = address in consist_data
-                    is_loco = address in locomotive_data
-
-                    if z21_manager and (is_consist or is_loco):
-                        z21_manager.set_function(address, function_num, state)
-                        await broadcast_state_update(address)
-
-                        # Also broadcast to individual loco panels if setting function on consist
-                        if is_consist and address in consist_data:
-                            locomotives = consist_data[address].get('locomotives', [])
-                            for loco in locomotives:
-                                loco_addr = loco['address']
-                                if loco_addr in locomotive_data:
-                                    # F0 goes to all, other functions only to lead
-                                    if function_num == 0 or loco_addr == locomotives[0]['address']:
-                                        await broadcast_state_update(loco_addr)
-
-                elif message_type == 'emergency_stop':
-                    power_on = data.get('powerOn', False)
-
-                    if z21_manager:
-                        if power_on:
-                            z21_manager.track_power_on()
-                        else:
-                            z21_manager.track_power_off()
-
-                        # Broadcast updates for all consists
-                        for address in consist_data.keys():
-                            await broadcast_state_update(address)
-
-                elif message_type == 'sync':
-                    # Sync specific consist from Z21
-                    address = data.get('address')
-                    if z21_manager and address in consist_data:
-                        z21_manager.sync_consist_state(address)
-                        await broadcast_state_update(address)
-
-                elif message_type == 'add_controller':
-                    # Add new controller to shared configuration
-                    new_controller = data.get('controller')
-                    if new_controller:
-                        controllers_config.append(new_controller)
-                        log('[WS]', f"Controller added: {new_controller}")
-                        await broadcast_controllers_update()
-
-                elif message_type == 'remove_controller':
-                    # Remove controller from shared configuration
-                    controller_id = data.get('id')
-                    if controller_id:
-                        # Don't allow removing last controller
-                        if len(controllers_config) > 1:
-                            controllers_config[:] = [c for c in controllers_config if c['id'] != controller_id]
-                            log('[WS]', f"Controller removed: {controller_id}")
-                            await broadcast_controllers_update()
-
-                elif message_type == 'update_controller_selection':
-                    # Update controller selection
-                    controller_id = data.get('id')
-                    selection = data.get('selection')
-                    if controller_id and selection:
-                        for controller in controllers_config:
-                            if controller['id'] == controller_id:
-                                controller['type'] = selection.get('type')
-                                controller['address'] = selection.get('address')
-                                log('[WS]', f"Controller {controller_id} updated: {selection}")
-                                await broadcast_controllers_update()
-
-                                # Small delay to ensure controllers_update is processed first
-                                await asyncio.sleep(0.05)  # 50ms delay
-
-                                # Also broadcast current state of the selected consist/loco
-                                # so the new panel gets updated functionStates
-                                selected_address = selection.get('address')
-                                if selected_address and (selected_address in consist_data or selected_address in locomotive_data):
-                                    await broadcast_state_update(selected_address)
-                                break
-
-                elif message_type == 'toggle_virtual_mode':
-                    # Toggle Virtual Consist Mode (CV19 write only, no speed compensation)
-                    consist_address = data.get('address')
-                    enable = data.get('enable', False)
-
-                    if z21_manager and consist_address in consist_data:
-                        if enable:
-                            success = z21_manager.enable_virtual_mode(consist_address)
-                        else:
-                            success = z21_manager.disable_virtual_mode(consist_address)
-
-                        if success:
-                            # Broadcast updated state to all clients
-                            await broadcast_state_update(consist_address)
-                            if debug_enabled:
-                                log('[INIT]', f"Virtual Mode {'enabled' if enable else 'disabled'} for consist {consist_address}")
-                        else:
-                            log('[WARN]', f"Failed to toggle Virtual Mode for consist {consist_address}")
-
-                elif message_type == 'toggle_auto_compensation':
-                    # Toggle Auto-Compensation (only allowed in Virtual Mode)
-                    consist_address = data.get('address')
-                    enable = data.get('enable', False)
-
-                    if z21_manager and consist_address in z21_manager.consist_state:
-                        consist = z21_manager.consist_state[consist_address]
-                        is_virtual = consist.get('virtual_mode', False)
-
-                        if is_virtual:
-                            # Only allow toggle if in Virtual Mode
-                            consist['auto_compensation_enabled'] = enable
-                            # Persist to config.json (critical: preserves setting across restarts)
-                            z21_manager._save_persisted_state()
-                            # Always log (important operation that modifies config.json)
-                            log('[COMP]', f"Auto-compensation {'enabled' if enable else 'disabled'} for consist {consist_address} (saved to config.json)")
-                            # Broadcast updated state to all clients
-                            await broadcast_state_update(consist_address)
-                        else:
-                            log('[WARN]', f"Cannot toggle auto-compensation: consist {consist_address} not in Virtual Mode")
-
-            except json.JSONDecodeError:
-                print("Invalid JSON received")
-                continue
-
-    except WebSocketDisconnect:
-        log('[WS]', f"Client disconnected (remaining: {len(connected_clients) - 1})")
-    except Exception as e:
-        print(f"WebSocket error: {e}")
-    finally:
-        if websocket in connected_clients:
-            connected_clients.remove(websocket)
-
-        # Notify tracking manager of client disconnection
-        if tracking_manager:
-            await tracking_manager.on_client_disconnected()
+    """WebSocket endpoint for real-time control (delegates to ws_control handler)"""
+    await handle_ws_control(
+        websocket=websocket,
+        connected_clients=connected_clients,
+        consist_data=consist_data,
+        locomotive_data=locomotive_data,
+        z21_manager=z21_manager,
+        tracking_manager=tracking_manager,
+        controllers_config=controllers_config,
+        last_track_power_state=last_track_power_state,
+        z21_online=z21_online,
+        debug_enabled=debug_enabled,
+        loco_start_times=loco_start_times
+    )
 
 
 @app.websocket("/ws/tracking")
 async def websocket_tracking_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for tracking daemon connection"""
-    global tracking_daemon_ws
-
-    await websocket.accept()
-    tracking_daemon_ws = websocket  # Save reference for bidirectional communication
-
-    log('[WS]', f"Tracking daemon connected")
-
-    # Sync daemon with current speeds immediately on connect
-    # Critical for page reload: daemon must know if locos are moving
-    if z21_manager:
-        for consist_address, consist_state in z21_manager.consist_state.items():
-            speed = consist_state.get('speed', 0)
-            if speed > 0:
-                try:
-                    await tracking_daemon_ws.send_json({
-                        'type': 'consist_speed_update',
-                        'consist_address': consist_address,
-                        'speed': speed
-                    })
-                    log('[INIT]', f"Synced daemon on connect: consist {consist_address} speed={speed}")
-                except Exception:
-                    pass  # Ignore errors on initial sync
-
-    try:
-        # Handle incoming messages from tracking daemon
-        while True:
-            try:
-                data = await websocket.receive_json()
-                message_type = data.get('type')
-
-                if message_type == 'delta_t_update':
-                    # Update from tracking daemon with new dT calculation
-                    consist_address = data.get('consist_address')
-                    delta_t = data.get('delta_t')
-                    status = data.get('status', 'UNKNOWN')
-                    timestamp = data.get('timestamp')
-                    time_str = data.get('time_str', '')  # Pre-calculated elapsed time
-                    thresholds = data.get('thresholds', timing_thresholds)  # From daemon or fallback to loaded
-
-                    if z21_manager and consist_address in consist_data:
-                        # Update consist state with ALL dT data from tracking_daemon (single source of truth)
-                        z21_manager.consist_state[consist_address]['delta_t'] = delta_t
-                        z21_manager.consist_state[consist_address]['delta_t_timestamp'] = timestamp
-                        z21_manager.consist_state[consist_address]['delta_t_status'] = status
-                        z21_manager.consist_state[consist_address]['delta_t_time_str'] = time_str
-
-                        # Colored status log (only status word colored)
-                        if status == 'CRITICAL':
-                            colored_status = f"\033[91m{status}\033[0m"
-                        elif status == 'WARNING':
-                            colored_status = f"\033[93m{status}\033[0m"
-                        elif status == 'SYNCED':
-                            colored_status = f"\033[92m{status}\033[0m"
-                        else:
-                            colored_status = status
-
-                        log('[DETECT]', f"dT update: consist {consist_address} = {delta_t:.3f}s ({colored_status})")
-
-                        # ⚡ AUTO-COMPENSATION: Trigger for CRITICAL (compensation) or SYNCED (decay)
-                        if consist_address in z21_manager.consist_state:
-                            consist = z21_manager.consist_state[consist_address]
-                            is_virtual = consist.get('virtual_mode', False)
-                            auto_comp_enabled = consist.get('auto_compensation_enabled', False)
-                            last_speed = consist.get('speed', 0)
-                            last_direction = consist.get('direction', 'forward') == 'forward'
-
-                            # Trigger set_speed() for both CRITICAL and SYNCED zones (not WARNING)
-                            # Only if Virtual Mode AND auto-compensation enabled
-                            if is_virtual and auto_comp_enabled and last_speed > 0:
-                                is_critical = abs(delta_t) > thresholds['warning']  # > warning threshold
-                                is_synced = abs(delta_t) < thresholds['normal']      # < normal threshold
-
-                                if is_critical or is_synced:
-                                    if is_critical:
-                                        log('[COMP]', f"Auto-compensation triggered: |dT| = {abs(delta_t):.3f}s > {thresholds['warning']}s")
-                                    # Call set_speed with auto_compensation flag (handles both compensation and decay)
-                                    z21_manager.set_speed(consist_address, last_speed, last_direction, is_auto_compensation=True)
-
-                        # Get compensation data for UI display
-                        consist = z21_manager.consist_state[consist_address]
-                        adjust_loco_address = consist.get('adjust_loco_address')
-                        adjust_speed = consist.get('adjust_speed')
-                        adjust_correction = consist.get('adjust_correction')
-
-                        # Broadcast to all frontend clients (include thresholds and time_str)
-                        message = {
-                            'type': 'delta_t_update',
-                            'consist_address': consist_address,
-                            'delta_t': delta_t,
-                            'status': status,
-                            'timestamp': timestamp,
-                            'time_str': time_str,  # Pre-calculated elapsed time
-                            'thresholds': thresholds,  # Dynamic thresholds from daemon
-                            'adjust_loco_address': adjust_loco_address,  # Which loco is being adjusted
-                            'adjust_speed': adjust_speed,  # Actual speed sent to adjust loco
-                            'adjust_correction': adjust_correction  # Difference from target (speed_adjust - speed)
-                        }
-
-                        disconnected_clients = []
-                        for client in connected_clients:
-                            try:
-                                await client.send_json(message)
-                            except Exception:
-                                disconnected_clients.append(client)
-
-                        # Remove disconnected clients
-                        for client in disconnected_clients:
-                            if client in connected_clients:
-                                connected_clients.remove(client)
-
-                elif message_type == 'yolo_detections':
-                    # YOLO detection positions for video overlay
-                    global yolo_detections
-                    yolo_detections = {
-                        'detections': data.get('detections', []),
-                        'timestamp': data.get('timestamp')
-                    }
-
-                elif message_type == 'tracking_positions':
-                    # Legacy position format (optional, for debugging)
-                    pass
-
-            except json.JSONDecodeError:
-                print("Invalid JSON received from tracking daemon")
-                continue
-
-    except WebSocketDisconnect:
-        log('[WS]', f"Tracking daemon disconnected")
-        tracking_daemon_ws = None  # Clear reference
-        # Note: consist_state['delta_t'] may be reset to None by z21_manager on stop (correct for logic)
-        # But video_feed cache keeps last value for display (matches React panel behavior)
-        log('[DETECT]', f"dT display: video cache preserves last value")
-    except Exception as e:
-        print(f"Tracking WebSocket error: {e}")
-        tracking_daemon_ws = None  # Clear reference on error
-
-
-# ========================================
-# Analytics Helper Functions
-# ========================================
-
-def format_duration_hms(seconds: float) -> str:
-    """
-    Format duration in seconds as HH:MM:SS.
-
-    Args:
-        seconds: Duration in seconds (float or int)
-
-    Returns:
-        Formatted string "HH:MM:SS"
-
-    Examples:
-        >>> format_duration_hms(3661.5)
-        '01:01:01'
-        >>> format_duration_hms(90)
-        '00:01:30'
-    """
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-
-
-# ========================================
-# Analytics Downsampling Helpers
-# ========================================
-
-def lttb_downsample(data: List[Dict], max_points: int, x_key: str = 'timestamp', y_key: str = 'value') -> List[Dict]:
-    """
-    Largest Triangle Three Buckets (LTTB) downsampling algorithm.
-    Preserves visual shape by selecting points that form largest triangles.
-
-    Args:
-        data: List of dicts with x (timestamp) and y (value) keys
-        max_points: Target number of points
-        x_key: Key for x-axis value (timestamp)
-        y_key: Key for y-axis value
-
-    Returns:
-        Downsampled list with ~max_points entries
-    """
-    if len(data) <= max_points:
-        return data
-
-    # Always include first and last points
-    sampled = [data[0]]
-    bucket_size = (len(data) - 2) / (max_points - 2)
-
-    a = 0  # Initially the first point
-    for i in range(max_points - 2):
-        # Calculate bucket range
-        avg_range_start = int((i + 1) * bucket_size) + 1
-        avg_range_end = int((i + 2) * bucket_size) + 1
-        avg_range_end = min(avg_range_end, len(data))
-
-        # Calculate average point in next bucket
-        avg_x = sum(d[x_key] for d in data[avg_range_start:avg_range_end]) / (avg_range_end - avg_range_start)
-        avg_y = sum(d[y_key] for d in data[avg_range_start:avg_range_end]) / (avg_range_end - avg_range_start)
-
-        # Find point in current bucket that forms largest triangle
-        range_start = int(i * bucket_size) + 1
-        range_end = int((i + 1) * bucket_size) + 1
-
-        max_area = -1
-        max_area_point = None
-
-        point_a_x = data[a][x_key]
-        point_a_y = data[a][y_key]
-
-        for j in range(range_start, range_end):
-            # Calculate triangle area
-            point_b_x = data[j][x_key]
-            point_b_y = data[j][y_key]
-            area = abs((point_a_x - avg_x) * (point_b_y - point_a_y) -
-                      (point_a_x - point_b_x) * (avg_y - point_a_y))
-
-            if area > max_area:
-                max_area = area
-                max_area_point = j
-
-        sampled.append(data[max_area_point])
-        a = max_area_point
-
-    sampled.append(data[-1])  # Always include last point
-    return sampled
-
-
-def smart_downsample_delta_t(events: List[Dict], max_points: int, critical_threshold: float = 1.5) -> List[Dict]:
-    """
-    Smart downsampling for Δt events: preserves all critical events + LTTB on rest.
-
-    Args:
-        events: List of delta_t event dicts with 'delta_t' and 'timestamp' keys
-        max_points: Target number of points
-        critical_threshold: |Δt| threshold for critical events (default 1.5s)
-
-    Returns:
-        Downsampled list with all critical events + LTTB sampled normal events
-    """
-    if len(events) <= max_points:
-        return events
-
-    # Separate critical and normal events
-    critical = [e for e in events if abs(e['delta_t']) >= critical_threshold]
-    normal = [e for e in events if abs(e['delta_t']) < critical_threshold]
-
-    # If critical events alone exceed max_points, return all critical (rare case)
-    if len(critical) >= max_points:
-        return sorted(critical, key=lambda e: e['timestamp'])
-
-    # Apply LTTB to normal events for remaining budget
-    remaining_budget = max_points - len(critical)
-    sampled_normal = lttb_downsample(normal, remaining_budget, x_key='timestamp', y_key='delta_t')
-
-    # Merge and sort by timestamp
-    result = critical + sampled_normal
-    return sorted(result, key=lambda e: e['timestamp'])
-
-
-# ========================================
-# Analytics Endpoints
-# ========================================
-
-@app.get("/api/analytics/current")
-async def get_current_session():
-    """Get current analytics session metadata (lightweight)"""
-    # Current session info from tracking daemon (if running)
-    if tracking_manager and tracking_manager.daemon:
-        logger = tracking_manager.daemon.analytics_logger
-        if logger:
-            return logger.get_session_info()
-    return {"error": "Analytics not available"}
-
-
-@app.get("/api/analytics/session/{session_id}")
-async def get_session_data(session_id: str):
-    """Load full session data (events, Δt trends)"""
-    import sqlite3
-    db_path = Path(__file__).parent / "data" / "analytics.db"
-
-    if not db_path.exists():
-        return {"error": "Analytics database not found"}
-
-    conn = sqlite3.connect(str(db_path))
-    cursor = conn.cursor()
-
-    # Get session metadata
-    cursor.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
-    session_row = cursor.fetchone()
-    if not session_row:
-        conn.close()
-        return {"error": "Session not found"}
-
-    session_data = {
-        'id': session_row[0],
-        'start_time': session_row[1],
-        'end_time': session_row[2],
-        'validated': bool(session_row[3]),
-        'event_count': session_row[4]
-    }
-
-    # Get all delta_t events
-    cursor.execute(
-        "SELECT timestamp, data FROM events WHERE session_id = ? AND event_type = 'delta_t' ORDER BY timestamp",
-        (session_id,)
+    """WebSocket endpoint for tracking daemon connection (delegates to ws_tracking handler)"""
+    await handle_ws_tracking(
+        websocket=websocket,
+        z21_manager=z21_manager,
+        consist_data=consist_data,
+        connected_clients=connected_clients,
+        timing_thresholds=timing_thresholds
     )
-
-    events = []
-    for row in cursor.fetchall():
-        data = json.loads(row[1])
-        events.append({
-            'timestamp': row[0],
-            'consist_id': data['consist_id'],
-            'delta_t': data['delta_t'],
-            'status': data['status'],
-            'gate_type': data['gate_type']
-        })
-
-    conn.close()
-
-    return {
-        'session': session_data,
-        'events': events
-    }
-
-
-def sample_events(events: list, max_points: int) -> list:
-    """
-    Uniform sampling for ANY event type.
-    Takes 1 event every N to reach max_points.
-
-    Args:
-        events: List of events (any type)
-        max_points: Target number of points (e.g., 500)
-
-    Returns:
-        Sampled events list (or original if already below max_points)
-    """
-    if len(events) <= max_points:
-        return events  # No sampling needed
-
-    step = len(events) / max_points
-    sampled = []
-    for i in range(max_points):
-        idx = int(i * step)
-        sampled.append(events[idx])
-
-    return sampled
-
-
-@app.get("/api/analytics/cumulative")
-async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[int] = None):
-    """
-    Get all sessions aggregated statistics with full event data for charts.
-
-    Args:
-        tail: Optional tail parameter. If provided, returns last N events (full resolution).
-              Used by Current view to keep recent data intact.
-              Example: ?tail=1000 (last 1000 events, no sampling)
-
-        max_points: Optional sampling parameter. If provided, applies uniform sampling
-                   to ALL event arrays across entire history.
-                   Used by Overview view for historical trends.
-                   Example: ?maxPoints=500
-
-    Note: tail and max_points are mutually exclusive (tail takes precedence)
-    """
-    import sqlite3
-    from collections import defaultdict
-    db_path = Path(__file__).parent / "data" / "analytics.db"
-
-    if not db_path.exists():
-        return {"error": "Analytics database not found"}
-
-    conn = sqlite3.connect(str(db_path))
-    cursor = conn.cursor()
-
-    # Get all validated sessions (closed sessions with end_time)
-    cursor.execute("SELECT id, start_time, end_time, event_count FROM sessions WHERE validated = 1 ORDER BY start_time DESC")
-    sessions = []
-    for row in cursor.fetchall():
-        sessions.append({
-            'id': row[0],
-            'start_time': row[1],
-            'end_time': row[2],
-            'event_count': row[3],
-            'duration': row[2] - row[1] if row[2] else None
-        })
-
-    # Include current session if running (validated but no end_time yet)
-    if tracking_manager and tracking_manager.daemon and tracking_manager.daemon.analytics_logger:
-        current_logger = tracking_manager.daemon.analytics_logger
-        if current_logger.session_validated:
-            sessions.insert(0, {  # Add at top (most recent)
-                'id': current_logger.session_id,
-                'start_time': current_logger.session_start,
-                'end_time': None,  # Still running
-                'event_count': current_logger.event_count,
-                'duration': None  # Can't calculate yet
-            })
-
-    # Get overall stats (including current session)
-    total_sessions = len(sessions)
-
-    # Get gate crossings aggregate (count per consist)
-    cursor.execute("SELECT data FROM events WHERE event_type = 'delta_t'")
-    gate_crossings = defaultdict(int)
-    for row in cursor.fetchall():
-        data = json.loads(row[0])
-        gate_crossings[data['consist_id']] += 1
-
-    # Get ALL delta_t events (chronologically ordered for continuous timeline)
-    cursor.execute(
-        "SELECT session_id, timestamp, data FROM events WHERE event_type = 'delta_t' ORDER BY timestamp"
-    )
-    delta_t_events = []
-    for row in cursor.fetchall():
-        data = json.loads(row[2])
-        delta_t_events.append({
-            'session_id': row[0],
-            'timestamp': row[1],
-            'consist_id': data['consist_id'],
-            'delta_t': data['delta_t'],
-            'status': data['status'],
-            'gate_type': data['gate_type']
-        })
-
-    # Get ALL YOLO performance events (FPS, confidence over time)
-    cursor.execute(
-        "SELECT session_id, timestamp, data FROM events WHERE event_type = 'yolo_performance' ORDER BY timestamp"
-    )
-    yolo_performance = []
-    for row in cursor.fetchall():
-        data = json.loads(row[2])
-        yolo_performance.append({
-            'session_id': row[0],
-            'timestamp': row[1],
-            'avg_fps': data.get('avg_fps', 0),
-            'avg_confidence': data.get('avg_confidence', {}),
-            'miss_rate': data.get('miss_rate', 0)
-        })
-
-    # Get locomotive operating time events (for per-session filtering in Current view)
-    cursor.execute(
-        "SELECT session_id, timestamp, data FROM events WHERE event_type = 'loco_operating_time' ORDER BY timestamp"
-    )
-    loco_operating_time_events = []
-    for row in cursor.fetchall():
-        data = json.loads(row[2])
-        loco_operating_time_events.append({
-            'session_id': row[0],
-            'timestamp': row[1],
-            'address': data.get('address'),
-            'duration_seconds': data.get('duration_seconds'),
-            'start_time': data.get('start_time'),
-            'end_time': data.get('end_time')
-        })
-
-    conn.close()
-
-    # Apply tail or sampling based on view mode (mutually exclusive)
-    if tail:
-        # Current view: keep last N events (full resolution, no sampling)
-        delta_t_events = delta_t_events[-tail:] if len(delta_t_events) > tail else delta_t_events
-        yolo_performance = yolo_performance[-tail:] if len(yolo_performance) > tail else yolo_performance
-        loco_operating_time_events = loco_operating_time_events[-tail:] if len(loco_operating_time_events) > tail else loco_operating_time_events
-    elif max_points:
-        # Overview view: intelligent downsampling (LTTB preserves shape, critical events always included)
-        original_delta_t_count = len(delta_t_events)
-        original_yolo_count = len(yolo_performance)
-
-        # Delta-t: Smart downsampling (all critical |Δt| ≥ 1.5s + LTTB on rest)
-        delta_t_events = smart_downsample_delta_t(delta_t_events, max_points, critical_threshold=1.5)
-
-        # YOLO FPS: LTTB downsampling (preserves peaks/valleys)
-        yolo_performance = lttb_downsample(yolo_performance, max_points, x_key='timestamp', y_key='avg_fps')
-        # Note: loco_operating_time not sampled (aggregate stats chart, not timeline)
-
-        # Log ONLY if debug enabled in config AND sampling reduction is significant
-        if debug_enabled:
-            delta_reduction = original_delta_t_count - len(delta_t_events)
-            yolo_reduction = original_yolo_count - len(yolo_performance)
-
-            # Significant = reduced >10% OR reduced >100 events
-            is_significant = (delta_reduction > original_delta_t_count * 0.1 or delta_reduction > 100 or
-                            yolo_reduction > original_yolo_count * 0.1 or yolo_reduction > 100)
-
-            if is_significant:
-                print(f"[DEBUG] LTTB downsampling applied (maxPoints={max_points}) | "
-                      f"dT: {original_delta_t_count}->{len(delta_t_events)} (critical preserved) | "
-                      f"YOLO: {original_yolo_count}->{len(yolo_performance)}")
-
-    # Note: delta_t_events already includes current session events (written by flush task every 10s)
-    # Total count is accurate because query includes all events from DB
-    return {
-        'total_sessions': total_sessions,
-        'total_delta_t_events': len(delta_t_events),
-        'sessions': sessions,
-        'gate_crossings': dict(gate_crossings),
-        'delta_t_events': delta_t_events,
-        'yolo_performance': yolo_performance,
-        'loco_operating_time': loco_operating_time_events
-    }
-
-
-@app.get("/api/analytics/reports")
-async def get_analytics_reports(
-    limit: int = 30,
-    consist_filter: Optional[int] = None
-):
-    """
-    Get session-by-session analysis reports for historical trend analysis.
-
-    Returns per-session aggregated statistics (avg dT, range, status distribution)
-    for the last N validated sessions.
-
-    Args:
-        limit: Number of sessions to return (default 30, max 100)
-        consist_filter: Optional consist ID to filter by (10, 11, etc.)
-
-    Returns:
-        {
-            "sessions": [
-                {
-                    "id": "20250114_143022",
-                    "date": "2025-01-14",
-                    "start_time": timestamp,
-                    "end_time": timestamp,
-                    "duration_seconds": 3600,
-                    "duration_formatted": "01:00:00",
-                    "total_events": 145,
-                    "consists": {
-                        "10": {
-                            "total_crossings": 72,
-                            "avg_delta_t": 0.52,
-                            "min_delta_t": -0.15,
-                            "max_delta_t": 1.82,
-                            "trend": "LEAD FASTER" | "REAR FASTER" | "BALANCED",
-                            "synced_count": 58,
-                            "warning_count": 10,
-                            "critical_count": 4,
-                            "synced_percent": 80.6
-                        },
-                        ...
-                    }
-                },
-                ...
-            ]
-        }
-    """
-    import sqlite3
-    import json
-    from datetime import datetime
-    from collections import defaultdict
-
-    # Cap limit to prevent abuse
-    if limit > 100:
-        limit = 100
-
-    db_path = Path(__file__).parent / "data" / "analytics.db"
-
-    if not db_path.exists():
-        return {"error": "Analytics database not found", "sessions": []}
-
-    try:
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-
-        # Get validated sessions (exclude running sessions with NULL end_time)
-        cursor.execute("""
-            SELECT id, start_time, end_time, event_count
-            FROM sessions
-            WHERE validated = 1 AND end_time IS NOT NULL
-            ORDER BY start_time DESC
-            LIMIT ?
-        """, (limit,))
-
-        sessions = cursor.fetchall()
-
-        if not sessions:
-            conn.close()
-            return {"sessions": []}
-
-        result_sessions = []
-
-        for session_id, start_time, end_time, event_count in sessions:
-            # Get all delta_t events for this session
-            cursor.execute("""
-                SELECT data
-                FROM events
-                WHERE session_id = ? AND event_type = 'delta_t'
-                ORDER BY timestamp
-            """, (session_id,))
-
-            event_rows = cursor.fetchall()
-
-            if not event_rows:
-                # Skip sessions with no delta_t events
-                continue
-
-            # Parse events and group by consist
-            consist_data = defaultdict(lambda: {
-                'delta_t_values': [],
-                'synced_count': 0,
-                'warning_count': 0,
-                'critical_count': 0
-            })
-
-            for (data_json,) in event_rows:
-                data = json.loads(data_json)
-                consist_id = data.get('consist_id')
-                delta_t = data.get('delta_t')
-                status = data.get('status')
-
-                if consist_id is None or delta_t is None:
-                    continue
-
-                # Apply consist filter if specified
-                if consist_filter is not None and consist_id != consist_filter:
-                    continue
-
-                consist_data[consist_id]['delta_t_values'].append(delta_t)
-
-                if status == 'SYNCED':
-                    consist_data[consist_id]['synced_count'] += 1
-                elif status == 'WARNING':
-                    consist_data[consist_id]['warning_count'] += 1
-                elif status == 'CRITICAL':
-                    consist_data[consist_id]['critical_count'] += 1
-
-            # Calculate statistics for each consist
-            consists = {}
-            for consist_id, data in consist_data.items():
-                values = data['delta_t_values']
-                total_crossings = len(values)
-
-                if total_crossings == 0:
-                    continue
-
-                avg_delta_t = sum(values) / total_crossings
-                min_delta_t = min(values)
-                max_delta_t = max(values)
-
-                # Calculate trend indicator
-                if avg_delta_t > 0.2:
-                    trend = 'LEAD FASTER'
-                elif avg_delta_t < -0.2:
-                    trend = 'REAR FASTER'
-                else:
-                    trend = 'BALANCED'
-
-                # Calculate synced percentage
-                synced_percent = (data['synced_count'] / total_crossings) * 100
-
-                consists[str(consist_id)] = {
-                    'total_crossings': total_crossings,
-                    'avg_delta_t': round(avg_delta_t, 3),
-                    'min_delta_t': round(min_delta_t, 3),
-                    'max_delta_t': round(max_delta_t, 3),
-                    'trend': trend,
-                    'synced_count': data['synced_count'],
-                    'warning_count': data['warning_count'],
-                    'critical_count': data['critical_count'],
-                    'synced_percent': round(synced_percent, 1)
-                }
-
-            # Only include sessions that have consist data after filtering
-            if not consists:
-                continue
-
-            # Format session data
-            duration_seconds = end_time - start_time
-            session_date = datetime.fromtimestamp(start_time).strftime('%d-%m-%Y')
-
-            # Count ONLY delta_t events (gate crossings), not all event types
-            total_delta_t_events = sum(cd['total_crossings'] for cd in consists.values())
-
-            result_sessions.append({
-                'id': session_id,
-                'date': session_date,
-                'start_time': start_time,
-                'end_time': end_time,
-                'duration_seconds': int(duration_seconds),
-                'duration_formatted': format_duration_hms(duration_seconds),
-                'total_events': total_delta_t_events,  # Only gate crossings, not all event types
-                'consists': consists
-            })
-
-        conn.close()
-
-        return {"sessions": result_sessions}
-
-    except Exception as e:
-        return {"error": f"Failed to load reports: {str(e)}", "sessions": []}
-
-
-@app.get("/api/analytics/locomotive-stats")
-async def get_locomotive_stats():
-    """Get aggregated locomotive operating time statistics"""
-    import sqlite3
-
-    db_path = Path(__file__).parent / "data" / "analytics.db"
-
-    if not db_path.exists():
-        return {'locomotives': []}
-
-    try:
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            SELECT
-                address,
-                name,
-                total_operating_seconds,
-                total_sessions,
-                last_active_time,
-                created_at
-            FROM locomotive_stats
-            ORDER BY address
-        ''')
-
-        rows = cursor.fetchall()
-        conn.close()
-
-        return {
-            'locomotives': [
-                {
-                    'address': row[0],
-                    'name': row[1] or f"Loco {row[0]}",
-                    'total_operating_hours': round(row[2] / 3600, 2) if row[2] else 0,
-                    'total_operating_seconds': row[2],
-                    'total_sessions': row[3],
-                    'last_active_time': row[4],
-                    'created_at': row[5]
-                }
-                for row in rows
-            ]
-        }
-    except Exception as e:
-        log('[ERROR]', f"Failed to load locomotive stats: {e}")
-        return {'error': str(e), 'locomotives': []}
 
 
 # ========================================

@@ -1957,3 +1957,236 @@ SRC_POINTS = np.float32([
 - Lette CV da file roster XML
 - Documentato setup completo plastico e roster
 - Creato script Python `read_cv_from_roster.py` e `read_consists.py`
+
+---
+
+## Changelog 2025-01-14 (Analytics UX & Session Boundaries)
+
+### 2025-01-14 - 🎉 **SESSION BOUNDARY LINE BREAKS - RISOLTO!**
+
+**Status**: ✅ **FEATURE COMPLETATA** dopo 10+ tentativi falliti
+
+Soluzione finale: Segment-based rendering con dataKey separati (NON array separati!), singolo array condiviso con dataKey diversi per ogni segmento.
+
+**Commits**: `250b863`, `863aa15`, `865387d`, `ed4cccb`, `35ea274` (soluzione finale)
+
+---
+
+### 2025-01-14 - 📊 **BOX-SELECT ZOOM & Y-AXIS IMPROVEMENTS**
+
+**Status**: ✅ **FEATURE COMPLETATA** - Interactive zoom, rotated labels, sticky legend
+
+- Box-select zoom in Overview mode, double-click reset
+- Y-axis fixes (ReferenceLine visibility, decimali 2 cifre, padding 5%, rotation 180°)
+- Sticky legend in Current mode
+- Session breaks toggle checkbox
+
+**Total commits**: 15
+
+---
+
+## Changelog 2025-01-13 (Analytics Suite Implementation)
+
+### 2025-01-13 - 🏷️ **ANALYTICS WORKING TAG** (Rollback + Fix)
+
+Context: Analytics panel was already working at commit `acfed1b` (2025-01-12 22:57).
+
+**Issues Fixed**:
+- Chart disappeared after session filtering → reverted to `acfed1b`
+- Gate crossings stats showed 0 → fixed SQL query (`event_type = 'gate_crossing'` → `'delta_t'`)
+- "Detail" naming unclear → renamed to "Current"
+
+**Tag**: `analytics-working` (commit `418fc03`)
+
+---
+
+### 2025-01-13 - 🎯 **DETERMINISTIC SESSION BOUNDARIES**
+
+Implemented `navigator.sendBeacon('/api/close-session')` on page unload.
+**Result**: Every page refresh = NEW session (100% deterministic, no timing dependencies).
+
+**Commit**: `f12cee5`
+
+---
+
+### 2025-01-13 - 📈 **ANALYTICS SUITE COMPLETATO - YOLO PERFORMANCE MONITORING**
+
+**Status**: ✅ **MILESTONE COMPLETATO** (commit `5dd4ed3`) - 3/3 charts implementati
+
+**Third Chart**: YOLO Performance Monitoring (FPS + Confidence)
+- DCC address tracking (1, 5, 7, 8) NOT YOLO class
+- 5-second logging (~720 events/hour vs 3600)
+- Horizontal scroll + auto-scroll to right
+
+**Production Results** (PC Windows + RTX 2060):
+- FPS: 50-130 FPS (2-4x faster than 30 FPS target!)
+- Confidence: Loco 1,7,8 = 60-75%, Loco 5 = 35%
+
+**Commits**: `4bce745`, `4457541`, `01df6af`, `d2630a3`, `5dd4ed3`
+
+---
+
+### 2025-01-13 - 📊 **TAIL VS SAMPLING STRATEGY + CONDITIONAL DEBUG LOGGING**
+
+**Solution: Tail vs Sampling** (mutually exclusive):
+- **Current View** (`?tail=1000`): Last N events at full resolution (no sampling)
+- **Overview View** (`?maxPoints=500`): Uniform sampling across entire history
+
+**Conditional Debug Logging**: Log ONLY when `config.json` → `"debug": {"enabled": true}` AND reduction significant (>10% OR >100 events)
+
+**Commit**: `2480eaf`
+
+---
+
+### 2025-01-13 - 📊 **ANALYTICS SESSION-FILTERED CARDS COMPLETATO**
+
+**Status**: ✅ **MILESTONE VERIFIED** (commit `33345ba`) - Tested with real locomotive movement
+
+- Current view: Cards filtered per session (Duration, Gate Crossings, Critical Events)
+- Overview view: Historical data totals
+- Consist filters: All/C10/C11 functional
+
+**Tag**: `analytics-working` (verified at `33345ba`)
+
+---
+
+### 2025-01-13 - 🚂 **LOCOMOTIVE OPERATING TIME TRACKING**
+
+**Status**: ✅ **IMPLEMENTED** - Hybrid approach (Events + Stats tables)
+
+- Database Schema: `locomotive_stats` table
+- Backend Tracking: `loco_start_times` dictionary (address → timestamp)
+- Migration: One-time backfill from existing sessions (46 events)
+- Frontend Chart: Bar chart, ONLY in Overview
+
+**Commits**: `b7c4114`, `2e6bea9`, `a061d49`, `ff40c8b`, `4641995`, `db60bf6`, `6133ca4`, `d791f20`, `b547636`, `5642b8c`, `c79c83c`, `84c048d`
+
+---
+
+### 2025-01-13 - 🗂️ **DATA DIRECTORY REFACTORING**
+
+**Change**: Moved `data/` → `backend/data/`
+- Before: `Path(__file__).parent.parent / "data" / "analytics.db"` (2 levels up)
+- After: `Path(__file__).parent / "data" / "analytics.db"` (1 level up)
+
+**Commit**: `aa1d172`
+
+---
+
+### 2025-01-13 - ♻️ **ANALYTICSPANEL REFACTORING**
+
+**Motivation**: Eliminate code duplication (~80 lines, 4+ duplications each)
+
+**Constants & Helpers Extracted**: TOOLTIP_STYLES, CHART_AXIS_STYLES, filterEventsBySession, getAddressFilter, getConsistColor
+
+**Result**: ~50 lines reduction, build size 658.74 kB → 658.26 kB
+
+**Commit**: `e610f70`
+
+---
+
+### 2025-01-13 - 🔧 **Z21 HEALTH CHECK GRACE PERIOD**
+
+**Solution**: Require 2 consecutive failures before marking offline (eliminates false positives)
+
+**Detection time**: 10s (2 × 5s checks)
+
+**Commit**: `5428a81`
+
+---
+
+### 2025-01-13 - ♻️ **ANALYTICS REFACTORING & CLEANUP**
+
+**Revert All Idle/Break Line Experiments** (commit `a406909`):
+- Double-null strategy failed when consists move independently
+- Hard reset to commit `3512f8d` (88 lines deleted)
+
+---
+
+### 2025-01-13 - 🔧 **ANALYTICS UX IMPROVEMENTS**
+
+Multiple improvements (commits `1e44b33`, `a7d88c7`, `e3eaa18`, `d1642d4`, `945b9e8`, `16b1f1f`, `10fee70`):
+- Operating Time Chart Filtering (All/C10/C11 consistent)
+- Sticky Header Filters (always visible)
+- Chart Remount Fix (`key={consistFilter}`)
+- Click Outside to Close modal
+- X-Axis Improvements for Overview (event numbers instead of timestamps)
+- Consist Names Shortened (C10 Interno, C11 Esterno)
+- Min Threshold Line Styling (white)
+
+---
+
+### 2025-01-13 - 🚀 **LTTB DOWNSAMPLING WITH CRITICAL EVENT PRESERVATION**
+
+**Motivation**: Analytics reaching >500 events → uniform sampling loses important peaks/valleys
+
+**Implementation**:
+- `lttb_downsample()` - Generic LTTB algorithm (~40 lines pure Python)
+- `smart_downsample_delta_t()` - ALWAYS includes ALL critical events (|Δt| ≥ 1.5s)
+
+**Performance**: <20ms with <1000 events, ~50-100ms with 5000 events
+
+**Commit**: `683d263`, **Tag**: `analytics-working`
+
+---
+
+### 2025-01-13 - 📚 **README UPDATE & ANALYTICS DOCUMENTATION**
+
+**README.md updated** (commit `207d411`):
+- Added Analytics Dashboard section
+- Updated Project Structure (`backend/data/`)
+- Fixed GPU model (GTX 1050 Ti → RTX 2060)
+- Added TensorRT acceleration details
+
+---
+
+### 2025-01-13 - ♻️ **ANALYTICSPANEL REFACTORING PHASE 2**
+
+**Completato DRY cleanup** (commit `28882ef`):
+- Card 2/3 color logic via helper
+- All chart axes use shared constant
+- Code eliminated: ~15 lines (Phase 1+2 total: ~65 lines)
+
+---
+
+### 2025-01-13 - 🔄 **DYNAMIC CHART LINE BREAKS (CONFIG-DRIVEN)**
+
+**Backend** (`/api/config/tracking`): Returns `idle_timeout_seconds` from `config.json`
+**Frontend**: `breakLineOnIdle()` helper inserts null points when gap > idle_timeout
+
+**Commit**: `c4c536d`
+
+---
+
+### 2025-01-13 - 🐛 **IDLE LINE BREAKS FIX (ALL FILTER)**
+
+**Solution: Double-Null Strategy**:
+- Apply `breakLineOnIdle()` separately to C10 and C11, merge chronologically
+- Creates double-null idle points (both consists null)
+- `connectNulls={true}` connects single nulls (other consist) but NOT double nulls (idle)
+
+**Commit**: `a9ab5d6`
+
+---
+
+### 2025-01-13 - 🎛️ **CONFIG-DRIVEN REFACTORING (DYNAMIC CONSIST SUPPORT)**
+
+**Motivation**: Analytics hardcoded consist IDs 10/11 → adding/renaming required code changes
+
+**Solution**: Dynamic consist support from `config.json`
+- Removed hardcoded constants (CONSIST_ADDRESSES, CONSIST_COLORS)
+- Added dynamic color palettes (cyclic, up to 6 consists)
+- Helper functions (getConsistStrokeColor, getConsistColorClass, getConsistBgClass, getAddressFilter)
+
+**Result**: Support for N consists (2, 3, 5, etc.), zero code changes needed
+
+**Commits**: `658d636`, `3512f8d` (fix missing config load)
+
+---
+
+### 2025-01-13 - 🚧 **IDLE VISUALIZATION IMPROVEMENT (IN PROGRESS)**
+
+**Planned Solution**: Dashed lines for idle periods (dual Line components per consist - active solid, idle dashed)
+
+**Status**: Ready to implement (user approved)
+

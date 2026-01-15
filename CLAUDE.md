@@ -61,6 +61,64 @@ Per dettagli tecnici completi, vedi:
 
 ---
 
+## ⚠️ CRITICAL: Python Virtual Environment
+
+**SEMPRE usare venv - Mac E PC - OGNI VOLTA che chiami python3**
+
+Questa è una regola **NON NEGOZIABILE** per TUTTO il progetto, non solo per il refactor.
+
+### Mac Development
+
+**SEMPRE attivare venv prima di eseguire comandi Python**:
+
+```bash
+# Attivare venv (OBBLIGATORIO ogni volta)
+source venv/bin/activate
+
+# Poi eseguire comandi Python
+python -m py_compile backend/routers/analytics.py
+python scripts/utils/some_script.py
+uvicorn main:app --reload
+```
+
+**Esempio - Syntax Check**:
+```bash
+source venv/bin/activate && python -m py_compile backend/routers/analytics.py backend/main.py
+```
+
+### PC Windows Production
+
+**Il deployment production usa venv automaticamente** via Task Scheduler (configurato in `start-backend.ps1`).
+
+**Per comandi manuali via SSH, attivare venv**:
+```powershell
+# Attivare venv (OBBLIGATORIO per comandi manuali)
+.\venv\Scripts\Activate.ps1
+
+# Poi eseguire comandi Python
+python -m py_compile backend/main.py
+python scripts/utils/some_script.py
+```
+
+**Nota**: Il comando `z21-restart` gestisce automaticamente venv activation via Task Scheduler.
+
+### Perché È Importante
+
+1. **Isolamento dipendenze**: PyTorch, ultralytics, FastAPI installati in venv, non system-wide
+2. **Controllo versione Python**: Evita problemi da `brew upgrade python` su Mac
+3. **Riproducibilità**: Stesso environment Mac (dev) e PC (production)
+4. **Zero cognitive load**: Una volta attivato, tutti i comandi funzionano correttamente
+
+### Cosa Succede Se Dimentichi
+
+- ❌ **Import errors**: `ModuleNotFoundError: No module named 'fastapi'`
+- ❌ **Versione Python sbagliata**: System Python 3.x invece di venv Python 3.11.x
+- ❌ **Conflitti dipendenze**: Pacchetti system vs requirements progetto
+
+**RICORDA**: Se vedi errori import Python, prima cosa da verificare: "Ho attivato venv?"
+
+---
+
 ## Setup Hardware
 
 **Control Station**:
@@ -613,6 +671,133 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2025-01-15 - 🎉 **BACKEND REFACTORING COMPLETATO** (Phase 4)
+
+**Status**: ✅ **MILESTONE ACHIEVED** - Modular architecture complete, merged to develop
+
+**Objective**: Reduce main.py from 2340 lines (monolithic) to modular architecture with routers + services + WebSocket handlers
+
+**Final Results**:
+- **main.py**: 2340 → 742 lines (-68.3% reduction, -1598 lines)
+- **Total modular code**: 3162 lines across 11 new files
+- **Architecture**: Routers (4) + Services (4) + WebSocket Handlers (2) + Dependencies system
+- **Endpoint compatibility**: 100% - all 27 endpoints functional, zero breaking changes
+- **Testing**: All features verified on PC Windows production (locomotive control, tracking, YOLO, analytics, gate editor)
+
+**Files Created** (11 total):
+1. `backend/dependencies.py` (230 lines) - Global state dependency injection
+2. `backend/routers/analytics.py` (226 lines) - 6 analytics endpoints
+3. `backend/routers/config.py` (378 lines) - 7 config/consist/gate endpoints
+4. `backend/routers/roster.py` (110 lines) - 3 roster endpoints
+5. `backend/routers/status.py` (125 lines) - 2 status/telemetry endpoints
+6. `backend/services/analytics_db.py` (435 lines) - SQLite analytics queries
+7. `backend/services/broadcast.py` (237 lines) - WebSocket broadcast utilities
+8. `backend/services/config_manager.py` (172 lines) - Configuration access helpers
+9. `backend/services/downsampling.py` (149 lines) - LTTB + smart Δt downsampling
+10. `backend/websocket_handlers/ws_control.py` (394 lines) - Real-time locomotive control (10 message types)
+11. `backend/websocket_handlers/ws_tracking.py` (192 lines) - YOLO tracking daemon handler (3 message types)
+
+**Critical Bugs Fixed During Refactoring**:
+1. **Namespace Collision**: Renamed `websockets/` → `websocket_handlers/` (uvicorn conflict)
+2. **WebSocket Crash**: Fixed `get_full_roster()` import from `routers.roster`
+3. **Tracking Broken**: Synced `tracking_daemon_ws` with `dependencies.set_tracking_daemon_ws()`
+4. **Video Panels Missing**: Updated `get_tracked_consist_ids()` to use `gate_ids` field (config schema change)
+5. **YOLO Bbox Gone**: Changed video feed callback to use `dependencies.get_yolo_detections()`
+6. **Dead Code**: Removed unused globals `tracking_daemon_ws` and `yolo_detections` (final cleanup)
+
+**Architecture Achieved**:
+```
+backend/
+├── main.py (742 lines - minimal delegation, FastAPI app)
+├── dependencies.py (global state injection)
+├── routers/
+│   ├── analytics.py (6 endpoints)
+│   ├── config.py (7 endpoints)
+│   ├── roster.py (3 endpoints)
+│   └── status.py (2 endpoints)
+├── services/
+│   ├── analytics_db.py (SQLite queries)
+│   ├── broadcast.py (WebSocket utilities)
+│   ├── config_manager.py (config helpers)
+│   └── downsampling.py (LTTB + smart sampling)
+└── websocket_handlers/
+    ├── ws_control.py (10 control messages)
+    └── ws_tracking.py (3 tracking messages)
+```
+
+**Benefits for Future Development**:
+- ✅ **Maintainability**: Single responsibility per file (~150-400 lines each)
+- ✅ **Testability**: Each router/service can be tested independently
+- ✅ **Scalability**: New features (Speed Table Auto-Tuning v1.3) require zero main.py changes
+- ✅ **Collaboration**: Multiple developers can work on different routers without conflicts
+- ✅ **Debugging**: Clear separation of concerns, easier to locate bugs
+
+**Time Investment**: ~10-12 hours total (4 phases, incremental testing after each)
+**Rollback Safety**: Git tag created after each phase (rollback ready if needed)
+
+**Commits**: `10d0bfd` → `0502e73` (14 commits across 4 phases)
+
+**Documentation Updated**:
+- `backend/README.md` - Project structure section
+- `docs/REFACTOR_PLAN.md` - Complete implementation guide
+- `CLAUDE.md` - This changelog entry
+
+**Next Steps** (v1.3 Speed Table Auto-Tuning):
+- Add `routers/speed_tuning.py` (clean separation)
+- Extend `AnalyticsDB` with speed correlation queries
+- Add CV write operations in `services/cv_manager.py`
+
+---
+
+### 2025-01-15 - ♻️ **BACKEND REFACTORING: Phase 2.2 Completato + Venv Documentation**
+
+**Status**: ✅ **Config Router Extracted** - 7 endpoints migrated to `backend/routers/config.py`
+
+**Phase 2.2 Implementation**:
+
+1. **Config Router Created** (`backend/routers/config.py`, 378 lines):
+   - GET `/api/consists` - List all consists with state and gates
+   - POST `/api/consists` - Create new consist with CV19 write (Virtual/DCC mode)
+   - PUT `/api/consists/{address}` - Update consist (mode switching, gate assignments)
+   - DELETE `/api/consists/{address}` - Delete consist (writes CV19=0 if DCC mode)
+   - GET `/api/config/tracking` - Get tracking configuration (idle_timeout, thresholds, consists)
+   - GET `/api/gates` - Get current gate configuration
+   - POST `/api/save-gates` - Save gate configuration from web editor
+
+2. **Key Features**:
+   - **CV19 Operations**: Automatic CV write for Virtual Mode (CV19=0) vs DCC Mode (CV19=consist_address)
+   - **Global State Management**: Uses dependency injection via `dependencies.get_consist_data()`, `dependencies.get_z21_manager()`
+   - **Broadcast Integration**: Updates global state and broadcasts to all connected clients after CRUD operations
+   - **Backup Creation**: Gate editor creates `config.json.backup` before saving
+
+3. **Testing Results** (PC Windows production):
+   - ✅ GET `/api/consists` → 2 consists, 4 gates
+   - ✅ GET `/api/gates` → 4 gates
+   - ✅ GET `/api/config/tracking` → idle_timeout 10s, 2 consists
+
+**Refactoring Progress**:
+- **main.py**: 2340 → 1227 lines (-1113 lines, **-47.5%** reduction)
+- **Routers extracted**: analytics.py (228 lines), config.py (378 lines)
+- **Total endpoints migrated**: 13/27 (48%)
+
+**Critical Documentation Added**:
+- **Plan file updated** with **"⚠️ CRITICAL: Development Environment Requirements"** section
+- **Emphasizes**: ALWAYS use venv on both Mac AND PC, every time calling python3
+- **Includes**: Practical examples for Mac (`source venv/bin/activate`) and PC (`.\venv\Scripts\Activate.ps1`)
+- **Explains**: Why it matters (dependency isolation, version control, reproducibility)
+- **Warns**: What happens if forgotten (ModuleNotFoundError, wrong Python version, conflicts)
+
+**Files Modified**:
+- `backend/routers/config.py` (NEW - 378 lines)
+- `backend/main.py` (removed 7 config endpoints, -334 lines)
+- `~/.claude/plans/glimmering-sleeping-starfish.md` (venv requirements section added)
+
+**Next Steps**: Phase 2.3 - Extract locomotives router (8 endpoints)
+
+**Commits**: `cbd1e60` - Phase 2.2: Extract config router + Plan file venv documentation
+
+---
+
 ### 2025-01-14 - 🔍 **ROOT CAUSE ANALYSIS: Loco 7 Erratic Behavior**
 
 **Investigation**: Analytics historical trend analysis su Consist 11 (30 sessioni, 2026-01-12 → 2026-01-14)
@@ -797,657 +982,7 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 **Files**: `web/src/App.jsx`
 
----
 
-Work in progress (2025-01-14):
-
-### 2025-01-14 - 🎉 **SESSION BOUNDARY LINE BREAKS - RISOLTO!**
-
-**Status**: ✅ **FEATURE COMPLETATA** dopo 10+ tentativi falliti
-
-#### Il Problema
-Linee continue nel grafico Δt Trends attraversavano pause/idle tra sessioni, rendendo difficile distinguere visivamente quando le locomotive erano ferme.
-
-#### Tentativi Falliti (2025-01-13 → 2025-01-14)
-1. **Segment-based con array separati** (commit `f3c40da`) - Recharts NON supporta `data` prop su Line
-2. **Unified dataset + null boundaries** (commit `615f68e`) - Mini-segmenti ovunque
-3. **Double-null strategy** (commit `f470b53`) - Recharts ignora double-null
-4. **XAxis numeric + segments** (commit `8037997`) - 1000+ legend entries, illegibile
-5. **Marker con undefined** (commit `250b863`) - Ignorati da Recharts
-6. **Marker con NaN** (commit `863aa15`) - Stesso risultato
-7. **connectNulls={false}** (commit `865387d`) - Spezza linee anche sui null naturali (altro consist)
-8. **Plotly migration** (commits `28bed61`-`a9c0e2f`) - Bundle 8.5x più grande (5.5 MB), illegibile con dati sparsi
-
-#### Soluzione Finale ✅ (commit `35ea274`)
-**Segment-based rendering con dataKey separati** (NON array separati!)
-
-**Approccio:**
-```javascript
-// 1. Rileva session boundaries, assegna segment numbers
-const eventSegments = [0, 0, 0, 1, 1, 2, 2, 2, ...];
-
-// 2. Build unified dataset con dataKey per ogni consist+segment
-chartData = events.map(e => ({
-  ...e,
-  delta_t_c10_seg0: (consist === 10 && segment === 0) ? delta_t : null,
-  delta_t_c10_seg1: (consist === 10 && segment === 1) ? delta_t : null,
-  delta_t_c11_seg0: (consist === 11 && segment === 0) ? delta_t : null,
-  delta_t_c11_seg1: (consist === 11 && segment === 1) ? delta_t : null,
-  // ... etc
-}));
-
-// 3. Render Line separata per ogni segmento
-<LineChart data={chartData}>  // <-- STESSO array per tutti!
-  <Line dataKey="delta_t_c10_seg0" legendType={undefined} />
-  <Line dataKey="delta_t_c10_seg1" legendType="none" />
-  <Line dataKey="delta_t_c11_seg0" legendType={undefined} />
-  <Line dataKey="delta_t_c11_seg1" legendType="none" />
-</LineChart>
-```
-
-**Differenza Cruciale dal Tentativo #1:**
-- ❌ **Prima**: Provato array `data` separati per ogni Line → non supportato
-- ✅ **Ora**: **Singolo array condiviso, dataKey diversi** per ogni segmento → supportato!
-
-**Legend Strategy**: `legendType="none"` sui segmenti >0 → ogni consist mostrato una sola volta
-
-**Risultato:**
-- ✅ Break visibili a ogni cambio sessione (idle periods)
-- ✅ Funziona in Current E Overview modes
-- ✅ Funziona con sampling LTTB (segmenti preservati)
-- ✅ Legend pulita (no duplicati)
-- ✅ Brush zoom/pan non influenzato
-- ✅ Zero impatto performance
-
-**Key Insight**: La "limitazione" di Recharts (array condiviso obbligatorio) è diventata la soluzione - il supporto multi-dataKey permette la segmentazione!
-
-**Commits**: `250b863` (markers undefined), `863aa15` (markers NaN), `865387d` (connectNulls test), `ed4cccb` (restore connectNulls), `35ea274` (✅ soluzione finale)
-
-**Documentazione completa**: `docs/ANALYTICS.md` → "Failed Approaches #3" + "Working Solutions #4"
+**Note**: Per dettagli completi implementation Analytics (2025-01-13/14), vedi `docs/CHANGELOG_ARCHIVE.md`
 
 ---
-
-### 2025-01-14 - 📊 **BOX-SELECT ZOOM & Y-AXIS IMPROVEMENTS**
-
-**Status**: ✅ **FEATURE COMPLETATA** - Interactive zoom, rotated labels, sticky legend
-
-**Funzionalità implementate:**
-- **Box-select zoom**: Trascina rettangolo in Overview mode, double-click reset
-- **Y-axis fixes**: ReferenceLine visibility, decimali 2 cifre, padding 5%, label rotation 180°
-- **Sticky legend**: Custom HTML in Current mode (non scorre), Recharts standard in Overview
-- **Session breaks toggle**: Checkbox ⏸️ per attivare/disattivare segmenti (default OFF)
-
-**Key challenges solved:**
-- XAxis categorical non supporta domain → filtra data invece
-- Performance mouseMove drag → throttle 50ms
-- Label rotation + centering → accept default (good enough)
-
-**Total commits**: 15
-**Documentazione completa**: `docs/ANALYTICS.md` → "Changelog 2025-01-14"
-
----
-
-Work in progress (2025-01-13):
-
-### 2025-01-13 - 🏷️ **ANALYTICS WORKING TAG** (Rollback + Fix)
-
-#### Context
-Analytics panel was **already working** at commit `acfed1b` (2025-01-12 22:57).
-Session filtering modifications attempted today broke the chart rendering.
-
-#### Issues Found & Fixed
-
-**Issue 1**: Chart disappeared after session filtering changes
-- **Root cause**: Attempt to filter chart data by `session_id` made chart empty
-- **Solution**: Reverted to `acfed1b` (original working version)
-- Chart must show ALL events (no session filtering on chart data)
-
-**Issue 2**: Gate crossings stats showed 0
-- **Root cause**: SQL query searched for `event_type = 'gate_crossing'` but events are stored as `'delta_t'`
-- **Solution**: Fixed SQL query in `backend/main.py` line 1718
-- **Commit**: `418fc03`
-
-**Issue 3**: "Detail" naming unclear
-- **Solution**: Renamed "Detail" → "Current" throughout UI
-- More intuitive: "Current session" vs "All sessions history"
-- **Commit**: `418fc03`
-
-#### Working State Restored
-- **Tag created**: `analytics-working` (points to commit `418fc03`)
-- **What works**:
-  - ✅ Chart displays all 145 historical events correctly
-  - ✅ Gate crossings stats show proper counts (C10/C11/All)
-  - ✅ Current/Overview view toggle with arrow keys
-  - ✅ Auto-refresh Current view when locos moving
-- **Lesson**: Session filtering should ONLY affect stats cards, NEVER the chart data
-
-**Commits**: `418fc03` (SQL fix + rename Detail→Current)
-**Tag**: `analytics-working` (use `git show analytics-working` to see details)
-
----
-
-### 2025-01-13 - 🎯 **DETERMINISTIC SESSION BOUNDARIES**
-
-Implemented `navigator.sendBeacon('/api/close-session')` on page unload.
-**Result**: Every page refresh = NEW session (100% deterministic, no timing dependencies).
-
-**Details**: See `docs/ANALYTICS.md` → "Session Lifecycle - Investigation 2"
-**Commit**: `f12cee5`
-
----
-
-### 2025-01-13 - 📈 **ANALYTICS SUITE COMPLETATO - YOLO PERFORMANCE MONITORING**
-
-**Status**: ✅ **MILESTONE COMPLETATO** (commit `5dd4ed3`) - 3/3 charts implementati
-
-**Third Chart Implemented**: YOLO Performance Monitoring
-- **FPS Line Chart** (time-series): Inference speed over time (50-130 FPS on TensorRT!)
-- **Confidence Bar Chart** (snapshot): Per-locomotive detection quality (DCC addresses)
-
-**Key Features**:
-- **DCC address tracking**: Confidence keyed by DCC address (1, 5, 7, 8), NOT YOLO class
-  - Ensures data consistency across model changes (OBB ↔ Standard)
-- **5-second logging**: Reduces event volume (~720 events/hour vs 3600)
-- **Session filtering rules**: Time-series charts NO filter, snapshot charts YES filter
-- **Horizontal scroll**: FPS chart scrollable in Current view (like Δt chart)
-- **Auto-scroll to right**: Always shows most recent data
-- **Sticky header**: Tab buttons remain visible during scroll
-
-**Production Results** (PC Windows + RTX 2060):
-- FPS: 50-130 FPS (2-4x faster than 30 FPS target!)
-- Confidence: Loco 1,7,8 = 60-75% (excellent), Loco 5 = 35% (below threshold)
-- Charts: ✅ FPS scrollbar working, ✅ Confidence empty in Current (correct), ✅ Consist filtering functional
-
-**Implementation Approach** (REUSABLE for future charts):
-1. **Backend tracking**: Performance stats in `yolo_tracker.py` with deque histories
-2. **Event logging**: 5-second interval in `tracking_daemon.py` (reduce volume)
-3. **API update**: Add `session_id` to query for filtering support
-4. **Frontend charts**:
-   - Time-series: NO session filtering, horizontal scroll, auto-scroll right
-   - Snapshot: YES session filtering (Current/Overview semantics)
-5. **Refs for scroll**: One ref per scrollable chart, shared auto-scroll effect
-
-**Session Filtering Rules** (CRITICAL):
-| Chart Type | Session Filter | Rationale |
-|-----------|---------------|-----------|
-| Δt Trends (time-series) | ❌ NO | Historical trends valuable |
-| FPS (time-series) | ❌ NO | Performance trends over time |
-| Confidence (snapshot) | ✅ YES | Current vs Overview semantics |
-| Stats Cards | ✅ YES | Session-specific metrics |
-
-**Commits**:
-- `4bce745` - YOLO Performance Monitoring implementation
-- `4457541` - Sticky header
-- `01df6af` - FPS chart horizontal scroll
-- `d2630a3` - Remove session filtering from FPS
-- `5dd4ed3` - Confidence chart session filtering logic
-
-**Documentation**:
-- `docs/ANALYTICS.md` - Complete implementation approach (REUSABLE PATTERN)
-- Section "YOLO Performance Monitoring" with step-by-step guide
-
-**✅ ANALYTICS SUITE COMPLETE** - All 3 charts from original plan implemented:
-1. ✅ Session Statistics Dashboard (cards)
-2. ✅ Δt Trends Visualization (line chart)
-3. ✅ YOLO Performance Monitoring (FPS + confidence charts)
-
----
-
-### 2025-01-13 - 📊 **TAIL VS SAMPLING STRATEGY + CONDITIONAL DEBUG LOGGING**
-
-**Status**: ✅ **IMPLEMENTED** (commit `2480eaf`)
-
-**Problem**: Need smart data strategy for large datasets (>1000 events):
-- Initial uniform sampling was too aggressive (sampled ALL data including recent)
-- User wanted full resolution for recent data, sampling only for historical overview
-
-**Solution: Tail vs Sampling** (mutually exclusive parameters):
-
-**Current View** (`?tail=1000`):
-- Returns **last N events** at full resolution (no sampling)
-- Keeps recent data intact (important for active operations)
-- Example: 1523 events → returns last 1000 (events 524-1523)
-
-**Overview View** (`?maxPoints=500`):
-- **Uniform sampling** across entire history
-- Optimizes performance for historical trends
-- Example: 1523 events → samples to 500 (every 3rd event)
-
-**Conditional Debug Logging**:
-- Log ONLY when `config.json` → `"debug": {"enabled": true}`
-- Log ONLY if reduction is **significant**: >10% **OR** >100 events absolute
-- Prevents spam for minimal reductions (501→500 = silent)
-
-**Log Examples**:
-```
-❌ 501->500 (1 event, 0.2%) - No log (not significant)
-❌ 550->500 (50 events, 9.1%) - No log (<10%)
-✅ 600->500 (100 events, 16.7%) - [DEBUG] Sampling applied (maxPoints=500) | dT: 600->500 | YOLO: 600->500
-✅ 1000->500 (500 events, 50%) - [DEBUG] Sampling applied (maxPoints=500) | dT: 1000->500 | YOLO: 1000->500
-```
-
-**Key Benefits**:
-- ✅ Current view: Full resolution recent data (no detail loss)
-- ✅ Overview view: Performance optimized (sampling entire history)
-- ✅ Silent by default (no log spam unless debug enabled + significant)
-- ✅ Universal: Works for ALL event types (Δt, YOLO, future charts)
-- ✅ Transparent: Frontend unchanged (receives array of events)
-
-**Files Modified**:
-- `backend/main.py`: Tail vs sampling logic + conditional debug log
-- `web/src/components/AnalyticsPanel.jsx`: View-specific API calls
-- `docs/ANALYTICS.md`: Updated STEP 1 with tail/sampling strategy
-
-**Commit**: `2480eaf`
-
----
-
-### 2025-01-13 - 📊 **ANALYTICS SESSION-FILTERED CARDS COMPLETATO**
-
-**Status**: ✅ **MILESTONE VERIFIED** (commit `33345ba`) - Tested with real locomotive movement
-
-**Implemented:**
-- **Current view**: Cards filtrate per sessione corrente (Duration, Gate Crossings, Critical Events)
-- **Overview view**: Cards mostrano dati storici totali
-- **Consist filters**: All/C10/C11 funzionano per Card 2 e Card 3
-- **Banner warning**: "Session not validated" quando validated=0
-- **Chart**: Sempre tutti i dati (non filtrato per sessione) ✅
-- **Legend**: Visibile solo con filtro "All" (evita chart shift verticale)
-
-**Known Issue (da fixare in futuro):**
-- C10 filter scrolla a destra (area vuota) perché eventi C10 sono all'inizio timeline
-- Soluzione futura: calcolare posizione ultimo evento C10 e scrollare lì esattamente
-- Per ora: utente scrolla manualmente a sinistra per vedere C10
-
-**Real-World Test** (2025-01-13 evening):
-- ✅ Session validation working (banner disappears after first Δt)
-- ✅ Current view cards update correctly (Gate Crossings, Critical Events)
-- ✅ Overview view shows historical data
-- ✅ Consist filters (All/C10/C11) working
-- ✅ Chart always visible, shows all events
-- ✅ Deterministic sessions (page refresh = new session)
-
-**Commits**: `fc38298`, `c5d28ef`, `cc5bcaf`, `0e10eb8`, `d6af031`, `89cc116`, `33345ba`
-**Tag**: `analytics-working` (✅ verified at `33345ba`)
-
----
-
-### 2025-01-13 - 🚂 **LOCOMOTIVE OPERATING TIME TRACKING**
-
-**Status**: ✅ **IMPLEMENTED** - Hybrid approach (Events + Stats tables)
-
-#### Implementation
-
-**Database Schema** (`analytics_logger.py`):
-- Added `locomotive_stats` table (address, total_operating_seconds, total_sessions, last_active_time)
-- Method `log_loco_operating_time()` for dual-write (events + stats)
-
-**Backend Tracking** (`backend/main.py`):
-- Global `loco_start_times` dictionary (address → timestamp)
-- Movement start: `speed > 0` and not in dict → save timestamp
-- Movement stop: `speed == 0` and in dict → calculate duration, log event
-- Real-time tracking for individual locomotives (addresses 1, 5, 7, 8)
-
-**Migration** (`scripts/utils/migrate_operating_time.py`):
-- One-time backfill from existing sessions (46 events)
-- Assumption: Consist locos operated together (same duration)
-- Mapping: C10→[1,5], C11→[7,8]
-- Result: Loco 1/5: 22.66h, Loco 7/8: 73.22h
-
-**API Endpoint**:
-- `GET /api/analytics/locomotive-stats` - Aggregated stats per locomotive
-- Endpoint `/api/analytics/cumulative` enhanced with `loco_operating_time` events
-
-**Frontend Chart** (`AnalyticsPanel.jsx`):
-- Bar chart with colored bars (LOCO_COLORS)
-- **Visibility**: ONLY in Overview (cumulative historic data)
-- Hidden in Current view (events logged only at movement stop)
-
-**Rationale**: Operating Time = cumulative aging/maintenance metric, not session metric
-
-**Commits**: `b7c4114`, `2e6bea9`, `a061d49`, `ff40c8b` (migration), `4641995` (session filtering), `db60bf6`, `6133ca4`, `d791f20`, `b547636` (endpoint fixes), `5642b8c` (always show chart), `c79c83c` (tooltip fix), `84c048d` (overview only)
-
----
-
-### 2025-01-13 - 🗂️ **DATA DIRECTORY REFACTORING**
-
-**Motivation**: Prevent path errors when adding new analytics endpoints
-
-**Change**: Moved `data/` → `backend/data/`
-- **Before**: `Path(__file__).parent.parent / "data" / "analytics.db"` (2 levels up)
-- **After**: `Path(__file__).parent / "data" / "analytics.db"` (1 level up)
-
-**Files Modified**:
-- `backend/main.py`: 3 endpoints (session, cumulative, locomotive-stats)
-- `backend/tracking_daemon.py`: 1 path reference
-- `.gitignore`: `data/*.db` → `backend/data/*.db`
-- `docs/ANALYTICS.md`: Updated path reference
-
-**Benefits**:
-- ✅ Simpler paths (one `.parent` less)
-- ✅ Logically correct (data belongs to backend)
-- ✅ Prevents future path errors
-
-**Commit**: `aa1d172`
-
----
-
-### 2025-01-13 - ♻️ **ANALYTICSPANEL REFACTORING**
-
-**Motivation**: Eliminate code duplication (~80 lines, 4+ duplications each)
-
-**Constants Extracted**:
-```javascript
-// Tooltip styles (4 duplications → 1 constant)
-const TOOLTIP_STYLES = {
-  contentStyle: { backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' },
-  labelStyle: { color: '#e2e8f0' },
-  itemStyle: { color: '#e2e8f0' }
-};
-
-// Chart axis styles (4 duplications → 1 constant)
-const CHART_AXIS_STYLES = {
-  grid: { strokeDasharray: '3 3', stroke: '#374151' },
-  axis: { stroke: '#9CA3AF' }
-};
-
-// Consist addresses (2 duplications → 1 constant)
-const CONSIST_ADDRESSES = {
-  10: [1, 5],
-  11: [7, 8]
-};
-
-// Consist colors (2 duplications → 1 constant)
-const CONSIST_COLORS = {
-  all: 'text-white',
-  10: 'text-fuchsia-400',
-  11: 'text-blue-400'
-};
-```
-
-**Helper Functions Extracted**:
-```javascript
-// Event filtering (3+ duplications → 1 function)
-const filterEventsBySession = (events, viewMode, currentSession) => ...
-
-// Address filtering (2 duplications → 1 function)
-const getAddressFilter = (consistFilter) => ...
-
-// Consist color (2 duplications → 1 function)
-const getConsistColor = (consist, defaultColor) => ...
-```
-
-**Confidence Chart Refactored**:
-- Eliminated ~30 lines of duplication (data + Cell mapping)
-- Used helpers for session filtering, address filtering
-- Cleaner, more maintainable code
-
-**Result**:
-- Code reduction: ~50 lines
-- Build size: 658.74 kB → 658.26 kB
-- All charts use shared constants/helpers
-
-**Commit**: `e610f70`
-
----
-
-### 2025-01-13 - 🔧 **Z21 HEALTH CHECK GRACE PERIOD**
-
-**Problem**: False positive disconnects from single packet loss
-- Check every 5s, single failure → immediate OFFLINE
-- UDP packet loss → spurious disconnects
-
-**Solution**: Require 2 consecutive failures before marking offline
-
-**Implementation**:
-- Global `z21_consecutive_failures` counter
-- Success → reset counter to 0, mark ONLINE
-- Failure → increment counter
-  - If counter == 1 → log warning "(1/2) grace period"
-  - If counter >= 2 → mark OFFLINE
-- Detection time: 10s (2 × 5s checks)
-
-**Benefits**:
-- ✅ Eliminates false positives from occasional packet loss
-- ✅ Maintains 5s check interval (responsive)
-- ✅ Clear logging ("1/2 grace period")
-
-**Commit**: `5428a81`
-
----
-
-### 2025-01-13 - ♻️ **ANALYTICS REFACTORING & CLEANUP**
-
-#### Revert All Idle/Break Line Experiments (commit `a406909`)
-**Problem**: Multiple failed attempts to show line breaks during idle periods:
-- Double-null strategy: Failed when consists move independently
-- Dashed lines approach: Wrong logic (marked events as idle instead of gaps)
-- Null points with connectNulls=false: Circular iteration, already tried before
-
-**Solution**: Hard reset to commit `3512f8d` (config-driven refactoring working), removed ALL experimental code (88 lines deleted).
-
-**Result**: Clean codebase with original behavior (continuous lines with `connectNulls={true}`)
-
----
-
-### 2025-01-13 - 🔧 **ANALYTICS UX IMPROVEMENTS**
-
-#### Operating Time Chart Filtering (commit `1e44b33`)
-- **Problem**: Operating Time chart didn't respond to consist filters (All/C10/C11)
-- **Solution**: Applied `getAddressFilter()` to filter locomotives by consist
-- **Result**: All/C10/C11 filtering works across ALL 4 charts consistently
-
-#### Sticky Header Filters (commit `a7d88c7`)
-- **Problem**: Consist filters (All/C10/C11) only visible above first chart, disappeared when scrolling
-- **Solution**: Moved filters to sticky header (Row 2, below Current/Overview tabs)
-- **Features**: Always visible, controls all charts simultaneously, "Filter:" label added
-- **Result**: Better UX, no need to scroll up to change filters
-
-#### Chart Remount Fix (commit `e3eaa18`)
-- **Problem**: Changing filters All/C11→C10 showed wrong scrollbar position (chart appeared empty, manual scroll needed to correct)
-- **Root cause**: React not remounting chart wrapper when filter changed
-- **Solution**: Added `key={consistFilter}` to scrollable wrappers (Δt and FPS charts)
-- **Result**: Chart width, scrollbar, and scroll position recalculate correctly on filter change
-
-#### Click Outside to Close (commit `d1642d4`)
-- **Feature**: Click on backdrop overlay closes Analytics panel
-- **Implementation**: `onClick={handleClose}` on backdrop + `stopPropagation` on panel content
-- **Result**: Standard modal UX pattern
-
-#### X-Axis Improvements for Overview Mode (commit `945b9e8`)
-- **Problem**: In Overview mode with hundreds of events, timestamp labels on X-axis were compressed and illegible
-- **Solution**: Conditional X-axis dataKey:
-  - **Current mode**: `dataKey="time"` (readable timestamps with few events)
-  - **Overview mode**: `dataKey="index"` (event numbers: 1, 50, 100...) + label "Event #" / "Sample #"
-- **Applied to**: Δt Trends chart ("Event #") and FPS chart ("Sample #")
-- **Result**: Clear, readable X-axis in Overview even with 500+ events
-
-#### Consist Names Shortened (commit `16b1f1f`)
-- **Problem**: Consist names too long for chart legends: "Consist 10 - Tracciato Interno (Figura 8)"
-- **Solution**: Abbreviated in `config.json`:
-  - C10: "Consist 10 - Tracciato Interno (Figura 8)" → "C10 Interno"
-  - C11: "Consist 11 - Tracciato Esterno (Ovale)" → "C11 Esterno"
-- **Used in**: Chart legends, Config Manager, API responses
-- **Benefits**: Cleaner UI, field still configurable (user can change anytime)
-
-#### Min Threshold Line Styling (commit `10fee70`)
-- **Change**: Confidence chart "Min Threshold (50%)" line changed from red to white
-- **Reason**: Better visibility and consistency with other reference lines
-
----
-
-### 2025-01-13 - 🚀 **LTTB DOWNSAMPLING WITH CRITICAL EVENT PRESERVATION** (commit `683d263`)
-
-#### Motivation
-Analytics reaching >500 events → uniform sampling loses important peaks/valleys and critical anomalies.
-
-#### Implementation
-
-**Added Functions** (`backend/main.py`):
-
-1. **`lttb_downsample()`** - Generic LTTB (Largest Triangle Three Buckets) algorithm
-   - Selects points forming largest triangles (preserves visual shape)
-   - Much better than uniform sampling for peaks/valleys
-   - ~40 lines pure Python (no dependencies)
-
-2. **`smart_downsample_delta_t()`** - Intelligent Δt downsampling
-   - **ALWAYS includes ALL critical events** (|Δt| ≥ 1.5s, both positive and negative)
-   - Applies LTTB to remaining normal events to reach target (e.g., 500 points)
-   - Critical events NEVER lost regardless of sampling
-
-**Updated Endpoint** (`/api/analytics/cumulative`):
-- **Δt events**: `smart_downsample_delta_t()` (critical preserved + LTTB on rest)
-- **YOLO FPS**: `lttb_downsample()` (shape preservation)
-
-**Performance**:
-- Runtime downsampling (always fresh, no stale cache)
-- With <1000 events: <20ms overhead (negligible)
-- With 5000 events: ~50-100ms (still acceptable)
-
-**Event Volume Example** (90 min session):
-- YOLO frames processed: 162,000 frames (30 FPS × 5400s)
-- Events logged to DB: 1,080 (every 5s)
-- Displayed in Overview (LTTB): 500 points
-- Reduction: 324:1 (frames→display), 2.16:1 (DB→display)
-
-**Benefits**:
-- ✅ Critical anomalies (|Δt| ≥ 1.5s) ALWAYS visible in Overview
-- ✅ Chart shape preserved much better than uniform sampling
-- ✅ Ready for >500 events (weeks/months of data)
-- ✅ Frontend unchanged (transparent backend optimization)
-
-**Tag**: `analytics-working` updated to include LTTB optimization
-
----
-
-### 2025-01-13 - 📚 **README UPDATE & ANALYTICS DOCUMENTATION**
-
-**README.md updated** (commit `207d411`):
-- Added **Analytics Dashboard** section with complete feature list
-- Updated **Project Structure** (added `backend/data/` for SQLite analytics)
-- Fixed **GPU model** (GTX 1050 Ti → RTX 2060)
-- Added **TensorRT acceleration** details (2-5x faster inference)
-- Updated **YOLO model specs** (OBB mAP50 91.7%, oriented bboxes)
-- Added **Z21 health** 2-failure grace period
-- Replaced INSTALL.md reference with **Quick Start** guide
-
-**Tag updated**: `analytics-working` moved to commit `c4c536d`
-
----
-
-### 2025-01-13 - ♻️ **ANALYTICSPANEL REFACTORING PHASE 2**
-
-**Completato DRY cleanup** (commit `28882ef`):
-- **Card 2/3 color logic**: Use `getConsistColorClass()` helper (eliminated 8 lines ternary duplication)
-- **All chart axes**: `XAxis`/`YAxis` use `{...CHART_AXIS_STYLES.axis}` (full consistency)
-- **Fix missing CartesianGrid**: Confidence chart now uses shared constant
-
-**Results**:
-- Build size: 658.22 kB (stable)
-- Code eliminated: ~15 lines (Phase 1+2 total: ~65 lines)
-- DRY compliance: 100% - zero duplication
-
----
-
-### 2025-01-13 - 🔄 **DYNAMIC CHART LINE BREAKS (CONFIG-DRIVEN)**
-
-#### Implementation (commit `c4c536d`)
-
-**Backend** (`/api/config/tracking`):
-- New endpoint returns `idle_timeout_seconds` from `config.json`
-
-**Frontend** (`AnalyticsPanel.jsx`):
-- Fetch tracking config on mount (idle_timeout_seconds)
-- Add `breakLineOnIdle()` helper: inserts null points when gap > idle_timeout
-- Apply to Δt Trends chart (breaks line when consist stops)
-
-**Result**:
-- Chart shows traces ONLY when locomotives moving (no false lines across gaps)
-- Coerenza with backend: same `idle_timeout_seconds` (default 10s, configurable)
-- User changes `config.json` → backend restart → frontend reflects new threshold
-
----
-
-### 2025-01-13 - 🐛 **IDLE LINE BREAKS FIX (ALL FILTER)**
-
-#### Problem (commit `a9ab5d6`)
-Initial implementation broke lines only in single-consist filters (C10/C11), not in "All" view.
-
-**Root cause**: Used simple filtering → null points had only single consist null (delta_t_c10=null, delta_t_c11=value).
-
-#### Solution: Double-Null Strategy
-- **Filter 'All'**: Apply `breakLineOnIdle()` separately to C10 and C11, then merge chronologically
-- Creates **double-null idle points** (both delta_t_c10 AND delta_t_c11 = null)
-- `connectNulls={true}` connects through **single nulls** (other consist) but NOT **double nulls** (idle)
-
-**Result**: Idle breaks visible in All/C10/C11 filters
-
-**Known limitation discovered later**: In "All" filter, idle breaks don't work when consists move independently (C10 idle, C11 moving → C11 events between C10 idle points have single null, not double null). Solution planned: dashed lines for idle periods (see next section).
-
----
-
-### 2025-01-13 - 🎛️ **CONFIG-DRIVEN REFACTORING (DYNAMIC CONSIST SUPPORT)**
-
-#### Motivation
-Analytics hardcoded consist IDs 10/11 everywhere → adding/renaming consists required code changes.
-
-#### Implementation (commit `658d636`)
-
-**Backend** (`/api/config/tracking` extended):
-- Return consist definitions from `config.json`:
-  - `consist_id` → `{name, lead_address, rear_address, addresses: [...]}`
-
-**Frontend** (`AnalyticsPanel.jsx`):
-- **Removed hardcoded constants**:
-  - `CONSIST_ADDRESSES = {10: [1,5], 11: [7,8]}`
-  - `CONSIST_COLORS = {10: 'text-fuchsia-400', 11: 'text-blue-400'}`
-- **Added dynamic color palettes** (cyclic, up to 6 consists):
-  - `CONSIST_COLOR_PALETTE` (stroke colors)
-  - `CONSIST_COLOR_CLASSES` (text colors)
-  - `CONSIST_BG_CLASSES` (button backgrounds)
-- **Helper functions**:
-  - `getConsistStrokeColor()` - Chart line colors (cyclic)
-  - `getConsistColorClass()` - Text colors for UI (cyclic)
-  - `getConsistBgClass()` - Button backgrounds (cyclic)
-  - `getAddressFilter()` - Locomotive addresses per consist (dynamic)
-- **Dynamic rendering**:
-  - Filter buttons: `Object.keys(consistConfig).map(...)` (not hardcoded 10/11)
-  - Chart Line components: `map()` over consist IDs, `dataKey: delta_t_c${id}`
-  - Card labels: `C${consistFilter}` (not ternary C10/C11)
-- **breakLineOnIdle() refactored**:
-  - Generates dynamic `delta_t_cXX` fields for all consists
-  - All filter: loops all consist IDs (not hardcoded 10/11)
-
-**Result**:
-- Support for **N consists** (2, 3, 5, etc.) from `config.json`
-- Add/remove/rename consists: **zero code changes** needed
-- Cyclic color assignment (up to 6 consists, then repeats)
-- Build size: 659.47 kB (+0.39 kB, acceptable)
-
-**Fix** (commit `3512f8d`):
-- Added missing `config = load_config()` call in `get_tracking_config()` endpoint
-- Initial deploy had `NameError: name 'config' is not defined`
-
----
-
-### 2025-01-13 - 🚧 **IDLE VISUALIZATION IMPROVEMENT (IN PROGRESS)**
-
-#### Current Limitation
-"All" filter shows continuous lines even during idle periods when consists move independently (e.g., C10 idle for 11 hours while C11 running).
-
-**Root cause**: Double-null strategy doesn't work when one consist moves while other is idle → moving consist events have single null (delta_t_c10=null, delta_t_c11=value), not double null.
-
-#### Planned Solution: Dashed Lines for Idle Periods
-**Approach**: Render **dual Line components** per consist:
-1. **Active line**: Solid stroke when consist moving
-2. **Idle line**: Dashed stroke (`strokeDasharray`) during idle periods
-
-**Implementation steps** (estimated 1-2 hours):
-1. Mark events post-idle with flag (e.g., `idle_period_c10: true`)
-2. Render 2 Lines per consist: one for active data, one for idle data
-3. Idle line: same color but `strokeDasharray="5 5"` (dashed pattern)
-
-**Benefit**: Visual distinction between movement and idle in "All" filter, without breaking existing data processing.
-
-**Status**: Ready to implement (user approved Opzione B - dashed lines)
-
