@@ -34,6 +34,7 @@ from services.broadcast import (
 from services.config_manager import ConfigManager
 import dependencies
 from routers import analytics, config, roster, status
+from routers.roster import get_full_roster
 
 # Default constants (single source of truth)
 DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}
@@ -683,7 +684,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         # Send initial state to new client
-        roster_data = await get_full_roster()
+        roster_data = await get_full_roster(consist_data, locomotive_data, z21_manager)
         await websocket.send_json({
             'type': 'initial_state',
             'consists': roster_data['consists'],
