@@ -18,6 +18,7 @@ import {
   formatOperatingTime
 } from '../utils/analyticsHelpers';
 import DeltaTChart from './charts/DeltaTChart';
+import FPSChart from './charts/FPSChart';
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current', 'overview', or 'reports'
@@ -770,94 +771,14 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     <div className="p-6 pt-0 space-y-6">
 
                   {/* FPS Line Chart */}
-                  <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                    {(() => {
-                      // NO session filtering for CHART - FPS chart shows ALL sessions like dT chart
-                      const chartData = cumulativeData.yolo_performance.map((e, idx) => ({
-                        index: idx + 1,
-                        time: formatTime(e.timestamp),
-                        fps: parseFloat(e.avg_fps.toFixed(1))
-                      }));
-
-                      // Calculate average FPS: Current = session only, Overview = all data
-                      // IMPORTANT: Filter out idle mode (FPS <= 10) to measure real tracking performance
-                      let avgFps = 'N/A';
-                      if (viewMode === 'current') {
-                        // Current mode: session-specific or N/A if not loaded
-                        if (!currentSession) {
-                          avgFps = 'N/A';  // Session not loaded yet
-                        } else {
-                          // Filter by current session + exclude idle (FPS > 10)
-                          const sessionEvents = cumulativeData.yolo_performance.filter(e =>
-                            e.session_id === currentSession.session_id && e.avg_fps > 10
-                          );
-                          if (sessionEvents.length > 0) {
-                            avgFps = (sessionEvents.reduce((sum, e) => sum + e.avg_fps, 0) / sessionEvents.length).toFixed(1);
-                          }
-                          // else: sessionEvents empty → avgFps stays 'N/A'
-                        }
-                      } else {
-                        // Overview: all data, exclude idle (FPS > 10)
-                        const activeEvents = cumulativeData.yolo_performance.filter(e => e.avg_fps > 10);
-                        avgFps = activeEvents.length > 0
-                          ? (activeEvents.reduce((sum, e) => sum + e.avg_fps, 0) / activeEvents.length).toFixed(1)
-                          : 'N/A';
-                      }
-
-                      return (
-                        <>
-                          <div className="flex items-center justify-between mb-4">
-                            <h4 className="text-lg font-semibold text-amber-400">Inference FPS Over Time</h4>
-                            <span className="px-3 py-1 bg-slate-800 border border-slate-600 rounded text-sm font-mono text-green-400">
-                              FPS avg: {avgFps}
-                            </span>
-                          </div>
-                          {(() => {
-
-                      const chartWidth = viewMode === 'current' ? Math.max(chartData.length * 60, 800) : '100%';
-                      const chartContent = (
-                        <ResponsiveContainer width={chartWidth} height={300}>
-                          <LineChart data={chartData}>
-                            <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                            {/* XAxis: time in Current (readable), index in Overview (compressed) */}
-                            <XAxis
-                              dataKey={viewMode === 'current' ? 'time' : 'index'}
-                              {...CHART_AXIS_STYLES.axis}
-                            />
-                            <YAxis yAxisId="left" {...CHART_AXIS_STYLES.axis} domain={[0, 140]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
-                            {/* Duplicate YAxis on right for Current mode (always visible when scrolling) */}
-                            {viewMode === 'current' && (
-                              <YAxis
-                                yAxisId="right"
-                                orientation="right"
-                                {...CHART_AXIS_STYLES.axis}
-                                domain={[0, 140]}
-                                allowDataOverflow={true}
-                                label={{ value: 'FPS', angle: 90, position: 'insideRight', fill: '#9CA3AF' }}
-                              />
-                            )}
-                            <Tooltip
-                              {...TOOLTIP_STYLES}
-                              formatter={(value) => value.toFixed(1) + ' FPS'}
-                            />
-                            <ReferenceLine yAxisId="left" y={30} stroke="#10b981" strokeDasharray="5 5" label={{ value: 'Target (30 FPS)', position: 'top', fill: '#10b981' }} />
-                            <Line yAxisId="left" type="monotone" dataKey="fps" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Inference FPS" />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      );
-
-                      return viewMode === 'current' ? (
-                        <div key={`fps-${consistFilter}`} ref={scrollRefFps} className="overflow-x-auto">
-                          <div style={{ minWidth: chartWidth }}>
-                            {chartContent}
-                          </div>
-                        </div>
-                      ) : chartContent;
-                    })()}
-                        </>
-                      );
-                    })()}
-                  </div>
+                  <FPSChart
+                    yoloPerformanceData={cumulativeData.yolo_performance}
+                    viewMode={viewMode}
+                    currentSession={currentSession}
+                    consistFilter={consistFilter}
+                    scrollRef={scrollRefFps}
+                    formatTime={formatTime}
+                  />
 
                   {/* Confidence Bar Chart - Per Locomotive (DCC addresses) */}
                   <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
