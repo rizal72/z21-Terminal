@@ -286,6 +286,58 @@ Consider decreasing CV speed table for adjust loco at this speed
 - ✅ Before/after preview reduces mistakes
 - ✅ Foundation for Phase 3 (automatic CV writes)
 
+**CV Harmonization/Smoothing** (JMRI Feature):
+
+JMRI DecoderPro includes a critical feature when modifying speed table CVs: **automatic harmonization of adjacent CVs** to maintain a smooth velocity curve.
+
+**How It Works**:
+- When you modify a single CV (e.g., CV82 from 128 → 135), JMRI offers checkboxes to "harmonize before" and "harmonize after"
+- You select the range (e.g., 3 steps before, 3 steps after)
+- JMRI interpolates/smooths adjacent CV values to create a gradual transition
+- **Purpose**: Avoid "jerks" or discontinuities in locomotive movement when speed table has abrupt value changes
+
+**Example**:
+```
+BEFORE harmonization:
+Step 13 (CV79): 100
+Step 14 (CV80): 110
+Step 15 (CV81): 120
+Step 16 (CV82): 128 → 135 (user changes +7)
+Step 17 (CV83): 140
+Step 18 (CV84): 150
+Step 19 (CV85): 160
+
+AFTER harmonization (3 steps before/after):
+Step 13 (CV79): 102  (+2)  ← interpolated
+Step 14 (CV80): 112  (+2)  ← interpolated
+Step 15 (CV81): 122  (+2)  ← interpolated
+Step 16 (CV82): 135  (+7)  ← user change
+Step 17 (CV83): 143  (+3)  ← interpolated
+Step 18 (CV84): 152  (+2)  ← interpolated
+Step 19 (CV85): 161  (+1)  ← interpolated
+```
+
+**Phase 2 Implementation Options**:
+
+**Option A** (Simpler - Recommended):
+- Our tool shows specific CV recommendations: "CV82: 128 → 135 (+7)"
+- User applies changes manually via JMRI DecoderPro
+- JMRI handles harmonization automatically with its UI checkboxes
+- **Pros**: Leverage existing JMRI feature, less code complexity, user maintains control
+- **Cons**: Requires JMRI for applying changes (but we already use it for roster management)
+
+**Option B** (Standalone):
+- Implement smoothing algorithm in our tool
+- UI includes "Harmonize" checkbox with range selector (±N steps)
+- Calculate interpolated values for adjacent CVs
+- Apply all CV writes via Operations Mode (Phase 3 prerequisite)
+- **Pros**: Fully standalone, no JMRI required for tuning
+- **Cons**: More complex implementation, need to replicate JMRI's proven algorithm
+
+**Recommendation**: Start with **Option A** for Phase 2. If user feedback demands standalone capability, implement Option B in Phase 3 alongside auto-tuning.
+
+---
+
 ### Phase 3: Auto-Tuning (v1.5)
 
 **Goal**: Apply CV adjustments via Operations Mode programming
