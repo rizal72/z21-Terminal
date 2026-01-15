@@ -35,6 +35,7 @@ from services.config_manager import ConfigManager
 import dependencies
 from routers import analytics, config, roster, status
 from routers.roster import get_full_roster
+from websockets.ws_control import handle_ws_control
 
 # Default constants (single source of truth)
 DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}
@@ -675,235 +676,20 @@ async def video_feed():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time control"""
-    global tracking_daemon_ws  # CRITICAL: needed for speed update broadcast
-    await websocket.accept()
-    connected_clients.append(websocket)
-
-    log('[WS]', f"Client connected (total: {len(connected_clients)})")
-
-    try:
-        # Send initial state to new client
-        roster_data = await get_full_roster(consist_data, locomotive_data, z21_manager)
-        await websocket.send_json({
-            'type': 'initial_state',
-            'consists': roster_data['consists'],
-            'locomotives': roster_data['locomotives'],
-            'controllers': controllers_config,
-            'trackPower': last_track_power_state,
-            'z21Online': z21_online
-        })
-        if debug_enabled:
-            log('[INIT]', f"Sent initial state (trackPower={last_track_power_state}, z21Online={z21_online})")
-
-        # Notify tracking manager of client connection
-        if tracking_manager:
-            await tracking_manager.on_client_connected()
-
-        # Handle incoming messages
-        while True:
-            try:
-                data = await websocket.receive_json()
-                message_type = data.get('type')
-
-                if message_type == 'set_speed':
-                    address = data.get('address')
-                    speed = data.get('speed', 0)
-                    forward = data.get('forward', True)
-
-                    if z21_manager and (address in consist_data or address in locomotive_data):
-                        z21_manager.set_speed(address, speed, forward)
-                        await broadcast_state_update(address)
-
-                        # Track locomotive operating time (individual locos only, not consists)
-                        if address in locomotive_data and tracking_manager and tracking_manager.analytics_logger:
-                            current_time = time.time()
-
-                            # Movement started (speed > 0 and was stopped)
-                            if speed > 0 and address not in loco_start_times:
-                                loco_start_times[address] = current_time
-                                log('[TRACK]', f"Loco {address} movement started")
-
-                            # Movement stopped (speed == 0 and was moving)
-                            elif speed == 0 and address in loco_start_times:
-                                start_time = loco_start_times.pop(address)
-                                duration = current_time - start_time
-
-                                # Log operating time event
-                                tracking_manager.analytics_logger.log_loco_operating_time(
-                                    address=address,
-                                    start_time=start_time,
-                                    end_time=current_time,
-                                    duration_seconds=duration
-                                )
-
-                                log('[TRACK]', f"Loco {address} movement stopped (duration: {duration:.1f}s)")
-
-                        # Notify tracking manager of speed change
-                        if tracking_manager and address in consist_data:
-                            await tracking_manager.on_speed_change(address, speed)
-
-                        # Notify tracking daemon of speed change (for dynamic FPS)
-                        if tracking_daemon_ws and address in consist_data:
-                            try:
-                                await tracking_daemon_ws.send_json({
-                                    'type': 'consist_speed_update',
-                                    'consist_address': address,
-                                    'speed': speed
-                                })
-                            except Exception:
-                                # Daemon disconnected, will be cleared on next loop
-                                pass
-
-                elif message_type == 'set_direction':
-                    address = data.get('address')
-                    direction = data.get('direction', 'forward')
-                    forward = direction == 'forward'
-
-                    if z21_manager and (address in consist_data or address in locomotive_data):
-                        # Get current speed (from consist_state or default)
-                        state = z21_manager.get_consist_state(address) if address in consist_data else {}
-                        current_speed = state.get('speed', 0)
-                        z21_manager.set_speed(address, current_speed, forward)
-                        await broadcast_state_update(address)
-
-                elif message_type == 'set_function':
-                    address = data.get('address')
-                    function_num = data.get('function')
-                    state = data.get('state', False)
-
-                    is_consist = address in consist_data
-                    is_loco = address in locomotive_data
-
-                    if z21_manager and (is_consist or is_loco):
-                        z21_manager.set_function(address, function_num, state)
-                        await broadcast_state_update(address)
-
-                        # Also broadcast to individual loco panels if setting function on consist
-                        if is_consist and address in consist_data:
-                            locomotives = consist_data[address].get('locomotives', [])
-                            for loco in locomotives:
-                                loco_addr = loco['address']
-                                if loco_addr in locomotive_data:
-                                    # F0 goes to all, other functions only to lead
-                                    if function_num == 0 or loco_addr == locomotives[0]['address']:
-                                        await broadcast_state_update(loco_addr)
-
-                elif message_type == 'emergency_stop':
-                    power_on = data.get('powerOn', False)
-
-                    if z21_manager:
-                        if power_on:
-                            z21_manager.track_power_on()
-                        else:
-                            z21_manager.track_power_off()
-
-                        # Broadcast updates for all consists
-                        for address in consist_data.keys():
-                            await broadcast_state_update(address)
-
-                elif message_type == 'sync':
-                    # Sync specific consist from Z21
-                    address = data.get('address')
-                    if z21_manager and address in consist_data:
-                        z21_manager.sync_consist_state(address)
-                        await broadcast_state_update(address)
-
-                elif message_type == 'add_controller':
-                    # Add new controller to shared configuration
-                    new_controller = data.get('controller')
-                    if new_controller:
-                        controllers_config.append(new_controller)
-                        log('[WS]', f"Controller added: {new_controller}")
-                        await broadcast_controllers_update()
-
-                elif message_type == 'remove_controller':
-                    # Remove controller from shared configuration
-                    controller_id = data.get('id')
-                    if controller_id:
-                        # Don't allow removing last controller
-                        if len(controllers_config) > 1:
-                            controllers_config[:] = [c for c in controllers_config if c['id'] != controller_id]
-                            log('[WS]', f"Controller removed: {controller_id}")
-                            await broadcast_controllers_update()
-
-                elif message_type == 'update_controller_selection':
-                    # Update controller selection
-                    controller_id = data.get('id')
-                    selection = data.get('selection')
-                    if controller_id and selection:
-                        for controller in controllers_config:
-                            if controller['id'] == controller_id:
-                                controller['type'] = selection.get('type')
-                                controller['address'] = selection.get('address')
-                                log('[WS]', f"Controller {controller_id} updated: {selection}")
-                                await broadcast_controllers_update()
-
-                                # Small delay to ensure controllers_update is processed first
-                                await asyncio.sleep(0.05)  # 50ms delay
-
-                                # Also broadcast current state of the selected consist/loco
-                                # so the new panel gets updated functionStates
-                                selected_address = selection.get('address')
-                                if selected_address and (selected_address in consist_data or selected_address in locomotive_data):
-                                    await broadcast_state_update(selected_address)
-                                break
-
-                elif message_type == 'toggle_virtual_mode':
-                    # Toggle Virtual Consist Mode (CV19 write only, no speed compensation)
-                    consist_address = data.get('address')
-                    enable = data.get('enable', False)
-
-                    if z21_manager and consist_address in consist_data:
-                        if enable:
-                            success = z21_manager.enable_virtual_mode(consist_address)
-                        else:
-                            success = z21_manager.disable_virtual_mode(consist_address)
-
-                        if success:
-                            # Broadcast updated state to all clients
-                            await broadcast_state_update(consist_address)
-                            if debug_enabled:
-                                log('[INIT]', f"Virtual Mode {'enabled' if enable else 'disabled'} for consist {consist_address}")
-                        else:
-                            log('[WARN]', f"Failed to toggle Virtual Mode for consist {consist_address}")
-
-                elif message_type == 'toggle_auto_compensation':
-                    # Toggle Auto-Compensation (only allowed in Virtual Mode)
-                    consist_address = data.get('address')
-                    enable = data.get('enable', False)
-
-                    if z21_manager and consist_address in z21_manager.consist_state:
-                        consist = z21_manager.consist_state[consist_address]
-                        is_virtual = consist.get('virtual_mode', False)
-
-                        if is_virtual:
-                            # Only allow toggle if in Virtual Mode
-                            consist['auto_compensation_enabled'] = enable
-                            # Persist to config.json (critical: preserves setting across restarts)
-                            z21_manager._save_persisted_state()
-                            # Always log (important operation that modifies config.json)
-                            log('[COMP]', f"Auto-compensation {'enabled' if enable else 'disabled'} for consist {consist_address} (saved to config.json)")
-                            # Broadcast updated state to all clients
-                            await broadcast_state_update(consist_address)
-                        else:
-                            log('[WARN]', f"Cannot toggle auto-compensation: consist {consist_address} not in Virtual Mode")
-
-            except json.JSONDecodeError:
-                print("Invalid JSON received")
-                continue
-
-    except WebSocketDisconnect:
-        log('[WS]', f"Client disconnected (remaining: {len(connected_clients) - 1})")
-    except Exception as e:
-        print(f"WebSocket error: {e}")
-    finally:
-        if websocket in connected_clients:
-            connected_clients.remove(websocket)
-
-        # Notify tracking manager of client disconnection
-        if tracking_manager:
-            await tracking_manager.on_client_disconnected()
+    """WebSocket endpoint for real-time control (delegates to ws_control handler)"""
+    await handle_ws_control(
+        websocket=websocket,
+        connected_clients=connected_clients,
+        consist_data=consist_data,
+        locomotive_data=locomotive_data,
+        z21_manager=z21_manager,
+        tracking_manager=tracking_manager,
+        controllers_config=controllers_config,
+        last_track_power_state=last_track_power_state,
+        z21_online=z21_online,
+        debug_enabled=debug_enabled,
+        loco_start_times=loco_start_times
+    )
 
 
 @app.websocket("/ws/tracking")
