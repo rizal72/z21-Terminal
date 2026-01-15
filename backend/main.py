@@ -33,6 +33,7 @@ from services.broadcast import (
     broadcast_initial_state,
     build_consist_response
 )
+from services.config_manager import ConfigManager
 
 # Default constants (single source of truth)
 DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}
@@ -177,23 +178,12 @@ async def lifespan(app: FastAPI):
     log('[INIT]', f"z21-Terminal Backend Starting...")
 
     # Load debug mode configuration FIRST
-    try:
-        config = load_config()
-        debug_config = config.get('debug', {'enabled': False})
-        debug_enabled = debug_config.get('enabled', False)
-    except Exception:
-        debug_enabled = False
+    debug_enabled = ConfigManager.get_debug_enabled()
 
     # Load timing thresholds from config.json
     log('[INIT]', f"Loading timing thresholds from config.json...")
     try:
-        config = load_config()
-        tracking_config = config.get('tracking', {})
-        thresholds = tracking_config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
-        timing_thresholds = {
-            'normal': thresholds.get('normal', DEFAULT_TIMING_THRESHOLDS['normal']),
-            'warning': thresholds.get('warning', DEFAULT_TIMING_THRESHOLDS['warning'])
-        }
+        timing_thresholds = ConfigManager.get_timing_thresholds()
         if debug_enabled:
             log('[INIT]', f"Timing thresholds: SYNCED < {timing_thresholds['normal']}s, WARNING < {timing_thresholds['warning']}s")
     except FileNotFoundError:
@@ -206,49 +196,32 @@ async def lifespan(app: FastAPI):
     # Load reference loco configuration (from consists)
     log('[INIT]', f"Loading reference loco configuration...")
     try:
-        config = load_config()
-        consists = config.get('consists', {})
-        # Extract reference info from each consist
-        reference_locos = {}
-        for consist_addr, consist_info in consists.items():
-            reference_locos[consist_addr] = {
-                'reference': consist_info.get('reference_loco'),
-                'adjust': consist_info.get('adjust_loco')
-            }
+        reference_locos = ConfigManager.get_reference_locos()
         if debug_enabled:
             log('[INIT]', f"Reference locos: {len(reference_locos)} consists configured")
             for consist_addr, ref_config in reference_locos.items():
                 print(f"    Consist {consist_addr}: reference={ref_config['reference']}, adjust={ref_config['adjust']}")
     except Exception as e:
         log('[WARN]', f"Error loading reference locos: {e}")
+        reference_locos = {}
 
     # Load tracked consist IDs (only consists with gate tracking configured)
     log('[INIT]', f"Loading tracked consist IDs...")
     try:
-        config = load_config()
-        consists = config.get('consists', {})
-        # Filter only consist IDs with gate_ids configured
-        for consist_key, consist_info in consists.items():
-            consist_id = int(consist_key)
-            gate_ids = consist_info.get('gate_ids', [])
-            if gate_ids:  # Only add if gates configured
-                tracked_consist_ids.append(consist_id)
-        tracked_consist_ids.sort()
+        tracked_consist_ids = ConfigManager.get_tracked_consist_ids()
         if debug_enabled:
             log('[INIT]', f"Tracked consists: {tracked_consist_ids}")
     except Exception as e:
         log('[WARN]', f"Error loading tracked consists: {e}")
-        reference_locos = {}
-        consists = {}
+        tracked_consist_ids = []
 
     # Load consist configuration
     # Priority: config.json consists → JMRI (bootstrap only)
-    if not consists:
-        try:
-            config = load_config()
-            consists = config.get('consists', {})
-        except Exception:
-            consists = {}
+    try:
+        config = load_config()
+        consists = config.get('consists', {})
+    except Exception:
+        consists = {}
 
     if consists:
         # Load from config.json (source of truth)
@@ -1042,8 +1015,7 @@ async def close_session():
 @app.get("/api/gates")
 async def get_gates():
     """Get current gate configuration"""
-    config = load_config()
-    return config.get('gates', [])
+    return ConfigManager.get_gates()
 
 
 @app.post("/api/save-gates")
