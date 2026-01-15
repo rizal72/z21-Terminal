@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, memo, useMemo, Fragment } from 'react';
-import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import {
-  LOCO_COLORS,
   CONSIST_COLOR_PALETTE,
   CONSIST_COLOR_CLASSES,
   CONSIST_BG_CLASSES,
