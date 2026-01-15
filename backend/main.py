@@ -33,7 +33,7 @@ from services.broadcast import (
 )
 from services.config_manager import ConfigManager
 import dependencies
-from routers import analytics, config
+from routers import analytics, config, roster
 
 # Default constants (single source of truth)
 DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}
@@ -460,6 +460,7 @@ app.add_middleware(
 app.include_router(analytics.router)
 app.include_router(analytics.router_no_prefix)  # For endpoints outside /api/analytics prefix
 app.include_router(config.router)
+app.include_router(roster.router)
 
 
 async def reload_roster_data():
@@ -626,68 +627,6 @@ async def restart_tracking_daemon():
             return {"success": False, "error": "Tracking manager not initialized"}
     except Exception as e:
         return {"success": False, "error": str(e)}
-
-
-@app.get("/api/locomotives")
-async def get_locomotives():
-    """Get all locomotives"""
-    result = {}
-
-    for address, data in locomotive_data.items():
-        # Get state from z21_manager if available
-        state = z21_manager.get_consist_state(address) if z21_manager else {}
-
-        result[address] = {
-            'address': address,
-            'type': 'locomotive',
-            'name': data['name'],
-            'functions': data['functions'],
-            'in_consist': data.get('in_consist'),
-            'speed': state.get('speed', 0),
-            'direction': state.get('direction', 'forward'),
-            'power': state.get('power', True),
-            'functionStates': state.get('functions', {})  # Actual function states from Z21
-        }
-
-    return result
-
-
-@app.get("/api/roster")
-async def get_full_roster():
-    """Get full roster: consists + locomotives"""
-    consists_data = await get_consists()
-    # Extract only the consists dict (backward compatibility)
-    # get_consists() now returns {consists: {...}, gates: [...], ...}
-    return {
-        'consists': consists_data.get('consists', {}),
-        'locomotives': await get_locomotives()
-    }
-
-
-@app.post("/api/reload-roster")
-async def reload_roster():
-    """Reload roster and consists from JMRI XML files without restarting backend"""
-    try:
-        success = await reload_roster_data()
-        if success:
-            return {
-                "status": "success",
-                "message": "Roster reloaded successfully",
-                "consists_loaded": len(consist_data),
-                "locomotives_loaded": len(locomotive_data),
-                "clients_notified": len(connected_clients)
-            }
-        else:
-            return {
-                "status": "error",
-                "message": "Failed to reload roster (Z21 not connected)"
-            }
-    except Exception as e:
-        log('[WARN]', f"Error reloading roster: {e}")
-        return {
-            "status": "error",
-            "message": f"Exception during reload: {str(e)}"
-        }
 
 
 @app.post("/api/toggle-panel")
