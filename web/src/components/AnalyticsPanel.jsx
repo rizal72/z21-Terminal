@@ -20,6 +20,7 @@ import {
 import DeltaTChart from './charts/DeltaTChart';
 import FPSChart from './charts/FPSChart';
 import ConfidenceChart from './charts/ConfidenceChart';
+import OperatingTimeChart from './charts/OperatingTimeChart';
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current', 'overview', or 'reports'
@@ -795,51 +796,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               )}
 
               {/* Locomotive Operating Time - ONLY in Overview (cumulative historic data) */}
-              {viewMode === 'overview' && locoStats && locoStats.length > 0 && (() => {
-                // Filter locomotives by consist (All/C10/C11)
-                const addressFilter = getAddressFilter(consistFilter, trackingConfig.consists);
-                const filteredLocoStats = locoStats.filter(loco => addressFilter.includes(loco.address));
-
-                return filteredLocoStats.length > 0 && (
-                  <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
-                    <div
-                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
-                      onClick={() => togglePanel('locoOperatingTime')}
-                    >
-                      <h3 className="text-lg font-semibold text-white">Locomotive Operating Time</h3>
-                      <i className={`fa-solid fa-chevron-${collapsedPanels.locoOperatingTime ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
-                    </div>
-                    {!collapsedPanels.locoOperatingTime && (
-                      <div className="p-6 pt-0">
-
-                    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                      <h4 className="text-lg font-semibold text-amber-400 mb-4">Total Operating Time</h4>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={filteredLocoStats}>
-                          <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                          <XAxis dataKey="name" {...CHART_AXIS_STYLES.axis} />
-                          <YAxis
-                            {...CHART_AXIS_STYLES.axis}
-                            tickFormatter={(value) => Math.floor(value / 60)}
-                            label={{ value: 'Operating Time (minutes)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
-                          />
-                          <Tooltip
-                            {...TOOLTIP_STYLES}
-                            formatter={(value) => formatOperatingTime(value)}
-                          />
-                          <Bar dataKey="total_operating_seconds">
-                            {filteredLocoStats.map((loco, index) => (
-                              <Cell key={`cell-${index}`} fill={LOCO_COLORS[loco.address] || '#9CA3AF'} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              {viewMode === 'overview' && locoStats && locoStats.length > 0 && (
+                <OperatingTimeChart
+                  locoStats={locoStats}
+                  consistFilter={consistFilter}
+                  trackingConfig={trackingConfig}
+                  collapsed={collapsedPanels.locoOperatingTime}
+                  onToggleCollapse={() => togglePanel('locoOperatingTime')}
+                />
+              )}
             </div>
           )}
 
