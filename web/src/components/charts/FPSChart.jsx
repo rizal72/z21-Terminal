@@ -112,7 +112,7 @@ const FPSChart = ({
           dataKey="fps"
           stroke="#10b981"
           strokeWidth={2}
-          dot={{ r: 3 }}
+          dot={viewMode === 'current' ? { r: 3 } : false}
           name="Inference FPS"
         />
       </LineChart>
