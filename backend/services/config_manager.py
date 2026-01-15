@@ -94,7 +94,7 @@ class ConfigManager:
         Get list of consist IDs with gate tracking configured.
 
         Returns:
-            List of consist IDs (integers) with tracking_assignments
+            List of consist IDs (integers) with gate_ids configured
 
         Example:
             [10, 11]
@@ -104,8 +104,9 @@ class ConfigManager:
 
         tracked_ids = []
         for consist_addr, consist_info in consists.items():
-            # Check if consist has tracking_assignments (gate mapping)
-            if consist_info.get('tracking_assignments'):
+            # Check if consist has gate_ids configured (non-empty list)
+            gate_ids = consist_info.get('gate_ids', [])
+            if gate_ids and len(gate_ids) > 0:
                 try:
                     tracked_ids.append(int(consist_addr))
                 except ValueError:
