@@ -344,7 +344,7 @@ async def save_gates(gates: List[Dict[str, Any]]):
         import shutil
         from datetime import datetime
 
-        config_path = Path(__file__).parent.parent / 'config.json'
+        config_path = get_config_path()  # Use centralized config path
         backup_name = "config.json.backup"
         backup_path = config_path.parent / backup_name
 
