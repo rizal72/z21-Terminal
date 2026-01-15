@@ -699,6 +699,7 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
 
     await websocket.accept()
     tracking_daemon_ws = websocket  # Save reference for bidirectional communication
+    dependencies.set_tracking_daemon_ws(websocket)  # CRITICAL: sync with dependencies for ws_control
 
     log('[WS]', f"Tracking daemon connected")
 
@@ -824,12 +825,14 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         log('[WS]', f"Tracking daemon disconnected")
         tracking_daemon_ws = None  # Clear reference
+        dependencies.set_tracking_daemon_ws(None)  # CRITICAL: sync with dependencies
         # Note: consist_state['delta_t'] may be reset to None by z21_manager on stop (correct for logic)
         # But video_feed cache keeps last value for display (matches React panel behavior)
         log('[DETECT]', f"dT display: video cache preserves last value")
     except Exception as e:
         print(f"Tracking WebSocket error: {e}")
         tracking_daemon_ws = None  # Clear reference on error
+        dependencies.set_tracking_daemon_ws(None)  # CRITICAL: sync with dependencies
 
 
 # ========================================
