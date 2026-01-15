@@ -5,14 +5,17 @@ Centralizes global state management with FastAPI Depends() pattern.
 Provides typed, testable access to singleton instances.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from fastapi import WebSocket
-from z21_manager import Z21Manager
-from tracking_manager import TrackingManager
+
+# Avoid circular imports: use TYPE_CHECKING for type hints only
+if TYPE_CHECKING:
+    from z21_manager import Z21Manager
+    from tracking_manager import TrackingManager
 
 # Singleton instances (initialized by main.py lifespan)
-_z21_manager: Optional[Z21Manager] = None
-_tracking_manager: Optional[TrackingManager] = None
+_z21_manager: Optional["Z21Manager"] = None
+_tracking_manager: Optional["TrackingManager"] = None
 _tracking_daemon_ws: Optional[WebSocket] = None
 _analytics_logger = None  # AnalyticsLogger instance (set when tracking daemon starts)
 _connected_clients: List[WebSocket] = []
@@ -37,8 +40,8 @@ _debug_enabled: bool = False
 
 
 def init_dependencies(
-    z21_mgr: Z21Manager,
-    tracking_mgr: TrackingManager,
+    z21_mgr: "Z21Manager",
+    tracking_mgr: "TrackingManager",
     clients: List[WebSocket],
     consists: Dict[int, Dict[str, Any]],
     locomotives: Dict[int, Dict[str, Any]],
@@ -82,12 +85,12 @@ def init_dependencies(
 
 # Dependency getters (for FastAPI Depends())
 
-def get_z21_manager() -> Optional[Z21Manager]:
+def get_z21_manager() -> Optional["Z21Manager"]:
     """Get Z21Manager instance"""
     return _z21_manager
 
 
-def get_tracking_manager() -> Optional[TrackingManager]:
+def get_tracking_manager() -> Optional["TrackingManager"]:
     """Get TrackingManager instance"""
     return _tracking_manager
 
