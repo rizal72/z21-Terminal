@@ -48,12 +48,10 @@ CONFIG_PATH = get_config_path()  # Centralized config path
 # Global instances
 z21_manager: Z21Manager = None
 tracking_manager: TrackingManager = None
-tracking_daemon_ws: WebSocket = None  # WebSocket connection to tracking daemon
 connected_clients: List[WebSocket] = []
 consist_data: Dict[int, Dict[str, Any]] = {}
 locomotive_data: Dict[int, Dict[str, Any]] = {}
 controllers_config: List[Dict[str, Any]] = []  # Shared controller configuration
-yolo_detections: Dict[str, Any] = {}  # Latest YOLO detections for video overlay
 timing_thresholds: Dict[str, float] = DEFAULT_TIMING_THRESHOLDS.copy()  # Dynamic thresholds from config.json
 reference_locos: Dict[str, Dict[str, int]] = {}  # Reference loco strategy from config.json
 tracked_consist_ids: List[int] = []  # Consist IDs with gate tracking configured (from tracking_assignments)
@@ -169,7 +167,7 @@ async def health_check_z21():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    global z21_manager, tracking_manager, tracking_daemon_ws, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config, timing_thresholds, reference_locos, tracked_consist_ids, debug_enabled
+    global z21_manager, tracking_manager, consist_data, locomotive_data, polling_task, health_check_task, last_track_power_state, z21_online, controllers_config, timing_thresholds, reference_locos, tracked_consist_ids, debug_enabled
 
     # Filter out repetitive telemetry GET logs (called every 5s)
     import logging
