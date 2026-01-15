@@ -149,7 +149,7 @@ async def get_analytics_reports(
     for the last N validated sessions.
 
     Args:
-        limit: Number of sessions to return (default 30, max 100)
+        limit: Number of sessions to return (default 30, configurable via UI: 30/50/100/200)
         consist_filter: Optional consist ID to filter by (10, 11, etc.)
 
     Returns:
