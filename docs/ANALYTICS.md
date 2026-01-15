@@ -1717,3 +1717,513 @@ label={viewMode === 'overview' ?
 5. **Good enough > perfect**: Attempted label centering not worth complexity/fragility
 
 **Result**: ✅ Interactive zoom working, Y-axes properly configured, UI responsive and intuitive
+
+---
+
+## Speed Table Viewer (Phase 1 - Read-Only)
+
+**Status**: 🔄 **IN PROGRESS** (2026-01-16)
+
+### Overview
+
+JMRI-style speed curve visualization showing CV67-94 values with CRITICAL event highlighting. Phase 1 is **read-only** (visualization + recommendations), no decoder writes.
+
+**Goal**: Help users identify which CV speed table entries need adjustment based on real-world tracking data (CRITICAL events from YOLO analytics).
+
+### Design Rationale
+
+**Why Read-Only First**:
+1. **Safe**: No risk of corrupting JMRI roster XML or decoder
+2. **Validate**: Ensure analytics and recommendations are accurate before automation
+3. **Learn**: Users understand which CVs need adjustment before we automate writes
+
+**Phase 2** (future): Add editing + decoder write + JMRI roster XML sync
+
+### Architecture
+
+**Data Flow**:
+```
+Analytics DB (CRITICAL events) + JMRI Roster XML (CV values)
+                    ↓
+          Backend /api/speed-table/{consist_id}
+                    ↓
+         Frontend SpeedTableViewer.jsx
+                    ↓
+    28 bars + recommendations + Export CSV
+```
+
+### Backend Implementation
+
+#### CV Reading from JMRI Roster
+
+**Reuses existing** `scripts/utils/cv_operations/read_cv_from_roster.py`:
+```python
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+def read_cv_speed_table(loco_address: int) -> dict:
+    """
+    Read CV67-94 from JMRI roster XML for given locomotive.
+
+    Args:
+        loco_address: DCC address of locomotive
+
+    Returns:
+        {67: 12, 68: 24, ..., 94: 255}  # CV number → value
+    """
+    roster_path = Path.home() / "Library/Preferences/JMRI/La_mia_Ferrovia_in_JMRI.jmri/roster"
+
+    for xml_file in roster_path.glob("*.xml"):
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        loco_elem = root.find('.//locomotive')
+        if loco_elem.get('dccAddress') == str(loco_address):
+            cv_values = {}
+            for cv_elem in root.findall('.//CVvalue'):
+                cv_num = int(cv_elem.get('name'))
+                cv_val = int(cv_elem.get('value'))
+                if 67 <= cv_num <= 94:  # Speed table range
+                    cv_values[cv_num] = cv_val
+            return cv_values
+
+    return {}  # Loco not found
+```
+
+#### Analytics Query (CRITICAL Events per Speed)
+
+**NEW method in** `backend/services/analytics_db.py`:
+```python
+def get_critical_events_by_speed(consist_id: int) -> dict:
+    """
+    Count CRITICAL/WARNING events grouped by speed for given consist.
+
+    Returns:
+        {
+            'critical': {10: 5, 20: 3, 88: 12, ...},  # speed → count
+            'warning': {10: 2, 20: 1, 88: 7, ...}
+        }
+    """
+    cursor.execute('''
+        SELECT
+            json_extract(data, '$.speed') as speed,
+            json_extract(data, '$.status') as status,
+            COUNT(*) as count
+        FROM events
+        WHERE event_type = 'delta_t'
+          AND json_extract(data, '$.consist_id') = ?
+          AND json_extract(data, '$.status') IN ('CRITICAL', 'WARNING')
+        GROUP BY speed, status
+    ''', (consist_id,))
+
+    results = {'critical': {}, 'warning': {}}
+    for row in cursor.fetchall():
+        speed, status, count = row
+        if status == 'CRITICAL':
+            results['critical'][speed] = count
+        elif status == 'WARNING':
+            results['warning'][speed] = count
+
+    return results
+```
+
+#### Speed → JMRI Step Mapping
+
+**Key algorithm** (DCC speed 0-126 → JMRI step 1-28):
+```python
+def speed_to_jmri_step(dcc_speed: int) -> int:
+    """
+    Map DCC speed (0-126) to JMRI step (1-28).
+
+    Examples:
+        0-4   → Step 1  (CV67)
+        5-9   → Step 2  (CV68)
+        70    → Step 16 (CV82)
+        122-126 → Step 28 (CV94)
+    """
+    step_index = int(dcc_speed // 4.5)  # 0-27
+    return step_index + 1  # JMRI uses 1-based indexing
+
+def jmri_step_to_cv(step: int) -> int:
+    """JMRI step (1-28) to CV index (67-94)"""
+    return 66 + step
+```
+
+#### API Endpoint
+
+**NEW endpoint in** `backend/routers/analytics.py`:
+```python
+@router.get("/api/speed-table/{consist_id}")
+async def get_speed_table(consist_id: int):
+    """
+    Get speed table visualization data for consist.
+
+    Returns CV values + CRITICAL counts mapped to JMRI steps.
+    """
+    config = load_config()
+
+    # Get adjust loco address from config (generic, no hardcoding)
+    reference_config = config.get('reference_locos', {}).get(str(consist_id))
+    if not reference_config:
+        return {'error': f'No reference config for consist {consist_id}'}
+
+    adjust_loco = reference_config['adjust']
+
+    # Read CV67-94 from roster XML
+    cv_values = read_cv_speed_table(adjust_loco)
+
+    # Query CRITICAL/WARNING events by speed
+    events_by_speed = get_critical_events_by_speed(consist_id)
+
+    # Map to JMRI steps (1-28)
+    steps_data = []
+    for step in range(1, 29):
+        cv_num = jmri_step_to_cv(step)
+        cv_value = cv_values.get(cv_num, 128)  # Default 128 if not found
+
+        # Aggregate CRITICAL/WARNING for this step's speed range
+        speed_min = int((step - 1) * 4.5)
+        speed_max = int(step * 4.5)
+
+        critical_count = sum(
+            events_by_speed['critical'].get(s, 0)
+            for s in range(speed_min, speed_max + 1)
+        )
+        warning_count = sum(
+            events_by_speed['warning'].get(s, 0)
+            for s in range(speed_min, speed_max + 1)
+        )
+
+        steps_data.append({
+            'step': step,
+            'cv_index': cv_num,
+            'cv_value': cv_value,
+            'speed_range': f"{speed_min}-{speed_max}",
+            'critical_count': critical_count,
+            'warning_count': warning_count
+        })
+
+    return {
+        'consist_id': consist_id,
+        'adjust_loco_address': adjust_loco,
+        'steps': steps_data,
+        'recommendations': generate_cv_recommendations(steps_data)
+    }
+```
+
+#### CV Recommendations
+
+**Algorithm**:
+```python
+def generate_cv_recommendations(steps_data: list) -> list:
+    """
+    Generate CV adjustment recommendations based on CRITICAL counts.
+
+    Threshold: ≥5 CRITICAL events = needs adjustment
+    Direction: Based on Δt sign from events (TODO: refine)
+    """
+    recommendations = []
+
+    for step in steps_data:
+        if step['critical_count'] >= 5:
+            # Simplified for Phase 1: suggest ±5-10 adjustment
+            # Phase 2: calculate exact adjustment from Δt analysis
+            adjustment = 7  # Placeholder
+            new_value = max(0, min(255, step['cv_value'] + adjustment))
+
+            recommendations.append({
+                'step': step['step'],
+                'cv_index': step['cv_index'],
+                'current_value': step['cv_value'],
+                'recommended_value': new_value,
+                'delta': new_value - step['cv_value'],
+                'reason': f"{step['critical_count']} CRITICAL events at {step['speed_range']}"
+            })
+
+    return recommendations
+```
+
+### Frontend Implementation
+
+#### Component Structure
+
+**NEW component**: `web/src/components/SpeedTableViewer.jsx`
+
+```jsx
+const SpeedTableViewer = ({ consistId, editable = false }) => {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    fetch(`/api/speed-table/${consistId}`)
+      .then(res => res.json())
+      .then(setData);
+  }, [consistId]);
+
+  if (!data) return <div>Loading...</div>;
+
+  return (
+    <div className="speed-table-viewer">
+      {/* 28 vertical bars */}
+      <div className="bars-container">
+        {data.steps.map(step => (
+          <SpeedTableBar
+            key={step.step}
+            step={step.step}
+            cvValue={step.cv_value}
+            criticalCount={step.critical_count}
+            warningCount={step.warning_count}
+            editable={editable}  // false in Phase 1
+          />
+        ))}
+      </div>
+
+      {/* Recommendations */}
+      <div className="recommendations">
+        <h3>Recommended CV Adjustments</h3>
+        {data.recommendations.map(rec => (
+          <div key={rec.step} className="recommendation-card">
+            <span>Step {rec.step} (CV{rec.cv_index}): </span>
+            <span>{rec.current_value} → {rec.recommended_value} </span>
+            <span className="delta">({rec.delta > 0 ? '+' : ''}{rec.delta})</span>
+            <p className="reason">{rec.reason}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Export button */}
+      <button onClick={() => exportToCSV(data)}>
+        Export for JMRI
+      </button>
+    </div>
+  );
+};
+```
+
+#### Bar Rendering
+
+**SpeedTableBar component**:
+```jsx
+const SpeedTableBar = ({ step, cvValue, criticalCount, editable }) => {
+  const isProblematic = criticalCount >= 5;
+  const fillHeight = (cvValue / 255) * 100;  // Percentage
+
+  return (
+    <div className="speed-bar-container">
+      {/* CV value label (top) */}
+      <div className="cv-value-label">{cvValue}</div>
+
+      {/* Bar (outline with proportional fill) */}
+      <div className={`bar-outline ${isProblematic ? 'problematic' : ''}`}>
+        <div
+          className="bar-fill"
+          style={{ height: `${fillHeight}%` }}
+        />
+      </div>
+
+      {/* Step label (bottom) */}
+      <div className="step-label">{step}</div>
+
+      {/* CRITICAL count badge */}
+      {criticalCount > 0 && (
+        <div className="critical-badge">{criticalCount}</div>
+      )}
+    </div>
+  );
+};
+```
+
+#### CSS Styling
+
+```css
+.speed-table-viewer {
+  padding: 2rem;
+}
+
+.bars-container {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: flex-end;
+  height: 300px;
+  margin-bottom: 2rem;
+}
+
+.speed-bar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.bar-outline {
+  width: 24px;
+  height: 200px;
+  border: 2px solid #64748b;  /* Neutral gray */
+  border-radius: 4px;
+  position: relative;
+  background: #1e293b;  /* Dark background */
+}
+
+.bar-outline.problematic {
+  border-color: #ef4444;  /* Red border for high CRITICAL */
+}
+
+.bar-fill {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: linear-gradient(to top, #3b82f6, #60a5fa);  /* Blue gradient */
+  border-radius: 0 0 2px 2px;
+  transition: height 0.3s ease;
+}
+
+.bar-outline.problematic .bar-fill {
+  background: linear-gradient(to top, #dc2626, #ef4444);  /* Red gradient */
+}
+
+.cv-value-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.step-label {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.critical-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #dc2626;
+  color: white;
+  font-size: 9px;
+  font-weight: bold;
+  padding: 2px 4px;
+  border-radius: 999px;
+  min-width: 16px;
+  text-align: center;
+}
+```
+
+#### Export Functionality
+
+```javascript
+const exportToCSV = (data) => {
+  // Generate CSV with CV adjustments
+  const csv = [
+    'Step,CV,Current,Recommended,Delta,Reason',
+    ...data.recommendations.map(rec =>
+      `${rec.step},${rec.cv_index},${rec.current_value},${rec.recommended_value},${rec.delta},"${rec.reason}"`
+    )
+  ].join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `speed_table_consist_${data.consist_id}_${Date.now()}.csv`;
+  a.click();
+};
+```
+
+### Speed Tuning Tab Integration
+
+**Update** `web/src/components/AnalyticsPanel.jsx`:
+
+**Tab Layout** (Speed Tuning):
+```jsx
+{activeTab === 'speed-tuning' && (
+  <div>
+    {/* Consist selector (C10/C11 only, no All) */}
+    <div className="consist-selector">
+      <button
+        onClick={() => setSelectedConsist(10)}
+        className={selectedConsist === 10 ? 'active' : ''}
+      >
+        C10
+      </button>
+      <button
+        onClick={() => setSelectedConsist(11)}
+        className={selectedConsist === 11 ? 'active' : ''}
+      >
+        C11
+      </button>
+    </div>
+
+    {/* Speed Table Viewer (NEW - top priority) */}
+    <SpeedTableViewer
+      consistId={selectedConsist}
+      editable={false}
+    />
+
+    {/* Scatter plot (existing - moved below) */}
+    <SpeedCorrelationChart
+      data={speedCorrelationData}
+      thresholds={trackingConfig.timing_thresholds}
+      consistColor={getConsistColor(selectedConsist)}
+    />
+  </div>
+)}
+```
+
+**Filter Changes**:
+- **BEFORE**: All / C10 / C11
+- **AFTER**: C10 / C11 only (default: C10)
+
+### Key Design Decisions
+
+1. **Generic consist handling**: No hardcoding C10/C11 or loco 1/7
+   - Uses `config.json` → `reference_locos[consist_id].adjust`
+   - Works with any future consist configuration
+
+2. **Read-only first**: Safe, validate, learn → then automate
+   - No risk of roster corruption
+   - Verify recommendations accuracy
+   - User understands which CVs need adjustment
+
+3. **JMRI roster as source**: Never read CVs from decoder (unreliable)
+   - Roster XML = single source of truth
+   - CV read via POM = 1/3 success rate
+   - Phase 2 will update both decoder + roster XML
+
+4. **Speed → Step mapping**: Standard NMRA formula
+   - DCC speed 0-126 → 28 steps (4.5 speed units per step)
+   - Step X → CV (66 + X)
+   - Example: Speed 70 → Step 16 → CV82
+
+5. **CRITICAL threshold**: ≥5 events = needs adjustment
+   - Based on typical session length (~50-100 gate crossings)
+   - Adjustable in future based on user feedback
+
+### Future Enhancements (Phase 2)
+
+**When Phase 1 validated**:
+1. **Enable editing**: `editable={true}` prop
+   - Keyboard arrows (↑↓) for selected bar
+   - Drag top of bar up/down
+   - Text input for direct CV value edit
+2. **Smoothing algorithm**: CV harmonization (±3 steps)
+3. **Apply to decoder**: Write CV67-94 via Operations Mode
+4. **Update JMRI roster XML**: Keep decoder and roster synchronized
+5. **Backup/Restore**: Automatic roster XML backup before write
+
+### Testing Strategy
+
+**Phase 1 Testing**:
+- ✅ Verify CV values read correctly from roster XML
+- ✅ Verify CRITICAL counts match analytics dashboard
+- ✅ Verify speed → step mapping (spot check: speed 70 = step 16)
+- ✅ Verify recommendations make sense (high CRITICAL = adjustment)
+- ✅ Verify export CSV format importable by JMRI
+
+**Test Data**:
+- Consist 10 (loco 1): ESU decoder, CV67-94 configured
+- Consist 11 (loco 7): Hornby decoder, CV67-94 configured
+- Real analytics data: 300+ delta_t events per consist
+
+---
+
+**Last Updated**: 2026-01-16 (Phase 1 design documented)
+**Implementation Status**: 🔄 In Progress

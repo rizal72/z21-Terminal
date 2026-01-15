@@ -737,6 +737,112 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2026-01-15 - 🐛 **SPEED TUNING: 8 Critical Bugs Fixed After Phase 1 Deployment**
+
+**Status**: ✅ **ALL BUGS FIXED** - Speed Tuning fully functional, v1.4 tag created
+
+**Context**: After Phase 1 MVP deployment, extensive testing revealed 8 critical bugs preventing Speed Tuning from working correctly. This debugging session (~6 hours) identified and fixed all issues.
+
+**Critical Bugs Discovered and Fixed**:
+
+1. **🔴 WebSocket Crash - Missing `await` Keyword** (MOST CRITICAL)
+   - **Error**: speed_setting events logged to console but NEVER reached database (0 events in DB)
+   - **Cause**: `analytics_logger.log_event()` is async but called without `await` in `ws_control.py:184`
+   - **Evidence**: 17 delta_t events at speed 126 existed (daemon logging worked), but 0 speed_setting events
+   - **Fix**: Added `await` before `analytics_logger.log_event()` call
+   - **File**: `backend/websocket_handlers/ws_control.py:184`
+   - **Commit**: `9f50436`
+
+2. **🔴 analytics_logger Not Accessible from ws_control.py**
+   - **Error**: `AttributeError: 'TrackingManager' object has no attribute 'analytics_logger'`
+   - **Cause**: analytics_logger lives in tracking_daemon, not tracking_manager
+   - **User symptom**: "le loco partono solo la prima volta e poi non è più possibile fermarle"
+   - **Fix**: Added analytics_logger to dependencies.py global state pattern
+     - tracking_daemon sets it on startup via `dependencies.set_analytics_logger()`
+     - ws_control.py gets it via `dependencies.get_analytics_logger()`
+   - **Files**: `backend/dependencies.py`, `backend/tracking_daemon.py`, `backend/websocket_handlers/ws_control.py`
+   - **Commits**: `cdf5f9c`, `d4c8c60`
+
+3. **🟡 Circular Import - dependencies.py**
+   - **Error**: `ImportError: cannot import name 'TrackingManager' from partially initialized module`
+   - **Cause**: Import chain: main.py → tracking_manager → tracking_daemon → dependencies → tracking_manager
+   - **Fix**: Used `TYPE_CHECKING` pattern in dependencies.py to avoid runtime circular import
+     ```python
+     from typing import TYPE_CHECKING
+     if TYPE_CHECKING:
+         from z21_manager import Z21Manager
+         from tracking_manager import TrackingManager
+     ```
+   - **File**: `backend/dependencies.py`
+   - **Commit**: `d4c8c60`
+
+4. **🟡 Speed Field Missing in delta_t Events**
+   - **Error**: delta_t events had no speed field → correlation algorithm couldn't work
+   - **Evidence**: Recent events showed `speed: None` or missing speed field
+   - **Fix**: Added `'speed': self.consist_speeds.get(consist_id, 0)` to delta_t event data
+   - **File**: `backend/tracking_daemon.py:204`
+   - **Commit**: `8d97f24`
+
+5. **🟡 Gate Editor Path Wrong**
+   - **Error**: `[Errno 2] No such file or directory: 'C:\\z21-Terminal\\backend\\config.json'`
+   - **Cause**: Gate editor tried to save to backend/config.json instead of root
+   - **Fix**: Changed to use `get_config_path()` instead of hardcoded path calculation
+   - **File**: `backend/routers/config.py:347`
+   - **Commit**: `5e04b62`
+
+6. **🟡 Config Paths Not Centralized**
+   - **User feedback**: "ci sono altri mille posti in cui qualcosa salva il config, ti prego di controllare tutti"
+   - **Fix**: Systematic search and replace all config.json access with `get_config_path()`
+   - **Files**: `backend/routers/config.py`, `backend/z21_manager.py`, `backend/video_feed.py`
+   - **Commits**: `5e04b62`, `aaa8db5`
+
+7. **🟡 Error Messages Not Visible in Logs**
+   - **User feedback**: "ma perchè non ho visto l'errore nel log, perchè non era rosso?"
+   - **Cause**: FastAPI/Starlette WebSocket handler uses print() instead of log()
+   - **Fix**: Created `ColoredOutput` wrapper class to intercept sys.stdout.write() and add colored [ERROR]/[WARN] prefix
+   - **File**: `backend/log_colors.py:69-112`
+   - **Commit**: `0502e73`
+
+8. **🟢 Orange Color for [SPEED] Log Prefix**
+   - **User request**: "possiamo dare un colore anche agli eventi speed? Orange"
+   - **Fix**: Added `'\033[38;5;208m'` (orange) to [SPEED] prefix in log_colors.py
+   - **File**: `backend/log_colors.py:26`
+   - **Commit**: `0a4e3cd`
+
+**Database Migrations** (Historical Data Correction):
+
+1. **Speed 70 → 88 Correction** (`fix_speed_70_to_88.py`):
+   - **Context**: User meant 70% of 126 = 88 DCC speed, not literal 70
+   - **User feedback**: "quando ti ho detto che i 333 eventi erano a speed 70, volevo dire 70% non 70, quindi speed 88!!!!!"
+   - **Results**:
+     - 352 delta_t events updated: speed 70 → 88
+     - 2 speed_setting events updated: speed_new 70 → 88
+   - **Backup**: `analytics.db.backup_20260115_181523.backup`
+
+**Architecture Improvements**:
+- ✅ **Global state pattern** in dependencies.py for analytics_logger access
+- ✅ **TYPE_CHECKING guard** prevents circular imports
+- ✅ **Centralized config path** via get_config_path() across all files
+- ✅ **Auto-prefix error wrapper** for better log visibility
+
+**Production Deployment**:
+- ✅ All fixes deployed to PC Windows via `z21-deploy-dev`
+- ✅ Speed Tuning chart now shows data correctly
+- ✅ Speed_setting events logging to database (verified with test session)
+- ✅ Orange [SPEED] log prefix visible in console
+- ✅ Config.json synced from Mac to PC (gate modifications preserved)
+
+**Final Status**:
+- **Tag**: `v1.4` (moved from initial Phase 1 commit)
+- **Commits**: `cdf5f9c` → `9f50436` (8 commits)
+- **Testing**: ✅ Full verification on PC Windows production
+- **User confirmation**: All features working correctly
+
+**Time Investment**: ~6 hours debugging + testing
+**Key Insight**: async/await bugs are silent killers - function appears to work (logs print) but never executes (no DB writes)
+
+---
+
 ### 2025-01-15 - 🎨 **FRONTEND REFACTORING COMPLETATO** (Analytics Dashboard)
 
 **Status**: ✅ **MILESTONE ACHIEVED** - Modular chart components, merged to develop
