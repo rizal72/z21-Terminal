@@ -22,6 +22,7 @@ from video_feed import generate_video_frames
 from config_loader import load_config, save_config, get_config_path
 from log_colors import log, colorize_status
 from services.downsampling import lttb_downsample, smart_downsample_delta_t, format_duration_hms, sample_events
+from services.analytics_db import AnalyticsDB
 
 # Default constants (single source of truth)
 DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}
@@ -1713,53 +1714,10 @@ async def get_current_session():
 @app.get("/api/analytics/session/{session_id}")
 async def get_session_data(session_id: str):
     """Load full session data (events, Δt trends)"""
-    import sqlite3
-    db_path = Path(__file__).parent / "data" / "analytics.db"
-
-    if not db_path.exists():
-        return {"error": "Analytics database not found"}
-
-    conn = sqlite3.connect(str(db_path))
-    cursor = conn.cursor()
-
-    # Get session metadata
-    cursor.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
-    session_row = cursor.fetchone()
-    if not session_row:
-        conn.close()
+    result = AnalyticsDB.get_session_by_id(session_id)
+    if result is None:
         return {"error": "Session not found"}
-
-    session_data = {
-        'id': session_row[0],
-        'start_time': session_row[1],
-        'end_time': session_row[2],
-        'validated': bool(session_row[3]),
-        'event_count': session_row[4]
-    }
-
-    # Get all delta_t events
-    cursor.execute(
-        "SELECT timestamp, data FROM events WHERE session_id = ? AND event_type = 'delta_t' ORDER BY timestamp",
-        (session_id,)
-    )
-
-    events = []
-    for row in cursor.fetchall():
-        data = json.loads(row[1])
-        events.append({
-            'timestamp': row[0],
-            'consist_id': data['consist_id'],
-            'delta_t': data['delta_t'],
-            'status': data['status'],
-            'gate_type': data['gate_type']
-        })
-
-    conn.close()
-
-    return {
-        'session': session_data,
-        'events': events
-    }
+    return result
 
 
 @app.get("/api/analytics/cumulative")
@@ -1779,27 +1737,8 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
 
     Note: tail and max_points are mutually exclusive (tail takes precedence)
     """
-    import sqlite3
-    from collections import defaultdict
-    db_path = Path(__file__).parent / "data" / "analytics.db"
-
-    if not db_path.exists():
-        return {"error": "Analytics database not found"}
-
-    conn = sqlite3.connect(str(db_path))
-    cursor = conn.cursor()
-
-    # Get all validated sessions (closed sessions with end_time)
-    cursor.execute("SELECT id, start_time, end_time, event_count FROM sessions WHERE validated = 1 ORDER BY start_time DESC")
-    sessions = []
-    for row in cursor.fetchall():
-        sessions.append({
-            'id': row[0],
-            'start_time': row[1],
-            'end_time': row[2],
-            'event_count': row[3],
-            'duration': row[2] - row[1] if row[2] else None
-        })
+    # Get validated sessions from DB
+    sessions = AnalyticsDB.get_validated_sessions()
 
     # Include current session if running (validated but no end_time yet)
     if tracking_manager and tracking_manager.daemon and tracking_manager.daemon.analytics_logger:
@@ -1813,64 +1752,16 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
                 'duration': None  # Can't calculate yet
             })
 
-    # Get overall stats (including current session)
+    # Get overall stats
     total_sessions = len(sessions)
 
-    # Get gate crossings aggregate (count per consist)
-    cursor.execute("SELECT data FROM events WHERE event_type = 'delta_t'")
-    gate_crossings = defaultdict(int)
-    for row in cursor.fetchall():
-        data = json.loads(row[0])
-        gate_crossings[data['consist_id']] += 1
+    # Get gate crossings aggregate
+    gate_crossings = AnalyticsDB.get_gate_crossings_aggregate()
 
-    # Get ALL delta_t events (chronologically ordered for continuous timeline)
-    cursor.execute(
-        "SELECT session_id, timestamp, data FROM events WHERE event_type = 'delta_t' ORDER BY timestamp"
-    )
-    delta_t_events = []
-    for row in cursor.fetchall():
-        data = json.loads(row[2])
-        delta_t_events.append({
-            'session_id': row[0],
-            'timestamp': row[1],
-            'consist_id': data['consist_id'],
-            'delta_t': data['delta_t'],
-            'status': data['status'],
-            'gate_type': data['gate_type']
-        })
-
-    # Get ALL YOLO performance events (FPS, confidence over time)
-    cursor.execute(
-        "SELECT session_id, timestamp, data FROM events WHERE event_type = 'yolo_performance' ORDER BY timestamp"
-    )
-    yolo_performance = []
-    for row in cursor.fetchall():
-        data = json.loads(row[2])
-        yolo_performance.append({
-            'session_id': row[0],
-            'timestamp': row[1],
-            'avg_fps': data.get('avg_fps', 0),
-            'avg_confidence': data.get('avg_confidence', {}),
-            'miss_rate': data.get('miss_rate', 0)
-        })
-
-    # Get locomotive operating time events (for per-session filtering in Current view)
-    cursor.execute(
-        "SELECT session_id, timestamp, data FROM events WHERE event_type = 'loco_operating_time' ORDER BY timestamp"
-    )
-    loco_operating_time_events = []
-    for row in cursor.fetchall():
-        data = json.loads(row[2])
-        loco_operating_time_events.append({
-            'session_id': row[0],
-            'timestamp': row[1],
-            'address': data.get('address'),
-            'duration_seconds': data.get('duration_seconds'),
-            'start_time': data.get('start_time'),
-            'end_time': data.get('end_time')
-        })
-
-    conn.close()
+    # Get ALL events (chronologically ordered)
+    delta_t_events = AnalyticsDB.get_delta_t_events()
+    yolo_performance = AnalyticsDB.get_yolo_performance_events()
+    loco_operating_time_events = AnalyticsDB.get_loco_operating_time_events()
 
     # Apply tail or sampling based on view mode (mutually exclusive)
     if tail:
@@ -1910,7 +1801,7 @@ async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[
         'total_sessions': total_sessions,
         'total_delta_t_events': len(delta_t_events),
         'sessions': sessions,
-        'gate_crossings': dict(gate_crossings),
+        'gate_crossings': gate_crossings,
         'delta_t_events': delta_t_events,
         'yolo_performance': yolo_performance,
         'loco_operating_time': loco_operating_time_events
@@ -1962,148 +1853,13 @@ async def get_analytics_reports(
             ]
         }
     """
-    import sqlite3
-    import json
-    from datetime import datetime
-    from collections import defaultdict
-
-    # Cap limit to prevent abuse
-    if limit > 100:
-        limit = 100
-
-    db_path = Path(__file__).parent / "data" / "analytics.db"
-
-    if not db_path.exists():
-        return {"error": "Analytics database not found", "sessions": []}
-
     try:
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-
-        # Get validated sessions (exclude running sessions with NULL end_time)
-        cursor.execute("""
-            SELECT id, start_time, end_time, event_count
-            FROM sessions
-            WHERE validated = 1 AND end_time IS NOT NULL
-            ORDER BY start_time DESC
-            LIMIT ?
-        """, (limit,))
-
-        sessions = cursor.fetchall()
-
-        if not sessions:
-            conn.close()
-            return {"sessions": []}
-
-        result_sessions = []
-
-        for session_id, start_time, end_time, event_count in sessions:
-            # Get all delta_t events for this session
-            cursor.execute("""
-                SELECT data
-                FROM events
-                WHERE session_id = ? AND event_type = 'delta_t'
-                ORDER BY timestamp
-            """, (session_id,))
-
-            event_rows = cursor.fetchall()
-
-            if not event_rows:
-                # Skip sessions with no delta_t events
-                continue
-
-            # Parse events and group by consist
-            consist_data = defaultdict(lambda: {
-                'delta_t_values': [],
-                'synced_count': 0,
-                'warning_count': 0,
-                'critical_count': 0
-            })
-
-            for (data_json,) in event_rows:
-                data = json.loads(data_json)
-                consist_id = data.get('consist_id')
-                delta_t = data.get('delta_t')
-                status = data.get('status')
-
-                if consist_id is None or delta_t is None:
-                    continue
-
-                # Apply consist filter if specified
-                if consist_filter is not None and consist_id != consist_filter:
-                    continue
-
-                consist_data[consist_id]['delta_t_values'].append(delta_t)
-
-                if status == 'SYNCED':
-                    consist_data[consist_id]['synced_count'] += 1
-                elif status == 'WARNING':
-                    consist_data[consist_id]['warning_count'] += 1
-                elif status == 'CRITICAL':
-                    consist_data[consist_id]['critical_count'] += 1
-
-            # Calculate statistics for each consist
-            consists = {}
-            for consist_id, data in consist_data.items():
-                values = data['delta_t_values']
-                total_crossings = len(values)
-
-                if total_crossings == 0:
-                    continue
-
-                avg_delta_t = sum(values) / total_crossings
-                min_delta_t = min(values)
-                max_delta_t = max(values)
-
-                # Calculate trend indicator
-                if avg_delta_t > 0.2:
-                    trend = 'LEAD FASTER'
-                elif avg_delta_t < -0.2:
-                    trend = 'REAR FASTER'
-                else:
-                    trend = 'BALANCED'
-
-                # Calculate synced percentage
-                synced_percent = (data['synced_count'] / total_crossings) * 100
-
-                consists[str(consist_id)] = {
-                    'total_crossings': total_crossings,
-                    'avg_delta_t': round(avg_delta_t, 3),
-                    'min_delta_t': round(min_delta_t, 3),
-                    'max_delta_t': round(max_delta_t, 3),
-                    'trend': trend,
-                    'synced_count': data['synced_count'],
-                    'warning_count': data['warning_count'],
-                    'critical_count': data['critical_count'],
-                    'synced_percent': round(synced_percent, 1)
-                }
-
-            # Only include sessions that have consist data after filtering
-            if not consists:
-                continue
-
-            # Format session data
-            duration_seconds = end_time - start_time
-            session_date = datetime.fromtimestamp(start_time).strftime('%d-%m-%Y')
-
-            # Count ONLY delta_t events (gate crossings), not all event types
-            total_delta_t_events = sum(cd['total_crossings'] for cd in consists.values())
-
-            result_sessions.append({
-                'id': session_id,
-                'date': session_date,
-                'start_time': start_time,
-                'end_time': end_time,
-                'duration_seconds': int(duration_seconds),
-                'duration_formatted': format_duration_hms(duration_seconds),
-                'total_events': total_delta_t_events,  # Only gate crossings, not all event types
-                'consists': consists
-            })
-
-        conn.close()
-
-        return {"sessions": result_sessions}
-
+        sessions = AnalyticsDB.get_reports_data(
+            limit=limit,
+            consist_filter=consist_filter,
+            format_duration_callback=format_duration_hms
+        )
+        return {"sessions": sessions}
     except Exception as e:
         return {"error": f"Failed to load reports: {str(e)}", "sessions": []}
 
@@ -2111,46 +1867,9 @@ async def get_analytics_reports(
 @app.get("/api/analytics/locomotive-stats")
 async def get_locomotive_stats():
     """Get aggregated locomotive operating time statistics"""
-    import sqlite3
-
-    db_path = Path(__file__).parent / "data" / "analytics.db"
-
-    if not db_path.exists():
-        return {'locomotives': []}
-
     try:
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            SELECT
-                address,
-                name,
-                total_operating_seconds,
-                total_sessions,
-                last_active_time,
-                created_at
-            FROM locomotive_stats
-            ORDER BY address
-        ''')
-
-        rows = cursor.fetchall()
-        conn.close()
-
-        return {
-            'locomotives': [
-                {
-                    'address': row[0],
-                    'name': row[1] or f"Loco {row[0]}",
-                    'total_operating_hours': round(row[2] / 3600, 2) if row[2] else 0,
-                    'total_operating_seconds': row[2],
-                    'total_sessions': row[3],
-                    'last_active_time': row[4],
-                    'created_at': row[5]
-                }
-                for row in rows
-            ]
-        }
+        locomotives = AnalyticsDB.get_locomotive_stats()
+        return {'locomotives': locomotives}
     except Exception as e:
         log('[ERROR]', f"Failed to load locomotive stats: {e}")
         return {'error': str(e), 'locomotives': []}
