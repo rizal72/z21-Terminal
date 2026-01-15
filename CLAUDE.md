@@ -671,6 +671,84 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2025-01-15 - 🎉 **BACKEND REFACTORING COMPLETATO** (Phase 4)
+
+**Status**: ✅ **MILESTONE ACHIEVED** - Modular architecture complete, merged to develop
+
+**Objective**: Reduce main.py from 2340 lines (monolithic) to modular architecture with routers + services + WebSocket handlers
+
+**Final Results**:
+- **main.py**: 2340 → 742 lines (-68.3% reduction, -1598 lines)
+- **Total modular code**: 3162 lines across 11 new files
+- **Architecture**: Routers (4) + Services (4) + WebSocket Handlers (2) + Dependencies system
+- **Endpoint compatibility**: 100% - all 27 endpoints functional, zero breaking changes
+- **Testing**: All features verified on PC Windows production (locomotive control, tracking, YOLO, analytics, gate editor)
+
+**Files Created** (11 total):
+1. `backend/dependencies.py` (230 lines) - Global state dependency injection
+2. `backend/routers/analytics.py` (226 lines) - 6 analytics endpoints
+3. `backend/routers/config.py` (378 lines) - 7 config/consist/gate endpoints
+4. `backend/routers/roster.py` (110 lines) - 3 roster endpoints
+5. `backend/routers/status.py` (125 lines) - 2 status/telemetry endpoints
+6. `backend/services/analytics_db.py` (435 lines) - SQLite analytics queries
+7. `backend/services/broadcast.py` (237 lines) - WebSocket broadcast utilities
+8. `backend/services/config_manager.py` (172 lines) - Configuration access helpers
+9. `backend/services/downsampling.py` (149 lines) - LTTB + smart Δt downsampling
+10. `backend/websocket_handlers/ws_control.py` (394 lines) - Real-time locomotive control (10 message types)
+11. `backend/websocket_handlers/ws_tracking.py` (192 lines) - YOLO tracking daemon handler (3 message types)
+
+**Critical Bugs Fixed During Refactoring**:
+1. **Namespace Collision**: Renamed `websockets/` → `websocket_handlers/` (uvicorn conflict)
+2. **WebSocket Crash**: Fixed `get_full_roster()` import from `routers.roster`
+3. **Tracking Broken**: Synced `tracking_daemon_ws` with `dependencies.set_tracking_daemon_ws()`
+4. **Video Panels Missing**: Updated `get_tracked_consist_ids()` to use `gate_ids` field (config schema change)
+5. **YOLO Bbox Gone**: Changed video feed callback to use `dependencies.get_yolo_detections()`
+6. **Dead Code**: Removed unused globals `tracking_daemon_ws` and `yolo_detections` (final cleanup)
+
+**Architecture Achieved**:
+```
+backend/
+├── main.py (742 lines - minimal delegation, FastAPI app)
+├── dependencies.py (global state injection)
+├── routers/
+│   ├── analytics.py (6 endpoints)
+│   ├── config.py (7 endpoints)
+│   ├── roster.py (3 endpoints)
+│   └── status.py (2 endpoints)
+├── services/
+│   ├── analytics_db.py (SQLite queries)
+│   ├── broadcast.py (WebSocket utilities)
+│   ├── config_manager.py (config helpers)
+│   └── downsampling.py (LTTB + smart sampling)
+└── websocket_handlers/
+    ├── ws_control.py (10 control messages)
+    └── ws_tracking.py (3 tracking messages)
+```
+
+**Benefits for Future Development**:
+- ✅ **Maintainability**: Single responsibility per file (~150-400 lines each)
+- ✅ **Testability**: Each router/service can be tested independently
+- ✅ **Scalability**: New features (Speed Table Auto-Tuning v1.3) require zero main.py changes
+- ✅ **Collaboration**: Multiple developers can work on different routers without conflicts
+- ✅ **Debugging**: Clear separation of concerns, easier to locate bugs
+
+**Time Investment**: ~10-12 hours total (4 phases, incremental testing after each)
+**Rollback Safety**: Git tag created after each phase (rollback ready if needed)
+
+**Commits**: `10d0bfd` → `0502e73` (14 commits across 4 phases)
+
+**Documentation Updated**:
+- `backend/README.md` - Project structure section
+- `docs/REFACTOR_PLAN.md` - Complete implementation guide
+- `CLAUDE.md` - This changelog entry
+
+**Next Steps** (v1.3 Speed Table Auto-Tuning):
+- Add `routers/speed_tuning.py` (clean separation)
+- Extend `AnalyticsDB` with speed correlation queries
+- Add CV write operations in `services/cv_manager.py`
+
+---
+
 ### 2025-01-15 - ♻️ **BACKEND REFACTORING: Phase 2.2 Completato + Venv Documentation**
 
 **Status**: ✅ **Config Router Extracted** - 7 endpoints migrated to `backend/routers/config.py`
