@@ -14,6 +14,7 @@ from tracking_manager import TrackingManager
 _z21_manager: Optional[Z21Manager] = None
 _tracking_manager: Optional[TrackingManager] = None
 _tracking_daemon_ws: Optional[WebSocket] = None
+_analytics_logger = None  # AnalyticsLogger instance (set when tracking daemon starts)
 _connected_clients: List[WebSocket] = []
 _consist_data: Dict[int, Dict[str, Any]] = {}
 _locomotive_data: Dict[int, Dict[str, Any]] = {}
@@ -100,6 +101,17 @@ def set_tracking_daemon_ws(ws: Optional[WebSocket]):
     """Set tracking daemon WebSocket connection"""
     global _tracking_daemon_ws
     _tracking_daemon_ws = ws
+
+
+def get_analytics_logger():
+    """Get AnalyticsLogger instance (set when tracking daemon starts)"""
+    return _analytics_logger
+
+
+def set_analytics_logger(logger):
+    """Set AnalyticsLogger instance (called by tracking daemon on startup)"""
+    global _analytics_logger
+    _analytics_logger = logger
 
 
 def get_connected_clients() -> List[WebSocket]:

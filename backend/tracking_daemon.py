@@ -27,6 +27,7 @@ from tracking.yolo_tracker import YOLOTracker
 from tracking.rtsp_handler import load_camera_config, setup_rtsp_stream, reconnect_rtsp_stream
 from analytics_logger import AnalyticsLogger
 from log_colors import log
+import dependencies
 
 # === CONFIGURATION ===
 project_root = Path(__file__).parent.parent  # z21-Terminal/ root
@@ -383,9 +384,14 @@ class TrackingDaemon:
             self.analytics_logger = AnalyticsLogger(db_path=str(db_path), idle_timeout=idle_timeout)
             self.analytics_flush_task = asyncio.create_task(self.analytics_logger.start_flush_loop())
             log('[ANALYTICS]', f"Analytics logging enabled (DB: {self.analytics_logger.db_path})")
+
+            # Make analytics_logger globally accessible for speed_setting event logging
+            dependencies.set_analytics_logger(self.analytics_logger)
+
         except Exception as e:
             log('[WARN]', f"Analytics logger init failed: {e} (tracking continues)")
             self.analytics_logger = None
+            dependencies.set_analytics_logger(None)
 
         # Start backend message listener in parallel
         listener_task = asyncio.create_task(self.listen_backend_messages())
@@ -494,6 +500,9 @@ class TrackingDaemon:
 
         if self.cap:
             self.cap.release()
+
+        # Clear global analytics_logger reference
+        dependencies.set_analytics_logger(None)
 
         if self.start_time and self.debug_enabled:
             duration = time.time() - self.start_time

@@ -18,7 +18,7 @@ from tracking_manager import TrackingManager
 from routers.roster import get_full_roster
 from services.broadcast import broadcast_state_update, broadcast_controllers_update
 from log_colors import log
-from dependencies import get_tracking_daemon_ws
+from dependencies import get_tracking_daemon_ws, get_analytics_logger
 
 
 async def handle_ws_control(
@@ -172,7 +172,7 @@ async def handle_set_speed(
         z21_manager.set_speed(address, speed, forward)
 
         # Log speed_setting event (for speed correlation analysis)
-        analytics_logger = getattr(tracking_manager, 'analytics_logger', None) if tracking_manager else None
+        analytics_logger = get_analytics_logger()
         if analytics_logger:
             # Determine if address is a consist
             consist_id = None
