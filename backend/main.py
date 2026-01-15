@@ -663,8 +663,8 @@ async def video_feed():
 
     def get_yolo_detections():
         """Callback to get latest YOLO detections for locomotive markers"""
-        global yolo_detections
-        return yolo_detections.get('detections', [])
+        detections = dependencies.get_yolo_detections()
+        return detections.get('detections', [])
 
     return StreamingResponse(
         generate_video_frames(
