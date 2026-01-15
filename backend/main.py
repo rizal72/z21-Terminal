@@ -23,6 +23,16 @@ from config_loader import load_config, save_config, get_config_path
 from log_colors import log, colorize_status
 from services.downsampling import lttb_downsample, smart_downsample_delta_t, format_duration_hms, sample_events
 from services.analytics_db import AnalyticsDB
+from services.broadcast import (
+    init_broadcast_service,
+    update_z21_status,
+    update_track_power,
+    broadcast_z21_status,
+    broadcast_controllers_update,
+    broadcast_state_update,
+    broadcast_initial_state,
+    build_consist_response
+)
 
 # Default constants (single source of truth)
 DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}
@@ -77,6 +87,7 @@ async def poll_track_power():
                 if current_power != last_track_power_state:
                     log('[INIT]', f"Track power changed: {'ON' if current_power else 'OFF'}")
                     last_track_power_state = current_power
+                    update_track_power(current_power)
 
                     # Update all consist states
                     for address in consist_data.keys():
@@ -110,11 +121,13 @@ async def health_check_z21():
                 # Success - reset failure counter and mark online
                 z21_consecutive_failures = 0
                 z21_online = True
+                update_z21_status(True)
             else:
                 # Failed - increment failure counter
                 z21_consecutive_failures += 1
                 if z21_consecutive_failures >= 2:
                     z21_online = False
+                    update_z21_status(False)
                 elif z21_consecutive_failures == 1:
                     log('[WARN]', f"Z21 health check failed (1/2) - grace period")
 
@@ -123,6 +136,7 @@ async def health_check_z21():
             z21_consecutive_failures += 1
             if z21_consecutive_failures >= 2:
                 z21_online = False
+                update_z21_status(False)
                 if previous_state:  # Only log when transitioning to offline
                     log('[WARN]', f"Z21 connection lost after 2 failures: {e}")
             elif z21_consecutive_failures == 1:
@@ -138,6 +152,7 @@ async def health_check_z21():
             if not z21_online:
                 log('[INIT]', f"Setting track power to OFF (Z21 offline)")
                 last_track_power_state = False
+                update_track_power(False)
                 # Update all consist states
                 for address in consist_data.keys():
                     if address in z21_manager.consist_state:
@@ -145,46 +160,6 @@ async def health_check_z21():
                         await broadcast_state_update(address)
 
             await broadcast_z21_status()
-
-
-async def broadcast_z21_status():
-    """Broadcast Z21 connection status to all connected clients"""
-    message = {
-        'type': 'z21_status',
-        'online': z21_online
-    }
-
-    disconnected_clients = []
-    for client in connected_clients:
-        try:
-            await client.send_json(message)
-        except Exception as e:
-            disconnected_clients.append(client)
-
-    # Remove disconnected clients
-    for client in disconnected_clients:
-        if client in connected_clients:
-            connected_clients.remove(client)
-
-
-async def broadcast_controllers_update():
-    """Broadcast controllers configuration to all connected clients"""
-    message = {
-        'type': 'controllers_update',
-        'controllers': controllers_config
-    }
-
-    disconnected_clients = []
-    for client in connected_clients:
-        try:
-            await client.send_json(message)
-        except Exception as e:
-            disconnected_clients.append(client)
-
-    # Remove disconnected clients
-    for client in disconnected_clients:
-        if client in connected_clients:
-            connected_clients.remove(client)
 
 
 @asynccontextmanager
@@ -438,6 +413,18 @@ async def lifespan(app: FastAPI):
         log('[FAIL]', "Failed to connect to Z21")
         z21_online = False
 
+    # Initialize broadcast service with global references
+    init_broadcast_service(
+        clients=connected_clients,
+        z21_mgr=z21_manager,
+        consist_dict=consist_data,
+        locomotive_dict=locomotive_data,
+        controllers=controllers_config
+    )
+    # Set initial runtime values
+    update_z21_status(z21_online)
+    update_track_power(last_track_power_state)
+
     log('[INIT]', f"Backend ready!")
     log('[INIT]', f"WebSocket endpoint: ws://localhost:8000/ws")
     log('[INIT]', f"WebSocket tracking endpoint: ws://localhost:8000/ws/tracking")
@@ -481,100 +468,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-async def broadcast_state_update(address: int):
-    """Broadcast consist/locomotive state update to all connected clients"""
-    # Check if address exists in either consists or locomotives
-    is_consist = address in consist_data
-    is_locomotive = address in locomotive_data
-
-    if not (is_consist or is_locomotive):
-        log('[WARN]', f"Address {address} not found in consists or locomotives")
-        return
-
-    state = z21_manager.get_consist_state(address)
-
-    # Get function definitions from roster data
-    if is_consist:
-        function_definitions = consist_data[address].get('functions', [])
-    else:
-        function_definitions = locomotive_data[address].get('functions', [])
-
-    message = {
-        'type': 'consist_update',  # Same type for both (backwards compatible)
-        'address': address,
-        'data': {
-            'speed': state.get('speed', 0),
-            'direction': state.get('direction', 'forward'),
-            'power': state.get('power', True),
-            'functions': function_definitions,  # Function definitions (array)
-            'functionStates': state.get('functions', {}),  # Function states (object)
-            'virtual_mode': state.get('virtual_mode', False),  # NEW: Virtual Mode status
-            'auto_compensation_enabled': state.get('auto_compensation_enabled', False),  # NEW: Auto-compensation flag
-            'delta_t': state.get('delta_t'),  # NEW: Latest dT from tracking (or None)
-            'delta_t_timestamp': state.get('delta_t_timestamp')  # NEW: Timestamp
-        }
-    }
-
-    # Send to all connected clients
-    disconnected_clients = []
-    for client in connected_clients:
-        try:
-            await client.send_json(message)
-        except Exception:
-            disconnected_clients.append(client)
-
-    # Remove disconnected clients
-    for client in disconnected_clients:
-        if client in connected_clients:
-            connected_clients.remove(client)
-
-
-async def broadcast_initial_state():
-    """Broadcast complete initial state to all connected clients"""
-    # Build consists state using helper function (DRY principle)
-    consists_state = {}
-    for address, data in consist_data.items():
-        state = z21_manager.get_consist_state(address) if z21_manager else {}
-        consists_state[address] = build_consist_response(address, data, state)
-
-    # Build locomotives state
-    locomotives_state = {}
-    for address, data in locomotive_data.items():
-        state = z21_manager.get_consist_state(address) if z21_manager else {}
-        locomotives_state[address] = {
-            'address': address,
-            'name': data.get('name', ''),
-            'in_consist': data.get('in_consist'),
-            'speed': state.get('speed', 0),
-            'direction': state.get('direction', 'forward'),
-            'functions': data.get('functions', []),
-            'functionStates': state.get('functions', {})
-        }
-
-    message = {
-        'type': 'initial_state',
-        'consists': consists_state,
-        'locomotives': locomotives_state,
-        'controllers': controllers_config,
-        'trackPower': last_track_power_state,
-        'z21Online': z21_online
-    }
-
-    # Send to all connected clients
-    disconnected_clients = []
-    for client in connected_clients:
-        try:
-            await client.send_json(message)
-        except Exception as e:
-            print(f"Error broadcasting initial state: {e}")
-            disconnected_clients.append(client)
-
-    # Remove disconnected clients
-    for client in disconnected_clients:
-        if client in connected_clients:
-            connected_clients.remove(client)
 
 
 async def reload_roster_data():
@@ -724,43 +617,6 @@ async def get_z21_telemetry():
             "status": "error",
             "message": f"Failed to get telemetry: {str(e)}"
         }
-
-
-def build_consist_response(address, data, state):
-    """
-    Single source of truth for consist response structure.
-    Use this for ALL WebSocket/API responses to avoid duplication.
-    """
-    locomotives = data.get('locomotives', [])
-    lead_name = locomotives[0]['name'] if locomotives else ''
-    rear_names = [loco['name'] for loco in locomotives[1:]] if len(locomotives) > 1 else []
-    rear_name = ' + '.join(rear_names) if rear_names else None
-
-    # Load gate_ids from config consists
-    gate_ids = []
-    try:
-        config = load_config()
-        consists = config.get('consists', {})
-        consist_info = consists.get(str(address), {})
-        gate_ids = consist_info.get('gate_ids', [])
-    except Exception:
-        pass  # If config load fails, gate_ids stays empty
-
-    return {
-        'address': address,
-        'type': 'consist',
-        'trackName': 'INTERNAL TRACK' if address == 10 else 'EXTERNAL TRACK',
-        'locomotives': locomotives,
-        'lead_name': lead_name,
-        'rear_name': rear_name,
-        'functions': data['functions'],
-        'gate_ids': gate_ids,  # Include gate_ids for frontend
-        # Spread ALL state fields automatically (speed, direction, power, virtual_mode, etc.)
-        # CRITICAL: Exclude 'functions' from spread to avoid overwriting function definitions with states
-        **{k: v for k, v in state.items() if k not in ['address', 'locomotives', 'functions']},
-        # Rename 'functions' state dict to 'functionStates' for clarity
-        'functionStates': state.get('functions', {})
-    }
 
 
 @app.get("/api/consists")
