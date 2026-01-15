@@ -20,7 +20,7 @@ from tracking_manager import TrackingManager
 import video_feed as video_feed_module
 from video_feed import generate_video_frames
 from config_loader import load_config, save_config, get_config_path
-from log_colors import log, colorize_status
+from log_colors import log, colorize_status, enable_auto_coloring
 from services.broadcast import (
     init_broadcast_service,
     update_z21_status,
@@ -37,6 +37,9 @@ from routers import analytics, config, roster, status
 from routers.roster import get_full_roster
 from websocket_handlers.ws_control import handle_ws_control
 from websocket_handlers.ws_tracking import handle_ws_tracking
+
+# Enable automatic coloring of error/warning messages in all print() output
+enable_auto_coloring()
 
 # Default constants (single source of truth)
 DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}

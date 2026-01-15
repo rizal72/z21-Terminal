@@ -4,6 +4,8 @@ Compatible with dark and light terminal backgrounds.
 Centralized mapping for easy maintenance.
 """
 
+import sys
+
 # Mapping PREFIX → COLOR (single source of truth)
 PREFIXES = {
     '[INIT]': '\033[97m',    # White bright - startup (importante, alta visibilità)
@@ -61,3 +63,48 @@ def colorize_status(text: str) -> str:
     text = text.replace('WARNING', f'{STATUS_YELLOW}WARNING{RESET}')
     text = text.replace('CRITICAL', f'{STATUS_RED}CRITICAL{RESET}')
     return text
+
+
+class ColoredOutput:
+    """
+    Wrapper for sys.stdout that automatically adds colored prefixes to error/warning messages.
+    Intercepts all print() calls and prepends [ERROR] or [WARN] prefix if needed.
+    """
+    def __init__(self, stream):
+        self.stream = stream
+        self.error_prefix = '\033[91m[ERROR]\033[0m'    # Red bright [ERROR] prefix
+        self.warn_prefix = '\033[93m[WARN]\033[0m'      # Yellow bright [WARN] prefix
+
+    def write(self, text):
+        """Intercept write() and add prefix if contains error/warning keywords"""
+        if text and text.strip():
+            text_lower = text.lower()
+
+            # Check if already has a colored prefix (e.g., [INIT], [WS], etc.)
+            has_prefix = any(prefix in text for prefix in PREFIXES.keys())
+
+            # Add [ERROR] prefix if contains "error" and doesn't have a prefix already
+            if 'error' in text_lower and not has_prefix:
+                text = f"{self.error_prefix} {text}"
+            # Add [WARN] prefix if contains "warning" and doesn't have a prefix already
+            elif 'warning' in text_lower and not has_prefix:
+                text = f"{self.warn_prefix} {text}"
+
+        self.stream.write(text)
+
+    def flush(self):
+        """Forward flush to underlying stream"""
+        self.stream.flush()
+
+    def __getattr__(self, name):
+        """Forward all other attributes to underlying stream"""
+        return getattr(self.stream, name)
+
+
+def enable_auto_coloring():
+    """
+    Enable automatic coloring of error/warning messages in all print() output.
+    Call this once at application startup.
+    """
+    if not isinstance(sys.stdout, ColoredOutput):
+        sys.stdout = ColoredOutput(sys.stdout)
