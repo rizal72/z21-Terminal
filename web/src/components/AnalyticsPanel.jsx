@@ -19,6 +19,7 @@ import {
 } from '../utils/analyticsHelpers';
 import DeltaTChart from './charts/DeltaTChart';
 import FPSChart from './charts/FPSChart';
+import ConfidenceChart from './charts/ConfidenceChart';
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current', 'overview', or 'reports'
@@ -781,53 +782,13 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   />
 
                   {/* Confidence Bar Chart - Per Locomotive (DCC addresses) */}
-                  <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                    <h4 className="text-lg font-semibold text-amber-400 mb-4">Average Confidence per Locomotive</h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={(() => {
-                        // Confidence chart: snapshot view, NOT time series
-                        const events = filterEventsBySession(cumulativeData.yolo_performance, viewMode, currentSession);
-                        if (events.length === 0) return [];
-
-                        const latestEvent = events[events.length - 1];
-                        const avgConfidence = latestEvent.avg_confidence;
-                        const addressFilter = getAddressFilter(consistFilter, trackingConfig.consists);
-
-                        return Object.entries(avgConfidence)
-                          .filter(([addr]) => addressFilter.includes(parseInt(addr)))
-                          .map(([dcc_addr, conf]) => ({
-                            loco: `Loco ${dcc_addr}`,
-                            address: parseInt(dcc_addr),
-                            confidence: parseFloat((conf * 100).toFixed(1))
-                          }));
-                      })()}>
-                        <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                        <XAxis dataKey="loco" {...CHART_AXIS_STYLES.axis} />
-                        <YAxis {...CHART_AXIS_STYLES.axis} domain={[0, 100]} label={{ value: 'Confidence (%)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
-                        <Tooltip
-                          {...TOOLTIP_STYLES}
-                          formatter={(value) => value.toFixed(1) + '%'}
-                        />
-                        <ReferenceLine y={50} stroke="#ffffff" strokeDasharray="5 5" label={{ value: 'Min Threshold (50%)', position: 'top', fill: '#ffffff' }} />
-                        <Bar dataKey="confidence">
-                          {(() => {
-                            const events = filterEventsBySession(cumulativeData.yolo_performance, viewMode, currentSession);
-                            if (events.length === 0) return [];
-
-                            const latestEvent = events[events.length - 1];
-                            const avgConfidence = latestEvent.avg_confidence;
-                            const addressFilter = getAddressFilter(consistFilter, trackingConfig.consists);
-
-                            return Object.entries(avgConfidence)
-                              .filter(([addr]) => addressFilter.includes(parseInt(addr)))
-                              .map(([dcc_addr], index) => (
-                                <Cell key={`cell-${index}`} fill={LOCO_COLORS[parseInt(dcc_addr)] || '#9CA3AF'} />
-                              ));
-                          })()}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <ConfidenceChart
+                    yoloPerformanceData={cumulativeData.yolo_performance}
+                    viewMode={viewMode}
+                    currentSession={currentSession}
+                    consistFilter={consistFilter}
+                    trackingConfig={trackingConfig}
+                  />
                     </div>
                   )}
                 </div>
