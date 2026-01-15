@@ -172,15 +172,16 @@ async def handle_set_speed(
         z21_manager.set_speed(address, speed, forward)
 
         # Log speed_setting event (for speed correlation analysis)
-        if tracking_manager and tracking_manager.analytics_logger:
+        analytics_logger = getattr(tracking_manager, 'analytics_logger', None) if tracking_manager else None
+        if analytics_logger:
             # Determine if address is a consist
             consist_id = None
             if address in consist_data:
                 consist_id = address
 
-            # Log speed change event (skip if speed unchanged and no direction change)
+            # Log speed change event (skip if speed unchanged)
             if old_speed != speed:
-                tracking_manager.analytics_logger.log_event(
+                analytics_logger.log_event(
                     event_type='speed_setting',
                     data={
                         'address': address,
@@ -196,7 +197,7 @@ async def handle_set_speed(
         await broadcast_state_update(address)
 
         # Track locomotive operating time (individual locos only, not consists)
-        if address in locomotive_data and tracking_manager and tracking_manager.analytics_logger:
+        if address in locomotive_data and analytics_logger:
             current_time = time.time()
 
             # Movement started (speed > 0 and was stopped)
@@ -210,7 +211,7 @@ async def handle_set_speed(
                 duration = current_time - start_time
 
                 # Log operating time event
-                tracking_manager.analytics_logger.log_loco_operating_time(
+                analytics_logger.log_loco_operating_time(
                     address=address,
                     start_time=start_time,
                     end_time=current_time,
