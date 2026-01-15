@@ -145,10 +145,14 @@ export const getSpeedTuningRecommendation = (meanDeltaT, thresholds) => {
     return null;
   }
 
-  // Determine which loco is faster
+  // Determine which loco needs adjustment
+  // Δt = rear_time - lead_time (positive = rear slower, negative = rear faster)
+  // Lead = Reference loco (don't touch), Rear = Adjust loco (modify CV)
   if (meanDeltaT > 0) {
-    return `Rear loco faster (+${meanDeltaT.toFixed(2)}s). Consider decreasing CV speed table for rear loco at this speed.`;
+    // Adjust loco is slower (arrives later) → increase its CV to speed it up
+    return `Adjust loco is slower (+${meanDeltaT.toFixed(2)}s). Consider increasing CV speed table for adjust loco at this speed.`;
   } else {
-    return `Lead loco faster (${meanDeltaT.toFixed(2)}s). Consider increasing CV speed table for rear loco at this speed.`;
+    // Adjust loco is faster (arrives earlier) → decrease its CV to slow it down
+    return `Adjust loco is faster (${meanDeltaT.toFixed(2)}s). Consider decreasing CV speed table for adjust loco at this speed.`;
   }
 };
