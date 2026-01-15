@@ -671,6 +671,56 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2025-01-15 - 🎨 **FRONTEND REFACTORING COMPLETATO** (Analytics Dashboard)
+
+**Status**: ✅ **MILESTONE ACHIEVED** - Modular chart components, merged to develop
+
+**Objective**: Reduce AnalyticsPanel.jsx from 1684 lines (monolithic) to modular architecture with extracted chart components + helpers + constants
+
+**Final Results**:
+- **AnalyticsPanel.jsx**: 1684 → 1151 lines (-31.6% reduction, -533 lines)
+- **Total modular code**: 909 lines across 8 new files
+- **Architecture**: 5 Chart Components + 1 Helpers Module + 1 Constants Module + 1 Plan Document
+- **Chart compatibility**: 100% - all Current/Overview/Reports view differences preserved
+- **Testing**: All features verified on PC Windows production (all charts, session filtering, consist filtering, click interactions)
+
+**Files Created** (8 total):
+1. `web/src/components/charts/DeltaTChart.jsx` (282 lines) - Δt Trends with session breaks + box-select zoom
+2. `web/src/components/charts/FPSChart.jsx` (162 lines) - Inference FPS with average badge
+3. `web/src/components/charts/ConfidenceChart.jsx` (138 lines) - Detection confidence per locomotive
+4. `web/src/components/charts/OperatingTimeChart.jsx` (94 lines) - Total operating time (Overview only)
+5. `web/src/components/charts/HistoricalTrendChart.jsx` (178 lines) - Session-by-session trend (Reports tab)
+6. `web/src/utils/analyticsHelpers.js` (86 lines) - 7 pure utility functions
+7. `web/src/constants/analyticsConstants.js` (31 lines) - Shared constants + styles
+8. `docs/FRONTEND_REFACTOR_PLAN.md` (1535 lines) - Complete refactoring documentation
+
+**Critical Features Preserved**:
+- **DeltaTChart**: 8 Current/Overview differences (XAxis dataKey, scroll, width, dots, stroke, zoom, duplicate Y-axis, auto-scroll)
+- **FPSChart**: 5 Current/Overview differences + FPS avg badge (idle filtering)
+- **ConfidenceChart**: Snapshot (Current) vs Aggregated (Overview) logic
+- **HistoricalTrendChart**: Custom tooltip showing ALL consists + clickable points for Session Detail Modal
+
+**Bugs Fixed During Refactoring**:
+1. **ConfidenceChart Overview mode**: Now aggregates all historical events (loco 5 missing fix)
+2. **FPSChart dots alignment**: Dots only in Current mode (aligned with DeltaTChart behavior)
+3. **DRY improvements**: Eliminated duplicate data prep logic in ConfidenceChart
+
+**Time Investment**: ~6-8 hours across 4 phases
+**Commits**: 17 commits (Phase 0 → Phase 4)
+**Branch**: `refactor-frontend` → merged to `develop`
+
+**Benefits**:
+- ✅ Single Responsibility: Each chart component ~90-280 lines (manageable)
+- ✅ Reusability: Charts can be used independently
+- ✅ Testability: Isolated components easier to test
+- ✅ Maintainability: Future chart additions follow established pattern
+- ✅ DRY: Shared constants/helpers eliminate duplication
+- ✅ Scalability: Adding SpeedCorrelationChart (v1.4) now straightforward
+
+**Deployment**: Tested on PC Windows production after each phase (same workflow as backend refactoring)
+
+---
+
 ### 2025-01-15 - 🎉 **BACKEND REFACTORING COMPLETATO** (Phase 4)
 
 **Status**: ✅ **MILESTONE ACHIEVED** - Modular architecture complete, merged to develop
