@@ -11,6 +11,135 @@
 
 ---
 
+## Testing Strategy (⚠️ CRITICAL - SAME AS BACKEND REFACTOR)
+
+**Branch**: `refactor-frontend` (separate from `develop`)
+**Testing Environment**: PC Windows production (gaming-pc)
+**Why PC**: Production environment with GPU (TensorRT), real YOLO tracking, complete feature set
+
+### Deploy Workflow (After EACH Phase)
+
+#### 1. Mac: Commit Phase Changes
+```bash
+git add .
+git commit -m "refactor(frontend): Phase X - [description]"
+git push origin refactor-frontend
+```
+
+#### 2. PC: Deploy & Test
+```powershell
+# SSH from Mac to PC
+ssh riccardo@gaming-pc
+
+# Deploy refactor-frontend branch
+cd C:\z21-Terminal
+git fetch origin
+git checkout refactor-frontend
+git reset --hard origin/refactor-frontend
+
+# Build frontend (CRITICAL - frontend changes require rebuild)
+npm install --prefix web
+npm run build --prefix web
+
+# Restart backend (serves new frontend dist/)
+z21-restart
+
+# Wait 5 seconds for backend to start
+Start-Sleep -Seconds 5
+
+# Check logs
+z21-log
+```
+
+**⚠️ IMPORTANT**: Frontend changes require **npm run build** every time (unlike backend hot-reload)
+
+#### 3. Manual Testing (See Testing Checklist Below)
+
+Open browser: **https://gaming-pc.tail9350d7.ts.net**
+
+Test ALL features:
+- ✅ Current view charts
+- ✅ Overview view charts
+- ✅ Reports tab
+- ✅ Session breaks toggle
+- ✅ Box-select zoom
+- ✅ Consist filters
+- ✅ Keyboard shortcuts
+- ✅ Locomotive control (verify backend still works)
+
+#### 4. Rollback If Needed
+```powershell
+cd C:\z21-Terminal
+git checkout develop
+git reset --hard origin/develop
+npm install --prefix web
+npm run build --prefix web
+z21-restart
+```
+
+### Git Tag Strategy (After Each Phase)
+
+```bash
+# Mac: Create tag after successful PC testing
+git tag refactor-fe-phase1  # After Phase 1 complete
+git push origin refactor-fe-phase1
+
+git tag refactor-fe-phase2  # After Phase 2 complete
+git push origin refactor-fe-phase2
+
+# ... etc for each phase
+```
+
+**Tags enable quick rollback** if later phase breaks something:
+```bash
+git reset --hard refactor-fe-phase2  # Rollback to Phase 2
+```
+
+### Why PC Testing Is Critical
+
+1. **Production Environment**: Real YOLO tracking, TensorRT GPU, full feature set
+2. **Build Verification**: Catches Vite build errors (tree-shaking, minification)
+3. **Performance**: Verify no performance regressions with 500+ events
+4. **Browser Compatibility**: Safari/Chrome on Mac vs Chrome on Windows
+5. **Analytics Dashboard**: 200+ commits to perfect, must NOT break
+
+### Testing Frequency
+
+**After EVERY phase** (like backend refactor):
+- Phase 1 (constants) → Deploy & test
+- Phase 2 (helpers) → Deploy & test
+- Phase 3.1 (DeltaT chart) → Deploy & test
+- Phase 3.2 (FPS chart) → Deploy & test
+- Phase 3.3 (Confidence chart) → Deploy & test
+- Phase 3.4 (OperatingTime chart) → Deploy & test
+- Phase 3.5 (HistoricalTrend chart) → Deploy & test
+- Phase 4 (cleanup) → Deploy & test
+
+**Total deploys**: 8 (one per phase/subphase)
+
+### What If Test Fails?
+
+1. **Don't panic** - Git tag exists for rollback
+2. **Check browser console** - Look for React errors
+3. **Check backend logs** - `z21-log` (verify backend still works)
+4. **Rollback to last tag** - `git reset --hard refactor-fe-phaseN`
+5. **Fix on Mac** - Debug locally, commit fix, re-deploy to PC
+6. **Ask user** - If stuck > 30 min
+
+### Branch Strategy (Same as Backend)
+
+```
+refactor-frontend (work here)
+    ↓
+  develop (merge when complete)
+    ↓
+   main (stable releases)
+```
+
+**Merge to develop** only after ALL phases complete and tested.
+
+---
+
 ## Critical Context (⚠️ READ BEFORE ANY CHANGES)
 
 **Analytics Dashboard took 200+ commits to work correctly.**
