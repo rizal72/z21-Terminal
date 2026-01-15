@@ -13,19 +13,22 @@ import {
   getConsistColorClass,
   getConsistBgClass,
   formatDeltaT,
-  formatOperatingTime
+  formatOperatingTime,
+  getSpeedTuningRecommendation
 } from '../utils/analyticsHelpers';
 import DeltaTChart from './charts/DeltaTChart';
 import FPSChart from './charts/FPSChart';
 import ConfidenceChart from './charts/ConfidenceChart';
 import OperatingTimeChart from './charts/OperatingTimeChart';
 import HistoricalTrendChart from './charts/HistoricalTrendChart';
+import SpeedCorrelationChart from './charts/SpeedCorrelationChart';
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
-  const [viewMode, setViewMode] = useState('current'); // 'current', 'overview', or 'reports'
+  const [viewMode, setViewMode] = useState('current'); // 'current', 'overview', 'reports', or 'speed-tuning'
   const [cumulativeData, setCumulativeData] = useState(null);
   const [currentSession, setCurrentSession] = useState(null); // Current session metadata
   const [locoStats, setLocoStats] = useState(null); // Locomotive operating time stats
+  const [speedCorrelationData, setSpeedCorrelationData] = useState(null); // Speed tuning correlation data
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [consistFilter, setConsistFilter] = useState('all'); // 'all', 10, 11, etc. (dynamic)
@@ -137,7 +140,14 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     }
   }, [consistFilter, sessionLimit]);
 
-  // Arrow key navigation between Current/Overview/Reports
+  // Reload Speed Correlation data when consist filter changes (Speed Tuning tab only)
+  useEffect(() => {
+    if (isOpen && viewMode === 'speed-tuning') {
+      loadSpeedCorrelationData();
+    }
+  }, [consistFilter]);
+
+  // Arrow key navigation between Current/Overview/Reports/Speed Tuning
   useEffect(() => {
     if (!isOpen) return;
 
@@ -247,12 +257,46 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     }
   };
 
+  const loadSpeedCorrelationData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Speed tuning requires consist filter (not 'all')
+      if (consistFilter === 'all') {
+        setError('Speed Tuning: Please select a specific consist (C10 or C11)');
+        setSpeedCorrelationData(null);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch speed correlation data for selected consist
+      const response = await fetch(`/api/analytics/speed-correlation?consist_id=${consistFilter}`);
+      const data = await response.json();
+
+      if (data.error) {
+        setError(data.error);
+        setSpeedCorrelationData(null);
+        return;
+      }
+
+      setSpeedCorrelationData(data);
+    } catch (err) {
+      setError(`Failed to load speed correlation: ${err.message}`);
+      setSpeedCorrelationData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleViewToggle = (newView) => {
     setViewMode(newView);
 
     // Auto-refresh data on view change
     if (newView === 'reports') {
       loadReportsData();
+    } else if (newView === 'speed-tuning') {
+      loadSpeedCorrelationData();
     } else {
       loadCumulativeData();
     }
@@ -548,6 +592,18 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               >
                 <i className="fa-solid fa-table-list mr-1.5"></i>
                 Reports
+              </button>
+              <button
+                onClick={() => handleViewToggle('speed-tuning')}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  viewMode === 'speed-tuning'
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+                title="Speed Table CV Tuning Analysis"
+              >
+                <i className="fa-solid fa-gauge-high mr-1.5"></i>
+                Speed Tuning
               </button>
             </div>
 
@@ -1005,6 +1061,134 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
             <div className="text-center py-12">
               <i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i>
               <p className="mt-4 text-slate-400">Loading configuration...</p>
+            </div>
+          )}
+
+          {/* Speed Tuning View */}
+          {viewMode === 'speed-tuning' && consistFilter !== 'all' && speedCorrelationData && !loading && (
+            <div className="space-y-6">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                  <div className="text-sm text-slate-400">Speed Changes</div>
+                  <div className="text-3xl font-bold text-white mt-1">
+                    {speedCorrelationData.total_speed_changes || 0}
+                  </div>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                  <div className="text-sm text-slate-400">Δt Samples Collected</div>
+                  <div className="text-3xl font-bold text-white mt-1">
+                    {speedCorrelationData.correlated_samples || 0}
+                  </div>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                  <div className="text-sm text-slate-400">Speed Buckets Analyzed</div>
+                  <div className="text-3xl font-bold text-white mt-1">
+                    {speedCorrelationData.speed_buckets?.length || 0}
+                  </div>
+                </div>
+              </div>
+
+              {/* Speed Correlation Chart */}
+              <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">
+                  Speed vs Δt Correlation (C{consistFilter})
+                </h3>
+                <SpeedCorrelationChart
+                  data={speedCorrelationData}
+                  thresholds={trackingConfig.delta_t_thresholds}
+                  consistColor={getConsistStrokeColor(consistFilter, trackingConfig.consists)}
+                />
+              </div>
+
+              {/* CV Tuning Recommendations */}
+              {speedCorrelationData.speed_buckets && speedCorrelationData.speed_buckets.length > 0 && (
+                <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
+                  <h3 className="text-lg font-semibold text-white mb-4">
+                    CV Tuning Recommendations
+                  </h3>
+                  {(() => {
+                    const problemSpeeds = speedCorrelationData.speed_buckets.filter(
+                      bucket => Math.abs(bucket.mean_delta_t) >= (trackingConfig.delta_t_thresholds?.critical_threshold || 2.0)
+                    );
+
+                    if (problemSpeeds.length === 0) {
+                      return (
+                        <div className="text-center py-8 text-slate-400">
+                          <i className="fa-solid fa-circle-check text-4xl text-green-500 mb-3"></i>
+                          <p className="text-lg">All speeds well synchronized!</p>
+                          <p className="text-sm mt-2">No CV adjustments needed (all Δt below action threshold)</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-3">
+                        {problemSpeeds.map((bucket, idx) => {
+                          const recommendation = getSpeedTuningRecommendation(
+                            bucket.mean_delta_t,
+                            trackingConfig.delta_t_thresholds
+                          );
+                          return (
+                            <div
+                              key={idx}
+                              className="bg-slate-900/50 rounded-lg p-4 border-l-4 border-red-500"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <div className="font-semibold text-white mb-1">
+                                    Speed {bucket.speed_bucket} ({bucket.speed_min}-{bucket.speed_max})
+                                  </div>
+                                  <div className="text-sm text-slate-300 mb-2">
+                                    Mean Δt: <span className="font-mono">{formatDeltaT(bucket.mean_delta_t)}</span>s
+                                    {' '}(±{bucket.std_dev.toFixed(2)}s, N={bucket.samples})
+                                  </div>
+                                  {recommendation && (
+                                    <div className="text-sm text-amber-400 flex items-start gap-2">
+                                      <i className="fa-solid fa-lightbulb mt-0.5"></i>
+                                      <span>{recommendation}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="mt-4 p-4 bg-blue-900/20 border border-blue-700 rounded-lg">
+                          <div className="flex items-start gap-3">
+                            <i className="fa-solid fa-circle-info text-blue-400 mt-0.5"></i>
+                            <div className="text-sm text-slate-300">
+                              <p className="font-semibold text-white mb-2">Phase 1: Manual CV Adjustment</p>
+                              <p>
+                                Use JMRI DecoderPro to adjust CV speed table values (CV67-94) for the rear locomotive
+                                at the recommended speeds. Monitor Δt improvement in subsequent sessions.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Speed Tuning: Consist Filter Required */}
+          {viewMode === 'speed-tuning' && consistFilter === 'all' && !loading && (
+            <div className="text-center py-12">
+              <i className="fa-solid fa-filter text-4xl text-slate-500 mb-4"></i>
+              <p className="text-xl text-slate-300 mb-2">Consist Filter Required</p>
+              <p className="text-slate-400">Please select a specific consist (C10 or C11) to view speed tuning analysis</p>
+            </div>
+          )}
+
+          {/* Speed Tuning: No Data Available */}
+          {viewMode === 'speed-tuning' && consistFilter !== 'all' && !speedCorrelationData && !loading && !error && (
+            <div className="text-center py-12">
+              <i className="fa-solid fa-gauge-high text-4xl text-slate-500 mb-4"></i>
+              <p className="text-xl text-slate-300 mb-2">No Speed Correlation Data</p>
+              <p className="text-slate-400">Change locomotive speed during sessions to collect data</p>
             </div>
           )}
 
