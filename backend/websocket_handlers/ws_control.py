@@ -181,7 +181,7 @@ async def handle_set_speed(
 
             # Log speed change event (skip if speed unchanged)
             if old_speed != speed:
-                analytics_logger.log_event(
+                await analytics_logger.log_event(
                     event_type='speed_setting',
                     data={
                         'address': address,
