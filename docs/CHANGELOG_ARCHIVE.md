@@ -2190,3 +2190,155 @@ Multiple improvements (commits `1e44b33`, `a7d88c7`, `e3eaa18`, `d1642d4`, `945b
 
 **Status**: Ready to implement (user approved)
 
+
+---
+
+## Changelog Archived: 2025-01-13 → 2025-01-15
+
+**Note**: The entries below were moved from CLAUDE.md on 2025-01-15 to keep CLAUDE.md < 40KB
+
+---
+
+### 2025-01-14 - 🔍 **ROOT CAUSE ANALYSIS: Loco 7 Erratic Behavior**
+
+**Investigation**: Analytics historical trend analysis su Consist 11 (30 sessioni, 2026-01-12 → 2026-01-14)
+
+**Findings**:
+- Loco 7 (Hornby TXS) comportamento **cronicamente instabile** fin dalla prima sessione tracked
+- Average dT varia da -0.06s (BALANCED) a -1.23s (CRITICAL) senza pattern prevedibile
+- Worst session: 2026-01-14 avg -1.23s, solo 51.6% SYNCED, range -3.52s to +1.09s (6.6s variabilità!)
+- **NON esiste "cambio improvviso"**: problema esisteva già quando tracking iniziato
+
+**Root Cause Identified**: 🎯 **Micro SMD capacitor (~0.5mm) staccato dalla PCB di loco 7**
+- **Location**: Lato periferico PCB (opposto decoder), vicino bordo corto (coda/testa loco)
+- **Function**: Smoothing/filtering capacitor per circuito alimentazione motore
+- **Impact**: Senza filtro → alimentazione instabile, rumore elettrico, spikes non smorzati
+- **Why not fixed**: Condensatore troppo piccolo per saldatura manuale, decoder sound troppo costoso per rischiare riparazione
+
+**Workaround**: ✅ **Virtual Mode attivo e funzionante**
+- Sistema compensa automaticamente comportamento erratico in real-time
+- Analytics tracking valida efficacia compensazione
+- Performance accettabile per operazioni quotidiane
+
+**Documentation**: Dettagli completi → `docs/CONSIST_ROSTER.md` (sezione loco 7 - Known Hardware Issue)
+
+**Tools Created**:
+- `scripts/utils/analytics_report.py` - Session analysis con dT statistics
+- `scripts/utils/c11_trend_analysis.py` - Historical trend C11 (30 sessions max)
+
+**Key Insight**: Questo problema hardware è stata la motivazione principale per sviluppare sistema YOLO tracking + Virtual Mode con compensazione automatica velocità.
+
+---
+
+### 2025-01-14 - 📊 **REPORTS TAB MVP COMPLETATO**
+
+**Status**: ✅ **v1.2 MILESTONE** - 3rd tab Analytics Dashboard implemented
+
+**Obiettivo**: Sostituire CLI scripts (`analytics_report.py`, `c11_trend_analysis.py`) con web UI accessibile da tablet/smartphone per analisi session-by-session.
+
+**Features Implemented**:
+
+1. **Session History Table**:
+   - Ultime 30 sessioni validate con colonne dinamiche (C10/C11 Avg Δt, Synced%)
+   - Color-coded avg Δt: verde (<1.0s), ambra (1.0-1.5s), rosso (≥1.5s)
+   - Consist filter: "All" mostra tutte sessioni con N/A per consist non girato, "C10"/"C11" filtra solo sessioni rilevanti
+   - Clickable rows → Session Detail Modal
+
+2. **Historical Trend Chart**:
+   - LineChart con avg Δt over time (X-axis: date, Y-axis: seconds)
+   - Reference lines: 0 (green), ±1.0 (amber), ±1.5 (red)
+   - Dynamic lines per consist (color-coded)
+   - Clickable points → Session Detail Modal
+   - Custom tooltip mostra tutti consist non-null per data
+
+3. **Session Detail Modal**:
+   - Session metadata: ID, Date, Duration, Total Events
+   - Per-consist breakdown: Total crossings, Avg Δt, Range, Trend, Status distribution (SYNCED/WARNING/CRITICAL)
+   - Interpretation guide con bullet points
+   - z-index 60 (sopra main Analytics modal)
+
+**Backend API**:
+- Endpoint: `GET /api/analytics/reports?limit=30&consist_filter=<id>`
+- Helper: `format_duration_hms()` (HH:MM:SS formatting)
+- Pre-aggregates statistics per session/consist (avg, min, max, status counts, synced%, trend)
+- Returns consist IDs as strings in JSON (`"10"`, `"11"`)
+
+**Critical Fixes**:
+1. Fragment import (React.Fragment undefined)
+2. Rules of Hooks (useMemo inside IIFE)
+3. Exclude Overview charts da Reports tab
+4. Helper functions null safety (`consistConfig || {}`)
+5. TrackingConfig load race condition (spinner durante load)
+6. Object.keys null safety (7 occorrenze con `|| {}`)
+7. **Consist ID type mismatch**: Backend strings vs frontend numbers → `String(cid)` conversion necessaria
+8. Session filtering by consist (`filteredReportsSessions` useMemo)
+9. Custom tooltip per mostrare tutti consist per data
+
+**Known Limitation**: ✅ RISOLTO
+- ~~Multiple sessions same date: Custom tooltip mostra correttamente tutti i consist per data~~
+
+**Documentation**:
+- `docs/REPORTS_TAB.md` - Documentazione completa implementazione (architecture, components, API, fixes, testing, future enhancements)
+
+**Testing**: ✅ Manual testing completato su PC Windows + GPU (production environment)
+
+**Commits**: `0f8c6f8` → `f55bc8f` (13 commits totali, 6 fix critici per crash/rendering)
+
+**Next Steps** (future releases):
+- v1.3: Speed setting tracking (HIGH PRIORITY)
+- v1.3+: Sortable columns, pagination, CSV export, date range filter
+
+---
+
+### 2025-01-15 - 🎉 **MILESTONE 1.2 COMPLETATA**
+
+**Status**: ✅ **v1.2 RELEASED** - Analytics UX improvements & data quality fixes
+
+**Features Implemented**:
+
+1. **Delta T Sign Display** (commit `7f63e57`):
+   - Added `formatDeltaT()` helper: always show "+" prefix for positive values
+   - Applied to ALL 6 display locations: Y-axis, tooltips, Reports table, Historical chart, Session detail modal
+   - Semantic clarity: "+" explicitly shows which loco is faster
+
+2. **Locomotive Operating Time Data Fix**:
+   - **Problem**: 22 anomalous events (10-14 hour durations) from bad migration showing 22-73 hours instead of minutes
+   - **Solution**: Created `fix_loco_events.py` script to delete anomalous events (duration > 3600s)
+   - **Result**: Correct data: Loco 1/5: 9.5 min, Loco 7/8: 249 min (4.15 hours over 11 movements)
+
+3. **Operating Time Format** (commits `7cd7efb`, `c240196`):
+   - Added `formatOperatingTime()` helper: "Xh Ym" format (e.g., "4h 9m")
+   - Changed Y-axis from decimal hours (0.16h) to integer minutes
+   - Tooltip shows human-readable "Xh Ym" format
+   - Chart title: "Total Operating Hours" → "Total Operating Time"
+
+4. **FPS Average Badge** (commits `344a135`, `fea3714`, `49d3ace`, `a07772f`):
+   - Added top-right badge on Inference FPS chart: "FPS avg: XX.X"
+   - Visible in both Current and Overview modes
+   - **Idle filtering**: Excludes FPS ≤ 10 to measure real tracking performance (not idle 1 FPS)
+   - **Session-specific logic**: Current mode shows session average or N/A if not loaded, Overview shows global average
+
+5. **Duplicate Right Y-Axis for FPS Chart** (commits `15a9b58`, `5f26ac9`, `dc4c754`):
+   - Added conditional right Y-axis in Current mode (always visible when scrolled right)
+   - Matches Δt chart implementation: `yAxisId="left"/"right"`, `allowDataOverflow={true}`
+   - Consistent UX across both time-series charts
+
+**Failed Experiments** (7 commits reverted):
+- **Date display on X-axis** (commits `f3c40da` → `8037997`, all reverted to `a07772f`):
+  - Attempted to show date (DD-MM in amber) at start of each day, followed by times
+  - 7 different strategies tried, all failed due to Recharts unpredictable tick sampling
+  - Cost: 76 lines of code written and deleted, ~1 hour development time
+  - Feature abandoned per user request
+
+**Key Insights**:
+- ✅ **Read complete implementation before modifying**: Avoid incremental commits by studying existing code patterns first
+- ⚠️ **Files becoming enormous**: `AnalyticsPanel.jsx` 1600+ lines, `main.py` needs refactoring (planned for future milestone)
+- 🎯 **Data quality matters**: Bad migration data corrupted statistics, manual cleanup required
+
+**Commits**: `7f63e57` (delta T sign) → `dc4c754` (FPS right Y-axis) - 8 feature commits + 7 reverted experiments
+
+**Next Steps** (v1.3):
+- **HIGH PRIORITY**: Speed setting tracking in Analytics
+- Refactor `main.py` and `AnalyticsPanel.jsx` (componentization)
+
+---
