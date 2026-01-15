@@ -8,14 +8,61 @@ Web-based DCC locomotive controller with real-time YOLO tracking, automatic spee
 
 ```
 z21-Terminal/
-├── README.md          # This file
-├── scripts/           # Python scripts (terminal controller, YOLO tracking, utilities)
-├── backend/           # FastAPI backend + WebSocket + Z21Manager + Tracking Daemon
-│   └── data/          # SQLite database for analytics (gitignored, auto-created)
-├── web/               # React frontend (Vite + Tailwind CSS)
-├── config.json        # Central configuration (consists, gates, thresholds, debug)
-└── camera_config.json # Camera credentials (gitignored)
+├── README.md           # This file
+├── scripts/            # Python scripts (terminal controller, YOLO tracking, utilities)
+├── backend/            # FastAPI backend (modular architecture)
+│   ├── main.py         # FastAPI app (742 lines - minimal delegation)
+│   ├── dependencies.py # Global state dependency injection
+│   ├── routers/        # API endpoint routers (analytics, config, roster, status)
+│   ├── services/       # Business logic (analytics_db, broadcast, config_manager, downsampling)
+│   ├── websocket_handlers/ # WebSocket handlers (ws_control, ws_tracking)
+│   └── data/           # SQLite database for analytics (gitignored, auto-created)
+├── web/                # React frontend (Vite + Tailwind CSS)
+├── config.json         # Central configuration (consists, gates, thresholds, debug)
+└── camera_config.json  # Camera credentials (gitignored)
 ```
+
+## Backend Architecture
+
+**Modular Design** (refactored 2025-01-15): Backend reduced from 2340 lines (monolithic) to 742 lines with modular architecture.
+
+### Directory Structure
+```
+backend/
+├── main.py (742 lines)                    # FastAPI app with minimal delegation
+├── dependencies.py (230 lines)            # Global state dependency injection
+│
+├── routers/ (839 lines total)             # API endpoint routers
+│   ├── analytics.py (226 lines)           # 6 analytics endpoints
+│   ├── config.py (378 lines)              # 7 config/consist/gate endpoints
+│   ├── roster.py (110 lines)              # 3 roster endpoints
+│   └── status.py (125 lines)              # 2 status/telemetry endpoints
+│
+├── services/ (993 lines total)            # Business logic services
+│   ├── analytics_db.py (435 lines)        # SQLite analytics queries
+│   ├── broadcast.py (237 lines)           # WebSocket broadcast utilities
+│   ├── config_manager.py (172 lines)      # Configuration access helpers
+│   └── downsampling.py (149 lines)        # LTTB + smart Δt downsampling
+│
+└── websocket_handlers/ (586 lines total)  # Real-time WebSocket handlers
+    ├── ws_control.py (394 lines)          # 10 locomotive control message types
+    └── ws_tracking.py (192 lines)         # 3 tracking daemon message types
+```
+
+**Total**: 3,390 lines (742 main + 2,648 modular)
+
+### Architecture Benefits
+- ✅ **Maintainability**: Single responsibility per file (~150-400 lines each)
+- ✅ **Testability**: Each router/service independently testable
+- ✅ **Scalability**: New features require zero main.py changes
+- ✅ **Collaboration**: Multiple developers, zero conflicts
+- ✅ **Debugging**: Clear separation of concerns
+
+### Key Components
+- **Routers**: FastAPI APIRouter instances for endpoint grouping (analytics, config, roster, status)
+- **Services**: Reusable business logic (database queries, broadcasting, configuration)
+- **WebSocket Handlers**: Real-time communication (locomotive control, tracking daemon)
+- **Dependencies**: Dependency injection pattern for global state (z21_manager, tracking_manager, etc.)
 
 ## Relationship with JMRI
 
