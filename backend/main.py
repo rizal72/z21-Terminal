@@ -21,8 +21,6 @@ import video_feed as video_feed_module
 from video_feed import generate_video_frames
 from config_loader import load_config, save_config, get_config_path
 from log_colors import log, colorize_status
-from services.downsampling import lttb_downsample, smart_downsample_delta_t, format_duration_hms, sample_events
-from services.analytics_db import AnalyticsDB
 from services.broadcast import (
     init_broadcast_service,
     update_z21_status,
@@ -34,6 +32,8 @@ from services.broadcast import (
     build_consist_response
 )
 from services.config_manager import ConfigManager
+import dependencies
+from routers import analytics
 
 # Default constants (single source of truth)
 DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}
@@ -398,6 +398,20 @@ async def lifespan(app: FastAPI):
     update_z21_status(z21_online)
     update_track_power(last_track_power_state)
 
+    # Initialize dependency injection system for routers
+    dependencies.init_dependencies(
+        z21_mgr=z21_manager,
+        tracking_mgr=tracking_manager,
+        clients=connected_clients,
+        consists=consist_data,
+        locomotives=locomotive_data,
+        controllers=controllers_config,
+        thresholds=timing_thresholds,
+        ref_locos=reference_locos,
+        tracked_ids=tracked_consist_ids,
+        debug=debug_enabled
+    )
+
     log('[INIT]', f"Backend ready!")
     log('[INIT]', f"WebSocket endpoint: ws://localhost:8000/ws")
     log('[INIT]', f"WebSocket tracking endpoint: ws://localhost:8000/ws/tracking")
@@ -441,6 +455,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(analytics.router)
 
 
 async def reload_roster_data():
@@ -993,25 +1010,6 @@ async def get_cv_profile_mode():
     return {"mode": config.get('cv_profile_mode', 'normal')}
 
 
-@app.post("/api/close-session")
-async def close_session():
-    """Force close current analytics session (called via sendBeacon on page unload/refresh)
-
-    This ensures deterministic session boundaries:
-    - Page refresh → daemon stops → session closes → new page load → daemon restarts → NEW session
-    - Without this: session continues if daemon doesn't stop between disconnect/reconnect
-    """
-    if tracking_manager:
-        try:
-            await tracking_manager.stop_tracking()
-            log('[SESSION]', 'Analytics session closed via page unload')
-            return {"status": "ok"}
-        except Exception as e:
-            log('[ERROR]', f'Failed to close session: {e}')
-            return {"status": "error", "message": str(e)}
-    return {"status": "ok"}  # No tracking manager = nothing to close
-
-
 @app.get("/api/gates")
 async def get_gates():
     """Get current gate configuration"""
@@ -1522,185 +1520,6 @@ async def websocket_tracking_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"Tracking WebSocket error: {e}")
         tracking_daemon_ws = None  # Clear reference on error
-
-
-# ========================================
-# Analytics Endpoints
-# ========================================
-
-@app.get("/api/analytics/current")
-async def get_current_session():
-    """Get current analytics session metadata (lightweight)"""
-    # Current session info from tracking daemon (if running)
-    if tracking_manager and tracking_manager.daemon:
-        logger = tracking_manager.daemon.analytics_logger
-        if logger:
-            return logger.get_session_info()
-    return {"error": "Analytics not available"}
-
-
-@app.get("/api/analytics/session/{session_id}")
-async def get_session_data(session_id: str):
-    """Load full session data (events, Δt trends)"""
-    result = AnalyticsDB.get_session_by_id(session_id)
-    if result is None:
-        return {"error": "Session not found"}
-    return result
-
-
-@app.get("/api/analytics/cumulative")
-async def get_cumulative_stats(tail: Optional[int] = None, max_points: Optional[int] = None):
-    """
-    Get all sessions aggregated statistics with full event data for charts.
-
-    Args:
-        tail: Optional tail parameter. If provided, returns last N events (full resolution).
-              Used by Current view to keep recent data intact.
-              Example: ?tail=1000 (last 1000 events, no sampling)
-
-        max_points: Optional sampling parameter. If provided, applies uniform sampling
-                   to ALL event arrays across entire history.
-                   Used by Overview view for historical trends.
-                   Example: ?maxPoints=500
-
-    Note: tail and max_points are mutually exclusive (tail takes precedence)
-    """
-    # Get validated sessions from DB
-    sessions = AnalyticsDB.get_validated_sessions()
-
-    # Include current session if running (validated but no end_time yet)
-    if tracking_manager and tracking_manager.daemon and tracking_manager.daemon.analytics_logger:
-        current_logger = tracking_manager.daemon.analytics_logger
-        if current_logger.session_validated:
-            sessions.insert(0, {  # Add at top (most recent)
-                'id': current_logger.session_id,
-                'start_time': current_logger.session_start,
-                'end_time': None,  # Still running
-                'event_count': current_logger.event_count,
-                'duration': None  # Can't calculate yet
-            })
-
-    # Get overall stats
-    total_sessions = len(sessions)
-
-    # Get gate crossings aggregate
-    gate_crossings = AnalyticsDB.get_gate_crossings_aggregate()
-
-    # Get ALL events (chronologically ordered)
-    delta_t_events = AnalyticsDB.get_delta_t_events()
-    yolo_performance = AnalyticsDB.get_yolo_performance_events()
-    loco_operating_time_events = AnalyticsDB.get_loco_operating_time_events()
-
-    # Apply tail or sampling based on view mode (mutually exclusive)
-    if tail:
-        # Current view: keep last N events (full resolution, no sampling)
-        delta_t_events = delta_t_events[-tail:] if len(delta_t_events) > tail else delta_t_events
-        yolo_performance = yolo_performance[-tail:] if len(yolo_performance) > tail else yolo_performance
-        loco_operating_time_events = loco_operating_time_events[-tail:] if len(loco_operating_time_events) > tail else loco_operating_time_events
-    elif max_points:
-        # Overview view: intelligent downsampling (LTTB preserves shape, critical events always included)
-        original_delta_t_count = len(delta_t_events)
-        original_yolo_count = len(yolo_performance)
-
-        # Delta-t: Smart downsampling (all critical |Δt| ≥ 1.5s + LTTB on rest)
-        delta_t_events = smart_downsample_delta_t(delta_t_events, max_points, critical_threshold=1.5)
-
-        # YOLO FPS: LTTB downsampling (preserves peaks/valleys)
-        yolo_performance = lttb_downsample(yolo_performance, max_points, x_key='timestamp', y_key='avg_fps')
-        # Note: loco_operating_time not sampled (aggregate stats chart, not timeline)
-
-        # Log ONLY if debug enabled in config AND sampling reduction is significant
-        if debug_enabled:
-            delta_reduction = original_delta_t_count - len(delta_t_events)
-            yolo_reduction = original_yolo_count - len(yolo_performance)
-
-            # Significant = reduced >10% OR reduced >100 events
-            is_significant = (delta_reduction > original_delta_t_count * 0.1 or delta_reduction > 100 or
-                            yolo_reduction > original_yolo_count * 0.1 or yolo_reduction > 100)
-
-            if is_significant:
-                print(f"[DEBUG] LTTB downsampling applied (maxPoints={max_points}) | "
-                      f"dT: {original_delta_t_count}->{len(delta_t_events)} (critical preserved) | "
-                      f"YOLO: {original_yolo_count}->{len(yolo_performance)}")
-
-    # Note: delta_t_events already includes current session events (written by flush task every 10s)
-    # Total count is accurate because query includes all events from DB
-    return {
-        'total_sessions': total_sessions,
-        'total_delta_t_events': len(delta_t_events),
-        'sessions': sessions,
-        'gate_crossings': gate_crossings,
-        'delta_t_events': delta_t_events,
-        'yolo_performance': yolo_performance,
-        'loco_operating_time': loco_operating_time_events
-    }
-
-
-@app.get("/api/analytics/reports")
-async def get_analytics_reports(
-    limit: int = 30,
-    consist_filter: Optional[int] = None
-):
-    """
-    Get session-by-session analysis reports for historical trend analysis.
-
-    Returns per-session aggregated statistics (avg dT, range, status distribution)
-    for the last N validated sessions.
-
-    Args:
-        limit: Number of sessions to return (default 30, max 100)
-        consist_filter: Optional consist ID to filter by (10, 11, etc.)
-
-    Returns:
-        {
-            "sessions": [
-                {
-                    "id": "20250114_143022",
-                    "date": "2025-01-14",
-                    "start_time": timestamp,
-                    "end_time": timestamp,
-                    "duration_seconds": 3600,
-                    "duration_formatted": "01:00:00",
-                    "total_events": 145,
-                    "consists": {
-                        "10": {
-                            "total_crossings": 72,
-                            "avg_delta_t": 0.52,
-                            "min_delta_t": -0.15,
-                            "max_delta_t": 1.82,
-                            "trend": "LEAD FASTER" | "REAR FASTER" | "BALANCED",
-                            "synced_count": 58,
-                            "warning_count": 10,
-                            "critical_count": 4,
-                            "synced_percent": 80.6
-                        },
-                        ...
-                    }
-                },
-                ...
-            ]
-        }
-    """
-    try:
-        sessions = AnalyticsDB.get_reports_data(
-            limit=limit,
-            consist_filter=consist_filter,
-            format_duration_callback=format_duration_hms
-        )
-        return {"sessions": sessions}
-    except Exception as e:
-        return {"error": f"Failed to load reports: {str(e)}", "sessions": []}
-
-
-@app.get("/api/analytics/locomotive-stats")
-async def get_locomotive_stats():
-    """Get aggregated locomotive operating time statistics"""
-    try:
-        locomotives = AnalyticsDB.get_locomotive_stats()
-        return {'locomotives': locomotives}
-    except Exception as e:
-        log('[ERROR]', f"Failed to load locomotive stats: {e}")
-        return {'error': str(e), 'locomotives': []}
 
 
 # ========================================
