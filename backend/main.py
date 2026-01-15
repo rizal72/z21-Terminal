@@ -35,7 +35,7 @@ from services.config_manager import ConfigManager
 import dependencies
 from routers import analytics, config, roster, status
 from routers.roster import get_full_roster
-from websockets.ws_control import handle_ws_control
+from websocket_handlers.ws_control import handle_ws_control
 
 # Default constants (single source of truth)
 DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}
