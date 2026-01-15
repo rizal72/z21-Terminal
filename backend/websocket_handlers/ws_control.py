@@ -166,7 +166,33 @@ async def handle_set_speed(
     forward = data.get('forward', True)
 
     if z21_manager and (address in consist_data or address in locomotive_data):
+        # Get old speed before changing (for speed_setting event logging)
+        old_speed = z21_manager.consist_state.get(address, {}).get('speed', 0)
+
         z21_manager.set_speed(address, speed, forward)
+
+        # Log speed_setting event (for speed correlation analysis)
+        if tracking_manager and tracking_manager.analytics_logger:
+            # Determine if address is a consist
+            consist_id = None
+            if address in consist_data:
+                consist_id = address
+
+            # Log speed change event (skip if speed unchanged and no direction change)
+            if old_speed != speed:
+                tracking_manager.analytics_logger.log_event(
+                    event_type='speed_setting',
+                    data={
+                        'address': address,
+                        'consist_id': consist_id,
+                        'speed_old': old_speed,
+                        'speed_new': speed,
+                        'forward': forward,
+                        'source': 'user'  # WebSocket messages are always user-initiated
+                    }
+                )
+                log('[SPEED]', f"Address {address}: {old_speed} -> {speed} (direction: {'FWD' if forward else 'REV'})")
+
         await broadcast_state_update(address)
 
         # Track locomotive operating time (individual locos only, not consists)

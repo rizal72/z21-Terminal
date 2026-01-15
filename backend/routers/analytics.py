@@ -204,6 +204,67 @@ async def get_locomotive_stats():
         return {'error': str(e), 'locomotives': []}
 
 
+@router.get("/speed-correlation")
+async def get_speed_correlation(
+    consist_id: int,
+    limit: int = 1000,
+    bucket_size: int = 5,
+    events_per_speed: int = 10
+):
+    """
+    Get speed vs delta_t correlation analysis for a consist.
+
+    Uses "Next N Events" strategy: For each speed change, collect next N delta_t
+    events to build statistical correlation between speed settings and sync quality.
+
+    Query Parameters:
+        consist_id: Consist ID to analyze (required)
+        limit: Max speed_setting events to analyze (default: 1000, most recent)
+        bucket_size: Speed bucketing interval in DCC steps (default: 5, e.g., 45-49 → bucket 50)
+        events_per_speed: Delta_t events to collect after each speed change (default: 10)
+
+    Returns:
+        {
+            "consist_id": int,
+            "total_speed_changes": int,
+            "correlated_samples": int,
+            "speed_buckets": [
+                {
+                    "speed_bucket": int,
+                    "speed_min": int,
+                    "speed_max": int,
+                    "mean_delta_t": float,
+                    "std_dev": float,
+                    "min_delta_t": float,
+                    "max_delta_t": float,
+                    "samples": int,
+                    "status_distribution": {"SYNCED": int, "WARNING": int, "CRITICAL": int},
+                    "raw_speeds": [int]
+                }
+            ]
+        }
+    """
+    try:
+        result = AnalyticsDB.get_speed_correlation(
+            consist_id=consist_id,
+            limit=limit,
+            bucket_size=bucket_size,
+            events_per_speed=events_per_speed
+        )
+        return result
+    except Exception as e:
+        log('[ERROR]', f"Failed to get speed correlation for consist {consist_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'error': str(e),
+            'consist_id': consist_id,
+            'total_speed_changes': 0,
+            'correlated_samples': 0,
+            'speed_buckets': []
+        }
+
+
 # Session lifecycle management (outside /api/analytics prefix)
 @router_no_prefix.post("/api/close-session")
 async def close_session(

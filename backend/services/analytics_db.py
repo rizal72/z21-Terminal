@@ -433,3 +433,151 @@ class AnalyticsDB:
 
         conn.close()
         return result_sessions
+
+    @staticmethod
+    def get_speed_correlation(
+        consist_id: int,
+        limit: int = 1000,
+        bucket_size: int = 5,
+        events_per_speed: int = 10
+    ) -> Dict:
+        """
+        Correlate speed_setting events with delta_t measurements.
+
+        Strategy: "Next N Events" - For each speed change, collect next N delta_t events
+        to build speed vs delta_t correlation statistics.
+
+        Args:
+            consist_id: Consist ID to analyze
+            limit: Max speed_setting events to fetch (most recent)
+            bucket_size: Speed bucketing interval (e.g., 5 = buckets 0-4, 5-9, etc.)
+            events_per_speed: Number of delta_t events to collect after each speed change
+
+        Returns:
+            Dict with consist_id, total_speed_changes, correlated_samples, speed_buckets stats
+        """
+        conn = AnalyticsDB.get_connection()
+        cursor = conn.cursor()
+
+        # Fetch recent speed_setting events for this consist (most recent first)
+        cursor.execute("""
+            SELECT timestamp, data
+            FROM events
+            WHERE event_type = 'speed_setting'
+            AND json_extract(data, '$.consist_id') = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (consist_id, limit))
+
+        speed_events = []
+        for row in cursor.fetchall():
+            data = json.loads(row[1])
+            speed_events.append({
+                'timestamp': row[0],
+                'speed_new': data['speed_new']
+            })
+
+        # Reverse to chronological order (oldest first)
+        speed_events.reverse()
+
+        if not speed_events:
+            conn.close()
+            return {
+                'consist_id': consist_id,
+                'total_speed_changes': 0,
+                'correlated_samples': 0,
+                'speed_buckets': []
+            }
+
+        # Fetch ALL delta_t events for this consist (we'll filter in Python)
+        cursor.execute("""
+            SELECT timestamp, data
+            FROM events
+            WHERE event_type = 'delta_t'
+            AND json_extract(data, '$.consist_id') = ?
+            ORDER BY timestamp ASC
+        """, (consist_id,))
+
+        delta_t_events = []
+        for row in cursor.fetchall():
+            data = json.loads(row[1])
+            delta_t_events.append({
+                'timestamp': row[0],
+                'delta_t': data['delta_t'],
+                'status': data['status'],
+                'speed': data.get('speed')  # May be None for old events
+            })
+
+        conn.close()
+
+        # Correlate: For each speed_setting, find next N delta_t events
+        correlated_deltas = []  # List of (speed, delta_t, status)
+
+        for speed_event in speed_events:
+            speed_timestamp = speed_event['timestamp']
+            speed_value = speed_event['speed_new']
+
+            # Skip speed 0 (stopped)
+            if speed_value == 0:
+                continue
+
+            # Find next events_per_speed delta_t events after this speed change
+            collected = 0
+            for dt_event in delta_t_events:
+                if dt_event['timestamp'] > speed_timestamp:
+                    correlated_deltas.append({
+                        'speed': speed_value,
+                        'delta_t': dt_event['delta_t'],
+                        'status': dt_event['status']
+                    })
+                    collected += 1
+                    if collected >= events_per_speed:
+                        break
+
+        # Group by speed buckets and calculate statistics
+        from collections import defaultdict
+        import statistics
+
+        speed_buckets_data = defaultdict(list)  # bucket_center -> list of delta_t
+
+        for item in correlated_deltas:
+            # Calculate bucket center (e.g., speed 47 with bucket_size 5 → bucket 50)
+            bucket_center = int((item['speed'] // bucket_size) * bucket_size + bucket_size / 2)
+            if bucket_size == 1:
+                bucket_center = item['speed']  # No bucketing
+
+            speed_buckets_data[bucket_center].append(item)
+
+        # Calculate stats per bucket
+        speed_buckets = []
+        for bucket_center, items in sorted(speed_buckets_data.items()):
+            if len(items) < 3:  # Skip buckets with insufficient data
+                continue
+
+            delta_t_values = [item['delta_t'] for item in items]
+            raw_speeds = list(set([item['speed'] for item in items]))
+
+            # Count status distribution
+            status_counts = defaultdict(int)
+            for item in items:
+                status_counts[item['status']] += 1
+
+            speed_buckets.append({
+                'speed_bucket': bucket_center,
+                'speed_min': min(raw_speeds),
+                'speed_max': max(raw_speeds),
+                'mean_delta_t': statistics.mean(delta_t_values),
+                'std_dev': statistics.stdev(delta_t_values) if len(delta_t_values) > 1 else 0.0,
+                'min_delta_t': min(delta_t_values),
+                'max_delta_t': max(delta_t_values),
+                'samples': len(items),
+                'status_distribution': dict(status_counts),
+                'raw_speeds': sorted(raw_speeds)
+            })
+
+        return {
+            'consist_id': consist_id,
+            'total_speed_changes': len([e for e in speed_events if e['speed_new'] > 0]),
+            'correlated_samples': len(correlated_deltas),
+            'speed_buckets': speed_buckets
+        }

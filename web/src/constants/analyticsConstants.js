@@ -29,3 +29,10 @@ export const CHART_AXIS_STYLES = {
   grid: { strokeDasharray: '3 3', stroke: '#374151' },
   axis: { stroke: '#9CA3AF' }
 };
+
+// Speed Tuning Status Colors (matches delta_t status colors)
+export const SPEED_STATUS_COLORS = {
+  SYNCED: '#10b981',    // Green
+  WARNING: '#f59e0b',   // Amber
+  CRITICAL: '#ef4444'   // Red
+};
