@@ -458,6 +458,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(analytics.router)
+app.include_router(analytics.router_no_prefix)  # For endpoints outside /api/analytics prefix
 
 
 async def reload_roster_data():

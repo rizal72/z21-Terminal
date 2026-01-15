@@ -19,6 +19,7 @@ from tracking_manager import TrackingManager
 from log_colors import log
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
+router_no_prefix = APIRouter(tags=["analytics"])  # For endpoints outside /api/analytics prefix
 
 
 @router.get("/current")
@@ -204,7 +205,7 @@ async def get_locomotive_stats():
 
 
 # Session lifecycle management (outside /api/analytics prefix)
-@router.post("/api/close-session", tags=["analytics"])
+@router_no_prefix.post("/api/close-session")
 async def close_session(
     tracking_manager: TrackingManager = Depends(get_tracking_manager)
 ):
