@@ -1,88 +1,25 @@
 import { useState, useEffect, useRef, memo, useMemo, Fragment } from 'react';
-import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
-
-// Locomotive colors (matches config.json locomotive_colors)
-const LOCO_COLORS = {
-  1: '#FFFF00',  // Yellow (Gr675 017)
-  5: '#FF8000',  // Orange (D645 014)
-  7: '#00FF00',  // Green (E656 239)
-  8: '#FF0000',  // Red (E444 056)
-};
-
-// Consist colors (dynamic assignment, cyclic if > colors available)
-const CONSIST_COLOR_PALETTE = ['#d946ef', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-const CONSIST_COLOR_CLASSES = ['text-fuchsia-400', 'text-blue-400', 'text-green-400', 'text-amber-400', 'text-red-400', 'text-purple-400'];
-const CONSIST_BG_CLASSES = ['bg-fuchsia-600', 'bg-blue-600', 'bg-green-600', 'bg-amber-600', 'bg-red-600', 'bg-purple-600'];
-
-// Shared chart styles (dark mode)
-const TOOLTIP_STYLES = {
-  contentStyle: { backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' },
-  labelStyle: { color: '#e2e8f0' },
-  itemStyle: { color: '#e2e8f0' }
-};
-
-const CHART_AXIS_STYLES = {
-  grid: { strokeDasharray: '3 3', stroke: '#374151' },
-  axis: { stroke: '#9CA3AF' }
-};
-
-// Helper functions
-const filterEventsBySession = (events, viewMode, currentSession) => {
-  if (viewMode === 'current' && currentSession && events) {
-    return events.filter(e => e.session_id === currentSession.session_id);
-  }
-  return events || [];
-};
-
-// Helper: get locomotive addresses for consist filter (dynamic from config)
-const getAddressFilter = (consistFilter, consistConfig) => {
-  const config = consistConfig || {};
-  if (consistFilter === 'all') {
-    // All consists: flatten all addresses
-    return Object.values(config).flatMap(c => c.addresses);
-  }
-  return config[consistFilter]?.addresses || [];
-};
-
-// Helper: get consist stroke color (cyclic palette)
-const getConsistStrokeColor = (consistId, consistConfig) => {
-  const config = consistConfig || {};
-  const consistIds = Object.keys(config).map(Number).sort((a, b) => a - b);
-  const index = consistIds.indexOf(consistId);
-  return index >= 0 ? CONSIST_COLOR_PALETTE[index % CONSIST_COLOR_PALETTE.length] : '#9CA3AF';
-};
-
-// Helper: get consist text color class (cyclic palette)
-const getConsistColorClass = (consistFilter, consistConfig, defaultColor = 'text-white') => {
-  if (consistFilter === 'all') return defaultColor;
-  const config = consistConfig || {};
-  const consistIds = Object.keys(config).map(Number).sort((a, b) => a - b);
-  const index = consistIds.indexOf(consistFilter);
-  return index >= 0 ? CONSIST_COLOR_CLASSES[index % CONSIST_COLOR_CLASSES.length] : defaultColor;
-};
-
-// Helper: get consist background color class for buttons (cyclic palette)
-const getConsistBgClass = (consistId, consistConfig) => {
-  const config = consistConfig || {};
-  const consistIds = Object.keys(config).map(Number).sort((a, b) => a - b);
-  const index = consistIds.indexOf(consistId);
-  return index >= 0 ? CONSIST_BG_CLASSES[index % CONSIST_BG_CLASSES.length] : 'bg-slate-600';
-};
-
-// Helper: format delta t with sign (always show + for positive values)
-const formatDeltaT = (value, decimals = 2) => {
-  if (value === null || value === undefined || isNaN(value)) return 'N/A';
-  const sign = value >= 0 ? '+' : '';
-  return `${sign}${value.toFixed(decimals)}`;
-};
-
-// Helper: format operating time seconds to "Xh Ym" format
-const formatOperatingTime = (seconds) => {
-  if (!seconds || seconds === 0) return '0h 0m';
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return `${hours}h ${minutes}m`;
-};
+import {
+  CONSIST_COLOR_PALETTE,
+  CONSIST_COLOR_CLASSES,
+  CONSIST_BG_CLASSES,
+  TOOLTIP_STYLES,
+  CHART_AXIS_STYLES
+} from '../constants/analyticsConstants';
+import {
+  filterEventsBySession,
+  getAddressFilter,
+  getConsistStrokeColor,
+  getConsistColorClass,
+  getConsistBgClass,
+  formatDeltaT,
+  formatOperatingTime
+} from '../utils/analyticsHelpers';
+import DeltaTChart from './charts/DeltaTChart';
+import FPSChart from './charts/FPSChart';
+import ConfidenceChart from './charts/ConfidenceChart';
+import OperatingTimeChart from './charts/OperatingTimeChart';
+import HistoricalTrendChart from './charts/HistoricalTrendChart';
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current', 'overview', or 'reports'
@@ -515,64 +452,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return { chartData: result, segmentCount: totalSegments };
   }, [filteredDeltaTEvents, trackingConfig.consists, showSessionBreaks]);
 
-  // Apply zoom filter if zoomDomain is set (Overview mode only)
-  const displayData = useMemo(() => {
-    if (viewMode !== 'overview' || !zoomDomain) return chartData;
-
-    // Filter data to show only zoomed range
-    const [xMin, xMax] = zoomDomain.x;
-    return chartData.filter(d => d.index >= xMin && d.index <= xMax);
-  }, [chartData, zoomDomain, viewMode]);
-
-  // Calculate Y domain to ensure all points are visible (10% padding)
-  const yDomain = useMemo(() => {
-    if (zoomDomain) return zoomDomain.y; // Use zoom domain if active
-
-    if (displayData.length === 0) return ['auto', 'auto'];
-
-    const consistIds = Object.keys(trackingConfig.consists || {}).map(Number);
-    let yMin = Infinity, yMax = -Infinity;
-
-    // Scan all data to find min/max
-    if (segmentCount === 0) {
-      // SIMPLE MODE
-      displayData.forEach(d => {
-        consistIds.forEach(cid => {
-          const value = d[`delta_t_c${cid}`];
-          if (value !== null && value !== undefined && !isNaN(value)) {
-            yMin = Math.min(yMin, value);
-            yMax = Math.max(yMax, value);
-          }
-        });
-      });
-    } else {
-      // SEGMENTED MODE
-      displayData.forEach(d => {
-        for (let seg = 0; seg < segmentCount; seg++) {
-          consistIds.forEach(cid => {
-            const value = d[`delta_t_c${cid}_seg${seg}`];
-            if (value !== null && value !== undefined && !isNaN(value)) {
-              yMin = Math.min(yMin, value);
-              yMax = Math.max(yMax, value);
-            }
-          });
-        }
-      });
-    }
-
-    // No valid data found
-    if (yMin === Infinity || yMax === -Infinity) return ['auto', 'auto'];
-
-    // Add 5% padding
-    const range = yMax - yMin;
-    const padding = range * 0.05;
-    return [yMin - padding, yMax + padding];
-  }, [displayData, segmentCount, trackingConfig.consists, zoomDomain]);
-
-  // Memoize chart width calculation
-  const chartWidth = useMemo(() => {
-    return viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
-  }, [chartData.length, viewMode]);
 
   // Reports chart data (historical trend)
   const reportsChartData = useMemo(() => {
@@ -860,168 +739,23 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
               {/* Δt Trends Chart - ALL sessions concatenated */}
               {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
-                <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
-                  <div
-                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
-                    onClick={() => togglePanel('deltaTrends')}
-                  >
-                    <h3 className="text-lg font-semibold text-white">Δt Trends (All Sessions)</h3>
-                    <div className="flex items-center gap-4">
-                      {!collapsedPanels.deltaTrends && (
-                        <span className="text-xs text-slate-400">
-                          Click & drag to zoom • Double-click to reset
-                        </span>
-                      )}
-                      <i className={`fa-solid fa-chevron-${collapsedPanels.deltaTrends ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
-                    </div>
-                  </div>
-                  {!collapsedPanels.deltaTrends && (
-                    <div className="p-6 pt-0">
-
-                  {/* Threshold Legend - SYNCED/WARNING/CRITICAL */}
-                  <div className="flex gap-6 justify-center mb-3 pb-3 border-b border-slate-700/50">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                      <span className="text-xs text-slate-400">SYNCED (&lt;1.0s)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                      <span className="text-xs text-slate-400">WARNING (1.0-1.5s)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                      <span className="text-xs text-slate-400">CRITICAL (≥1.5s)</span>
-                    </div>
-                  </div>
-
-                  {/* Custom Legend (always shown when All filter, both Current and Overview) */}
-                  {chartData.length > 0 && consistFilter === 'all' && (
-                    <div className="flex gap-4 justify-center mb-4 pb-3 border-b border-slate-700">
-                      {Object.keys(trackingConfig.consists || {})
-                        .map(Number)
-                        .sort((a, b) => a - b)
-                        .map((consistId) => (
-                          <div key={consistId} className="flex items-center gap-2">
-                            <div
-                              className="w-4 h-1"
-                              style={{ backgroundColor: getConsistStrokeColor(consistId, trackingConfig.consists) }}
-                            ></div>
-                            <span className="text-sm text-slate-300">
-                              {trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-
-                  {chartData.length > 0 && (
-                    <div
-                      key={consistFilter}
-                      ref={viewMode === 'current' ? scrollRefSession : null}
-                      style={{ width: '100%', overflowX: viewMode === 'current' ? 'auto' : 'visible' }}
-                    >
-                      <ResponsiveContainer width={chartWidth} height={400}>
-                          <LineChart
-                            data={displayData}
-                            onMouseDown={handleMouseDown}
-                            onMouseMove={handleMouseMove}
-                            onMouseUp={handleMouseUp}
-                            onDoubleClick={handleDoubleClick}
-                          >
-                            <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                      {/* XAxis: time in Current (readable), index in Overview (compressed) */}
-                      <XAxis
-                        dataKey={viewMode === 'current' ? 'time' : 'index'}
-                        {...CHART_AXIS_STYLES.axis}
-                      />
-                      <YAxis
-                        yAxisId="left"
-                        {...CHART_AXIS_STYLES.axis}
-                        domain={yDomain}
-                        allowDataOverflow={true}
-                        tickFormatter={(value) => formatDeltaT(value)}
-                        label={{ value: 'Δt (seconds)', angle: 90, position: 'insideLeft', fill: '#9CA3AF' }}
-                      />
-                      {/* Duplicate YAxis on right for Current mode (always visible when scrolling) */}
-                      {viewMode === 'current' && (
-                        <YAxis
-                          yAxisId="right"
-                          orientation="right"
-                          {...CHART_AXIS_STYLES.axis}
-                          domain={yDomain}
-                          allowDataOverflow={true}
-                          tickFormatter={(value) => formatDeltaT(value)}
-                          label={{ value: 'Δt (seconds)', angle: 90, position: 'insideRight', fill: '#9CA3AF' }}
-                        />
-                      )}
-                      <Tooltip
-                        {...TOOLTIP_STYLES}
-                        formatter={(value) => value !== null ? formatDeltaT(value) + 's' : 'N/A'}
-                      />
-                      <ReferenceLine yAxisId="left" y={0} stroke="#10b981" strokeDasharray="3 3" />
-                      <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.normal || 1.0} stroke="#f59e0b" strokeDasharray="3 3" />
-                      <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.normal || 1.0)} stroke="#f59e0b" strokeDasharray="3 3" />
-                      <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.warning || 1.5} stroke="#ef4444" strokeDasharray="3 3" />
-                      <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.warning || 1.5)} stroke="#ef4444" strokeDasharray="3 3" />
-
-                          {/* Dynamic lines: simple or segmented based on showSessionBreaks */}
-                          {Object.keys(trackingConfig.consists || {})
-                            .map(Number)
-                            .sort((a, b) => a - b)
-                            .filter(consistId => consistFilter === 'all' || consistFilter === consistId)
-                            .flatMap((consistId) => {
-                              // SIMPLE MODE: One Line per consist (no session breaks)
-                              if (segmentCount === 0) {
-                                return (
-                                  <Line
-                                    key={consistId}
-                                    yAxisId="left"
-                                    type="monotone"
-                                    dataKey={`delta_t_c${consistId}`}
-                                    stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
-                                    strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                                    dot={viewMode === 'current' ? { r: 4 } : false}
-                                    name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
-                                    connectNulls={true}
-                                  />
-                                );
-                              }
-
-                              // SEGMENTED MODE: One Line per segment (session breaks enabled)
-                              return Array.from({ length: segmentCount }, (_, segIdx) => (
-                                <Line
-                                  key={`${consistId}_seg${segIdx}`}
-                                  yAxisId="left"
-                                  type="monotone"
-                                  dataKey={`delta_t_c${consistId}_seg${segIdx}`}
-                                  stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
-                                  strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                                  dot={viewMode === 'current' ? { r: 4 } : false}
-                                  name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
-                                  legendType={segIdx === 0 ? undefined : 'none'}
-                                  connectNulls={true}
-                                />
-                              ));
-                            })}
-
-                            {/* ReferenceArea for box-select zoom - only during drag in Overview */}
-                            {refAreaLeft && refAreaRight && (
-                              <ReferenceArea
-                                yAxisId="left"
-                                x1={refAreaLeft}
-                                x2={refAreaRight}
-                                strokeOpacity={0.3}
-                                fill="#3b82f6"
-                                fillOpacity={0.3}
-                              />
-                            )}
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                    </div>
-                  )}
-                </div>
+                <DeltaTChart
+                  chartData={chartData}
+                  segmentCount={segmentCount}
+                  viewMode={viewMode}
+                  consistFilter={consistFilter}
+                  trackingConfig={trackingConfig}
+                  scrollRef={scrollRefSession}
+                  zoomDomain={zoomDomain}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onDoubleClick={handleDoubleClick}
+                  refAreaLeft={refAreaLeft}
+                  refAreaRight={refAreaRight}
+                  collapsed={collapsedPanels.deltaTrends}
+                  onToggleCollapse={() => togglePanel('deltaTrends')}
+                />
               )}
 
               {/* YOLO Performance Monitoring - FPS & Confidence */}
@@ -1038,194 +772,38 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     <div className="p-6 pt-0 space-y-6">
 
                   {/* FPS Line Chart */}
-                  <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                    {(() => {
-                      // NO session filtering for CHART - FPS chart shows ALL sessions like dT chart
-                      const chartData = cumulativeData.yolo_performance.map((e, idx) => ({
-                        index: idx + 1,
-                        time: formatTime(e.timestamp),
-                        fps: parseFloat(e.avg_fps.toFixed(1))
-                      }));
-
-                      // Calculate average FPS: Current = session only, Overview = all data
-                      // IMPORTANT: Filter out idle mode (FPS <= 10) to measure real tracking performance
-                      let avgFps = 'N/A';
-                      if (viewMode === 'current') {
-                        // Current mode: session-specific or N/A if not loaded
-                        if (!currentSession) {
-                          avgFps = 'N/A';  // Session not loaded yet
-                        } else {
-                          // Filter by current session + exclude idle (FPS > 10)
-                          const sessionEvents = cumulativeData.yolo_performance.filter(e =>
-                            e.session_id === currentSession.session_id && e.avg_fps > 10
-                          );
-                          if (sessionEvents.length > 0) {
-                            avgFps = (sessionEvents.reduce((sum, e) => sum + e.avg_fps, 0) / sessionEvents.length).toFixed(1);
-                          }
-                          // else: sessionEvents empty → avgFps stays 'N/A'
-                        }
-                      } else {
-                        // Overview: all data, exclude idle (FPS > 10)
-                        const activeEvents = cumulativeData.yolo_performance.filter(e => e.avg_fps > 10);
-                        avgFps = activeEvents.length > 0
-                          ? (activeEvents.reduce((sum, e) => sum + e.avg_fps, 0) / activeEvents.length).toFixed(1)
-                          : 'N/A';
-                      }
-
-                      return (
-                        <>
-                          <div className="flex items-center justify-between mb-4">
-                            <h4 className="text-lg font-semibold text-amber-400">Inference FPS Over Time</h4>
-                            <span className="px-3 py-1 bg-slate-800 border border-slate-600 rounded text-sm font-mono text-green-400">
-                              FPS avg: {avgFps}
-                            </span>
-                          </div>
-                          {(() => {
-
-                      const chartWidth = viewMode === 'current' ? Math.max(chartData.length * 60, 800) : '100%';
-                      const chartContent = (
-                        <ResponsiveContainer width={chartWidth} height={300}>
-                          <LineChart data={chartData}>
-                            <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                            {/* XAxis: time in Current (readable), index in Overview (compressed) */}
-                            <XAxis
-                              dataKey={viewMode === 'current' ? 'time' : 'index'}
-                              {...CHART_AXIS_STYLES.axis}
-                            />
-                            <YAxis yAxisId="left" {...CHART_AXIS_STYLES.axis} domain={[0, 140]} label={{ value: 'FPS', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
-                            {/* Duplicate YAxis on right for Current mode (always visible when scrolling) */}
-                            {viewMode === 'current' && (
-                              <YAxis
-                                yAxisId="right"
-                                orientation="right"
-                                {...CHART_AXIS_STYLES.axis}
-                                domain={[0, 140]}
-                                allowDataOverflow={true}
-                                label={{ value: 'FPS', angle: 90, position: 'insideRight', fill: '#9CA3AF' }}
-                              />
-                            )}
-                            <Tooltip
-                              {...TOOLTIP_STYLES}
-                              formatter={(value) => value.toFixed(1) + ' FPS'}
-                            />
-                            <ReferenceLine yAxisId="left" y={30} stroke="#10b981" strokeDasharray="5 5" label={{ value: 'Target (30 FPS)', position: 'top', fill: '#10b981' }} />
-                            <Line yAxisId="left" type="monotone" dataKey="fps" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Inference FPS" />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      );
-
-                      return viewMode === 'current' ? (
-                        <div key={`fps-${consistFilter}`} ref={scrollRefFps} className="overflow-x-auto">
-                          <div style={{ minWidth: chartWidth }}>
-                            {chartContent}
-                          </div>
-                        </div>
-                      ) : chartContent;
-                    })()}
-                        </>
-                      );
-                    })()}
-                  </div>
+                  <FPSChart
+                    yoloPerformanceData={cumulativeData.yolo_performance}
+                    viewMode={viewMode}
+                    currentSession={currentSession}
+                    consistFilter={consistFilter}
+                    scrollRef={scrollRefFps}
+                    formatTime={formatTime}
+                  />
 
                   {/* Confidence Bar Chart - Per Locomotive (DCC addresses) */}
-                  <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                    <h4 className="text-lg font-semibold text-amber-400 mb-4">Average Confidence per Locomotive</h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={(() => {
-                        // Confidence chart: snapshot view, NOT time series
-                        const events = filterEventsBySession(cumulativeData.yolo_performance, viewMode, currentSession);
-                        if (events.length === 0) return [];
-
-                        const latestEvent = events[events.length - 1];
-                        const avgConfidence = latestEvent.avg_confidence;
-                        const addressFilter = getAddressFilter(consistFilter, trackingConfig.consists);
-
-                        return Object.entries(avgConfidence)
-                          .filter(([addr]) => addressFilter.includes(parseInt(addr)))
-                          .map(([dcc_addr, conf]) => ({
-                            loco: `Loco ${dcc_addr}`,
-                            address: parseInt(dcc_addr),
-                            confidence: parseFloat((conf * 100).toFixed(1))
-                          }));
-                      })()}>
-                        <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                        <XAxis dataKey="loco" {...CHART_AXIS_STYLES.axis} />
-                        <YAxis {...CHART_AXIS_STYLES.axis} domain={[0, 100]} label={{ value: 'Confidence (%)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }} />
-                        <Tooltip
-                          {...TOOLTIP_STYLES}
-                          formatter={(value) => value.toFixed(1) + '%'}
-                        />
-                        <ReferenceLine y={50} stroke="#ffffff" strokeDasharray="5 5" label={{ value: 'Min Threshold (50%)', position: 'top', fill: '#ffffff' }} />
-                        <Bar dataKey="confidence">
-                          {(() => {
-                            const events = filterEventsBySession(cumulativeData.yolo_performance, viewMode, currentSession);
-                            if (events.length === 0) return [];
-
-                            const latestEvent = events[events.length - 1];
-                            const avgConfidence = latestEvent.avg_confidence;
-                            const addressFilter = getAddressFilter(consistFilter, trackingConfig.consists);
-
-                            return Object.entries(avgConfidence)
-                              .filter(([addr]) => addressFilter.includes(parseInt(addr)))
-                              .map(([dcc_addr], index) => (
-                                <Cell key={`cell-${index}`} fill={LOCO_COLORS[parseInt(dcc_addr)] || '#9CA3AF'} />
-                              ));
-                          })()}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <ConfidenceChart
+                    yoloPerformanceData={cumulativeData.yolo_performance}
+                    viewMode={viewMode}
+                    currentSession={currentSession}
+                    consistFilter={consistFilter}
+                    trackingConfig={trackingConfig}
+                  />
                     </div>
                   )}
                 </div>
               )}
 
               {/* Locomotive Operating Time - ONLY in Overview (cumulative historic data) */}
-              {viewMode === 'overview' && locoStats && locoStats.length > 0 && (() => {
-                // Filter locomotives by consist (All/C10/C11)
-                const addressFilter = getAddressFilter(consistFilter, trackingConfig.consists);
-                const filteredLocoStats = locoStats.filter(loco => addressFilter.includes(loco.address));
-
-                return filteredLocoStats.length > 0 && (
-                  <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
-                    <div
-                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
-                      onClick={() => togglePanel('locoOperatingTime')}
-                    >
-                      <h3 className="text-lg font-semibold text-white">Locomotive Operating Time</h3>
-                      <i className={`fa-solid fa-chevron-${collapsedPanels.locoOperatingTime ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
-                    </div>
-                    {!collapsedPanels.locoOperatingTime && (
-                      <div className="p-6 pt-0">
-
-                    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                      <h4 className="text-lg font-semibold text-amber-400 mb-4">Total Operating Time</h4>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={filteredLocoStats}>
-                          <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                          <XAxis dataKey="name" {...CHART_AXIS_STYLES.axis} />
-                          <YAxis
-                            {...CHART_AXIS_STYLES.axis}
-                            tickFormatter={(value) => Math.floor(value / 60)}
-                            label={{ value: 'Operating Time (minutes)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
-                          />
-                          <Tooltip
-                            {...TOOLTIP_STYLES}
-                            formatter={(value) => formatOperatingTime(value)}
-                          />
-                          <Bar dataKey="total_operating_seconds">
-                            {filteredLocoStats.map((loco, index) => (
-                              <Cell key={`cell-${index}`} fill={LOCO_COLORS[loco.address] || '#9CA3AF'} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              {viewMode === 'overview' && locoStats && locoStats.length > 0 && (
+                <OperatingTimeChart
+                  locoStats={locoStats}
+                  consistFilter={consistFilter}
+                  trackingConfig={trackingConfig}
+                  collapsed={collapsedPanels.locoOperatingTime}
+                  onToggleCollapse={() => togglePanel('locoOperatingTime')}
+                />
+              )}
             </div>
           )}
 
@@ -1407,129 +985,18 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               </div>
 
               {/* Historical Trend Chart */}
-              <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
-                <div
-                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
-                  onClick={() => togglePanel('historicalTrend')}
-                >
-                  <h3 className="text-lg font-semibold text-white">Historical Trend - Avg Δt</h3>
-                  <i className={`fa-solid fa-chevron-${collapsedPanels.historicalTrend ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
-                </div>
-                {!collapsedPanels.historicalTrend && (
-                  <div className="p-6 pt-0">
-
-                {/* Threshold Legend */}
-                <div className="flex gap-6 justify-center mb-4 pb-3 border-b border-slate-700/50">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span className="text-xs text-slate-400">SYNCED (&lt;1.0s)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                    <span className="text-xs text-slate-400">WARNING (1.0-1.5s)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                    <span className="text-xs text-slate-400">CRITICAL (≥1.5s)</span>
-                  </div>
-                </div>
-
-                {reportsChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={400}>
-                    <LineChart
-                      data={reportsChartData}
-                      onClick={(data) => {
-                        if (data?.activePayload?.[0]) {
-                          const sessionId = data.activePayload[0].payload.session_id;
-                          const session = reportsData.sessions.find(s => s.id === sessionId);
-                          if (session) {
-                            setSelectedSession(session);
-                            setShowSessionDetail(true);
-                          }
-                        }
-                      }}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 35 }}
-                    >
-                      <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                      <XAxis
-                        dataKey="index"
-                        {...CHART_AXIS_STYLES.axis}
-                        angle={-40}
-                        textAnchor="end"
-                        height={35}
-                        interval="preserveStartEnd"
-                        tickFormatter={(index) => {
-                          const item = reportsChartData[index - 1];
-                          if (!item) return index;
-                          // Format: DD-MM HH:MM (backend sends DD-MM-YYYY)
-                          const [day, month, year] = item.date.split('-');
-                          return `${day}-${month} ${item.time}`;
-                        }}
-                      />
-                      <YAxis
-                        {...CHART_AXIS_STYLES.axis}
-                        label={{ value: 'Avg Δt (seconds)', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
-                      />
-                      <Tooltip
-                        {...TOOLTIP_STYLES}
-                        content={({ active, payload, label }) => {
-                          if (!active || !payload || payload.length === 0) return null;
-
-                          // Get session data from payload
-                          const sessionData = payload[0]?.payload;
-                          if (!sessionData) return null;
-
-                          return (
-                            <div style={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px', padding: '12px' }}>
-                              <p style={{ color: '#e2e8f0', marginBottom: '8px', fontWeight: 'bold' }}>
-                                {sessionData.date} {sessionData.time}
-                              </p>
-                              {payload.map((entry, index) => {
-                                if (entry.value === null || entry.value === undefined) return null;
-                                return (
-                                  <p key={index} style={{ color: entry.color, margin: '4px 0' }}>
-                                    {entry.name}: {formatDeltaT(entry.value)}s
-                                  </p>
-                                );
-                              })}
-                            </div>
-                          );
-                        }}
-                      />
-                      <ReferenceLine y={0} stroke="#10b981" strokeDasharray="3 3" />
-                      <ReferenceLine y={1.0} stroke="#f59e0b" strokeDasharray="3 3" />
-                      <ReferenceLine y={-1.0} stroke="#f59e0b" strokeDasharray="3 3" />
-                      <ReferenceLine y={1.5} stroke="#ef4444" strokeDasharray="3 3" />
-                      <ReferenceLine y={-1.5} stroke="#ef4444" strokeDasharray="3 3" />
-
-                      {Object.keys(trackingConfig.consists || {}).map(cid => {
-                        if (consistFilter === 'all' || consistFilter == cid) {
-                          return (
-                            <Line
-                              key={cid}
-                              dataKey={`avg_delta_t_c${cid}`}
-                              stroke={getConsistStrokeColor(Number(cid), trackingConfig.consists)}
-                              strokeWidth={2}
-                              dot={{ r: 5 }}
-                              activeDot={{ r: 7 }}
-                              connectNulls={false}
-                              name={`C${cid}`}
-                            />
-                          );
-                        }
-                        return null;
-                      })}
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="text-center py-12 text-slate-400">
-                    <i className="fa-solid fa-chart-line text-4xl mb-4"></i>
-                    <p>No trend data available</p>
-                  </div>
-                )}
-                  </div>
-                )}
-              </div>
+              <HistoricalTrendChart
+                reportsChartData={reportsChartData}
+                reportsData={reportsData}
+                consistFilter={consistFilter}
+                trackingConfig={trackingConfig}
+                collapsed={collapsedPanels.historicalTrend}
+                onToggleCollapse={() => togglePanel('historicalTrend')}
+                onSessionClick={(session) => {
+                  setSelectedSession(session);
+                  setShowSessionDetail(true);
+                }}
+              />
             </div>
           )}
 
