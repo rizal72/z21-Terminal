@@ -23,6 +23,7 @@ PREFIXES = {
     '[GATE]': '\033[94m',    # Blue bright - gate crossings
     '[WS]': '\033[34m',      # Blue normale - websocket connections
     '[OVFL]': '\033[95m',    # Magenta bright - overflow
+    '[SPEED]': '\033[38;5;208m',  # Orange - speed setting events
 }
 
 RESET = '\033[0m'
