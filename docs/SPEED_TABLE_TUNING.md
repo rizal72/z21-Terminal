@@ -54,9 +54,11 @@ Result: Perfect speed matching across ALL speed steps, eliminating need for Virt
 
 ## Implementation Strategy
 
-### Phase 1: Speed Tracking (v1.3)
+### Phase 1: Speed Tracking & Correlation Analytics (v1.3) ✅ COMPLETED
 
-**Goal**: Collect speed setting data with Δt measurements
+**Status**: ✅ **IMPLEMENTED** (2026-01-15) - Live in production
+
+**Goal**: Collect speed setting data with Δt measurements and visualize correlation
 
 **Data Model**:
 ```python
@@ -97,59 +99,192 @@ Result: Perfect speed matching across ALL speed steps, eliminating need for Virt
 - Y-axis: Average Δt with error bars (min/max range)
 - Color-coded: Green (<1.0s), Amber (1.0-1.5s), Red (≥1.5s)
 
-### Phase 2: Speed Table Analysis (v1.4)
+**Implementation Results** (2026-01-15):
 
-**Goal**: Aggregate Δt data per speed step, identify problematic CVs
+✅ **Backend** (3 files modified):
+- `ws_control.py`: Speed event logging (`speed_setting` event type)
+- `analytics_db.py`: `get_speed_correlation()` with "Next N Events" strategy (N=10 default)
+- `routers/analytics.py`: `/api/analytics/speed-correlation` endpoint
 
-**Algorithm**:
+✅ **Frontend** (4 files):
+- `SpeedCorrelationChart.jsx`: NEW scatter chart with error bars + dynamic reference lines
+- `AnalyticsPanel.jsx`: 4th tab "Speed Tuning" (187 lines added)
+- `analyticsHelpers.js`: 3 helper functions (no hardcoded thresholds)
+- `analyticsConstants.js`: `SPEED_STATUS_COLORS` constants
+
+✅ **Database Migrations**:
+- Migration 1: Added `speed: 70` to 352 historical delta_t events
+- Migration 2: Created 2 `speed_setting` events (C10, C11: 0→70 at session start)
+- Backups: `analytics.db.backup_20260115_151846.backup`, `analytics.db.backup_20260115_163137.backup`
+
+✅ **Production Testing**:
+- Consist 10 @ speed 70: Mean Δt +1.07s (±0.60s) - 50% SYNCED, 30% CRITICAL
+- Consist 11 @ speed 70: Mean Δt -0.80s (±1.15s) - 60% SYNCED, 30% CRITICAL
+- Status: Both under action threshold (1.5s) → "All speeds well synchronized!"
+
+**Key Features**:
+- ✅ "Next N Events" correlation (adaptive to track length differences)
+- ✅ Dynamic thresholds from config.json (no hardcoding)
+- ✅ Color-coded scatter points by dominant status
+- ✅ Error bars showing standard deviation
+- ✅ Summary cards (speed changes, samples, buckets)
+- ✅ Generic CV recommendations (Phase 1 scope: text only)
+- ✅ Consist filter enforcement (must select C10 or C11)
+
+---
+
+### Phase 2: Specific CV Recommendations with JMRI Roster Integration (v1.4)
+
+**Status**: ⏳ **PLANNED** - Enhancement to Phase 1 (not yet implemented)
+
+**Goal**: Provide specific CV recommendations with exact before/after values and JMRI-style step numbering
+
+**Enhancement Motivation** (discussed 2026-01-15):
+- ✅ CV speed table values ALREADY in JMRI roster (CV67-94)
+- ✅ Can read them like other roster data (already implemented)
+- ✅ JMRI uses 1-28 step numbering (more user-friendly than CV67-94)
+- ✅ Enable specific recommendations: "Step 16 (CV82): 128 → 135 (+7)" instead of generic text
+
+**JMRI Speed Table Mapping**:
 ```python
-def analyze_speed_table(consist_id: int, min_samples: int = 10):
-    """
-    Analyze Δt distribution per speed step
-    Returns: Dict[speed_step, SpeedAnalysis]
-    """
-    # Group delta_t events by speed bins (28 bins, 0-126 range)
-    speed_bins = {}  # speed_step (0-27) → List[delta_t]
+# DCC Speed (0-126) → JMRI Step (1-28) → CV Index (67-94)
+dcc_speed = 70
+step_index = dcc_speed // 4.5  # 70 // 4.5 = 15
+jmri_step = step_index + 1      # 16 (JMRI numbering starts at 1)
+cv_index = 67 + step_index      # CV82
 
-    for event in get_delta_t_events(consist_id):
-        speed_step = event.speed // 4.5  # Map 0-126 to 0-27
-        speed_bins[speed_step].append(event.delta_t)
-
-    # Calculate statistics per speed step
-    results = {}
-    for step, deltas in speed_bins.items():
-        if len(deltas) < min_samples:
-            continue  # Insufficient data
-
-        results[step] = {
-            "avg_delta_t": mean(deltas),
-            "std_dev": std(deltas),
-            "samples": len(deltas),
-            "cv_index": 67 + step,  # CV67-94
-            "recommended_adjustment": calculate_adjustment(mean(deltas))
-        }
-
-    return results
-
-def calculate_adjustment(avg_delta_t: float) -> int:
-    """
-    Convert Δt to CV adjustment
-
-    Δt > 0: Rear loco faster → Decrease rear CV (slow down rear)
-    Δt < 0: Lead loco faster → Increase rear CV (speed up rear)
-
-    Scale: ~0.1s Δt ≈ ±1 CV value (empirical, needs calibration)
-    """
-    # Adjust REAR locomotive CV (reference is lead)
-    adjustment = -int(avg_delta_t * 10)  # Negative Δt → positive CV adjustment
-    return max(-20, min(20, adjustment))  # Clamp to ±20 for safety
+# Example speed ranges per JMRI step:
+# Step 1  (CV67): Speed 0-4
+# Step 2  (CV68): Speed 5-9
+# ...
+# Step 16 (CV82): Speed 68-72  ← Speed 70 falls here
+# ...
+# Step 28 (CV94): Speed 122-126
 ```
 
-**Frontend UI**:
-- Reports tab → "Speed Table Analysis" section
-- Table view: Speed Step | CV Index | Avg Δt | Samples | Status | Recommended Adjustment
-- Visual indicator: ✅ Good (<1.0s), ⚠️ Warning (1.0-1.5s), ❌ Critical (≥1.5s)
-- Button: "Preview Adjustments" → Show before/after CV values
+**Enhanced Data Model**:
+```python
+# Backend: Extend speed_correlation API response with CV data
+{
+    "consist_id": 11,
+    "adjust_loco_address": 8,  # Rear loco in consist 11 (E444 056)
+    "speed_buckets": [
+        {
+            "speed_bucket": 70,
+            "mean_delta_t": -0.80,
+            "std_dev": 0.60,
+            "samples": 10,
+            # NEW FIELDS:
+            "jmri_step": 16,           # Human-readable step number
+            "cv_index": 82,             # Actual CV to modify
+            "current_cv_value": 128,    # Read from JMRI roster
+            "recommended_cv_value": 135, # Calculated adjustment
+            "cv_delta": +7,             # +7 to speed up adjust loco
+            "recommendation": "Adjust loco is faster. Decrease CV82 by 7."
+        }
+    ]
+}
+```
+
+**Backend Implementation**:
+```python
+def get_speed_correlation_with_cv_data(consist_id: int):
+    """
+    Enhanced speed correlation with CV-specific recommendations.
+    Reads current CV values from JMRI roster for adjust loco.
+    """
+    # Get basic correlation data (Phase 1)
+    correlation = get_speed_correlation(consist_id)
+
+    # Load consist config to identify adjust loco
+    config = load_config()
+    consist = config['consists'][str(consist_id)]
+    adjust_loco_address = consist['rear_address']  # Adjust = rear
+
+    # Read CV speed table from JMRI roster (CV67-94)
+    cv_speed_table = read_cv_speed_table_from_roster(adjust_loco_address)
+    # Returns: {67: 12, 68: 24, ..., 94: 255}
+
+    # Enhance each speed bucket with CV data
+    for bucket in correlation['speed_buckets']:
+        speed = bucket['speed_bucket']
+        mean_delta_t = bucket['mean_delta_t']
+
+        # Map speed to JMRI step
+        step_index = int(speed // 4.5)
+        jmri_step = step_index + 1
+        cv_index = 67 + step_index
+
+        # Get current CV value
+        current_cv = cv_speed_table.get(cv_index, 128)  # Default 128 if missing
+
+        # Calculate recommended adjustment
+        # Δt > 0: adjust loco slower → increase CV (speed up)
+        # Δt < 0: adjust loco faster → decrease CV (slow down)
+        cv_delta = calculate_cv_adjustment(mean_delta_t)
+        recommended_cv = max(0, min(255, current_cv + cv_delta))
+
+        # Add CV-specific fields
+        bucket['jmri_step'] = jmri_step
+        bucket['cv_index'] = cv_index
+        bucket['current_cv_value'] = current_cv
+        bucket['recommended_cv_value'] = recommended_cv
+        bucket['cv_delta'] = cv_delta
+
+    correlation['adjust_loco_address'] = adjust_loco_address
+    return correlation
+
+def calculate_cv_adjustment(mean_delta_t: float) -> int:
+    """
+    Convert mean Δt to CV adjustment.
+
+    Δt = rear_time - lead_time
+    Δt > 0: Adjust loco is slower (arrives late) → increase CV to speed up
+    Δt < 0: Adjust loco is faster (arrives early) → decrease CV to slow down
+
+    Scale: ~0.2s Δt ≈ ±1 CV value (empirical, tune based on testing)
+    """
+    adjustment = int(mean_delta_t / 0.2)  # 0.2s per CV step
+    return max(-20, min(20, adjustment))  # Safety clamp ±20
+```
+
+**Frontend UI Enhancement**:
+
+**BEFORE** (Phase 1 - generic text):
+```
+Speed 70: Adjust loco is faster (-0.80s)
+Consider decreasing CV speed table for adjust loco at this speed
+```
+
+**AFTER** (Phase 2 - specific values):
+```
+╔════════════════════════════════════════════════════════════╗
+║ Speed 70 (68-72 range)                                     ║
+║ JMRI Step 16 │ CV82                                        ║
+╠════════════════════════════════════════════════════════════╣
+║ Current Value:     128                                     ║
+║ Recommended:       124  (-4)                               ║
+║                                                            ║
+║ Reason: Adjust loco arrives 0.80s early at this speed     ║
+║ Action: Decrease CV82 by 4 to slow down adjust loco       ║
+╚════════════════════════════════════════════════════════════╝
+
+[Preview All Changes] [Apply via Operations Mode]
+```
+
+**UI Components**:
+- Card layout with JMRI step number prominent
+- Before/after CV value comparison
+- Visual diff indicator (+/- with color)
+- Clear reasoning text
+- Preview button (show all changes before applying)
+- Apply button (Phase 3 - writes CV via Operations Mode)
+
+**Benefits**:
+- ✅ User sees EXACT CV to change (no guessing)
+- ✅ JMRI step numbering matches DecoderPro UI (cognitive alignment)
+- ✅ Before/after preview reduces mistakes
+- ✅ Foundation for Phase 3 (automatic CV writes)
 
 ### Phase 3: Auto-Tuning (v1.5)
 

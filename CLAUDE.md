@@ -671,40 +671,65 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
-### 2026-01-15 - 🚀 **SPEED TABLE AUTO-TUNING: Planning & Data Migration**
+### 2026-01-15 - 🎉 **SPEED TABLE AUTO-TUNING: Phase 1 MVP COMPLETATA**
 
-**Status**: ⏳ **IN PLANNING** - Phase 1 implementation ready to start
+**Status**: ✅ **PHASE 1 COMPLETE** - Speed correlation analytics live in production
 
-**Planning Completed**:
-- ✅ Design document: `docs/SPEED_TABLE_TUNING.md` (full architecture, 4 phases)
-- ✅ Implementation plan: `~/.claude/plans/glimmering-sleeping-starfish.md` (detailed Phase 1-2 roadmap)
-- ✅ Strategy: "Next N Events" correlation approach (adaptive to track length)
-- ✅ Test Mode decision: Ignore accel/decel transients (N=10 samples mitigate naturally)
+**Implementation Summary**:
+- **Time**: ~3 hours (stima: 8-12h) - ottimizzato grazie a modular architecture
+- **Commits**: 5 commits (ba8d9e4 → f8669c7)
+- **Deploy**: PC Windows production via `z21-deploy-dev`
+- **Testing**: ✅ Live con dati reali (C10: 52 eventi, C11: 300 eventi a speed 70)
 
-**Historical Data Migration** (2026-01-15):
-- ✅ **Database retroactive update**: 352 delta_t events updated with `speed: 70`
-- ✅ **Backup created**: `backend/data/analytics.db.backup_20260115_151846`
-- ✅ **Migration script**: `migrate_add_speed.py` (one-time execution)
-- ✅ **Result**: Immediate baseline data for speed 70 analysis available
+**Backend** (3 files modified):
+- ✅ `ws_control.py`: Speed event logging in `handle_set_speed()` (logga solo se speed cambia)
+- ✅ `analytics_db.py`: `get_speed_correlation()` con "Next N Events" strategy (default N=10)
+- ✅ `routers/analytics.py`: Endpoint `/api/analytics/speed-correlation?consist_id=X`
 
-**Key Insights**:
-- User has ALWAYS operated at speed=70 historically
-- All 352 historical delta_t events now have speed field
-- Can validate manual CV tuning effectiveness at speed 70 before implementing new features
-- Future speed tests (50, 90, 7) will have baseline comparison
+**Frontend** (4 files: 3 modified, 1 new):
+- ✅ `analyticsConstants.js`: `SPEED_STATUS_COLORS` (no hardcoded thresholds!)
+- ✅ `analyticsHelpers.js`: 3 helper functions (reference lines, bucket color, recommendations)
+- ✅ `SpeedCorrelationChart.jsx`: NEW scatter chart component con error bars + reference lines
+- ✅ `AnalyticsPanel.jsx`: 4th tab "Speed Tuning" integrato (187 lines added)
 
-**Next Steps** (Phase 1 - 8-12 hours):
-1. Backend: Log `speed_setting` events in `ws_control.py`
-2. Backend: Implement `get_speed_correlation()` in `analytics_db.py`
-3. Backend: Add `/api/analytics/speed-correlation` endpoint
-4. Frontend: Create `SpeedCorrelationChart.jsx` component (scatter plot + error bars)
-5. Frontend: Add 4th tab "Speed Tuning" in Analytics Dashboard
+**Features Implemented**:
+- ✅ Speed vs Δt scatter chart con error bars (std dev)
+- ✅ Dynamic reference lines da config thresholds (SYNCED/WARNING/ACTION)
+- ✅ Color-coded points by dominant status (green/amber/red)
+- ✅ Summary cards (speed changes, samples, buckets)
+- ✅ CV tuning recommendations (text only - Phase 1, manual JMRI adjustment)
+- ✅ Consist filter enforcement (must select C10 or C11, not "All")
+- ✅ Auto-reload on consist filter change
 
-**Files to Create**:
-- `backend/routers/analytics.py` - Speed correlation endpoint (extend existing)
-- `backend/services/analytics_db.py` - Speed correlation query method
-- `web/src/components/charts/SpeedCorrelationChart.jsx` - NEW component
-- `web/src/constants/analyticsConstants.js` - Add speed tuning constants
+**Database Migrations** (2 scripts, one-time execution):
+1. **Migration 1** (`migrate_add_speed.py`): Aggiunto `speed: 70` a 352 eventi delta_t storici
+   - Backup: `analytics.db.backup_20260115_151846.backup`
+2. **Migration 2** (`add_historical_speed_events.py`): Creati 2 eventi `speed_setting` (0→70)
+   - C10: 52 eventi delta_t utilizzabili
+   - C11: 300 eventi delta_t utilizzabili
+   - Backup: `analytics.db.backup_20260115_163137.backup`
+
+**Production Results** (2026-01-15 16:30):
+- **Consist 10**: Speed 70 → Mean Δt +1.07s (±0.60s) - 50% SYNCED, 30% CRITICAL
+- **Consist 11**: Speed 70 → Mean Δt -0.80s (±1.15s) - 60% SYNCED, 30% CRITICAL
+- **Status**: Entrambi sotto soglia action (1.5s) → "All speeds well synchronized!" ✅
+
+**Critical Fixes Applied**:
+- ✅ Exclude speed-tuning from Current/Overview charts rendering (efa54ba)
+- ✅ Correct terminology: "Reference/Adjust loco" instead of "Lead/Rear" (f8669c7)
+- ✅ Fix recommendation logic: Δt > 0 = adjust slower (not faster)
+
+**Architecture Notes**:
+- **No hardcoded thresholds**: Tutti i threshold da `config.json` (dynamic)
+- **Modular design**: Chart component riutilizzabile, helpers DRY
+- **"Next N Events" strategy**: Adattivo a track length (C10: 55s vs C11: 15s lap)
+- **Phase 1 scope**: TEXT recommendations only (manual CV adjustment via JMRI)
+
+**Next: Phase 2 Enhancement** (discussed, not implemented):
+- Read CV speed table values from JMRI roster (CV67-94)
+- JMRI-style step numbering (1-28 instead of CV67-94)
+- Specific recommendations: "Step 16 (CV82): 128 → 135 (+7)" instead of generic text
+- Before/after preview with exact CV values
 
 **References**:
 - Design: `docs/SPEED_TABLE_TUNING.md`
