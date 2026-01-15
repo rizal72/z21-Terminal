@@ -671,6 +671,47 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2026-01-15 - 🚀 **SPEED TABLE AUTO-TUNING: Planning & Data Migration**
+
+**Status**: ⏳ **IN PLANNING** - Phase 1 implementation ready to start
+
+**Planning Completed**:
+- ✅ Design document: `docs/SPEED_TABLE_TUNING.md` (full architecture, 4 phases)
+- ✅ Implementation plan: `~/.claude/plans/glimmering-sleeping-starfish.md` (detailed Phase 1-2 roadmap)
+- ✅ Strategy: "Next N Events" correlation approach (adaptive to track length)
+- ✅ Test Mode decision: Ignore accel/decel transients (N=10 samples mitigate naturally)
+
+**Historical Data Migration** (2026-01-15):
+- ✅ **Database retroactive update**: 352 delta_t events updated with `speed: 70`
+- ✅ **Backup created**: `backend/data/analytics.db.backup_20260115_151846`
+- ✅ **Migration script**: `migrate_add_speed.py` (one-time execution)
+- ✅ **Result**: Immediate baseline data for speed 70 analysis available
+
+**Key Insights**:
+- User has ALWAYS operated at speed=70 historically
+- All 352 historical delta_t events now have speed field
+- Can validate manual CV tuning effectiveness at speed 70 before implementing new features
+- Future speed tests (50, 90, 7) will have baseline comparison
+
+**Next Steps** (Phase 1 - 8-12 hours):
+1. Backend: Log `speed_setting` events in `ws_control.py`
+2. Backend: Implement `get_speed_correlation()` in `analytics_db.py`
+3. Backend: Add `/api/analytics/speed-correlation` endpoint
+4. Frontend: Create `SpeedCorrelationChart.jsx` component (scatter plot + error bars)
+5. Frontend: Add 4th tab "Speed Tuning" in Analytics Dashboard
+
+**Files to Create**:
+- `backend/routers/analytics.py` - Speed correlation endpoint (extend existing)
+- `backend/services/analytics_db.py` - Speed correlation query method
+- `web/src/components/charts/SpeedCorrelationChart.jsx` - NEW component
+- `web/src/constants/analyticsConstants.js` - Add speed tuning constants
+
+**References**:
+- Design: `docs/SPEED_TABLE_TUNING.md`
+- Plan: `~/.claude/plans/glimmering-sleeping-starfish.md`
+
+---
+
 ### 2025-01-15 - 🎨 **FRONTEND REFACTORING COMPLETATO** (Analytics Dashboard)
 
 **Status**: ✅ **MILESTONE ACHIEVED** - Modular chart components, merged to develop
