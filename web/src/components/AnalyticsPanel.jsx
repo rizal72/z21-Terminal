@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, memo, useMemo, Fragment } from 'react';
-import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
+import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import {
   LOCO_COLORS,
   CONSIST_COLOR_PALETTE,
@@ -17,6 +17,7 @@ import {
   formatDeltaT,
   formatOperatingTime
 } from '../utils/analyticsHelpers';
+import DeltaTChart from './charts/DeltaTChart';
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current', 'overview', or 'reports'
@@ -449,64 +450,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return { chartData: result, segmentCount: totalSegments };
   }, [filteredDeltaTEvents, trackingConfig.consists, showSessionBreaks]);
 
-  // Apply zoom filter if zoomDomain is set (Overview mode only)
-  const displayData = useMemo(() => {
-    if (viewMode !== 'overview' || !zoomDomain) return chartData;
-
-    // Filter data to show only zoomed range
-    const [xMin, xMax] = zoomDomain.x;
-    return chartData.filter(d => d.index >= xMin && d.index <= xMax);
-  }, [chartData, zoomDomain, viewMode]);
-
-  // Calculate Y domain to ensure all points are visible (10% padding)
-  const yDomain = useMemo(() => {
-    if (zoomDomain) return zoomDomain.y; // Use zoom domain if active
-
-    if (displayData.length === 0) return ['auto', 'auto'];
-
-    const consistIds = Object.keys(trackingConfig.consists || {}).map(Number);
-    let yMin = Infinity, yMax = -Infinity;
-
-    // Scan all data to find min/max
-    if (segmentCount === 0) {
-      // SIMPLE MODE
-      displayData.forEach(d => {
-        consistIds.forEach(cid => {
-          const value = d[`delta_t_c${cid}`];
-          if (value !== null && value !== undefined && !isNaN(value)) {
-            yMin = Math.min(yMin, value);
-            yMax = Math.max(yMax, value);
-          }
-        });
-      });
-    } else {
-      // SEGMENTED MODE
-      displayData.forEach(d => {
-        for (let seg = 0; seg < segmentCount; seg++) {
-          consistIds.forEach(cid => {
-            const value = d[`delta_t_c${cid}_seg${seg}`];
-            if (value !== null && value !== undefined && !isNaN(value)) {
-              yMin = Math.min(yMin, value);
-              yMax = Math.max(yMax, value);
-            }
-          });
-        }
-      });
-    }
-
-    // No valid data found
-    if (yMin === Infinity || yMax === -Infinity) return ['auto', 'auto'];
-
-    // Add 5% padding
-    const range = yMax - yMin;
-    const padding = range * 0.05;
-    return [yMin - padding, yMax + padding];
-  }, [displayData, segmentCount, trackingConfig.consists, zoomDomain]);
-
-  // Memoize chart width calculation
-  const chartWidth = useMemo(() => {
-    return viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
-  }, [chartData.length, viewMode]);
 
   // Reports chart data (historical trend)
   const reportsChartData = useMemo(() => {
@@ -794,168 +737,23 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
               {/* Δt Trends Chart - ALL sessions concatenated */}
               {cumulativeData.delta_t_events && cumulativeData.delta_t_events.length > 0 && (
-                <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
-                  <div
-                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
-                    onClick={() => togglePanel('deltaTrends')}
-                  >
-                    <h3 className="text-lg font-semibold text-white">Δt Trends (All Sessions)</h3>
-                    <div className="flex items-center gap-4">
-                      {!collapsedPanels.deltaTrends && (
-                        <span className="text-xs text-slate-400">
-                          Click & drag to zoom • Double-click to reset
-                        </span>
-                      )}
-                      <i className={`fa-solid fa-chevron-${collapsedPanels.deltaTrends ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
-                    </div>
-                  </div>
-                  {!collapsedPanels.deltaTrends && (
-                    <div className="p-6 pt-0">
-
-                  {/* Threshold Legend - SYNCED/WARNING/CRITICAL */}
-                  <div className="flex gap-6 justify-center mb-3 pb-3 border-b border-slate-700/50">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                      <span className="text-xs text-slate-400">SYNCED (&lt;1.0s)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                      <span className="text-xs text-slate-400">WARNING (1.0-1.5s)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                      <span className="text-xs text-slate-400">CRITICAL (≥1.5s)</span>
-                    </div>
-                  </div>
-
-                  {/* Custom Legend (always shown when All filter, both Current and Overview) */}
-                  {chartData.length > 0 && consistFilter === 'all' && (
-                    <div className="flex gap-4 justify-center mb-4 pb-3 border-b border-slate-700">
-                      {Object.keys(trackingConfig.consists || {})
-                        .map(Number)
-                        .sort((a, b) => a - b)
-                        .map((consistId) => (
-                          <div key={consistId} className="flex items-center gap-2">
-                            <div
-                              className="w-4 h-1"
-                              style={{ backgroundColor: getConsistStrokeColor(consistId, trackingConfig.consists) }}
-                            ></div>
-                            <span className="text-sm text-slate-300">
-                              {trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-
-                  {chartData.length > 0 && (
-                    <div
-                      key={consistFilter}
-                      ref={viewMode === 'current' ? scrollRefSession : null}
-                      style={{ width: '100%', overflowX: viewMode === 'current' ? 'auto' : 'visible' }}
-                    >
-                      <ResponsiveContainer width={chartWidth} height={400}>
-                          <LineChart
-                            data={displayData}
-                            onMouseDown={handleMouseDown}
-                            onMouseMove={handleMouseMove}
-                            onMouseUp={handleMouseUp}
-                            onDoubleClick={handleDoubleClick}
-                          >
-                            <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                      {/* XAxis: time in Current (readable), index in Overview (compressed) */}
-                      <XAxis
-                        dataKey={viewMode === 'current' ? 'time' : 'index'}
-                        {...CHART_AXIS_STYLES.axis}
-                      />
-                      <YAxis
-                        yAxisId="left"
-                        {...CHART_AXIS_STYLES.axis}
-                        domain={yDomain}
-                        allowDataOverflow={true}
-                        tickFormatter={(value) => formatDeltaT(value)}
-                        label={{ value: 'Δt (seconds)', angle: 90, position: 'insideLeft', fill: '#9CA3AF' }}
-                      />
-                      {/* Duplicate YAxis on right for Current mode (always visible when scrolling) */}
-                      {viewMode === 'current' && (
-                        <YAxis
-                          yAxisId="right"
-                          orientation="right"
-                          {...CHART_AXIS_STYLES.axis}
-                          domain={yDomain}
-                          allowDataOverflow={true}
-                          tickFormatter={(value) => formatDeltaT(value)}
-                          label={{ value: 'Δt (seconds)', angle: 90, position: 'insideRight', fill: '#9CA3AF' }}
-                        />
-                      )}
-                      <Tooltip
-                        {...TOOLTIP_STYLES}
-                        formatter={(value) => value !== null ? formatDeltaT(value) + 's' : 'N/A'}
-                      />
-                      <ReferenceLine yAxisId="left" y={0} stroke="#10b981" strokeDasharray="3 3" />
-                      <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.normal || 1.0} stroke="#f59e0b" strokeDasharray="3 3" />
-                      <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.normal || 1.0)} stroke="#f59e0b" strokeDasharray="3 3" />
-                      <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.warning || 1.5} stroke="#ef4444" strokeDasharray="3 3" />
-                      <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.warning || 1.5)} stroke="#ef4444" strokeDasharray="3 3" />
-
-                          {/* Dynamic lines: simple or segmented based on showSessionBreaks */}
-                          {Object.keys(trackingConfig.consists || {})
-                            .map(Number)
-                            .sort((a, b) => a - b)
-                            .filter(consistId => consistFilter === 'all' || consistFilter === consistId)
-                            .flatMap((consistId) => {
-                              // SIMPLE MODE: One Line per consist (no session breaks)
-                              if (segmentCount === 0) {
-                                return (
-                                  <Line
-                                    key={consistId}
-                                    yAxisId="left"
-                                    type="monotone"
-                                    dataKey={`delta_t_c${consistId}`}
-                                    stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
-                                    strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                                    dot={viewMode === 'current' ? { r: 4 } : false}
-                                    name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
-                                    connectNulls={true}
-                                  />
-                                );
-                              }
-
-                              // SEGMENTED MODE: One Line per segment (session breaks enabled)
-                              return Array.from({ length: segmentCount }, (_, segIdx) => (
-                                <Line
-                                  key={`${consistId}_seg${segIdx}`}
-                                  yAxisId="left"
-                                  type="monotone"
-                                  dataKey={`delta_t_c${consistId}_seg${segIdx}`}
-                                  stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
-                                  strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                                  dot={viewMode === 'current' ? { r: 4 } : false}
-                                  name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
-                                  legendType={segIdx === 0 ? undefined : 'none'}
-                                  connectNulls={true}
-                                />
-                              ));
-                            })}
-
-                            {/* ReferenceArea for box-select zoom - only during drag in Overview */}
-                            {refAreaLeft && refAreaRight && (
-                              <ReferenceArea
-                                yAxisId="left"
-                                x1={refAreaLeft}
-                                x2={refAreaRight}
-                                strokeOpacity={0.3}
-                                fill="#3b82f6"
-                                fillOpacity={0.3}
-                              />
-                            )}
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                    </div>
-                  )}
-                </div>
+                <DeltaTChart
+                  chartData={chartData}
+                  segmentCount={segmentCount}
+                  viewMode={viewMode}
+                  consistFilter={consistFilter}
+                  trackingConfig={trackingConfig}
+                  scrollRef={scrollRefSession}
+                  zoomDomain={zoomDomain}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onDoubleClick={handleDoubleClick}
+                  refAreaLeft={refAreaLeft}
+                  refAreaRight={refAreaRight}
+                  collapsed={collapsedPanels.deltaTrends}
+                  onToggleCollapse={() => togglePanel('deltaTrends')}
+                />
               )}
 
               {/* YOLO Performance Monitoring - FPS & Confidence */}
