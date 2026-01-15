@@ -200,7 +200,8 @@ class TrackingDaemon:
                         'consist_id': consist_id,
                         'delta_t': delta_t,
                         'status': message['status'],
-                        'gate_type': current_type
+                        'gate_type': current_type,
+                        'speed': self.consist_speeds.get(consist_id, 0)  # Current consist speed
                     })
             except Exception as e:
                 log('[WARN]', f"Backend disconnected: {e}")
