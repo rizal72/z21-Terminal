@@ -103,8 +103,12 @@ async def get_cumulative_stats(
         original_delta_t_count = len(delta_t_events)
         original_yolo_count = len(yolo_performance)
 
+        log('[ANALYTICS]', f"Before downsampling: {original_delta_t_count} delta_t events, target: {max_points}")
+
         # Delta-t: Smart downsampling (all critical |Δt| ≥ 1.5s + LTTB on rest)
         delta_t_events = smart_downsample_delta_t(delta_t_events, max_points, critical_threshold=1.5)
+
+        log('[ANALYTICS]', f"After downsampling: {len(delta_t_events)} delta_t events")
 
         # YOLO FPS: LTTB downsampling (preserves peaks/valleys)
         yolo_performance = lttb_downsample(yolo_performance, max_points, x_key='timestamp', y_key='avg_fps')
