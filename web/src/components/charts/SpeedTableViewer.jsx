@@ -456,6 +456,11 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           title={isCheckpoint ? "Fixed checkpoint (click to uncheck)" : "Auto-interpolated (click to fix)"}
         />
 
+        {/* CV Number (67-94) */}
+        <div className="text-[10px] font-mono text-slate-600 mt-0.5">
+          CV{cvIndex}
+        </div>
+
         {/* Speed Percentage (bottom) - only for checkpoints */}
         <div className="text-xs font-mono text-blue-400 h-4">
           {isCheckpoint && percentLabel ? percentLabel : ''}
