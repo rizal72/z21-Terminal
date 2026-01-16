@@ -8,6 +8,7 @@ Eliminates code duplication across endpoints.
 from pathlib import Path
 import sqlite3
 import json
+import time
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
 from datetime import datetime
@@ -342,11 +343,11 @@ class AnalyticsDB:
         conn = AnalyticsDB.get_connection()
         cursor = conn.cursor()
 
-        # Get validated sessions (exclude running sessions)
+        # Get validated sessions (include running sessions for real-time display)
         cursor.execute("""
             SELECT id, start_time, end_time, event_count
             FROM sessions
-            WHERE validated = 1 AND end_time IS NOT NULL
+            WHERE validated = 1
             ORDER BY start_time DESC
             LIMIT ?
         """, (limit,))
@@ -445,7 +446,9 @@ class AnalyticsDB:
                 continue
 
             # Format session data
-            duration_seconds = end_time - start_time
+            # For running sessions (end_time = None), use current time for duration
+            effective_end_time = end_time if end_time is not None else time.time()
+            duration_seconds = effective_end_time - start_time
             session_date = datetime.fromtimestamp(start_time).strftime('%d-%m-%Y')
 
             # Count ONLY delta_t events (gate crossings), not all event types
