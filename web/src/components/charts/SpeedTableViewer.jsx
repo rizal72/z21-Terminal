@@ -33,6 +33,11 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
   // Recommendations approval state
   const [selectedRecommendations, setSelectedRecommendations] = useState(new Set());
 
+  // CV write state (Phase 2 - Direct decoder write)
+  const [writing, setWriting] = useState(false);
+  const [writeError, setWriteError] = useState(null);
+  const [writeSuccess, setWriteSuccess] = useState(null);
+
   // Initialize selected recommendations (default: all checked)
   useEffect(() => {
     if (!data || !data.recommendations) return;
@@ -240,6 +245,53 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     URL.revokeObjectURL(url);
   };
 
+  // Write speed table to decoder (Phase 2 - Direct CV Write)
+  const writeToDecoder = async () => {
+    if (!data || !cvValuesFloat || Object.keys(cvValuesFloat).length === 0) return;
+
+    setWriting(true);
+    setWriteError(null);
+    setWriteSuccess(null);
+
+    try {
+      // Prepare cv_values payload (all 28 CVs, rounded to integers)
+      const cvValues = {};
+      for (let step = 1; step <= 28; step++) {
+        const cvIndex = 66 + step; // CV67-94
+        cvValues[cvIndex] = Math.round(cvValuesFloat[cvIndex] || 0);
+      }
+
+      const response = await fetch(`/api/speed-table/write/${consistId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cv_values: cvValues })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.detail || 'Failed to write CVs to decoder');
+      }
+
+      if (result.success) {
+        setWriteSuccess(`Successfully wrote 28 CVs to loco ${result.adjust_loco_address} (${result.total_time}s)`);
+      } else {
+        setWriteError(`Partial write: ${result.cvs_written}/28 CVs written (failed: ${result.failed_cvs.join(', ')})`);
+      }
+    } catch (err) {
+      setWriteError(err.message);
+    } finally {
+      setWriting(false);
+    }
+  };
+
+  // Apply & Write: Write to decoder then export CSV
+  const applyAndWrite = async () => {
+    await writeToDecoder();
+    // Export CSV after write completes (or fails)
+    setTimeout(() => exportToCSV(), 500); // Small delay to show write result first
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -433,14 +485,47 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
             </span>
           )}
         </div>
-        <button
-          onClick={exportToCSV}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-        >
-          <i className="fa-solid fa-download"></i>
-          <span>Export for JMRI</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={applyAndWrite}
+            disabled={writing}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-semibold"
+          >
+            {writing ? (
+              <>
+                <i className="fa-solid fa-spinner fa-spin"></i>
+                <span>Writing CVs...</span>
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-microchip"></i>
+                <span>Apply & Write to Decoder</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={exportToCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            <i className="fa-solid fa-download"></i>
+            <span>Export CSV Only</span>
+          </button>
+        </div>
       </div>
+
+      {/* Write feedback messages */}
+      {writeSuccess && (
+        <div className="mt-4 p-3 bg-green-900/30 border border-green-600 rounded-lg text-green-400 text-sm">
+          <i className="fa-solid fa-check-circle mr-2"></i>
+          {writeSuccess}
+        </div>
+      )}
+      {writeError && (
+        <div className="mt-4 p-3 bg-red-900/30 border border-red-600 rounded-lg text-red-400 text-sm">
+          <i className="fa-solid fa-exclamation-triangle mr-2"></i>
+          {writeError}
+        </div>
+      )}
 
       {/* 28 Vertical Bars */}
       <div className="flex justify-center gap-1 overflow-x-auto pb-4">
@@ -528,7 +613,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
             })}
           </div>
           <p className="text-xs text-slate-500 mt-4">
-            💡 Click Apply to update speed table with selected recommendations. Changes can be exported to CSV or written via POM.
+            💡 Click Apply to update speed table with selected recommendations. Use "Apply & Write to Decoder" to write CVs directly via POM (includes CSV export), or "Export CSV Only" for JMRI manual import.
           </p>
         </div>
       ) : (
