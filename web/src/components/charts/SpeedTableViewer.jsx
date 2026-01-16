@@ -256,37 +256,47 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           <h3 className="text-white font-semibold mb-3 text-lg">
             CV Adjustment Recommendations
           </h3>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {data.recommendations.map((rec) => (
               <div
                 key={rec.cv_index}
-                className="flex items-center justify-between text-sm border-b border-slate-700 pb-2"
+                className="border-b border-slate-700 pb-3"
               >
-                <div className="flex items-center gap-4">
-                  <span className="font-mono text-slate-400 w-20">
-                    CV{rec.cv_index}
-                  </span>
-                  <span className="text-slate-300">
+                {/* Step prominente + CV secondario */}
+                <div className="text-base font-semibold text-white mb-1">
+                  Step {rec.jmri_step} <span className="text-slate-500 font-normal">(CV{rec.cv_index})</span>
+                </div>
+
+                {/* CV values + delta */}
+                <div className="flex items-center gap-3 text-sm mb-1">
+                  <span className="text-slate-300 font-mono">
                     {rec.cv_current} → {rec.cv_suggested}
                   </span>
-                  <span className={`font-mono ${rec.cv_delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <span className={`font-mono font-semibold ${rec.cv_delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {rec.cv_delta > 0 ? '+' : ''}{rec.cv_delta}
                   </span>
                 </div>
-                <div className="flex items-center gap-4 text-xs">
+
+                {/* Stats row */}
+                <div className="flex items-center gap-3 text-xs text-slate-400">
                   <span className={`font-mono ${rec.mean_delta_t < 0 ? 'text-blue-400' : 'text-amber-400'}`}>
                     Δt {rec.mean_delta_t >= 0 ? '+' : ''}{rec.mean_delta_t.toFixed(2)}s
                   </span>
+                  <span>•</span>
                   <span className="text-red-400">
                     {rec.critical_count} critical
                   </span>
                   {rec.warning_count > 0 && (
-                    <span className="text-amber-400">
-                      {rec.warning_count} warning
-                    </span>
+                    <>
+                      <span>•</span>
+                      <span className="text-amber-400">
+                        {rec.warning_count} warning
+                      </span>
+                    </>
                   )}
+                  <span>•</span>
                   <span className="text-slate-500">
-                    Speed {rec.speed} (Step {rec.jmri_step})
+                    Speed {rec.speed}
                   </span>
                 </div>
               </div>
