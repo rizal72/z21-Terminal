@@ -114,5 +114,6 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
         'cv_values': cv_values,
         'critical_events': critical_events,
         'warning_events': warning_events,
-        'recommendations': recommendations
+        'recommendations': recommendations,
+        'fixed_count': len(fixed_speeds)  # Number of speeds proven OK in last session
     }

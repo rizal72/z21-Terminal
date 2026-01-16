@@ -201,15 +201,21 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           </div>
         </div>
         <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-          <div className="text-sm text-slate-400">Problematic Speeds</div>
-          <div className="text-3xl font-bold text-white mt-1">
-            {Object.keys(data.critical_events).length}
-          </div>
-        </div>
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
           <div className="text-sm text-slate-400">Recommendations</div>
           <div className="text-3xl font-bold text-white mt-1">
             {data.recommendations?.length || 0}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            CV adjustments needed
+          </div>
+        </div>
+        <div className="bg-slate-800/50 rounded-lg p-4 border border-green-700/50">
+          <div className="text-sm text-slate-400">Fixed Speeds</div>
+          <div className="text-3xl font-bold text-green-400 mt-1">
+            {data.fixed_count || 0}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            Proven OK recently
           </div>
         </div>
       </div>
