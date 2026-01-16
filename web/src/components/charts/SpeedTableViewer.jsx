@@ -393,7 +393,17 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') saveEdit();
               }}
-              onBlur={saveEdit}
+              onBlur={() => {
+                // Only save + interpolate if value actually changed
+                const currentValue = Math.round(cvValuesFloat[66 + editingStep] || 0);
+                const newValue = parseInt(editingValue);
+
+                if (!isNaN(newValue) && newValue !== currentValue) {
+                  saveEdit(); // Save + interpolate
+                } else {
+                  cancelEdit(); // Close without interpolating
+                }
+              }}
               className="w-12 px-1 text-xs font-mono text-center bg-slate-700 text-white border border-blue-500 rounded"
               autoFocus
             />
