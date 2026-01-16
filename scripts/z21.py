@@ -589,6 +589,9 @@ class Z21:
         Returns:
             True se scrittura confermata, False se errore/timeout
         """
+        # Delay before write to space out consecutive CV writes (prevents decoder overload)
+        time.sleep(0.1)
+
         if not (0 <= value <= 255):
             if self.verbose:
                 print(f"❌ Valore CV fuori range: {value} (deve essere 0-255)")

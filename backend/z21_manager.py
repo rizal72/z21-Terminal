@@ -722,9 +722,7 @@ class Z21Manager:
                         cv3_value = cv_profiles[addr_str]['testing']['cv3']
                         cv4_value = cv_profiles[addr_str]['testing']['cv4']
                         self.z21.write_cv_ops_mode(addr, 3, cv3_value)
-                        time.sleep(0.1)  # Delay tra CV write per dare tempo al decoder
                         self.z21.write_cv_ops_mode(addr, 4, cv4_value)
-                        time.sleep(0.1)  # Delay prima del prossimo loco
                         elapsed = time.time() - loco_start
                         log('[CV]', f"Loco {addr}: CV3={cv3_value}, CV4={cv4_value} [{elapsed*1000:.0f}ms]")
                         success_count += 1
@@ -751,9 +749,7 @@ class Z21Manager:
                         cv3_value = cv_profiles[addr_str]['normal']['cv3']
                         cv4_value = cv_profiles[addr_str]['normal']['cv4']
                         self.z21.write_cv_ops_mode(addr, 3, cv3_value)
-                        time.sleep(0.1)  # Delay tra CV write per dare tempo al decoder
                         self.z21.write_cv_ops_mode(addr, 4, cv4_value)
-                        time.sleep(0.1)  # Delay prima del prossimo loco
                         elapsed = time.time() - loco_start
                         log('[CV]', f"Loco {addr}: CV3={cv3_value}, CV4={cv4_value} [{elapsed*1000:.0f}ms]")
                         success_count += 1
