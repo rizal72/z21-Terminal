@@ -671,6 +671,95 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2025-01-17 - 🔄 **SPEED TABLE VIEWER: Cumulative Intelligent Recommendations** (v0.9.0)
+
+**Status**: ✅ **MILESTONE ACHIEVED** - Iterative testing workflow with intelligent "fixed" detection
+
+**Objective**: Transform single-session recommendations into cumulative historical analysis that persists across sessions but auto-clears when speeds are proven OK.
+
+**Implementation Time**: ~6-8 hours (14 commits with multiple iterations on auto-select logic)
+
+**Major Changes**:
+
+1. **Cumulative Historical Data** (Backend):
+   - `get_critical_events_by_speed()` now aggregates ALL sessions (removed `session_id` parameter)
+   - Cumulative CRITICAL/WARNING counts provide complete problem picture
+   - Commit: `08353ce`
+
+2. **Intelligent "Fixed" Detection** (Backend):
+   - Speed considered fixed if last tested session has ≥3 Δt events AND <20% CRITICAL rate
+   - Fixed speeds excluded from recommendations (problem resolved)
+   - Enables iterative workflow: adjust CV → retest → recommendation auto-disappears
+   - Commit: `08353ce`
+
+3. **Fixed ±1 CV Adjustment** (Backend - CRITICAL FIX):
+   - **Bug**: Cumulative scaling caused massive adjustments (CV86 80→48 = -32!)
+   - **User Insight**: "CV misconfiguration error is CONSTANT regardless of CRITICAL count"
+   - **Fix**: Changed from `(critical_count // 5) * 2` to fixed `adjustment_magnitude = 1`
+   - **Reasoning**: More CRITICALs = more confirmation, NOT bigger CV error
+   - **Result**: Conservative iterative approach (adjust -1, retest, repeat)
+   - Commits: `9729422`, `fc7b313`
+
+4. **Non-Validated Session Display** (Frontend):
+   - Show UI even when session not validated (was blocking entire UI)
+   - Added amber badge "WAITING FOR FIRST ΔT" when session exists but no events yet
+   - Backend returns latest session regardless of validation state
+   - Commits: `6b8116a`, `7b89eab`
+
+5. **Summary Cards Redesign** (Frontend):
+   - **Removed**: "Problematic Speeds" card (redundant with Recommendations)
+   - **Added**: "Fixed Speeds" card (positive feedback, green theme)
+   - **Result**: Card 2 = actionable (what to do), Card 3 = success feedback (what you fixed)
+   - Commit: `7e3f6a0`
+
+6. **Step Prominence** (Frontend):
+   - "Step 20 (CV86)" format with Step in white font-semibold
+   - CV index secondary in gray parentheses
+   - Horizontal layout preserved (user preference)
+   - Commits: `880ab5a`, `0dd9b98`
+
+7. **Auto-Select Consist** (Frontend - Multiple Iterations):
+   - **Goal**: Avoid extra click when opening Speed Tuning tab
+   - **Challenge**: Race conditions + wrong data source (cumulativeData has ALL history)
+   - **Final Solution**: Use ONLY `reportsData.sessions[0].consists` (last validated session)
+   - **Result**: Auto-selects whichever consist(s) ran most recently
+   - Commits: `3602259`, `37a8966`, `77c5822` (debug), `0190c1a` (fix), `5118e21` (cleanup)
+
+**Key User Insights Captured**:
+- "se adjust continua a sommarsi solo su un CV, resta problema smoothing" → Phase 2 requirement documented
+- "io manualmente vado sempre di + o - 2 al massimo" → informed ±1 conservative approach
+- "la visualizzazione tutta orizzontale di prima mi piaceva!" → UI preference preserved
+
+**Testing Results**:
+- ✅ Cumulative recommendations aggregate historical data correctly
+- ✅ Fixed detection works (speed 70% cleared after good session)
+- ✅ Non-validated sessions show UI with amber badge
+- ✅ Auto-select picks correct consist from last session
+- ✅ ±1 adjustment prevents massive CV changes
+
+**Documentation Updated**:
+- `docs/SPEED_TABLE_VIEWER.md` - Added "🆕 2025-01-17 Updates" section
+- Workflow example showing 3-session iterative testing
+- Phase 2 smoothing requirement documented
+
+**Commits**: 14 total (`08353ce` → `5118e21`)
+
+**Files Modified**:
+- `backend/services/analytics_db.py` - Cumulative queries + fixed detection
+- `backend/services/speed_table_helpers.py` - Fixed ±1 adjustment
+- `backend/routers/speed_table.py` - Latest session (any state)
+- `web/src/components/charts/SpeedTableViewer.jsx` - UI improvements
+- `web/src/components/AnalyticsPanel.jsx` - Auto-select consist logic
+- `docs/SPEED_TABLE_VIEWER.md` - Feature documentation
+- `CLAUDE.md` - This changelog entry
+
+**Versioning Decision**: Tagged as **v0.9.0** (not v1.4)
+- Current: Feature-complete Phase 1 (Speed Table Viewer read-only)
+- Future v1.0.0: Phase 2 Auto CV Adjust with smoothing (automation completa)
+- Reasoning: 0.x = "stable but evolving", 1.0 = production-ready auto-tuning
+
+---
+
 ### 2025-01-16 - 📊 **SPEED TABLE VIEWER: Phase 1 Complete** (Read-Only CV Analysis)
 
 **Status**: ✅ **PRODUCTION READY** - Visual JMRI-style speed table with CV recommendations
