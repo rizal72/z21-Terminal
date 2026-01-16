@@ -151,6 +151,10 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   // Auto-select consist when entering Speed Tuning tab (after reportsData loaded)
   useEffect(() => {
     if (viewMode === 'speed-tuning' && consistFilter === 'all' && reportsData) {
+      console.log('[AUTO-SELECT] Starting auto-select logic');
+      console.log('[AUTO-SELECT] reportsData:', reportsData);
+      console.log('[AUTO-SELECT] cumulativeData:', cumulativeData);
+
       // Strategy: Find which consist(s) were active in the most recent session
       // 1. Try current session delta_t events (if session is running/validated)
       // 2. Fallback: use last validated session from reports data
@@ -159,18 +163,24 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
       // Check current session events
       if (cumulativeData?.delta_t_events && cumulativeData.delta_t_events.length > 0) {
+        console.log('[AUTO-SELECT] Found current session events:', cumulativeData.delta_t_events.length);
         cumulativeData.delta_t_events.forEach(event => {
           consistsWithEvents.add(event.consist_id);
         });
+        console.log('[AUTO-SELECT] Consists from current session:', Array.from(consistsWithEvents));
       }
 
       // Fallback: if current session empty, check last validated session from reports
       if (consistsWithEvents.size === 0 && reportsData?.sessions && reportsData.sessions.length > 0) {
+        console.log('[AUTO-SELECT] Current session empty, checking last validated session');
         const lastSession = reportsData.sessions[0]; // Most recent session
+        console.log('[AUTO-SELECT] Last session:', lastSession);
         if (lastSession.consists) {
+          console.log('[AUTO-SELECT] Last session consists:', lastSession.consists);
           Object.keys(lastSession.consists).forEach(cid => {
             consistsWithEvents.add(parseInt(cid, 10));
           });
+          console.log('[AUTO-SELECT] Consists from last session:', Array.from(consistsWithEvents));
         }
       }
 
@@ -179,8 +189,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       // - If both have events → select C10 (first numeric)
       // - If none have events → leave 'all' (will show message)
       const consistIds = Array.from(consistsWithEvents).sort((a, b) => a - b);
+      console.log('[AUTO-SELECT] Final consist IDs (sorted):', consistIds);
       if (consistIds.length > 0) {
+        console.log('[AUTO-SELECT] Selecting consist:', consistIds[0]);
         setConsistFilter(consistIds[0]); // First consist (C10 if both, or the only one)
+      } else {
+        console.log('[AUTO-SELECT] No consists found, leaving filter as "all"');
       }
     }
   }, [viewMode, reportsData, cumulativeData]);
