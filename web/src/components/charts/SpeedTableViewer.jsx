@@ -292,6 +292,12 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     setTimeout(() => exportToCSV(), 500); // Small delay to show write result first
   };
 
+  // Check if any CVs were modified (manual edit or applied recommendations)
+  const hasModifications = data && Object.keys(cvValuesFloat).some(cvIndex => {
+    const cvIndexInt = parseInt(cvIndex);
+    return cvValuesFloat[cvIndexInt] !== data.cv_values[cvIndexInt];
+  });
+
   // Loading state
   if (loading) {
     return (
@@ -506,8 +512,9 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
         <div className="flex items-center gap-2">
           <button
             onClick={applyAndWrite}
-            disabled={writing}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-semibold"
+            disabled={!hasModifications || writing}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-semibold"
+            title={!hasModifications ? "No modifications to write" : "Write all CVs to decoder and export CSV"}
           >
             {writing ? (
               <>
