@@ -731,45 +731,6 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ## 📋 TODO / Future Enhancements
 
-### Header UI Consistency (2025-01-14)
-
-**Task**: Uniformare i 3 bottoni sinistra allo stile di Analytics (icona + label)
-
-**SINISTRA - ACTIONS (da aggiornare):**
-```
-[🔄] → [🔄 Reload]     + tooltip: "Reload roster from JMRI XML files"
-[➕] → [➕ Add]         + tooltip: "Add controller panel"
-[⚙️] → [⚙️ Consists]   + tooltip: "Manage consists"
-[📊 Analytics]         (unchanged)
-```
-
-**DESTRA - STATES + BADGES (unchanged):**
-```
-[🧪 Test] [🛑 STOP] [⚡ON] [📶WS] [🔌Z21]
-```
-
-**DECISIONE COLORI (da valutare):**
-
-**Opzione A**: Analytics → grigio/bianco (uniformare tutto)
-- Tutti e 4 i bottoni identici (grigio/bianco, hover ambra)
-- Coerenza visiva totale
-
-**Opzione B**: 3 bottoni → colori personalizzati (differenziare)
-- Analytics resta blu (già OK)
-- Reload: ? colore da decidere
-- Add: ? colore da decidere
-- Consists: ? colore da decidere
-- Differenziazione visiva per tipo azione
-
-**Layout finale:**
-```
-[Logo] [🔄 Reload] [➕ Add] [⚙️ Consists] [📊 Analytics] ............ [🧪 Test] [🛑 STOP] [⚡ON] [📶WS] [🔌Z21]
-        └──────────────── ACTIONS ────────────┘                       └────── UNCHANGED ─────┘
-```
-
-**Files**: `web/src/App.jsx`
-
-
-**Note**: Per dettagli completi implementation Analytics (2025-01-13/14), vedi `docs/CHANGELOG_ARCHIVE.md`
+**Note**: Nessun TODO attivo. Vedi sezioni precedenti per roadmap features (Speed Table Phase 2, YOLO expansion, etc.)
 
 ---
