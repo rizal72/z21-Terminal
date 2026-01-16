@@ -667,370 +667,67 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ## Changelog
 
-**Note**: Per changelog storico (2025-12-16 → 2025-01-15), vedi `docs/CHANGELOG_ARCHIVE.md`
+**Note**: Per changelog storico (2025-12-16 → 2025-01-16), vedi `docs/CHANGELOG_ARCHIVE.md`
 
 ---
 
-### 2026-01-15 - 🎉 **SPEED TABLE AUTO-TUNING: Phase 1 MVP COMPLETATA**
+### 2025-01-16 - 📊 **SPEED TABLE VIEWER: Phase 1 Complete** (Read-Only CV Analysis)
 
-**Status**: ✅ **PHASE 1 COMPLETE** - Speed correlation analytics live in production
+**Status**: ✅ **PRODUCTION READY** - Visual JMRI-style speed table with CV recommendations
 
-**Implementation Summary**:
-- **Time**: ~3 hours (stima: 8-12h) - ottimizzato grazie a modular architecture
-- **Commits**: 5 commits (ba8d9e4 → f8669c7)
-- **Deploy**: PC Windows production via `z21-deploy-dev`
-- **Testing**: ✅ Live con dati reali (C10: 52 eventi, C11: 300 eventi a speed 70)
+**Feature**: 28-bar visualization of CV67-94 with automatic CV adjustment recommendations based on real-time consist performance data.
 
-**Backend** (3 files modified):
-- ✅ `ws_control.py`: Speed event logging in `handle_set_speed()` (logga solo se speed cambia)
-- ✅ `analytics_db.py`: `get_speed_correlation()` con "Next N Events" strategy (default N=10)
-- ✅ `routers/analytics.py`: Endpoint `/api/analytics/speed-correlation?consist_id=X`
+**Implementation**:
+- **Time**: ~8 hours (complete feature + critical bug fixes)
+- **Commits**: 14 commits (`078b215` → `1d1d752`)
+- **Documentation**: `docs/SPEED_TABLE_VIEWER.md` (complete technical spec)
 
-**Frontend** (4 files: 3 modified, 1 new):
-- ✅ `analyticsConstants.js`: `SPEED_STATUS_COLORS` (no hardcoded thresholds!)
-- ✅ `analyticsHelpers.js`: 3 helper functions (reference lines, bucket color, recommendations)
-- ✅ `SpeedCorrelationChart.jsx`: NEW scatter chart component con error bars + reference lines
-- ✅ `AnalyticsPanel.jsx`: 4th tab "Speed Tuning" integrato (187 lines added)
+**Backend** (3 files: 2 new, 1 modified):
+- ✅ `routers/speed_table.py` - API endpoint `/api/speed-table/{consist_id}`
+- ✅ `services/speed_table_helpers.py` - CV calculation logic (reuses existing Locomotive class)
+- ✅ `services/analytics_db.py` - Query CRITICAL events + mean Δt per speed
+
+**Frontend** (1 new component):
+- ✅ `SpeedTableViewer.jsx` - 28 vertical bars + recommendations table + CSV export
 
 **Features Implemented**:
-- ✅ Speed vs Δt scatter chart con error bars (std dev)
-- ✅ Dynamic reference lines da config thresholds (SYNCED/WARNING/ACTION)
-- ✅ Color-coded points by dominant status (green/amber/red)
-- ✅ Summary cards (speed changes, samples, buckets)
-- ✅ CV tuning recommendations (text only - Phase 1, manual JMRI adjustment)
-- ✅ Consist filter enforcement (must select C10 or C11, not "All")
-- ✅ Auto-reload on consist filter change
+- ✅ 28 vertical bars displaying current CV values from JMRI roster XML
+- ✅ Color-coded highlighting (gray/amber/red) based on CRITICAL event counts
+- ✅ Speed percentage labels (10%, 20%, ..., 100%) aligned to JMRI steps
+- ✅ CV adjustment recommendations with direction based on mean Δt sign
+- ✅ CSV export for manual JMRI DecoderPro import
+- ✅ Real-time session tracking (session ID displayed in Current view + Reports tab)
+- ✅ Running session highlighted in Reports list (green border + "RUNNING" badge)
 
-**Database Migrations** (2 scripts, one-time execution):
-1. **Migration 1** (`migrate_add_speed.py`): Aggiunto `speed: 70` a 352 eventi delta_t storici
-   - Backup: `analytics.db.backup_20260115_151846.backup`
-2. **Migration 2** (`add_historical_speed_events.py`): Creati 2 eventi `speed_setting` (0→70)
-   - C10: 52 eventi delta_t utilizzabili
-   - C11: 300 eventi delta_t utilizzabili
-   - Backup: `analytics.db.backup_20260115_163137.backup`
+**Critical Bugs Fixed**:
+1. **Emoji in backend logs** → ASCII-only `[ERROR]` prefix (commit `5d64b74`)
+2. **macOS metadata files** → Skip `._*.xml` files (commit `5d64b74`)
+3. **CV recommendation direction** → Use mean Δt sign (negative → decrease CV, positive → increase CV) - CRITICAL fix (commit `91f7ce6`)
+4. **Step percentage alignment** → Use `Math.floor()` instead of `Math.round()` (commit `eb7c844`)
 
-**Production Results** (2026-01-15 16:30):
-- **Consist 10**: Speed 70 → Mean Δt +1.07s (±0.60s) - 50% SYNCED, 30% CRITICAL
-- **Consist 11**: Speed 70 → Mean Δt -0.80s (±1.15s) - 60% SYNCED, 30% CRITICAL
-- **Status**: Entrambi sotto soglia action (1.5s) → "All speeds well synchronized!" ✅
+**Algorithm Highlights**:
+- **Speed to JMRI step**: `step = floor(dcc_speed / 4.5) + 1` (28 steps, 0-126 DCC speeds)
+- **CV adjustment magnitude**: `(critical_count // 5) * 2` (conservative, user-validated)
+- **Direction logic**: `delta_t < 0` → adjust faster → decrease CV | `delta_t > 0` → adjust slower → increase CV
 
-**Critical Fixes Applied**:
-- ✅ Exclude speed-tuning from Current/Overview charts rendering (efa54ba)
-- ✅ Correct terminology: "Reference/Adjust loco" instead of "Lead/Rear" (f8669c7)
-- ✅ Fix recommendation logic: Δt > 0 = adjust slower (not faster)
+**Session Tracking Integration**:
+- Session ID visible in Current view (inside duration card)
+- Running sessions highlighted in Reports tab (before end_time)
+- Speed Table uses current/last validated session for recommendations
 
-**Architecture Notes**:
-- **No hardcoded thresholds**: Tutti i threshold da `config.json` (dynamic)
-- **Modular design**: Chart component riutilizzabile, helpers DRY
-- **"Next N Events" strategy**: Adattivo a track length (C10: 55s vs C11: 15s lap)
-- **Phase 1 scope**: TEXT recommendations only (manual CV adjustment via JMRI)
+**User Feedback**: "Stuoendo, un lavoro fantastico" 🎯
 
-**Next: Phase 2 Enhancement** (discussed, not implemented):
-- Read CV speed table values from JMRI roster (CV67-94)
-- JMRI-style step numbering (1-28 instead of CV67-94)
-- Specific recommendations: "Step 16 (CV82): 128 → 135 (+7)" instead of generic text
-- Before/after preview with exact CV values
+**Phase 2 Roadmap** (not implemented):
+- Interactive CV editing (keyboard arrows, drag-to-adjust)
+- CV smoothing (±3 adjacent steps interpolation)
+- Auto-apply to decoder (direct POM writes)
+- Speed table validation (monotonicity checks)
 
 **References**:
-- Design: `docs/SPEED_TABLE_TUNING.md`
-- Plan: `~/.claude/plans/glimmering-sleeping-starfish.md`
+- Full documentation: `docs/SPEED_TABLE_VIEWER.md`
+- API spec, algorithms, testing notes, known limitations
 
 ---
-
-### 2026-01-15 - 🐛 **SPEED TUNING: 8 Critical Bugs Fixed After Phase 1 Deployment**
-
-**Status**: ✅ **ALL BUGS FIXED** - Speed Tuning fully functional, v1.4 tag created
-
-**Context**: After Phase 1 MVP deployment, extensive testing revealed 8 critical bugs preventing Speed Tuning from working correctly. This debugging session (~6 hours) identified and fixed all issues.
-
-**Critical Bugs Discovered and Fixed**:
-
-1. **🔴 WebSocket Crash - Missing `await` Keyword** (MOST CRITICAL)
-   - **Error**: speed_setting events logged to console but NEVER reached database (0 events in DB)
-   - **Cause**: `analytics_logger.log_event()` is async but called without `await` in `ws_control.py:184`
-   - **Evidence**: 17 delta_t events at speed 126 existed (daemon logging worked), but 0 speed_setting events
-   - **Fix**: Added `await` before `analytics_logger.log_event()` call
-   - **File**: `backend/websocket_handlers/ws_control.py:184`
-   - **Commit**: `9f50436`
-
-2. **🔴 analytics_logger Not Accessible from ws_control.py**
-   - **Error**: `AttributeError: 'TrackingManager' object has no attribute 'analytics_logger'`
-   - **Cause**: analytics_logger lives in tracking_daemon, not tracking_manager
-   - **User symptom**: "le loco partono solo la prima volta e poi non è più possibile fermarle"
-   - **Fix**: Added analytics_logger to dependencies.py global state pattern
-     - tracking_daemon sets it on startup via `dependencies.set_analytics_logger()`
-     - ws_control.py gets it via `dependencies.get_analytics_logger()`
-   - **Files**: `backend/dependencies.py`, `backend/tracking_daemon.py`, `backend/websocket_handlers/ws_control.py`
-   - **Commits**: `cdf5f9c`, `d4c8c60`
-
-3. **🟡 Circular Import - dependencies.py**
-   - **Error**: `ImportError: cannot import name 'TrackingManager' from partially initialized module`
-   - **Cause**: Import chain: main.py → tracking_manager → tracking_daemon → dependencies → tracking_manager
-   - **Fix**: Used `TYPE_CHECKING` pattern in dependencies.py to avoid runtime circular import
-     ```python
-     from typing import TYPE_CHECKING
-     if TYPE_CHECKING:
-         from z21_manager import Z21Manager
-         from tracking_manager import TrackingManager
-     ```
-   - **File**: `backend/dependencies.py`
-   - **Commit**: `d4c8c60`
-
-4. **🟡 Speed Field Missing in delta_t Events**
-   - **Error**: delta_t events had no speed field → correlation algorithm couldn't work
-   - **Evidence**: Recent events showed `speed: None` or missing speed field
-   - **Fix**: Added `'speed': self.consist_speeds.get(consist_id, 0)` to delta_t event data
-   - **File**: `backend/tracking_daemon.py:204`
-   - **Commit**: `8d97f24`
-
-5. **🟡 Gate Editor Path Wrong**
-   - **Error**: `[Errno 2] No such file or directory: 'C:\\z21-Terminal\\backend\\config.json'`
-   - **Cause**: Gate editor tried to save to backend/config.json instead of root
-   - **Fix**: Changed to use `get_config_path()` instead of hardcoded path calculation
-   - **File**: `backend/routers/config.py:347`
-   - **Commit**: `5e04b62`
-
-6. **🟡 Config Paths Not Centralized**
-   - **User feedback**: "ci sono altri mille posti in cui qualcosa salva il config, ti prego di controllare tutti"
-   - **Fix**: Systematic search and replace all config.json access with `get_config_path()`
-   - **Files**: `backend/routers/config.py`, `backend/z21_manager.py`, `backend/video_feed.py`
-   - **Commits**: `5e04b62`, `aaa8db5`
-
-7. **🟡 Error Messages Not Visible in Logs**
-   - **User feedback**: "ma perchè non ho visto l'errore nel log, perchè non era rosso?"
-   - **Cause**: FastAPI/Starlette WebSocket handler uses print() instead of log()
-   - **Fix**: Created `ColoredOutput` wrapper class to intercept sys.stdout.write() and add colored [ERROR]/[WARN] prefix
-   - **File**: `backend/log_colors.py:69-112`
-   - **Commit**: `0502e73`
-
-8. **🟢 Orange Color for [SPEED] Log Prefix**
-   - **User request**: "possiamo dare un colore anche agli eventi speed? Orange"
-   - **Fix**: Added `'\033[38;5;208m'` (orange) to [SPEED] prefix in log_colors.py
-   - **File**: `backend/log_colors.py:26`
-   - **Commit**: `0a4e3cd`
-
-**Database Migrations** (Historical Data Correction):
-
-1. **Speed 70 → 88 Correction** (`fix_speed_70_to_88.py`):
-   - **Context**: User meant 70% of 126 = 88 DCC speed, not literal 70
-   - **User feedback**: "quando ti ho detto che i 333 eventi erano a speed 70, volevo dire 70% non 70, quindi speed 88!!!!!"
-   - **Results**:
-     - 352 delta_t events updated: speed 70 → 88
-     - 2 speed_setting events updated: speed_new 70 → 88
-   - **Backup**: `analytics.db.backup_20260115_181523.backup`
-
-**Architecture Improvements**:
-- ✅ **Global state pattern** in dependencies.py for analytics_logger access
-- ✅ **TYPE_CHECKING guard** prevents circular imports
-- ✅ **Centralized config path** via get_config_path() across all files
-- ✅ **Auto-prefix error wrapper** for better log visibility
-
-**Production Deployment**:
-- ✅ All fixes deployed to PC Windows via `z21-deploy-dev`
-- ✅ Speed Tuning chart now shows data correctly
-- ✅ Speed_setting events logging to database (verified with test session)
-- ✅ Orange [SPEED] log prefix visible in console
-- ✅ Config.json synced from Mac to PC (gate modifications preserved)
-
-**Final Status**:
-- **Tag**: `v1.4` (moved from initial Phase 1 commit)
-- **Commits**: `cdf5f9c` → `9f50436` (8 commits)
-- **Testing**: ✅ Full verification on PC Windows production
-- **User confirmation**: All features working correctly
-
-**Time Investment**: ~6 hours debugging + testing
-**Key Insight**: async/await bugs are silent killers - function appears to work (logs print) but never executes (no DB writes)
-
----
-
-### 2025-01-15 - 🎨 **FRONTEND REFACTORING COMPLETATO** (Analytics Dashboard)
-
-**Status**: ✅ **MILESTONE ACHIEVED** - Modular chart components, merged to develop
-
-**Objective**: Reduce AnalyticsPanel.jsx from 1684 lines (monolithic) to modular architecture with extracted chart components + helpers + constants
-
-**Final Results**:
-- **AnalyticsPanel.jsx**: 1684 → 1151 lines (-31.6% reduction, -533 lines)
-- **Total modular code**: 909 lines across 8 new files
-- **Architecture**: 5 Chart Components + 1 Helpers Module + 1 Constants Module + 1 Plan Document
-- **Chart compatibility**: 100% - all Current/Overview/Reports view differences preserved
-- **Testing**: All features verified on PC Windows production (all charts, session filtering, consist filtering, click interactions)
-
-**Files Created** (8 total):
-1. `web/src/components/charts/DeltaTChart.jsx` (282 lines) - Δt Trends with session breaks + box-select zoom
-2. `web/src/components/charts/FPSChart.jsx` (162 lines) - Inference FPS with average badge
-3. `web/src/components/charts/ConfidenceChart.jsx` (138 lines) - Detection confidence per locomotive
-4. `web/src/components/charts/OperatingTimeChart.jsx` (94 lines) - Total operating time (Overview only)
-5. `web/src/components/charts/HistoricalTrendChart.jsx` (178 lines) - Session-by-session trend (Reports tab)
-6. `web/src/utils/analyticsHelpers.js` (86 lines) - 7 pure utility functions
-7. `web/src/constants/analyticsConstants.js` (31 lines) - Shared constants + styles
-8. `docs/FRONTEND_REFACTOR_PLAN.md` (1535 lines) - Complete refactoring documentation
-
-**Critical Features Preserved**:
-- **DeltaTChart**: 8 Current/Overview differences (XAxis dataKey, scroll, width, dots, stroke, zoom, duplicate Y-axis, auto-scroll)
-- **FPSChart**: 5 Current/Overview differences + FPS avg badge (idle filtering)
-- **ConfidenceChart**: Snapshot (Current) vs Aggregated (Overview) logic
-- **HistoricalTrendChart**: Custom tooltip showing ALL consists + clickable points for Session Detail Modal
-
-**Bugs Fixed During Refactoring**:
-1. **ConfidenceChart Overview mode**: Now aggregates all historical events (loco 5 missing fix)
-2. **FPSChart dots alignment**: Dots only in Current mode (aligned with DeltaTChart behavior)
-3. **DRY improvements**: Eliminated duplicate data prep logic in ConfidenceChart
-
-**Time Investment**: ~6-8 hours across 4 phases
-**Commits**: 17 commits (Phase 0 → Phase 4)
-**Branch**: `refactor-frontend` → merged to `develop`
-
-**Benefits**:
-- ✅ Single Responsibility: Each chart component ~90-280 lines (manageable)
-- ✅ Reusability: Charts can be used independently
-- ✅ Testability: Isolated components easier to test
-- ✅ Maintainability: Future chart additions follow established pattern
-- ✅ DRY: Shared constants/helpers eliminate duplication
-- ✅ Scalability: Adding SpeedCorrelationChart (v1.4) now straightforward
-
-**Deployment**: Tested on PC Windows production after each phase (same workflow as backend refactoring)
-
-**Git Workflow**:
-- Merged: `refactor-frontend` → `develop` (--no-ff, preserve history)
-- Tagged: `frontend-refactor-complete`
-- Branch deleted: Local and remote cleaned up
-
-**Production Deployment**: ✅ **VERIFIED** (2025-01-15)
-- Deployed via `z21-deploy-dev` on PC Windows
-- All 5 chart components working perfectly
-- No regressions, all features functional
-- User confirmed: "la perfezione!" 🎯
-
----
-
-### 2025-01-15 - 🎉 **BACKEND REFACTORING COMPLETATO** (Phase 4)
-
-**Status**: ✅ **MILESTONE ACHIEVED** - Modular architecture complete, merged to develop
-
-**Objective**: Reduce main.py from 2340 lines (monolithic) to modular architecture with routers + services + WebSocket handlers
-
-**Final Results**:
-- **main.py**: 2340 → 742 lines (-68.3% reduction, -1598 lines)
-- **Total modular code**: 3162 lines across 11 new files
-- **Architecture**: Routers (4) + Services (4) + WebSocket Handlers (2) + Dependencies system
-- **Endpoint compatibility**: 100% - all 27 endpoints functional, zero breaking changes
-- **Testing**: All features verified on PC Windows production (locomotive control, tracking, YOLO, analytics, gate editor)
-
-**Files Created** (11 total):
-1. `backend/dependencies.py` (230 lines) - Global state dependency injection
-2. `backend/routers/analytics.py` (226 lines) - 6 analytics endpoints
-3. `backend/routers/config.py` (378 lines) - 7 config/consist/gate endpoints
-4. `backend/routers/roster.py` (110 lines) - 3 roster endpoints
-5. `backend/routers/status.py` (125 lines) - 2 status/telemetry endpoints
-6. `backend/services/analytics_db.py` (435 lines) - SQLite analytics queries
-7. `backend/services/broadcast.py` (237 lines) - WebSocket broadcast utilities
-8. `backend/services/config_manager.py` (172 lines) - Configuration access helpers
-9. `backend/services/downsampling.py` (149 lines) - LTTB + smart Δt downsampling
-10. `backend/websocket_handlers/ws_control.py` (394 lines) - Real-time locomotive control (10 message types)
-11. `backend/websocket_handlers/ws_tracking.py` (192 lines) - YOLO tracking daemon handler (3 message types)
-
-**Critical Bugs Fixed During Refactoring**:
-1. **Namespace Collision**: Renamed `websockets/` → `websocket_handlers/` (uvicorn conflict)
-2. **WebSocket Crash**: Fixed `get_full_roster()` import from `routers.roster`
-3. **Tracking Broken**: Synced `tracking_daemon_ws` with `dependencies.set_tracking_daemon_ws()`
-4. **Video Panels Missing**: Updated `get_tracked_consist_ids()` to use `gate_ids` field (config schema change)
-5. **YOLO Bbox Gone**: Changed video feed callback to use `dependencies.get_yolo_detections()`
-6. **Dead Code**: Removed unused globals `tracking_daemon_ws` and `yolo_detections` (final cleanup)
-
-**Architecture Achieved**:
-```
-backend/
-├── main.py (742 lines - minimal delegation, FastAPI app)
-├── dependencies.py (global state injection)
-├── routers/
-│   ├── analytics.py (6 endpoints)
-│   ├── config.py (7 endpoints)
-│   ├── roster.py (3 endpoints)
-│   └── status.py (2 endpoints)
-├── services/
-│   ├── analytics_db.py (SQLite queries)
-│   ├── broadcast.py (WebSocket utilities)
-│   ├── config_manager.py (config helpers)
-│   └── downsampling.py (LTTB + smart sampling)
-└── websocket_handlers/
-    ├── ws_control.py (10 control messages)
-    └── ws_tracking.py (3 tracking messages)
-```
-
-**Benefits for Future Development**:
-- ✅ **Maintainability**: Single responsibility per file (~150-400 lines each)
-- ✅ **Testability**: Each router/service can be tested independently
-- ✅ **Scalability**: New features (Speed Table Auto-Tuning v1.3) require zero main.py changes
-- ✅ **Collaboration**: Multiple developers can work on different routers without conflicts
-- ✅ **Debugging**: Clear separation of concerns, easier to locate bugs
-
-**Time Investment**: ~10-12 hours total (4 phases, incremental testing after each)
-**Rollback Safety**: Git tag created after each phase (rollback ready if needed)
-
-**Commits**: `10d0bfd` → `0502e73` (14 commits across 4 phases)
-
-**Documentation Updated**:
-- `backend/README.md` - Project structure section
-- `docs/REFACTOR_PLAN.md` - Complete implementation guide
-- `CLAUDE.md` - This changelog entry
-
-**Next Steps** (v1.3 Speed Table Auto-Tuning):
-- Add `routers/speed_tuning.py` (clean separation)
-- Extend `AnalyticsDB` with speed correlation queries
-- Add CV write operations in `services/cv_manager.py`
-
----
-
-### 2025-01-15 - ♻️ **BACKEND REFACTORING: Phase 2.2 Completato + Venv Documentation**
-
-**Status**: ✅ **Config Router Extracted** - 7 endpoints migrated to `backend/routers/config.py`
-
-**Phase 2.2 Implementation**:
-
-1. **Config Router Created** (`backend/routers/config.py`, 378 lines):
-   - GET `/api/consists` - List all consists with state and gates
-   - POST `/api/consists` - Create new consist with CV19 write (Virtual/DCC mode)
-   - PUT `/api/consists/{address}` - Update consist (mode switching, gate assignments)
-   - DELETE `/api/consists/{address}` - Delete consist (writes CV19=0 if DCC mode)
-   - GET `/api/config/tracking` - Get tracking configuration (idle_timeout, thresholds, consists)
-   - GET `/api/gates` - Get current gate configuration
-   - POST `/api/save-gates` - Save gate configuration from web editor
-
-2. **Key Features**:
-   - **CV19 Operations**: Automatic CV write for Virtual Mode (CV19=0) vs DCC Mode (CV19=consist_address)
-   - **Global State Management**: Uses dependency injection via `dependencies.get_consist_data()`, `dependencies.get_z21_manager()`
-   - **Broadcast Integration**: Updates global state and broadcasts to all connected clients after CRUD operations
-   - **Backup Creation**: Gate editor creates `config.json.backup` before saving
-
-3. **Testing Results** (PC Windows production):
-   - ✅ GET `/api/consists` → 2 consists, 4 gates
-   - ✅ GET `/api/gates` → 4 gates
-   - ✅ GET `/api/config/tracking` → idle_timeout 10s, 2 consists
-
-**Refactoring Progress**:
-- **main.py**: 2340 → 1227 lines (-1113 lines, **-47.5%** reduction)
-- **Routers extracted**: analytics.py (228 lines), config.py (378 lines)
-- **Total endpoints migrated**: 13/27 (48%)
-
-**Critical Documentation Added**:
-- **Plan file updated** with **"⚠️ CRITICAL: Development Environment Requirements"** section
-- **Emphasizes**: ALWAYS use venv on both Mac AND PC, every time calling python3
-- **Includes**: Practical examples for Mac (`source venv/bin/activate`) and PC (`.\venv\Scripts\Activate.ps1`)
-- **Explains**: Why it matters (dependency isolation, version control, reproducibility)
-- **Warns**: What happens if forgotten (ModuleNotFoundError, wrong Python version, conflicts)
-
-**Files Modified**:
-- `backend/routers/config.py` (NEW - 378 lines)
-- `backend/main.py` (removed 7 config endpoints, -334 lines)
-- `~/.claude/plans/glimmering-sleeping-starfish.md` (venv requirements section added)
-
-**Next Steps**: Phase 2.3 - Extract locomotives router (8 endpoints)
-
-**Commits**: `cbd1e60` - Phase 2.2: Extract config router + Plan file venv documentation
-
----
-
 
 ## 📋 TODO / Future Enhancements
 
