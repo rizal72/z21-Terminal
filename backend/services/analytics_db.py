@@ -25,6 +25,40 @@ class AnalyticsDB:
         return sqlite3.connect(str(DB_PATH))
 
     @staticmethod
+    def get_latest_session() -> Optional[Dict]:
+        """
+        Get most recent session from database (validated or not).
+
+        Returns:
+            Session dict with id, start_time, end_time, validated, event_count
+            or None if no sessions exist
+        """
+        conn = AnalyticsDB.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT id, start_time, end_time, validated, event_count
+            FROM sessions
+            ORDER BY start_time DESC
+            LIMIT 1
+        """)
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return None
+
+        return {
+            'id': row[0],
+            'start_time': row[1],
+            'end_time': row[2],
+            'validated': bool(row[3]),
+            'event_count': row[4],
+            'duration': row[2] - row[1] if row[2] else None
+        }
+
+    @staticmethod
     def get_validated_sessions(limit: Optional[int] = None, exclude_running: bool = False) -> List[Dict]:
         """
         Get validated sessions from database.

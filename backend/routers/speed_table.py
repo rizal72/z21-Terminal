@@ -80,37 +80,22 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
     loco = locos.get(str(adjust_loco_address))
     adjust_loco_name = loco.name if loco else f"Loco {adjust_loco_address}"
 
-    # Get current session (if any)
-    # Find most recent validated session (or running session)
-    sessions = AnalyticsDB.get_validated_sessions(limit=1, exclude_running=False)
+    # Get latest session (validated or not)
+    current_session = AnalyticsDB.get_latest_session()
 
-    if not sessions:
-        # No sessions yet - return empty data
-        return {
-            'consist_id': consist_id,
-            'adjust_loco_address': adjust_loco_address,
-            'adjust_loco_name': adjust_loco_name,
-            'session_id': None,
-            'session_validated': False,
-            'cv_values': cv_values,
-            'critical_events': {},
-            'warning_events': {},
-            'recommendations': [],
-            'message': 'No active session - waiting for locomotive movement'
-        }
+    # Extract session info (or None if no sessions exist)
+    session_id = current_session['id'] if current_session else None
+    session_validated = current_session['validated'] if current_session else False
 
-    current_session = sessions[0]
-    session_id = current_session['id']
-    session_validated = True  # get_validated_sessions only returns validated=1
-
-    # Get CRITICAL/WARNING events (historical cumulative with "fixed" detection)
+    # ALWAYS get CRITICAL/WARNING events (historical cumulative with "fixed" detection)
+    # This is independent from current session state
     events_by_status = AnalyticsDB.get_critical_events_by_speed(consist_id)
     critical_events = events_by_status.get('critical', {})
     warning_events = events_by_status.get('warning', {})
     mean_delta_t_by_speed = events_by_status.get('mean_delta_t', {})
     fixed_speeds = events_by_status.get('fixed_speeds', set())
 
-    # Calculate CV recommendations (excludes fixed speeds, uses mean delta_t sign for direction)
+    # ALWAYS calculate CV recommendations (cumulative historical data)
     recommendations = calculate_cv_recommendations(
         cv_values=cv_values,
         critical_events=critical_events,

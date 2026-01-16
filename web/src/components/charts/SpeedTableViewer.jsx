@@ -217,9 +217,19 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
 
       {/* Header: Loco info + Export button */}
       <div className="flex items-center justify-between">
-        <div className="text-sm text-slate-400">
+        <div className="text-sm text-slate-400 flex items-center gap-2">
           <span className="font-semibold">Adjust Loco:</span> {data.adjust_loco_address} |{' '}
-          <span className="font-semibold">Session:</span> {data.session_id}
+          <span className="font-semibold">Session:</span>
+          {data.session_id ? (
+            <span className="font-mono text-slate-300">{data.session_id}</span>
+          ) : (
+            <span className="text-slate-500">None</span>
+          )}
+          {data.session_id && !data.session_validated && (
+            <span className="ml-2 px-2 py-0.5 text-xs font-semibold bg-amber-600 text-white rounded">
+              WAITING FOR FIRST ΔT
+            </span>
+          )}
         </div>
         <button
           onClick={exportToCSV}
