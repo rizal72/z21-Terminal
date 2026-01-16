@@ -293,6 +293,26 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   const handleViewToggle = (newView) => {
     setViewMode(newView);
 
+    // Auto-select consist when switching to Speed Tuning tab
+    if (newView === 'speed-tuning' && consistFilter === 'all') {
+      // Find which consists have events in current session
+      const consistsWithEvents = new Set();
+      if (cumulativeData?.delta_t_events) {
+        cumulativeData.delta_t_events.forEach(event => {
+          consistsWithEvents.add(event.consist_id);
+        });
+      }
+
+      // Auto-select consist:
+      // - If only 1 consist has events → select it
+      // - If both have events → select C10 (first numeric)
+      // - If none have events → leave 'all' (will show message)
+      const consistIds = Array.from(consistsWithEvents).sort((a, b) => a - b);
+      if (consistIds.length > 0) {
+        setConsistFilter(consistIds[0]); // First consist (C10 if both, or the only one)
+      }
+    }
+
     // Auto-refresh data on view change
     if (newView === 'reports') {
       loadReportsData();
