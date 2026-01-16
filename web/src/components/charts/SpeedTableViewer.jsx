@@ -103,13 +103,12 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     );
   }
 
-  // No session state
-  if (!data || !data.session_validated) {
+  // No data state (shouldn't happen - backend always returns data)
+  if (!data) {
     return (
       <div className="h-96 flex items-center justify-center text-slate-400">
         <div className="text-center">
-          <p className="text-lg mb-2">Waiting for locomotive movement</p>
-          <p className="text-sm">Start consist {consistId} to collect speed data</p>
+          <p className="text-lg mb-2">Loading speed table data...</p>
         </div>
       </div>
     );
