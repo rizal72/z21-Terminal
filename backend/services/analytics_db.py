@@ -586,6 +586,7 @@ class AnalyticsDB:
     def get_critical_events_by_speed(consist_id: int, session_id: str) -> Dict[str, Dict[int, int]]:
         """
         Count CRITICAL/WARNING events grouped by speed for current session only.
+        Also calculates mean delta_t per speed (all events) for CV adjustment direction.
         Used by Speed Table Viewer to identify problematic speeds.
 
         Args:
@@ -595,12 +596,14 @@ class AnalyticsDB:
         Returns:
             {
                 'critical': {10: 5, 20: 3, 88: 12, ...},
-                'warning': {10: 2, 20: 1, 88: 7, ...}
+                'warning': {10: 2, 20: 1, 88: 7, ...},
+                'mean_delta_t': {10: -0.5, 20: 0.3, 88: -1.2, ...}  # Avg delta_t per speed
             }
         """
         conn = AnalyticsDB.get_connection()
         cursor = conn.cursor()
 
+        # Query 1: Count CRITICAL/WARNING events per speed
         cursor.execute('''
             SELECT
                 json_extract(data, '$.speed') as speed,
@@ -614,15 +617,34 @@ class AnalyticsDB:
             GROUP BY speed, status
         ''', (consist_id, session_id))
 
-        results = {'critical': {}, 'warning': {}}
+        results = {'critical': {}, 'warning': {}, 'mean_delta_t': {}}
         for row in cursor.fetchall():
             speed, status, count = row
-            if speed is not None:  # Skip null speeds
+            if speed is not None:
                 speed = int(speed)
                 if status == 'CRITICAL':
                     results['critical'][speed] = count
                 elif status == 'WARNING':
                     results['warning'][speed] = count
+
+        # Query 2: Calculate mean delta_t per speed (ALL events, not just CRITICAL/WARNING)
+        # This tells us if adjust loco is faster (negative) or slower (positive)
+        cursor.execute('''
+            SELECT
+                json_extract(data, '$.speed') as speed,
+                AVG(json_extract(data, '$.delta_t')) as mean_delta_t
+            FROM events
+            WHERE event_type = 'delta_t'
+              AND json_extract(data, '$.consist_id') = ?
+              AND session_id = ?
+            GROUP BY speed
+        ''', (consist_id, session_id))
+
+        for row in cursor.fetchall():
+            speed, mean_delta_t = row
+            if speed is not None and mean_delta_t is not None:
+                speed = int(speed)
+                results['mean_delta_t'][speed] = float(mean_delta_t)
 
         conn.close()
         return results

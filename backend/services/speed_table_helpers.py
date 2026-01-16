@@ -93,15 +93,17 @@ def calculate_cv_recommendations(
     cv_values: Dict[int, int],
     critical_events: Dict[int, int],
     warning_events: Dict[int, int],
+    mean_delta_t_by_speed: Dict[int, float],
     critical_threshold: int = 5
 ) -> List[Dict]:
     """
-    Calculate CV adjustment recommendations based on CRITICAL event counts.
+    Calculate CV adjustment recommendations based on CRITICAL event counts and delta_t sign.
 
     Args:
         cv_values: Current CV67-94 values (CV index -> value)
         critical_events: CRITICAL event counts per speed (speed -> count)
         warning_events: WARNING event counts per speed (speed -> count)
+        mean_delta_t_by_speed: Mean delta_t per speed (speed -> avg_delta_t)
         critical_threshold: Minimum CRITICAL count to trigger recommendation (default: 5)
 
     Returns:
@@ -112,19 +114,21 @@ def calculate_cv_recommendations(
                 'jmri_step': 20,
                 'cv_index': 86,
                 'cv_current': 128,
-                'cv_suggested': 135,
-                'cv_delta': +7,
+                'cv_suggested': 126,  # Could be lower OR higher
+                'cv_delta': -2,       # Negative = decrease, Positive = increase
                 'critical_count': 12,
-                'warning_count': 5
+                'warning_count': 5,
+                'mean_delta_t': -1.2  # Negative = adjust faster
             },
             ...
         ]
 
     Strategy:
         - For each speed with CRITICAL count >= threshold
-        - Map speed -> JMRI step -> CV index
-        - Suggest CV adjustment based on critical count severity
-        - Higher critical count = larger adjustment
+        - Use mean delta_t sign to determine adjustment direction:
+          * delta_t < 0 → adjust loco FASTER (arrives first) → DECREASE CV (slow down)
+          * delta_t > 0 → adjust loco SLOWER (arrives second) → INCREASE CV (speed up)
+        - Adjustment magnitude based on critical count severity
     """
     recommendations = []
 
@@ -140,11 +144,27 @@ def calculate_cv_recommendations(
         # Get current CV value (default 0 if not configured)
         cv_current = cv_values.get(cv_index, 0)
 
-        # Calculate suggested adjustment based on severity
-        # Conservative heuristic: +2 per 5 CRITICAL events (user validated safe increment)
-        adjustment_factor = (critical_count // 5) * 2
-        cv_suggested = min(cv_current + adjustment_factor, 255)  # Cap at 255
-        cv_delta = cv_suggested - cv_current
+        # Get mean delta_t for this speed (default 0 if no data)
+        mean_delta_t = mean_delta_t_by_speed.get(speed, 0.0)
+
+        # Calculate adjustment magnitude based on severity
+        # Conservative heuristic: 2 per 5 CRITICAL events (user validated safe increment)
+        adjustment_magnitude = (critical_count // 5) * 2
+
+        # Determine direction based on delta_t sign
+        # delta_t = arrival_adjust - arrival_reference
+        # Negative delta_t → adjust arrives first (faster) → need to DECREASE CV (slow down)
+        # Positive delta_t → adjust arrives second (slower) → need to INCREASE CV (speed up)
+        if mean_delta_t < 0:
+            # Adjust loco is FASTER → slow it down (decrease CV)
+            cv_delta = -adjustment_magnitude
+        else:
+            # Adjust loco is SLOWER → speed it up (increase CV)
+            cv_delta = adjustment_magnitude
+
+        # Calculate suggested CV (clamp between 0-255)
+        cv_suggested = max(0, min(cv_current + cv_delta, 255))
+        cv_delta = cv_suggested - cv_current  # Recalculate actual delta after clamping
 
         # Get warning count for this speed (if any)
         warning_count = warning_events.get(speed, 0)
@@ -157,7 +177,8 @@ def calculate_cv_recommendations(
             'cv_suggested': cv_suggested,
             'cv_delta': cv_delta,
             'critical_count': critical_count,
-            'warning_count': warning_count
+            'warning_count': warning_count,
+            'mean_delta_t': round(mean_delta_t, 3)
         })
 
     # Sort by CV index (ascending)

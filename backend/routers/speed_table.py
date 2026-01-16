@@ -99,16 +99,18 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
     session_id = current_session['id']
     session_validated = True  # get_validated_sessions only returns validated=1
 
-    # Get CRITICAL/WARNING events for current session
+    # Get CRITICAL/WARNING events for current session + mean delta_t per speed
     events_by_status = AnalyticsDB.get_critical_events_by_speed(consist_id, session_id)
     critical_events = events_by_status.get('critical', {})
     warning_events = events_by_status.get('warning', {})
+    mean_delta_t_by_speed = events_by_status.get('mean_delta_t', {})
 
-    # Calculate CV recommendations
+    # Calculate CV recommendations (uses mean delta_t sign for adjustment direction)
     recommendations = calculate_cv_recommendations(
         cv_values=cv_values,
         critical_events=critical_events,
         warning_events=warning_events,
+        mean_delta_t_by_speed=mean_delta_t_by_speed,
         critical_threshold=5  # Configurable threshold
     )
 

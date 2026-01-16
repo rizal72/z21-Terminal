@@ -259,6 +259,9 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                   </span>
                 </div>
                 <div className="flex items-center gap-4 text-xs">
+                  <span className={`font-mono ${rec.mean_delta_t < 0 ? 'text-blue-400' : 'text-amber-400'}`}>
+                    Δt {rec.mean_delta_t >= 0 ? '+' : ''}{rec.mean_delta_t.toFixed(2)}s
+                  </span>
                   <span className="text-red-400">
                     {rec.critical_count} critical
                   </span>
