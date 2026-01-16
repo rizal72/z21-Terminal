@@ -47,7 +47,7 @@ async def get_session_data(session_id: str):
 @router.get("/cumulative")
 async def get_cumulative_stats(
     tail: Optional[int] = None,
-    max_points: Optional[int] = None,
+    maxPoints: Optional[int] = None,  # Changed to camelCase to match frontend
     tracking_manager: TrackingManager = Depends(get_tracking_manager),
     debug_enabled: bool = Depends(get_debug_enabled)
 ):
@@ -59,12 +59,12 @@ async def get_cumulative_stats(
               Used by Current view to keep recent data intact.
               Example: ?tail=1000 (last 1000 events, no sampling)
 
-        max_points: Optional sampling parameter. If provided, applies uniform sampling
+        maxPoints: Optional sampling parameter. If provided, applies uniform sampling
                    to ALL event arrays across entire history.
                    Used by Overview view for historical trends.
                    Example: ?maxPoints=500
 
-    Note: tail and max_points are mutually exclusive (tail takes precedence)
+    Note: tail and maxPoints are mutually exclusive (tail takes precedence)
     """
     # Get validated sessions from DB
     sessions = AnalyticsDB.get_validated_sessions()
@@ -98,20 +98,20 @@ async def get_cumulative_stats(
         delta_t_events = delta_t_events[-tail:] if len(delta_t_events) > tail else delta_t_events
         yolo_performance = yolo_performance[-tail:] if len(yolo_performance) > tail else yolo_performance
         loco_operating_time_events = loco_operating_time_events[-tail:] if len(loco_operating_time_events) > tail else loco_operating_time_events
-    elif max_points:
+    elif maxPoints:
         # Overview view: intelligent downsampling (LTTB preserves shape, critical events always included)
         original_delta_t_count = len(delta_t_events)
         original_yolo_count = len(yolo_performance)
 
-        log('[ANALYTICS]', f"Before downsampling: {original_delta_t_count} delta_t events, target: {max_points}")
+        log('[ANALYTICS]', f"Before downsampling: {original_delta_t_count} delta_t events, target: {maxPoints}")
 
         # Delta-t: Smart downsampling (all critical |Δt| ≥ 1.5s + LTTB on rest)
-        delta_t_events = smart_downsample_delta_t(delta_t_events, max_points, critical_threshold=1.5)
+        delta_t_events = smart_downsample_delta_t(delta_t_events, maxPoints, critical_threshold=1.5)
 
         log('[ANALYTICS]', f"After downsampling: {len(delta_t_events)} delta_t events")
 
         # YOLO FPS: LTTB downsampling (preserves peaks/valleys)
-        yolo_performance = lttb_downsample(yolo_performance, max_points, x_key='timestamp', y_key='avg_fps')
+        yolo_performance = lttb_downsample(yolo_performance, maxPoints, x_key='timestamp', y_key='avg_fps')
         # Note: loco_operating_time not sampled (aggregate stats chart, not timeline)
 
         # Log if sampling reduction is significant (always visible, not debug-only)
@@ -123,7 +123,7 @@ async def get_cumulative_stats(
                         yolo_reduction > original_yolo_count * 0.1 or yolo_reduction > 100)
 
         if is_significant:
-            log('[ANALYTICS]', f"LTTB downsampling applied (maxPoints={max_points}) | "
+            log('[ANALYTICS]', f"LTTB downsampling applied (maxPoints={maxPoints}) | "
                   f"dT: {original_delta_t_count}->{len(delta_t_events)} (critical preserved) | "
                   f"YOLO: {original_yolo_count}->{len(yolo_performance)}")
 
