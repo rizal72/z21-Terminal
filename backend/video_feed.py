@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from config_loader import load_config, get_config_path
+from services.config_helpers import get_all_locomotives
 from log_colors import log
 
 
@@ -44,19 +45,19 @@ def load_locomotive_colors() -> Dict[int, tuple]:
     """
     Load locomotive colors from config.json and convert to BGR.
 
+    Uses config_helpers.get_all_locomotives() (backward compatible with old format).
+
     Returns:
         Dict mapping DCC address to BGR tuple
     """
     try:
-        config = load_config(CONFIG_PATH)
-        loco_colors = config.get('locomotive_colors', {})
+        locomotives = get_all_locomotives()
 
         # Convert hex to BGR and int keys
         colors = {}
-        for address, hex_color in loco_colors.items():
-            if address == 'notes':
-                continue
-            colors[int(address)] = hex_to_bgr(hex_color)
+        for address_str, loco_data in locomotives.items():
+            hex_color = loco_data.get('color', '#808080')
+            colors[int(address_str)] = hex_to_bgr(hex_color)
 
         return colors
     except Exception as e:

@@ -13,11 +13,14 @@ import time
 from services.analytics_db import AnalyticsDB
 from services.speed_table_helpers import (
     read_cv_speed_table,
+    read_cv_speed_table_from_db,
+    update_cv_speed_table_in_db,
+    undo_cv_speed_table,
     speed_to_jmri_step,
     jmri_step_to_cv,
-    calculate_cv_recommendations,
-    load_all_locomotives
+    calculate_cv_recommendations
 )
+from services.config_helpers import get_locomotive_name, get_all_locomotives
 from config_loader import load_config
 from dependencies import get_z21_manager
 from z21_manager import Z21Manager
@@ -70,19 +73,22 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
             detail=f"Consist {consist_id} has no adjust_loco configured"
         )
 
-    # Read CV67-94 from JMRI roster for adjust loco
-    cv_values = read_cv_speed_table(adjust_loco_address)
+    # Read CV67-94 from DB (primary), fallback to JMRI roster
+    cv_values = read_cv_speed_table_from_db(adjust_loco_address)
 
     if cv_values is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Roster file not found for locomotive {adjust_loco_address}"
-        )
+        # Fallback to JMRI roster XML
+        log('[SPEED-TABLE]', f"Loco {adjust_loco_address}: not in DB, reading from JMRI roster (fallback)")
+        cv_values = read_cv_speed_table(adjust_loco_address)
 
-    # Get locomotive name from roster
-    locos = load_all_locomotives()
-    loco = locos.get(str(adjust_loco_address))
-    adjust_loco_name = loco.name if loco else f"Loco {adjust_loco_address}"
+        if cv_values is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Speed table not found in DB or JMRI roster for locomotive {adjust_loco_address}"
+            )
+
+    # Get locomotive name from config
+    adjust_loco_name = get_locomotive_name(adjust_loco_address)
 
     # Get latest session (validated or not)
     current_session = AnalyticsDB.get_latest_session()
@@ -205,6 +211,19 @@ async def write_speed_table_to_decoder(
 
     if all_success:
         log('[CV]', f"Speed table write complete: 28 CVs written successfully [{total_time:.2f}s]")
+
+        # Update database after successful write (with undo snapshot)
+        cv_values_int = {int(k): int(v) for k, v in cv_values.items()}
+        db_success = update_cv_speed_table_in_db(
+            loco_address=adjust_loco_address,
+            cv_values=cv_values_int,
+            source='web_ui'
+        )
+
+        if db_success:
+            log('[SPEED-TABLE]', f"Database updated for loco {adjust_loco_address} (undo snapshot saved)")
+        else:
+            log('[ERROR]', f"Failed to update database for loco {adjust_loco_address}")
     else:
         log('[CV]', f"Speed table write partial: {28 - len(failed_cvs)}/28 CVs written [{total_time:.2f}s]")
 
@@ -213,5 +232,168 @@ async def write_speed_table_to_decoder(
         'failed_cvs': failed_cvs,
         'total_time': round(total_time, 2),
         'adjust_loco_address': adjust_loco_address,
+        'cvs_written': 28 - len(failed_cvs)
+    }
+
+
+@router.post("/api/speed-table/reimport/{consist_id}")
+async def reimport_speed_table_from_jmri(consist_id: int) -> Dict[str, Any]:
+    """
+    Re-import speed table CV67-94 from JMRI roster to database.
+
+    Use case: User modified CV via JMRI DecoderPro and wants to sync DB with JMRI.
+
+    Args:
+        consist_id: Consist ID (10, 11, etc.)
+
+    Returns:
+        - success: True if CV reimported successfully
+        - adjust_loco_address: Address of locomotive
+        - cv_values: CV67-94 values read from JMRI roster
+        - source: 'jmri_reimport'
+
+    Raises:
+        404: Consist not found, or JMRI roster not found for locomotive
+    """
+    # Get config to identify adjust loco
+    config = load_config()
+    consists = config.get('consists', {})
+    consist_config = consists.get(str(consist_id))
+
+    if not consist_config:
+        raise HTTPException(status_code=404, detail=f"Consist {consist_id} not found in config")
+
+    adjust_loco_address = consist_config.get('adjust_loco')
+    if not adjust_loco_address:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Consist {consist_id} has no adjust_loco configured"
+        )
+
+    # Read CV67-94 from JMRI roster (force re-read)
+    log('[SPEED-TABLE]', f"Re-importing speed table from JMRI roster for loco {adjust_loco_address}...")
+    cv_values = read_cv_speed_table(adjust_loco_address)
+
+    if cv_values is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"JMRI roster not found for locomotive {adjust_loco_address}"
+        )
+
+    # Update database with JMRI values
+    db_success = update_cv_speed_table_in_db(
+        loco_address=adjust_loco_address,
+        cv_values=cv_values,
+        source='jmri_reimport'
+    )
+
+    if not db_success:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update database for loco {adjust_loco_address}"
+        )
+
+    log('[SPEED-TABLE]', f"Re-import complete: loco {adjust_loco_address} synced from JMRI roster")
+
+    return {
+        'success': True,
+        'adjust_loco_address': adjust_loco_address,
+        'cv_values': cv_values,
+        'source': 'jmri_reimport'
+    }
+
+
+@router.post("/api/speed-table/undo/{consist_id}")
+async def undo_speed_table_change(
+    consist_id: int,
+    z21_manager: Z21Manager = Depends(get_z21_manager)
+) -> Dict[str, Any]:
+    """
+    Undo last speed table change (restore previous_values from DB).
+
+    Restores previous CV67-94 values from database snapshot and writes them
+    to decoder via Z21 operations mode (POM). Swaps current <-> previous in DB
+    (so you can undo the undo).
+
+    Args:
+        consist_id: Consist ID (10, 11, etc.)
+        z21_manager: Z21Manager instance (injected dependency)
+
+    Returns:
+        - success: True if CV restored successfully
+        - adjust_loco_address: Address of locomotive
+        - previous_values: CV67-94 values restored (before undo)
+        - failed_cvs: List of CV indexes that failed to write
+
+    Raises:
+        404: Consist not found, or no undo available
+        400: Z21 not connected
+    """
+    start_time = time.time()
+
+    # Get config to identify adjust loco
+    config = load_config()
+    consists = config.get('consists', {})
+    consist_config = consists.get(str(consist_id))
+
+    if not consist_config:
+        raise HTTPException(status_code=404, detail=f"Consist {consist_id} not found in config")
+
+    adjust_loco_address = consist_config.get('adjust_loco')
+    if not adjust_loco_address:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Consist {consist_id} has no adjust_loco configured"
+        )
+
+    # Check Z21 connection
+    if not z21_manager or not z21_manager.z21:
+        raise HTTPException(status_code=400, detail="Z21 not connected")
+
+    # Restore previous values from DB (swaps current <-> previous)
+    log('[SPEED-TABLE]', f"Restoring previous speed table for loco {adjust_loco_address}...")
+    previous_values = undo_cv_speed_table(adjust_loco_address)
+
+    if previous_values is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No undo available for locomotive {adjust_loco_address}"
+        )
+
+    # Write previous CV67-94 to decoder via POM
+    log('[CV]', f"Writing previous CV67-94 to loco {adjust_loco_address}...")
+    failed_cvs = []
+
+    for cv_index in range(67, 95):  # CV67-94 (28 values)
+        cv_value = previous_values.get(str(cv_index))
+
+        if cv_value is None:
+            log('[CV]', f"CV{cv_index} missing in previous_values, skipping")
+            failed_cvs.append(cv_index)
+            continue
+
+        try:
+            success = z21_manager.z21.write_cv_ops_mode(adjust_loco_address, cv_index, cv_value)
+            if not success:
+                log('[CV]', f"Loco {adjust_loco_address}: CV{cv_index} undo write failed")
+                failed_cvs.append(cv_index)
+        except Exception as e:
+            log('[CV]', f"Loco {adjust_loco_address}: CV{cv_index} undo write error: {e}")
+            failed_cvs.append(cv_index)
+
+    total_time = time.time() - start_time
+    all_success = len(failed_cvs) == 0
+
+    if all_success:
+        log('[SPEED-TABLE]', f"Undo complete: loco {adjust_loco_address} restored [{total_time:.2f}s]")
+    else:
+        log('[SPEED-TABLE]', f"Undo partial: {28 - len(failed_cvs)}/28 CVs restored [{total_time:.2f}s]")
+
+    return {
+        'success': all_success,
+        'adjust_loco_address': adjust_loco_address,
+        'previous_values': previous_values,
+        'failed_cvs': failed_cvs,
+        'total_time': round(total_time, 2),
         'cvs_written': 28 - len(failed_cvs)
     }

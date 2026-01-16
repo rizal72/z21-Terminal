@@ -21,6 +21,7 @@ sys.path.insert(0, str(scripts_dir))
 
 from z21 import Z21
 from config_loader import load_config, save_config, get_config_path
+from services.config_helpers import get_locomotive_cv_profile, get_all_locomotives
 from log_colors import log, colorize_status
 
 
@@ -693,9 +694,9 @@ class Z21Manager:
         try:
             config = load_config()
             current_mode = config.get('cv_profile_mode', 'normal')
-            cv_profiles = config.get('cv_profiles', {})
-            if not cv_profiles:
-                return False, current_mode, "No CV profiles configured in config.json"
+            locomotives = get_all_locomotives()
+            if not locomotives:
+                return False, current_mode, "No locomotives configured in config.json"
 
             # Check track power before attempting writes
             status = self.z21.get_status()
@@ -707,7 +708,7 @@ class Z21Manager:
                 return False, current_mode, "Short circuit detected - Check track and locomotives"
 
             new_mode = 'testing' if current_mode == 'normal' else 'normal'
-            addresses = [int(addr) for addr in cv_profiles.keys()]
+            addresses = [int(addr) for addr in locomotives.keys()]
             log('[CV]', f"CV Profile Toggle: {current_mode} -> {new_mode} (addresses: {addresses})")
             if new_mode == 'testing':
                 import time
@@ -716,11 +717,11 @@ class Z21Manager:
                 success_count = 0
                 failed_locos = []
                 for addr in addresses:
-                    addr_str = str(addr)
                     try:
                         loco_start = time.time()
-                        cv3_value = cv_profiles[addr_str]['testing']['cv3']
-                        cv4_value = cv_profiles[addr_str]['testing']['cv4']
+                        cv_profile = get_locomotive_cv_profile(addr, 'testing')
+                        cv3_value = cv_profile['cv3']
+                        cv4_value = cv_profile['cv4']
                         self.z21.write_cv_ops_mode(addr, 3, cv3_value)
                         self.z21.write_cv_ops_mode(addr, 4, cv4_value)
                         elapsed = time.time() - loco_start
@@ -743,11 +744,11 @@ class Z21Manager:
                 success_count = 0
                 failed_locos = []
                 for addr in addresses:
-                    addr_str = str(addr)
                     try:
                         loco_start = time.time()
-                        cv3_value = cv_profiles[addr_str]['normal']['cv3']
-                        cv4_value = cv_profiles[addr_str]['normal']['cv4']
+                        cv_profile = get_locomotive_cv_profile(addr, 'normal')
+                        cv3_value = cv_profile['cv3']
+                        cv4_value = cv_profile['cv4']
                         self.z21.write_cv_ops_mode(addr, 3, cv3_value)
                         self.z21.write_cv_ops_mode(addr, 4, cv4_value)
                         elapsed = time.time() - loco_start

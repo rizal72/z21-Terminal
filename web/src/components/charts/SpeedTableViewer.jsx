@@ -38,6 +38,10 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
   const [writeError, setWriteError] = useState(null);
   const [writeSuccess, setWriteSuccess] = useState(null);
 
+  // Undo/Reimport state
+  const [undoing, setUndoing] = useState(false);
+  const [reimporting, setReimporting] = useState(false);
+
   // Initialize selected recommendations (default: all checked)
   useEffect(() => {
     if (!data || !data.recommendations) return;
@@ -296,6 +300,82 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     setTimeout(() => exportToCSV(), 500); // Small delay to show write result first
   };
 
+  // Undo Last Change: Restore previous CV values from DB and write to decoder
+  const handleUndo = async () => {
+    if (!confirm('Restore previous CV values and write them to decoder? This will undo the last change.')) {
+      return;
+    }
+
+    setUndoing(true);
+    setWriteError(null);
+    setWriteSuccess(null);
+
+    try {
+      const response = await fetch(`/api/speed-table/undo/${consistId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Undo failed');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setWriteSuccess(`Undo successful! ${result.cvs_written}/28 CVs restored in ${result.total_time}s`);
+        // Reload speed table data
+        await fetchData();
+      } else {
+        setWriteError(`Undo partially successful: ${result.failed_cvs.length}/28 CVs failed`);
+      }
+    } catch (err) {
+      console.error('Undo error:', err);
+      setWriteError(err.message);
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  // Re-import from JMRI: Force re-read CV from JMRI roster and update DB
+  const handleReimport = async () => {
+    if (!confirm('Re-import speed table from JMRI roster? This will overwrite current database values with JMRI values.')) {
+      return;
+    }
+
+    setReimporting(true);
+    setWriteError(null);
+    setWriteSuccess(null);
+
+    try {
+      const response = await fetch(`/api/speed-table/reimport/${consistId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Re-import failed');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setWriteSuccess(`Re-import successful! CV values synced from JMRI roster for loco ${result.adjust_loco_address}`);
+        // Reload speed table data
+        await fetchData();
+      } else {
+        setWriteError('Re-import failed');
+      }
+    } catch (err) {
+      console.error('Re-import error:', err);
+      setWriteError(err.message);
+    } finally {
+      setReimporting(false);
+    }
+  };
+
   // Check if any CVs were modified (manual edit or applied recommendations)
   const hasModifications = data && Object.keys(cvValuesFloat).some(cvIndex => {
     const cvIndexInt = parseInt(cvIndex);
@@ -543,6 +623,42 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           >
             <i className="fa-solid fa-download"></i>
             <span>Export CSV Only</span>
+          </button>
+          <button
+            onClick={handleUndo}
+            disabled={undoing}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+            title="Restore previous CV values from database snapshot"
+          >
+            {undoing ? (
+              <>
+                <i className="fa-solid fa-spinner fa-spin"></i>
+                <span>Undoing...</span>
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-undo"></i>
+                <span>Undo Last Change</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleReimport}
+            disabled={reimporting}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+            title="Force re-import CV values from JMRI roster to database"
+          >
+            {reimporting ? (
+              <>
+                <i className="fa-solid fa-spinner fa-spin"></i>
+                <span>Re-importing...</span>
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-sync"></i>
+                <span>Re-import from JMRI</span>
+              </>
+            )}
           </button>
         </div>
       </div>

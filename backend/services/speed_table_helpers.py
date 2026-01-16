@@ -3,13 +3,18 @@ Speed Table Helper Functions
 
 Utilities for Speed Table Viewer feature:
 - Reading CV67-94 from JMRI roster XML (reuses existing Locomotive class)
+- Reading CV67-94 from database (source of truth after migration)
+- Writing CV67-94 to database (with undo snapshot)
 - Speed to JMRI step mapping
 - CV recommendations calculation
 """
 
 import sys
+import sqlite3
+import json
 from pathlib import Path
 from typing import Dict, Optional, List
+from log_colors import log
 
 # Add scripts/utils/cv_operations to path for Locomotive class import
 SCRIPT_DIR = Path(__file__).parent.parent.parent / "scripts" / "utils" / "cv_operations"
@@ -197,3 +202,166 @@ def calculate_cv_recommendations(
     recommendations.sort(key=lambda x: x['cv_index'])
 
     return recommendations
+
+
+# ============================================================================
+# Database Functions (Speed Table Migration)
+# ============================================================================
+
+def read_cv_speed_table_from_db(loco_address: int) -> Optional[Dict[int, int]]:
+    """
+    Read CV67-94 from database (source of truth after migration).
+
+    Args:
+        loco_address: Locomotive DCC address (1-8)
+
+    Returns:
+        Dict {67: value, 68: value, ..., 94: value} or None if not found
+    """
+    conn = sqlite3.connect('data/analytics.db')
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT cv67, cv68, cv69, cv70, cv71, cv72, cv73, cv74, cv75, cv76,
+               cv77, cv78, cv79, cv80, cv81, cv82, cv83, cv84, cv85, cv86,
+               cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94
+        FROM locomotive_speed_table
+        WHERE loco_address = ?
+    """, (loco_address,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return None
+
+    # Convert tuple to dict {67: value, 68: value, ..., 94: value}
+    return {67 + i: row[i] for i in range(28)}
+
+
+def update_cv_speed_table_in_db(
+    loco_address: int,
+    cv_values: Dict[int, int],
+    source: str = 'web_ui'
+) -> bool:
+    """
+    Update CV67-94 in database after successful POM write.
+
+    Saves previous values as JSON snapshot (1-level undo).
+
+    Args:
+        loco_address: Locomotive DCC address
+        cv_values: Dict {67: value, 68: value, ..., 94: value}
+        source: 'web_ui', 'test_mode', 'jmri_import', 'jmri_reimport', 'undo'
+
+    Returns:
+        True if successful, False if error
+    """
+    try:
+        conn = sqlite3.connect('data/analytics.db')
+        cursor = conn.cursor()
+
+        # Get current values (for undo snapshot)
+        cursor.execute("""
+            SELECT cv67, cv68, cv69, cv70, cv71, cv72, cv73, cv74, cv75, cv76,
+                   cv77, cv78, cv79, cv80, cv81, cv82, cv83, cv84, cv85, cv86,
+                   cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94
+            FROM locomotive_speed_table
+            WHERE loco_address = ?
+        """, (loco_address,))
+
+        row = cursor.fetchone()
+        previous_values = None
+
+        if row:
+            # Save current as previous (undo snapshot)
+            previous_values = json.dumps({67 + i: row[i] for i in range(28)})
+
+        # Prepare new values (cv67-cv94 in order)
+        new_values = [cv_values.get(67 + i, 0) for i in range(28)]
+
+        # Insert or replace
+        cursor.execute("""
+            INSERT OR REPLACE INTO locomotive_speed_table (
+                loco_address,
+                cv67, cv68, cv69, cv70, cv71, cv72, cv73, cv74, cv75, cv76,
+                cv77, cv78, cv79, cv80, cv81, cv82, cv83, cv84, cv85, cv86,
+                cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94,
+                previous_values, last_modified, source
+            ) VALUES (
+                ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, CURRENT_TIMESTAMP, ?
+            )
+        """, (loco_address, *new_values, previous_values, source))
+
+        conn.commit()
+        conn.close()
+        return True
+
+    except Exception as e:
+        log('[ERROR]', f"Failed to update DB for loco {loco_address}: {e}")
+        return False
+
+
+def undo_cv_speed_table(loco_address: int) -> Optional[Dict[int, int]]:
+    """
+    Undo last speed table change (restore previous_values).
+
+    Swaps current ↔ previous (so you can undo the undo).
+
+    Args:
+        loco_address: Locomotive DCC address
+
+    Returns:
+        Dict {67: value, ..., 94: value} (previous values) or None if no undo available
+    """
+    conn = sqlite3.connect('data/analytics.db')
+    cursor = conn.cursor()
+
+    # Get previous_values
+    cursor.execute("""
+        SELECT previous_values
+        FROM locomotive_speed_table
+        WHERE loco_address = ?
+    """, (loco_address,))
+
+    row = cursor.fetchone()
+
+    if not row or not row[0]:
+        conn.close()
+        return None  # No undo available
+
+    # Parse JSON
+    previous_values = json.loads(row[0])
+
+    # Swap: current ↔ previous (so we can undo the undo)
+    cursor.execute("""
+        SELECT cv67, cv68, cv69, cv70, cv71, cv72, cv73, cv74, cv75, cv76,
+               cv77, cv78, cv79, cv80, cv81, cv82, cv83, cv84, cv85, cv86,
+               cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94
+        FROM locomotive_speed_table
+        WHERE loco_address = ?
+    """, (loco_address,))
+
+    current_row = cursor.fetchone()
+    current_values_json = json.dumps({67 + i: current_row[i] for i in range(28)})
+
+    # Update DB with previous values (current → previous snapshot)
+    new_values = [previous_values[str(67 + i)] for i in range(28)]
+
+    cursor.execute("""
+        UPDATE locomotive_speed_table
+        SET cv67=?, cv68=?, cv69=?, cv70=?, cv71=?, cv72=?, cv73=?, cv74=?, cv75=?, cv76=?,
+            cv77=?, cv78=?, cv79=?, cv80=?, cv81=?, cv82=?, cv83=?, cv84=?, cv85=?, cv86=?,
+            cv87=?, cv88=?, cv89=?, cv90=?, cv91=?, cv92=?, cv93=?, cv94=?,
+            previous_values=?, last_modified=CURRENT_TIMESTAMP, source='undo'
+        WHERE loco_address=?
+    """, (*new_values, current_values_json, loco_address))
+
+    conn.commit()
+    conn.close()
+
+    return previous_values

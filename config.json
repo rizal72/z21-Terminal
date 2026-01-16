@@ -1,14 +1,7 @@
 {
   "debug": {
     "enabled": false,
-    "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (✅🚪⏱️🎯🚂📹), gate crossing (🚦🚪), warnings (⚠️), mode changes (🔄⏸️). SUPPRESSED when false: YOLO pause/resume verbose (🔇🔊)"
-  },
-  "locomotive_colors": {
-    "1": "#FFFF00",
-    "5": "#FF8000",
-    "7": "#00FF00",
-    "8": "#FF0000",
-    "notes": "Hex color codes for locomotive visualization (RGB format). Used in video feed markers, analytics charts, and UI badges. Backend auto-converts to BGR for OpenCV."
+    "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (\u2705\ud83d\udeaa\u23f1\ufe0f\ud83c\udfaf\ud83d\ude82\ud83d\udcf9), gate crossing (\ud83d\udea6\ud83d\udeaa), warnings (\u26a0\ufe0f), mode changes (\ud83d\udd04\u23f8\ufe0f). SUPPRESSED when false: YOLO pause/resume verbose (\ud83d\udd07\ud83d\udd0a)"
   },
   "consists": {
     "10": {
@@ -17,7 +10,10 @@
       "rear_address": 5,
       "reference_loco": 5,
       "adjust_loco": 1,
-      "gate_ids": [3, 4],
+      "gate_ids": [
+        3,
+        4
+      ],
       "gate_assignment": {
         "reference": 3,
         "adjust": 4
@@ -32,7 +28,10 @@
       "rear_address": 8,
       "reference_loco": 8,
       "adjust_loco": 7,
-      "gate_ids": [1, 2],
+      "gate_ids": [
+        1,
+        2
+      ],
       "gate_assignment": null,
       "virtual_mode": true,
       "auto_compensation_enabled": true,
@@ -43,38 +42,66 @@
     {
       "id": 1,
       "name": "Gate 1",
-      "center": [995, 27],
+      "center": [
+        995,
+        27
+      ],
       "width": 65,
       "height": 43,
       "angle": 0,
-      "color": [255, 165, 0]
+      "color": [
+        255,
+        165,
+        0
+      ]
     },
     {
       "id": 2,
       "name": "Gate 2",
-      "center": [10, 269],
+      "center": [
+        10,
+        269
+      ],
       "width": 44,
       "height": 47,
       "angle": -30,
-      "color": [255, 165, 0]
+      "color": [
+        255,
+        165,
+        0
+      ]
     },
     {
       "id": 3,
       "name": "Gate 3",
-      "center": [1086, 326],
+      "center": [
+        1086,
+        326
+      ],
       "width": 80,
       "height": 80,
       "angle": 300,
-      "color": [0, 255, 255]
+      "color": [
+        0,
+        255,
+        255
+      ]
     },
     {
       "id": 4,
       "name": "Gate 4",
-      "center": [479, 29],
+      "center": [
+        479,
+        29
+      ],
       "width": 50,
       "height": 50,
       "angle": 0,
-      "color": [0, 255, 255]
+      "color": [
+        0,
+        255,
+        255
+      ]
     }
   ],
   "tracking": {
@@ -90,75 +117,13 @@
       "normal": 1.0,
       "warning": 1.5,
       "max_delta_t": 10.0,
-      "notes": "Thresholds in seconds: |Δt| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
+      "notes": "Thresholds in seconds: |\u0394t| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
     },
     "yolo_confidence": 0.3,
     "yolo_iou": 0.6,
     "yolo_imgsz": 640,
     "yolo_obb": true,
     "notes_yolo": "YOLO confidence threshold (0.0-1.0), IoU threshold for NMS (0.0-1.0, higher = allows more bbox overlap), inference image size (640 for square models, [640, 1152] for rectangular), and yolo_obb (true = Oriented Bounding Boxes for rotated objects, false = standard axis-aligned boxes)"
-  },
-  "cv_profiles": {
-    "1": {
-      "normal": {
-        "cv3": 78,
-        "cv4": 58
-      },
-      "testing": {
-        "cv3": 0,
-        "cv4": 0
-      }
-    },
-    "2": {
-      "normal": {
-        "cv3": 23,
-        "cv4": 14
-      },
-      "testing": {
-        "cv3": 0,
-        "cv4": 0
-      }
-    },
-    "5": {
-      "normal": {
-        "cv3": 22,
-        "cv4": 16
-      },
-      "testing": {
-        "cv3": 0,
-        "cv4": 0
-      }
-    },
-    "6": {
-      "normal": {
-        "cv3": 23,
-        "cv4": 14
-      },
-      "testing": {
-        "cv3": 0,
-        "cv4": 0
-      }
-    },
-    "7": {
-      "normal": {
-        "cv3": 22,
-        "cv4": 16
-      },
-      "testing": {
-        "cv3": 1,
-        "cv4": 1
-      }
-    },
-    "8": {
-      "normal": {
-        "cv3": 22,
-        "cv4": 15
-      },
-      "testing": {
-        "cv3": 0,
-        "cv4": 0
-      }
-    }
   },
   "cv_profile_mode": "testing",
   "tracking_OBB": {
@@ -170,5 +135,119 @@
     "yolo_confidence": 0.2,
     "yolo_iou": 0.95,
     "yolo_obb": false
+  },
+  "locomotives": {
+    "7": {
+      "name": "E656 239",
+      "decoder": "Hornby TXS Class 91 Electric",
+      "color": "#00FF00",
+      "cv_profiles": {
+        "normal": {
+          "cv3": 22,
+          "cv4": 16
+        },
+        "testing": {
+          "cv3": 1,
+          "cv4": 1
+        }
+      },
+      "notes": ""
+    },
+    "6": {
+      "name": "D445 1140",
+      "decoder": "LokPilot 5 DCC",
+      "color": "#FF00FF",
+      "cv_profiles": {
+        "normal": {
+          "cv3": 23,
+          "cv4": 14
+        },
+        "testing": {
+          "cv3": 0,
+          "cv4": 0
+        }
+      },
+      "notes": ""
+    },
+    "8": {
+      "name": "E444 056",
+      "decoder": "LokPilot 5 DCC",
+      "color": "#FF0000",
+      "cv_profiles": {
+        "normal": {
+          "cv3": 22,
+          "cv4": 15
+        },
+        "testing": {
+          "cv3": 0,
+          "cv4": 0
+        }
+      },
+      "notes": ""
+    },
+    "1": {
+      "name": "Gr.675 017",
+      "decoder": "LokSound V4.0",
+      "color": "#FFFF00",
+      "cv_profiles": {
+        "normal": {
+          "cv3": 78,
+          "cv4": 58
+        },
+        "testing": {
+          "cv3": 0,
+          "cv4": 0
+        }
+      },
+      "notes": ""
+    },
+    "4": {
+      "name": "2048 010-9",
+      "decoder": "MX630 version 31",
+      "color": "#00FFFF",
+      "cv_profiles": {
+        "normal": {
+          "cv3": 0,
+          "cv4": 0
+        },
+        "testing": {
+          "cv3": 0,
+          "cv4": 0
+        }
+      },
+      "notes": ""
+    },
+    "5": {
+      "name": "D645 014",
+      "decoder": "LokPilot 5 DCC",
+      "color": "#FF8000",
+      "cv_profiles": {
+        "normal": {
+          "cv3": 22,
+          "cv4": 16
+        },
+        "testing": {
+          "cv3": 0,
+          "cv4": 0
+        }
+      },
+      "notes": ""
+    },
+    "2": {
+      "name": "E656 182",
+      "decoder": "LokPilot 5 DCC",
+      "color": "#FFFFFF",
+      "cv_profiles": {
+        "normal": {
+          "cv3": 23,
+          "cv4": 14
+        },
+        "testing": {
+          "cv3": 0,
+          "cv4": 0
+        }
+      },
+      "notes": ""
+    }
   }
 }
