@@ -172,9 +172,12 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-          <div className="text-sm text-slate-400">CV Configured</div>
-          <div className="text-3xl font-bold text-white mt-1">
-            {Object.keys(data.cv_values).length}/28
+          <div className="text-sm text-slate-400">Adjust Locomotive</div>
+          <div className="text-xl font-bold text-white mt-1">
+            {data.adjust_loco_name}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            Address {data.adjust_loco_address} • {Object.keys(data.cv_values).length}/28 CV
           </div>
         </div>
         <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">

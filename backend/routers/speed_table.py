@@ -14,7 +14,8 @@ from services.speed_table_helpers import (
     read_cv_speed_table,
     speed_to_jmri_step,
     jmri_step_to_cv,
-    calculate_cv_recommendations
+    calculate_cv_recommendations,
+    load_all_locomotives
 )
 from config_loader import load_config
 
@@ -70,6 +71,11 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
             detail=f"Roster file not found for locomotive {adjust_loco_address}"
         )
 
+    # Get locomotive name from roster
+    locos = load_all_locomotives()
+    loco = locos.get(str(adjust_loco_address))
+    adjust_loco_name = loco.name if loco else f"Loco {adjust_loco_address}"
+
     # Get current session (if any)
     # Find most recent validated session (or running session)
     sessions = AnalyticsDB.get_validated_sessions(limit=1, exclude_running=False)
@@ -79,6 +85,7 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
         return {
             'consist_id': consist_id,
             'adjust_loco_address': adjust_loco_address,
+            'adjust_loco_name': adjust_loco_name,
             'session_id': None,
             'session_validated': False,
             'cv_values': cv_values,
@@ -108,6 +115,7 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
     return {
         'consist_id': consist_id,
         'adjust_loco_address': adjust_loco_address,
+        'adjust_loco_name': adjust_loco_name,
         'session_id': session_id,
         'session_validated': session_validated,
         'cv_values': cv_values,
