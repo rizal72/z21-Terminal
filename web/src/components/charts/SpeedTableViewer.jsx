@@ -25,7 +25,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
       setError(null);
 
       try {
-        const response = await fetch(`http://localhost:8000/api/speed-table/${consistId}`);
+        const response = await fetch(`/api/speed-table/${consistId}`);
 
         if (!response.ok) {
           const errorData = await response.json();
