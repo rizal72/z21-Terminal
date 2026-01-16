@@ -2,17 +2,20 @@
 Speed Table Helper Functions
 
 Utilities for Speed Table Viewer feature:
-- Reading CV67-94 from JMRI roster XML
+- Reading CV67-94 from JMRI roster XML (reuses existing Locomotive class)
 - Speed to JMRI step mapping
 - CV recommendations calculation
 """
 
-import xml.etree.ElementTree as ET
+import sys
 from pathlib import Path
 from typing import Dict, Optional, List
 
-# JMRI roster path (same as roster_loader.py)
-ROSTER_DIR = Path.home() / "Library/Preferences/JMRI/La_mia_Ferrovia_in_JMRI.jmri/roster"
+# Add scripts/utils/cv_operations to path for Locomotive class import
+SCRIPT_DIR = Path(__file__).parent.parent.parent / "scripts" / "utils" / "cv_operations"
+sys.path.insert(0, str(SCRIPT_DIR))
+
+from read_cv_from_roster import Locomotive, load_all_locomotives
 
 
 def speed_to_jmri_step(dcc_speed: int) -> int:
@@ -56,7 +59,7 @@ def jmri_step_to_cv(step: int) -> int:
 def read_cv_speed_table(loco_address: int) -> Optional[Dict[int, int]]:
     """
     Read CV67-94 (28-step speed table) from JMRI roster XML for a locomotive.
-    Reuses Locomotive class pattern from scripts/utils/cv_operations/read_cv_from_roster.py
+    Reuses existing Locomotive class from scripts/utils/cv_operations/read_cv_from_roster.py
 
     Args:
         loco_address: Locomotive DCC address
@@ -67,47 +70,23 @@ def read_cv_speed_table(loco_address: int) -> Optional[Dict[int, int]]:
     Example:
         {67: 10, 68: 15, 69: 20, ..., 94: 255}
     """
-    # Find roster file for this locomotive (format: "Loco_XXXX.xml" or by address scan)
-    roster_files = list(ROSTER_DIR.glob("*.xml"))
+    # Load all locomotives using existing function
+    locos = load_all_locomotives()
 
-    for roster_file in roster_files:
-        try:
-            tree = ET.parse(roster_file)
-            root = tree.getroot()
+    # Find locomotive by address (address is stored as string in dict)
+    loco = locos.get(str(loco_address))
 
-            # Check if this is the right locomotive (by address)
-            loco_elem = root.find('.//locomotive')
-            if loco_elem is None:
-                continue
+    if loco is None:
+        return None
 
-            # Get DCC address from locomotive element attribute (same pattern as roster_loader.py)
-            xml_address = loco_elem.get('dccAddress')
-            if xml_address and int(xml_address) == loco_address:
-                # Found the right locomotive! Read CV67-94
-                cv_values = {}
+    # Extract CV67-94 from locomotive's CV dict
+    cv_speed_table = {}
+    for cv_index in range(67, 95):  # CV67-94 (28 steps)
+        if cv_index in loco.cv:
+            cv_speed_table[cv_index] = loco.cv[cv_index]
 
-                for cv_elem in root.findall('.//CVvalue'):
-                    cv_name = cv_elem.get('name', '')
-                    cv_value = cv_elem.get('value', '')
-
-                    if cv_name and cv_value:
-                        try:
-                            cv_index = int(cv_name)
-                            # Only include CV67-94 (28-step speed table)
-                            if 67 <= cv_index <= 94:
-                                cv_values[cv_index] = int(cv_value)
-                        except ValueError:
-                            pass
-
-                # Return even if empty (locomotive exists but no speed table configured)
-                return cv_values if cv_values else {}
-
-        except (ET.ParseError, ValueError, AttributeError):
-            # Skip malformed XML files
-            continue
-
-    # Locomotive not found in roster
-    return None
+    # Return even if empty (locomotive exists but no speed table configured)
+    return cv_speed_table if cv_speed_table else {}
 
 
 def calculate_cv_recommendations(
