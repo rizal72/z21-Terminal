@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Download } from 'lucide-react';
 
 /**
  * SpeedTableViewer Component (Phase 1 - Read-Only)
@@ -180,7 +179,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           onClick={exportToCSV}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
         >
-          <Download size={18} />
+          <i className="fa-solid fa-download"></i>
           <span>Export CSV</span>
         </button>
       </div>
