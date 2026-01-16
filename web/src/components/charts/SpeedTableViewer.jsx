@@ -42,6 +42,31 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
   const [undoing, setUndoing] = useState(false);
   const [reimporting, setReimporting] = useState(false);
 
+  // Fetch speed table data from API
+  const fetchSpeedTableData = async () => {
+    if (!consistId) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/speed-table/${consistId}`);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch speed table data');
+      }
+
+      const result = await response.json();
+      setData(result);
+    } catch (err) {
+      console.error('Speed table fetch error:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Initialize selected recommendations (default: all checked)
   useEffect(() => {
     if (!data || !data.recommendations) return;
@@ -179,34 +204,10 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     setEditingValue('');
   };
 
-  // Fetch speed table data from API
+  // Load speed table data on mount and when consistId/sessionId changes
   useEffect(() => {
-    if (!consistId) return;
-
-    const fetchSpeedTableData = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(`/api/speed-table/${consistId}`);
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Failed to fetch speed table data');
-        }
-
-        const result = await response.json();
-        setData(result);
-      } catch (err) {
-        console.error('Speed table fetch error:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchSpeedTableData();
-  }, [consistId, sessionId]); // Refresh when session changes
+  }, [consistId, sessionId]);
 
   // Initialize cvValuesFloat from API data (convert integers to floats)
   useEffect(() => {
