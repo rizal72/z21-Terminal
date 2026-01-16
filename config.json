@@ -43,7 +43,7 @@
     {
       "id": 1,
       "name": "Gate 1",
-      "center": [927, 19],
+      "center": [995, 27],
       "width": 65,
       "height": 43,
       "angle": 0,
@@ -52,7 +52,7 @@
     {
       "id": 2,
       "name": "Gate 2",
-      "center": [17, 311],
+      "center": [10, 269],
       "width": 44,
       "height": 47,
       "angle": -30,
@@ -160,5 +160,15 @@
       }
     }
   },
-  "cv_profile_mode": "testing"
+  "cv_profile_mode": "testing",
+  "tracking_OBB": {
+    "yolo_confidence": 0.3,
+    "yolo_iou": 0.6,
+    "yolo_obb": true
+  },
+  "tracking_standard": {
+    "yolo_confidence": 0.2,
+    "yolo_iou": 0.95,
+    "yolo_obb": false
+  }
 }
