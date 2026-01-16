@@ -797,19 +797,26 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   </div>
                   <div className={`text-3xl font-bold mt-1 ${getConsistColorClass(consistFilter, trackingConfig.consists, 'text-white')}`}>
                     {(() => {
-                      let events = cumulativeData.delta_t_events || [];
+                      // Use total_delta_t_events (pre-downsampling) for accurate count
+                      // In Overview mode with filtering, we need to filter the actual events
+                      if (viewMode === 'current' || consistFilter !== 'all') {
+                        let events = cumulativeData.delta_t_events || [];
 
-                      // Filter by session if Current view
-                      if (viewMode === 'current' && currentSession) {
-                        events = events.filter(e => e.session_id === currentSession.session_id);
+                        // Filter by session if Current view
+                        if (viewMode === 'current' && currentSession) {
+                          events = events.filter(e => e.session_id === currentSession.session_id);
+                        }
+
+                        // Filter by consist
+                        if (consistFilter !== 'all') {
+                          events = events.filter(e => e.consist_id === consistFilter);
+                        }
+
+                        return events.length;
                       }
 
-                      // Filter by consist
-                      if (consistFilter !== 'all') {
-                        events = events.filter(e => e.consist_id === consistFilter);
-                      }
-
-                      return events.length;
+                      // Overview mode, no filter: use accurate pre-downsampling count
+                      return cumulativeData.total_delta_t_events || 0;
                     })()}
                   </div>
                 </div>

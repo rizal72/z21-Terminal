@@ -92,6 +92,9 @@ async def get_cumulative_stats(
     yolo_performance = AnalyticsDB.get_yolo_performance_events()
     loco_operating_time_events = AnalyticsDB.get_loco_operating_time_events()
 
+    # Save original counts BEFORE tail/maxPoints (for accurate stats cards)
+    original_delta_t_count = len(delta_t_events)
+
     # Apply tail or sampling based on view mode (mutually exclusive)
     if tail:
         # Current view: keep last N events (full resolution, no sampling)
@@ -100,7 +103,6 @@ async def get_cumulative_stats(
         loco_operating_time_events = loco_operating_time_events[-tail:] if len(loco_operating_time_events) > tail else loco_operating_time_events
     elif maxPoints:
         # Overview view: intelligent downsampling (LTTB preserves shape, critical events always included)
-        original_delta_t_count = len(delta_t_events)
         original_yolo_count = len(yolo_performance)
 
         if debug_enabled:
@@ -133,10 +135,10 @@ async def get_cumulative_stats(
     # Total count is accurate because query includes all events from DB
     return {
         'total_sessions': total_sessions,
-        'total_delta_t_events': len(delta_t_events),
+        'total_delta_t_events': original_delta_t_count,  # ALWAYS pre-downsampling count (accurate for stats)
         'sessions': sessions,
         'gate_crossings': gate_crossings,
-        'delta_t_events': delta_t_events,
+        'delta_t_events': delta_t_events,  # May be downsampled (for chart rendering)
         'yolo_performance': yolo_performance,
         'loco_operating_time': loco_operating_time_events
     }
