@@ -151,8 +151,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   // Auto-select consist when entering Speed Tuning tab (after reportsData loaded)
   useEffect(() => {
     if (viewMode === 'speed-tuning' && consistFilter === 'all' && reportsData) {
-      console.log('[AUTO-SELECT] Starting auto-select logic');
-
       // Strategy: Use ONLY last validated session from reports (not cumulative!)
       // cumulativeData contains ALL historical events → would always find both consists
       // We want which consist ran in the LAST session specifically
@@ -161,17 +159,12 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
       if (reportsData?.sessions && reportsData.sessions.length > 0) {
         const lastSession = reportsData.sessions[0]; // Most recent validated session
-        console.log('[AUTO-SELECT] Last validated session:', lastSession.id);
-        console.log('[AUTO-SELECT] Last session consists field:', lastSession.consists);
 
         if (lastSession.consists) {
           Object.keys(lastSession.consists).forEach(cid => {
             consistsWithEvents.add(parseInt(cid, 10));
           });
-          console.log('[AUTO-SELECT] Consists from last session:', Array.from(consistsWithEvents));
         }
-      } else {
-        console.log('[AUTO-SELECT] No validated sessions found');
       }
 
       // Auto-select consist:
@@ -179,12 +172,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       // - If both consists in last session → select C10 (first numeric)
       // - If no sessions → leave 'all' (will show message)
       const consistIds = Array.from(consistsWithEvents).sort((a, b) => a - b);
-      console.log('[AUTO-SELECT] Final consist IDs (sorted):', consistIds);
       if (consistIds.length > 0) {
-        console.log('[AUTO-SELECT] Selecting consist:', consistIds[0]);
         setConsistFilter(consistIds[0]);
-      } else {
-        console.log('[AUTO-SELECT] No consists found, leaving filter as "all"');
       }
     }
   }, [viewMode, reportsData]);
