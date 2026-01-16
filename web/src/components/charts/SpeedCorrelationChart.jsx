@@ -105,11 +105,15 @@ const SpeedCorrelationChart = ({ data, thresholds, consistColor }) => {
     );
   }
 
+  // Format speed as percentage (speed / 126 * 100)
+  const speedToPercent = (speed) => `${Math.round((speed / 126) * 100)}%`;
+
   return (
     <ResponsiveContainer width="100%" height={400}>
-      <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 20 }}>
+      <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 20 }}>
         <CartesianGrid {...CHART_AXIS_STYLES.grid} />
         <XAxis
+          xAxisId="dcc"
           type="number"
           dataKey="speed"
           name="Speed"
@@ -117,6 +121,19 @@ const SpeedCorrelationChart = ({ data, thresholds, consistColor }) => {
           ticks={[0, 20, 40, 60, 80, 100, 120]}
           label={{ value: 'DCC Speed', position: 'insideBottom', offset: -10, fill: '#9CA3AF' }}
           {...CHART_AXIS_STYLES.axis}
+        />
+        <XAxis
+          xAxisId="percent"
+          type="number"
+          dataKey="speed"
+          domain={[0, 126]}
+          ticks={[0, 20, 40, 60, 80, 100, 120]}
+          tickFormatter={speedToPercent}
+          orientation="bottom"
+          axisLine={false}
+          tickLine={false}
+          dy={20}
+          tick={{ fill: '#64748B', fontSize: 11 }}
         />
         <YAxis
           type="number"
@@ -141,6 +158,7 @@ const SpeedCorrelationChart = ({ data, thresholds, consistColor }) => {
 
         {/* Scatter plot with error bars */}
         <Scatter
+          xAxisId="dcc"
           name="Speed Buckets"
           data={chartData}
           fill={consistColor || '#8884d8'}
