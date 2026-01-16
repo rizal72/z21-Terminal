@@ -61,61 +61,14 @@ Per dettagli tecnici completi, vedi:
 
 ---
 
-## ⚠️ CRITICAL: Python Virtual Environment
+## Python Virtual Environment & Deployment
 
-**SEMPRE usare venv - Mac E PC - OGNI VOLTA che chiami python3**
+**CRITICAL**: Always use venv for Python commands (Mac and PC).
 
-Questa è una regola **NON NEGOZIABILE** per TUTTO il progetto, non solo per il refactor.
+- **Mac**: `source venv/bin/activate` before running Python
+- **PC**: Managed automatically by Task Scheduler (`z21-restart`)
 
-### Mac Development
-
-**SEMPRE attivare venv prima di eseguire comandi Python**:
-
-```bash
-# Attivare venv (OBBLIGATORIO ogni volta)
-source venv/bin/activate
-
-# Poi eseguire comandi Python
-python -m py_compile backend/routers/analytics.py
-python scripts/utils/some_script.py
-uvicorn main:app --reload
-```
-
-**Esempio - Syntax Check**:
-```bash
-source venv/bin/activate && python -m py_compile backend/routers/analytics.py backend/main.py
-```
-
-### PC Windows Production
-
-**Il deployment production usa venv automaticamente** via Task Scheduler (configurato in `start-backend.ps1`).
-
-**Per comandi manuali via SSH, attivare venv**:
-```powershell
-# Attivare venv (OBBLIGATORIO per comandi manuali)
-.\venv\Scripts\Activate.ps1
-
-# Poi eseguire comandi Python
-python -m py_compile backend/main.py
-python scripts/utils/some_script.py
-```
-
-**Nota**: Il comando `z21-restart` gestisce automaticamente venv activation via Task Scheduler.
-
-### Perché È Importante
-
-1. **Isolamento dipendenze**: PyTorch, ultralytics, FastAPI installati in venv, non system-wide
-2. **Controllo versione Python**: Evita problemi da `brew upgrade python` su Mac
-3. **Riproducibilità**: Stesso environment Mac (dev) e PC (production)
-4. **Zero cognitive load**: Una volta attivato, tutti i comandi funzionano correttamente
-
-### Cosa Succede Se Dimentichi
-
-- ❌ **Import errors**: `ModuleNotFoundError: No module named 'fastapi'`
-- ❌ **Versione Python sbagliata**: System Python 3.x invece di venv Python 3.11.x
-- ❌ **Conflitti dipendenze**: Pacchetti system vs requirements progetto
-
-**RICORDA**: Se vedi errori import Python, prima cosa da verificare: "Ho attivato venv?"
+**For complete deployment workflow, rules, and troubleshooting**: See `~/.claude/skills/z21-deployment/SKILL.md`
 
 ---
 
@@ -133,36 +86,12 @@ python scripts/utils/some_script.py
 - **Path**: `C:\z21-Terminal` (⚠️ CRITICAL - root C:, NOT Documents!)
 - OS: Windows 11
 - Python: venv isolato con PyTorch GPU + CUDA 11.8
-- **Shell Configuration** (hybrid setup):
-  - **SSH**: PowerShell 7.5.4 (default via Registry `HKLM:\SOFTWARE\OpenSSH\DefaultShell`)
-    - Better command syntax, fewer retry attempts for SSH operations
-    - Profile master: `~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` (PS7)
-    - Profile PS5.1: symlink → PS7 master (compatibilità legacy)
-  - **Task Scheduler** (z21-backend): PowerShell 5.1 (`powershell.exe`)
-    - Console window displays colors perfectly (Windows-1252 encoding)
-    - PS7 shows garbled ANSI codes in Task Scheduler console (UTF-8 encoding mismatch)
-    - `start-backend.ps1` has PS7 encoding fix (inactive with PS5.1, ready if needed)
-  - Git autocompletion: posh-git installato su entrambi PS7 e PS5.1
-- **Deployment aliases** (PowerShell):
-  - `z21-deploy` - Production deploy from `main` branch
-  - `z21-deploy-dev` - Development deploy from `develop` branch
-  - Both use shared `Deploy-Z21Terminal` helper function (DRY)
-- **Deploy workflow**:
-  1. Switch to branch (main/develop)
-  2. `git reset --hard origin/<branch>` (clean config.json, preserve config.local.json)
-  3. Build frontend (`npm install` + `npm run build`)
-  4. Restart backend (`z21-restart`)
-- **⚠️ Deployment Decision Tree** (when to use what):
-  - **Docs only** (`CLAUDE.md`, `README.md`, `docs/*`) → `git pull` (no deploy needed)
-  - **Backend only** (`backend/*`) → `git pull` + `z21-restart` (no rebuild needed)
-  - **Frontend only** (`web/src/*`) → `z21-deploy-dev` (rebuild required)
-  - **Both Frontend + Backend** → `z21-deploy-dev` (full cycle)
-  - **Why**: Backend = Python interpreted (restart OK), Frontend = static build (rebuild needed)
-- **⚠️ IMPORTANTE**:
-  - `config.json` viene sovrascritto ad ogni deploy (`git reset --hard`)
-  - `config.local.json` è **gitignored** → NON toccato da deploy (usa per override locali)
-  - **CV Test Mode**: Premere T per tornare a NORMAL prima di chiudere/deployare
-  - Altrimenti: disallineamento tra CV fisici (test) e config (normal)
+- **Shell**: PowerShell 7.5.4 (SSH), PowerShell 5.1 (Task Scheduler)
+- **Deployment**: See `~/.claude/skills/z21-deployment/SKILL.md` for:
+  - Deployment decision tree (docs/backend/frontend)
+  - PowerShell aliases (z21-deploy-dev, z21-restart, z21-log, etc.)
+  - 8 CRITICAL rules (venv, CV test mode, git workflow, etc.)
+  - Pre-deploy checklist
 
 **Software**:
 - JMRI (roster/consist management)
@@ -674,6 +603,57 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 ## Changelog
 
 **Note**: Per changelog storico (2025-12-16 → 2025-01-16), vedi `docs/CHANGELOG_ARCHIVE.md`
+
+---
+
+### 2025-01-17 - 🧹 **CLAUDE.md Cleanup + Deployment Skill Creation**
+
+**Status**: ✅ **COMPLETED** - Documentation consolidation and skill-based workflow enforcement
+
+**Objective**: Eliminate duplication between CLAUDE.md and new deployment skill, enforce correct workflow usage
+
+**Trigger**: I manually executed deployment commands instead of using PowerShell aliases. User corrected: "ma non hai eseguito l'alias!!! Hai fatto tutto a mano"
+
+**Implementation**:
+
+1. **Created Deployment Skill** (`~/.claude/skills/z21-deployment/SKILL.md` - 314 lines):
+   - Deployment decision tree (docs/backend/frontend → correct command)
+   - PowerShell aliases (z21-deploy-dev, z21-deploy, z21-restart, z21-stop, z21-log)
+   - 8 CRITICAL rules (venv, CV test mode, git workflow, frontend rebuild, secrets, SSH protocol, encoding, README language)
+   - Pre-deploy checklist (7 items)
+   - Config files behavior (config.json vs config.local.json)
+   - PC info (SSH, paths, shell, logs)
+
+2. **Consolidated Skill** (404 → 314 lines, 22% reduction):
+   - Removed CRITICAL Rule #9 (PowerShell Aliases) - redundant with dedicated section
+   - Removed CRITICAL Rule #10 (SSH Username) - evident from examples
+   - Removed Common Scenarios - redundant with Decision Tree
+   - Removed Quick Reference Table - redundant with PowerShell Aliases
+
+3. **Simplified CLAUDE.md** (~73 lines removed):
+   - Python Virtual Environment section: 56 lines → 8 lines
+   - Production Deployment section: 35 lines → 10 lines
+   - Replaced with references to `~/.claude/skills/z21-deployment/SKILL.md`
+
+**Benefits**:
+- ✅ Single source of truth (skill file)
+- ✅ Auto-triggered on deployment requests
+- ✅ Prevents manual command execution
+- ✅ CLAUDE.md cleaner, more maintainable
+- ✅ Zero duplication
+
+**User Feedback During Creation**:
+- "dove possibile userei comandi one line"
+- "SSH gaming-pc da solo ti da errore, serve sempre l'username"
+- "ci sono altri aliases su PC che potrsti usare in altri scenari, uno su tutti z21-log"
+- "recentemente abbiamo deciso di mettere su git anche claude ed altri files md, per cui quella parte la devi togliere"
+- "hai fatto un check per vedere se alcune regole sono duplicate?"
+
+**Files Created**:
+- `~/.claude/skills/z21-deployment/SKILL.md` - Complete deployment workflow
+
+**Files Modified**:
+- `/Users/riccardosallusti/Documents/_PROGETTI/z21-Terminal/CLAUDE.md` - Simplified deployment sections
 
 ---
 
