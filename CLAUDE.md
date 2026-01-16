@@ -152,6 +152,12 @@ python scripts/utils/some_script.py
   2. `git reset --hard origin/<branch>` (clean config.json, preserve config.local.json)
   3. Build frontend (`npm install` + `npm run build`)
   4. Restart backend (`z21-restart`)
+- **⚠️ Deployment Decision Tree** (when to use what):
+  - **Docs only** (`CLAUDE.md`, `README.md`, `docs/*`) → `git pull` (no deploy needed)
+  - **Backend only** (`backend/*`) → `git pull` + `z21-restart` (no rebuild needed)
+  - **Frontend only** (`web/src/*`) → `z21-deploy-dev` (rebuild required)
+  - **Both Frontend + Backend** → `z21-deploy-dev` (full cycle)
+  - **Why**: Backend = Python interpreted (restart OK), Frontend = static build (rebuild needed)
 - **⚠️ IMPORTANTE**:
   - `config.json` viene sovrascritto ad ogni deploy (`git reset --hard`)
   - `config.local.json` è **gitignored** → NON toccato da deploy (usa per override locali)
