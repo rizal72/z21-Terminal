@@ -169,6 +169,28 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
 
   return (
     <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+          <div className="text-sm text-slate-400">CV Configured</div>
+          <div className="text-3xl font-bold text-white mt-1">
+            {Object.keys(data.cv_values).length}/28
+          </div>
+        </div>
+        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+          <div className="text-sm text-slate-400">Problematic Speeds</div>
+          <div className="text-3xl font-bold text-white mt-1">
+            {Object.keys(data.critical_events).length}
+          </div>
+        </div>
+        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+          <div className="text-sm text-slate-400">Recommendations</div>
+          <div className="text-3xl font-bold text-white mt-1">
+            {data.recommendations?.length || 0}
+          </div>
+        </div>
+      </div>
+
       {/* Header: Loco info + Export button */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-slate-400">

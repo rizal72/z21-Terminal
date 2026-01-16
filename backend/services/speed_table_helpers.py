@@ -141,8 +141,8 @@ def calculate_cv_recommendations(
         cv_current = cv_values.get(cv_index, 0)
 
         # Calculate suggested adjustment based on severity
-        # Basic heuristic: +5 per 5 CRITICAL events (can be refined later)
-        adjustment_factor = (critical_count // 5) * 5
+        # Conservative heuristic: +2 per 5 CRITICAL events (user validated safe increment)
+        adjustment_factor = (critical_count // 5) * 2
         cv_suggested = min(cv_current + adjustment_factor, 255)  # Cap at 255
         cv_delta = cv_suggested - cv_current
 
