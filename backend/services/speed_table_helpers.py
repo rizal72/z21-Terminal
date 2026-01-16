@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, Optional, List
 
 # JMRI roster path (same as roster_loader.py)
-ROSTER_DIR = Path.home() / "JMRI" / "roster"
+ROSTER_DIR = Path.home() / "Library/Preferences/JMRI/La_mia_Ferrovia_in_JMRI.jmri/roster"
 
 
 def speed_to_jmri_step(dcc_speed: int) -> int:
