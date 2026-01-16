@@ -90,18 +90,19 @@ def load_all_locomotives() -> Dict[str, Locomotive]:
     locos = {}
 
     if not ROSTER_PATH.exists():
-        print(f"❌ Roster path non trovato: {ROSTER_PATH}")
+        print(f"[ERROR] Roster path non trovato: {ROSTER_PATH}")
         return locos
 
     for xml_file in ROSTER_PATH.glob("*.xml"):
-        if xml_file.name.endswith('.bak'):
+        # Skip backup files and macOS metadata files
+        if xml_file.name.endswith('.bak') or xml_file.name.startswith('._'):
             continue
 
         try:
             loco = Locomotive(xml_file)
             locos[loco.address] = loco
         except Exception as e:
-            print(f"⚠️  Errore leggendo {xml_file.name}: {e}")
+            print(f"[ERROR] Errore leggendo {xml_file.name}: {e}")
 
     return locos
 
