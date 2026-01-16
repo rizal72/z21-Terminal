@@ -387,6 +387,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                 if (e.key === 'Enter') saveEdit();
                 if (e.key === 'Escape') cancelEdit();
               }}
+              onBlur={saveEdit}
               className="w-12 px-1 text-xs font-mono text-center bg-slate-700 text-white border border-blue-500 rounded"
               autoFocus
             />
