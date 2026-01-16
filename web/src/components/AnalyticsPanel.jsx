@@ -725,15 +725,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   <i className={`fa-solid fa-chevron-${collapsedPanels.statsCards ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
                 </div>
                 {!collapsedPanels.statsCards && (
-                  <div className="p-4 pt-0">
-                    {/* Current Session ID (only in Current view) */}
-                    {viewMode === 'current' && currentSession && currentSession.session_id && (
-                      <div className="mb-3 text-xs text-slate-500">
-                        <span className="font-semibold">Current Session:</span>{' '}
-                        <span className="font-mono text-slate-400">{currentSession.session_id}</span>
-                      </div>
-                    )}
-                    <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-3 gap-4 p-4 pt-0">
                 {/* Card 1: Session Duration (Current) or Total Sessions (Overview) */}
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                   <div className="text-sm text-slate-400">
@@ -753,6 +745,11 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       : cumulativeData.total_sessions
                     }
                   </div>
+                  {viewMode === 'current' && currentSession && currentSession.session_id && (
+                    <div className="text-xs text-slate-500 mt-2">
+                      <span className="font-mono text-slate-400">{currentSession.session_id}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Card 2: Gate Crossings (filtered by session in Current view) */}
@@ -807,7 +804,6 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     })()}
                   </div>
                 </div>
-                    </div>
                   </div>
                 )}
               </div>
