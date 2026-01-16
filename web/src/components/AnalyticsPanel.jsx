@@ -152,52 +152,42 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
   useEffect(() => {
     if (viewMode === 'speed-tuning' && consistFilter === 'all' && reportsData) {
       console.log('[AUTO-SELECT] Starting auto-select logic');
-      console.log('[AUTO-SELECT] reportsData:', reportsData);
-      console.log('[AUTO-SELECT] cumulativeData:', cumulativeData);
 
-      // Strategy: Find which consist(s) were active in the most recent session
-      // 1. Try current session delta_t events (if session is running/validated)
-      // 2. Fallback: use last validated session from reports data
+      // Strategy: Use ONLY last validated session from reports (not cumulative!)
+      // cumulativeData contains ALL historical events → would always find both consists
+      // We want which consist ran in the LAST session specifically
 
       const consistsWithEvents = new Set();
 
-      // Check current session events
-      if (cumulativeData?.delta_t_events && cumulativeData.delta_t_events.length > 0) {
-        console.log('[AUTO-SELECT] Found current session events:', cumulativeData.delta_t_events.length);
-        cumulativeData.delta_t_events.forEach(event => {
-          consistsWithEvents.add(event.consist_id);
-        });
-        console.log('[AUTO-SELECT] Consists from current session:', Array.from(consistsWithEvents));
-      }
+      if (reportsData?.sessions && reportsData.sessions.length > 0) {
+        const lastSession = reportsData.sessions[0]; // Most recent validated session
+        console.log('[AUTO-SELECT] Last validated session:', lastSession.id);
+        console.log('[AUTO-SELECT] Last session consists field:', lastSession.consists);
 
-      // Fallback: if current session empty, check last validated session from reports
-      if (consistsWithEvents.size === 0 && reportsData?.sessions && reportsData.sessions.length > 0) {
-        console.log('[AUTO-SELECT] Current session empty, checking last validated session');
-        const lastSession = reportsData.sessions[0]; // Most recent session
-        console.log('[AUTO-SELECT] Last session:', lastSession);
         if (lastSession.consists) {
-          console.log('[AUTO-SELECT] Last session consists:', lastSession.consists);
           Object.keys(lastSession.consists).forEach(cid => {
             consistsWithEvents.add(parseInt(cid, 10));
           });
           console.log('[AUTO-SELECT] Consists from last session:', Array.from(consistsWithEvents));
         }
+      } else {
+        console.log('[AUTO-SELECT] No validated sessions found');
       }
 
       // Auto-select consist:
-      // - If only 1 consist has events → select it
-      // - If both have events → select C10 (first numeric)
-      // - If none have events → leave 'all' (will show message)
+      // - If only 1 consist in last session → select it
+      // - If both consists in last session → select C10 (first numeric)
+      // - If no sessions → leave 'all' (will show message)
       const consistIds = Array.from(consistsWithEvents).sort((a, b) => a - b);
       console.log('[AUTO-SELECT] Final consist IDs (sorted):', consistIds);
       if (consistIds.length > 0) {
         console.log('[AUTO-SELECT] Selecting consist:', consistIds[0]);
-        setConsistFilter(consistIds[0]); // First consist (C10 if both, or the only one)
+        setConsistFilter(consistIds[0]);
       } else {
         console.log('[AUTO-SELECT] No consists found, leaving filter as "all"');
       }
     }
-  }, [viewMode, reportsData, cumulativeData]);
+  }, [viewMode, reportsData]);
 
   // Reload Speed Correlation data when consist filter changes (Speed Tuning tab only)
   useEffect(() => {
