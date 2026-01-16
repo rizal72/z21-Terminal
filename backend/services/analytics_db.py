@@ -581,3 +581,48 @@ class AnalyticsDB:
             'correlated_samples': len(correlated_deltas),
             'speed_buckets': speed_buckets
         }
+
+    @staticmethod
+    def get_critical_events_by_speed(consist_id: int, session_id: str) -> Dict[str, Dict[int, int]]:
+        """
+        Count CRITICAL/WARNING events grouped by speed for current session only.
+        Used by Speed Table Viewer to identify problematic speeds.
+
+        Args:
+            consist_id: Consist ID (10, 11, etc.)
+            session_id: Current session ID for filtering
+
+        Returns:
+            {
+                'critical': {10: 5, 20: 3, 88: 12, ...},
+                'warning': {10: 2, 20: 1, 88: 7, ...}
+            }
+        """
+        conn = AnalyticsDB.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT
+                json_extract(data, '$.speed') as speed,
+                json_extract(data, '$.status') as status,
+                COUNT(*) as count
+            FROM events
+            WHERE event_type = 'delta_t'
+              AND json_extract(data, '$.consist_id') = ?
+              AND session_id = ?
+              AND json_extract(data, '$.status') IN ('CRITICAL', 'WARNING')
+            GROUP BY speed, status
+        ''', (consist_id, session_id))
+
+        results = {'critical': {}, 'warning': {}}
+        for row in cursor.fetchall():
+            speed, status, count = row
+            if speed is not None:  # Skip null speeds
+                speed = int(speed)
+                if status == 'CRITICAL':
+                    results['critical'][speed] = count
+                elif status == 'WARNING':
+                    results['warning'][speed] = count
+
+        conn.close()
+        return results

@@ -22,6 +22,7 @@ import ConfidenceChart from './charts/ConfidenceChart';
 import OperatingTimeChart from './charts/OperatingTimeChart';
 import HistoricalTrendChart from './charts/HistoricalTrendChart';
 import SpeedCorrelationChart from './charts/SpeedCorrelationChart';
+import SpeedTableViewer from './charts/SpeedTableViewer';
 
 export default function AnalyticsPanel({ isOpen, onClose }) {
   const [viewMode, setViewMode] = useState('current'); // 'current', 'overview', 'reports', or 'speed-tuning'
@@ -614,12 +615,21 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
             <div className="flex gap-1.5 items-center">
               <span className="text-xs text-slate-400 mr-1">Filter:</span>
               <button
-                onClick={() => setConsistFilter('all')}
+                onClick={() => {
+                  // Disable "All" in Speed Tuning (requires specific consist)
+                  if (viewMode !== 'speed-tuning') {
+                    setConsistFilter('all');
+                  }
+                }}
+                disabled={viewMode === 'speed-tuning'}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  consistFilter === 'all'
+                  viewMode === 'speed-tuning'
+                    ? 'bg-slate-800/30 text-slate-600 cursor-not-allowed'
+                    : consistFilter === 'all'
                     ? 'bg-slate-600 text-white'
                     : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
                 }`}
+                title={viewMode === 'speed-tuning' ? 'Speed Tuning requires a specific consist' : ''}
               >
                 All
               </button>
@@ -1065,110 +1075,30 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           )}
 
           {/* Speed Tuning View */}
-          {viewMode === 'speed-tuning' && consistFilter !== 'all' && speedCorrelationData && !loading && (
+          {viewMode === 'speed-tuning' && consistFilter !== 'all' && !loading && (
             <div className="space-y-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                  <div className="text-sm text-slate-400">Speed Changes</div>
-                  <div className="text-3xl font-bold text-white mt-1">
-                    {speedCorrelationData.total_speed_changes || 0}
-                  </div>
-                </div>
-                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                  <div className="text-sm text-slate-400">Δt Samples Collected</div>
-                  <div className="text-3xl font-bold text-white mt-1">
-                    {speedCorrelationData.correlated_samples || 0}
-                  </div>
-                </div>
-                <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                  <div className="text-sm text-slate-400">Speed Buckets Analyzed</div>
-                  <div className="text-3xl font-bold text-white mt-1">
-                    {speedCorrelationData.speed_buckets?.length || 0}
-                  </div>
-                </div>
-              </div>
-
-              {/* Speed Correlation Chart */}
+              {/* Speed Table Viewer (28-step CV visualization + recommendations) */}
               <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">
-                  Speed vs Δt Correlation (C{consistFilter})
+                  JMRI Speed Table (CV67-94) - Consist {consistFilter}
                 </h3>
-                <SpeedCorrelationChart
-                  data={speedCorrelationData}
-                  thresholds={trackingConfig.delta_t_thresholds}
-                  consistColor={getConsistStrokeColor(consistFilter, trackingConfig.consists)}
+                <SpeedTableViewer
+                  consistId={parseInt(consistFilter, 10)}
+                  sessionId={cumulativeData?.currentSessionId}
                 />
               </div>
 
-              {/* CV Tuning Recommendations */}
-              {speedCorrelationData.speed_buckets && speedCorrelationData.speed_buckets.length > 0 && (
+              {/* Speed Correlation Chart (scatter plot - additional info) */}
+              {speedCorrelationData && (
                 <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
                   <h3 className="text-lg font-semibold text-white mb-4">
-                    CV Tuning Recommendations
+                    Speed vs Δt Correlation (Additional Analysis)
                   </h3>
-                  {(() => {
-                    const problemSpeeds = speedCorrelationData.speed_buckets.filter(
-                      bucket => Math.abs(bucket.mean_delta_t) >= (trackingConfig.delta_t_thresholds?.critical_threshold || 2.0)
-                    );
-
-                    if (problemSpeeds.length === 0) {
-                      return (
-                        <div className="text-center py-8 text-slate-400">
-                          <i className="fa-solid fa-circle-check text-4xl text-green-500 mb-3"></i>
-                          <p className="text-lg">All speeds well synchronized!</p>
-                          <p className="text-sm mt-2">No CV adjustments needed (all Δt below action threshold)</p>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="space-y-3">
-                        {problemSpeeds.map((bucket, idx) => {
-                          const recommendation = getSpeedTuningRecommendation(
-                            bucket.mean_delta_t,
-                            trackingConfig.delta_t_thresholds
-                          );
-                          return (
-                            <div
-                              key={idx}
-                              className="bg-slate-900/50 rounded-lg p-4 border-l-4 border-red-500"
-                            >
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <div className="font-semibold text-white mb-1">
-                                    Speed {bucket.speed_bucket} ({bucket.speed_min}-{bucket.speed_max})
-                                  </div>
-                                  <div className="text-sm text-slate-300 mb-2">
-                                    Mean Δt: <span className="font-mono">{formatDeltaT(bucket.mean_delta_t)}</span>s
-                                    {' '}(±{bucket.std_dev.toFixed(2)}s, N={bucket.samples})
-                                  </div>
-                                  {recommendation && (
-                                    <div className="text-sm text-amber-400 flex items-start gap-2">
-                                      <i className="fa-solid fa-lightbulb mt-0.5"></i>
-                                      <span>{recommendation}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        <div className="mt-4 p-4 bg-blue-900/20 border border-blue-700 rounded-lg">
-                          <div className="flex items-start gap-3">
-                            <i className="fa-solid fa-circle-info text-blue-400 mt-0.5"></i>
-                            <div className="text-sm text-slate-300">
-                              <p className="font-semibold text-white mb-2">Phase 1: Manual CV Adjustment</p>
-                              <p>
-                                Use JMRI DecoderPro to adjust CV speed table values (CV67-94) for the rear locomotive
-                                at the recommended speeds. Monitor Δt improvement in subsequent sessions.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  <SpeedCorrelationChart
+                    data={speedCorrelationData}
+                    thresholds={trackingConfig.delta_t_thresholds}
+                    consistColor={getConsistStrokeColor(consistFilter, trackingConfig.consists)}
+                  />
                 </div>
               )}
             </div>

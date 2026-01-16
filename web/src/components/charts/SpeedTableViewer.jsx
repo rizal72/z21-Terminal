@@ -1,0 +1,250 @@
+import React, { useState, useEffect } from 'react';
+import { Download } from 'lucide-react';
+
+/**
+ * SpeedTableViewer Component (Phase 1 - Read-Only)
+ *
+ * Displays 28-step JMRI speed table (CV67-94) for consist's adjust locomotive.
+ * Highlights problematic speeds based on CRITICAL/WARNING event counts.
+ * Shows CV adjustment recommendations below chart.
+ *
+ * Props:
+ *   - consistId: Consist ID to analyze (10, 11, etc.)
+ *   - sessionId: Current session ID (triggers refresh when changed)
+ */
+const SpeedTableViewer = ({ consistId, sessionId }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [data, setData] = useState(null);
+
+  // Fetch speed table data from API
+  useEffect(() => {
+    if (!consistId) return;
+
+    const fetchSpeedTableData = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch(`http://localhost:8000/api/speed-table/${consistId}`);
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || 'Failed to fetch speed table data');
+        }
+
+        const result = await response.json();
+        setData(result);
+      } catch (err) {
+        console.error('Speed table fetch error:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSpeedTableData();
+  }, [consistId, sessionId]); // Refresh when session changes
+
+  // Export speed table to CSV
+  const exportToCSV = () => {
+    if (!data || !data.cv_values) return;
+
+    // CSV Header
+    let csv = 'JMRI Step,CV Index,Current Value,Suggested Value,Delta,Critical Count,Warning Count,Notes\n';
+
+    // Build rows (28 steps)
+    for (let step = 1; step <= 28; step++) {
+      const cvIndex = 66 + step; // CV67-94
+      const currentValue = data.cv_values[cvIndex] || 0;
+
+      // Find recommendation for this CV (if any)
+      const recommendation = data.recommendations?.find(r => r.cv_index === cvIndex);
+
+      if (recommendation) {
+        // Has recommendation
+        csv += `${step},${cvIndex},${currentValue},${recommendation.cv_suggested},${recommendation.cv_delta},${recommendation.critical_count},${recommendation.warning_count},"Needs adjustment"\n`;
+      } else {
+        // No recommendation (OK)
+        csv += `${step},${cvIndex},${currentValue},${currentValue},0,0,0,"OK"\n`;
+      }
+    }
+
+    // Download CSV file
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `speed_table_consist_${consistId}_loco_${data.adjust_loco_address}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="h-96 flex items-center justify-center text-slate-400">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p>Loading speed table data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="h-96 flex items-center justify-center text-slate-400">
+        <div className="text-center">
+          <p className="text-lg mb-2 text-red-400">Error loading speed table</p>
+          <p className="text-sm">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // No session state
+  if (!data || !data.session_validated) {
+    return (
+      <div className="h-96 flex items-center justify-center text-slate-400">
+        <div className="text-center">
+          <p className="text-lg mb-2">Waiting for locomotive movement</p>
+          <p className="text-sm">Start consist {consistId} to collect speed data</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Render 28 vertical bars (CV67-94)
+  const bars = [];
+  for (let step = 1; step <= 28; step++) {
+    const cvIndex = 66 + step; // CV67-94
+    const cvValue = data.cv_values[cvIndex] || 0;
+    const fillPercent = (cvValue / 255) * 100; // 0-255 → 0-100%
+
+    // Check if this CV has recommendations (problematic speeds)
+    const hasRecommendation = data.recommendations?.some(r => r.cv_index === cvIndex);
+    const recommendation = data.recommendations?.find(r => r.cv_index === cvIndex);
+
+    // Border/fill color based on severity
+    let borderColor = 'border-slate-600'; // Default
+    let fillColor = 'bg-slate-600'; // Default
+
+    if (hasRecommendation && recommendation) {
+      if (recommendation.critical_count >= 10) {
+        borderColor = 'border-red-500';
+        fillColor = 'bg-red-500';
+      } else if (recommendation.critical_count >= 5) {
+        borderColor = 'border-amber-500';
+        fillColor = 'bg-amber-500';
+      }
+    }
+
+    bars.push(
+      <div key={step} className="flex flex-col items-center">
+        {/* CV Value (top) */}
+        <div className="text-xs font-mono text-slate-400 mb-1 h-4">
+          {cvValue}
+        </div>
+
+        {/* Vertical Bar */}
+        <div
+          className={`relative w-8 h-64 border-2 ${borderColor} rounded-sm bg-slate-800`}
+          title={`Step ${step} - CV${cvIndex} = ${cvValue}${hasRecommendation ? ` (${recommendation.critical_count} critical)` : ''}`}
+        >
+          {/* Fill (bottom-up) */}
+          <div
+            className={`absolute bottom-0 left-0 right-0 ${fillColor} rounded-sm transition-all duration-300`}
+            style={{ height: `${fillPercent}%` }}
+          />
+        </div>
+
+        {/* JMRI Step Number (bottom) */}
+        <div className="text-xs font-mono text-slate-500 mt-1">
+          {step}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header: Loco info + Export button */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-slate-400">
+          <span className="font-semibold">Adjust Loco:</span> {data.adjust_loco_address} |{' '}
+          <span className="font-semibold">Session:</span> {data.session_id?.slice(0, 8)}...
+        </div>
+        <button
+          onClick={exportToCSV}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+        >
+          <Download size={18} />
+          <span>Export CSV</span>
+        </button>
+      </div>
+
+      {/* 28 Vertical Bars */}
+      <div className="flex justify-center gap-1 overflow-x-auto pb-4">
+        {bars}
+      </div>
+
+      {/* CV Recommendations (below chart) */}
+      {data.recommendations && data.recommendations.length > 0 ? (
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+          <h3 className="text-white font-semibold mb-3 text-lg">
+            CV Adjustment Recommendations
+          </h3>
+          <div className="space-y-2">
+            {data.recommendations.map((rec) => (
+              <div
+                key={rec.cv_index}
+                className="flex items-center justify-between text-sm border-b border-slate-700 pb-2"
+              >
+                <div className="flex items-center gap-4">
+                  <span className="font-mono text-slate-400 w-20">
+                    CV{rec.cv_index}
+                  </span>
+                  <span className="text-slate-300">
+                    {rec.cv_current} → {rec.cv_suggested}
+                  </span>
+                  <span className={`font-mono ${rec.cv_delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {rec.cv_delta > 0 ? '+' : ''}{rec.cv_delta}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 text-xs">
+                  <span className="text-red-400">
+                    {rec.critical_count} critical
+                  </span>
+                  {rec.warning_count > 0 && (
+                    <span className="text-amber-400">
+                      {rec.warning_count} warning
+                    </span>
+                  )}
+                  <span className="text-slate-500">
+                    Speed {rec.speed} (Step {rec.jmri_step})
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500 mt-4">
+            💡 Export to CSV and import via JMRI DecoderPro to apply these adjustments
+          </p>
+        </div>
+      ) : (
+        <div className="bg-green-900/20 border border-green-700 rounded-lg p-4 text-center">
+          <p className="text-green-400 font-semibold">
+            ✓ No CV adjustments needed
+          </p>
+          <p className="text-slate-400 text-sm mt-1">
+            All speeds are within acceptable tolerance
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default SpeedTableViewer;

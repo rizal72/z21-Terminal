@@ -33,7 +33,7 @@ from services.broadcast import (
 )
 from services.config_manager import ConfigManager
 import dependencies
-from routers import analytics, config, roster, status
+from routers import analytics, config, roster, status, speed_table
 from routers.roster import get_full_roster
 from websocket_handlers.ws_control import handle_ws_control
 from websocket_handlers.ws_tracking import handle_ws_tracking
@@ -466,6 +466,7 @@ app.include_router(analytics.router_no_prefix)  # For endpoints outside /api/ana
 app.include_router(config.router)
 app.include_router(roster.router)
 app.include_router(status.router)
+app.include_router(speed_table.router)
 
 
 async def reload_roster_data():
