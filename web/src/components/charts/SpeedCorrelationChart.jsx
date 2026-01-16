@@ -105,8 +105,16 @@ const SpeedCorrelationChart = ({ data, thresholds, consistColor }) => {
     );
   }
 
-  // Format speed as percentage (speed / 126 * 100)
-  const speedToPercent = (speed) => `${Math.round((speed / 126) * 100)}%`;
+  // Calculate DCC speeds for even percentage intervals (10%, 20%, 30%...)
+  // Formula: percent / 100 * 126 = DCC speed
+  const percentTicks = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  const dccTicksForPercent = percentTicks.map(p => Math.round((p / 100) * 126));
+
+  // Format tick as percentage label
+  const formatPercentTick = (dccSpeed) => {
+    const percent = Math.round((dccSpeed / 126) * 100);
+    return `${percent}%`;
+  };
 
   return (
     <ResponsiveContainer width="100%" height={400}>
@@ -118,7 +126,7 @@ const SpeedCorrelationChart = ({ data, thresholds, consistColor }) => {
           dataKey="speed"
           name="Speed"
           domain={[0, 126]}
-          ticks={[0, 20, 40, 60, 80, 100, 120]}
+          ticks={dccTicksForPercent}
           label={{ value: 'DCC Speed', position: 'insideBottom', offset: -10, fill: '#9CA3AF' }}
           {...CHART_AXIS_STYLES.axis}
         />
@@ -127,8 +135,8 @@ const SpeedCorrelationChart = ({ data, thresholds, consistColor }) => {
           type="number"
           dataKey="speed"
           domain={[0, 126]}
-          ticks={[0, 20, 40, 60, 80, 100, 120]}
-          tickFormatter={speedToPercent}
+          ticks={dccTicksForPercent}
+          tickFormatter={formatPercentTick}
           orientation="bottom"
           axisLine={false}
           tickLine={false}
