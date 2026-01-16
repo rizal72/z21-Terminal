@@ -606,6 +606,62 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2025-01-17 - 🎉 **v1.0.0 - Production Release**
+
+**Status**: ✅ **PRODUCTION READY** - Complete locomotive control system with AI-powered speed optimization
+
+**Milestone**: First production release with full feature set:
+- ✅ Dual consist control (C10, C11) with real-time WebSocket sync
+- ✅ YOLO-based computer vision tracking (4 locomotives, OBB model, TensorRT GPU acceleration)
+- ✅ Automatic speed compensation via Virtual Consist Mode
+- ✅ Interactive Speed Table Viewer with JMRI-compatible checkpoint interpolation
+- ✅ Cumulative intelligent CV recommendations with auto-clear on fix
+- ✅ Session tracking with running session display (green badge in Reports)
+- ✅ Analytics dashboard with historical trend analysis
+- ✅ Mobile-first PWA design with Tailscale HTTPS access
+
+**What's New in v1.0.0**:
+- Speed Table Viewer Phase 2 complete (interactive editing, float precision, live interpolation)
+- Running sessions visible in Reports tab with green border + "RUNNING" badge
+- Deployment workflow skill created (Mac → PC automation reminder)
+- Documentation consolidated (CLAUDE.md, skills, comprehensive guides)
+
+**Technical Stack**:
+- Backend: FastAPI + WebSocket + SQLite + YOLO v8 nano OBB + TensorRT
+- Frontend: React 18.3 + Vite 6.0 + Tailwind CSS
+- Hardware: Roco Z21 Bianca, Tapo IP camera 720P, PC Windows 11 + GPU
+
+**Production Deployment**: PC Windows (gaming-pc) via z21-deploy-dev
+
+**Next Phase**: v1.1.0+ (optional enhancements - system is feature-complete)
+
+---
+
+### 2025-01-17 - 🐛 **Fix: Running Sessions in Reports Tab**
+
+**Status**: ✅ **FIXED AND DEPLOYED**
+
+**Bug**: Running sessions (end_time = NULL) were excluded from Reports list due to SQL filter.
+
+**Impact**: Current active session invisible in Reports tab despite UI supporting green badge.
+
+**Fix**:
+- Removed `AND end_time IS NOT NULL` filter in `get_reports_data()` query
+- Calculate duration using `time.time()` if `end_time` is NULL (shows elapsed time)
+- Added missing `import time` for time module
+
+**Result**: Running sessions now visible in Reports with:
+- Green border (`border-green-500/50`)
+- Green background (`bg-green-900/10`)
+- "RUNNING" badge (green)
+- Real-time duration updates on refresh
+
+**Commit**: `54d7e7d` - fix(reports): include running sessions in Reports tab
+
+**Deployed**: Backend restarted on PC production
+
+---
+
 ### 2025-01-17 - ⚙️ **Speed Table Viewer: Phase 2 Interactive Editing** (Complete)
 
 **Status**: ✅ **DEPLOYED TO PRODUCTION** - JMRI-compatible checkpoint-based editing with float precision
