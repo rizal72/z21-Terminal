@@ -219,7 +219,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
       <div className="flex items-center justify-between">
         <div className="text-sm text-slate-400">
           <span className="font-semibold">Adjust Loco:</span> {data.adjust_loco_address} |{' '}
-          <span className="font-semibold">Session:</span> {data.session_id?.slice(0, 8)}...
+          <span className="font-semibold">Session:</span> {data.session_id}
         </div>
         <button
           onClick={exportToCSV}
