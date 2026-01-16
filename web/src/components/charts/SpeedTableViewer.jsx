@@ -140,6 +140,12 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
       }
     }
 
+    // Calculate speed percentage for this step
+    // JMRI Step -> DCC speed center: (step - 0.5) * 4.5
+    // DCC speed -> Percentage: (speed / 126) * 100
+    const dccSpeed = (step - 0.5) * 4.5;
+    const speedPercent = Math.round((dccSpeed / 126) * 100);
+
     bars.push(
       <div key={step} className="flex flex-col items-center">
         {/* CV Value (top) */}
@@ -159,9 +165,14 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           />
         </div>
 
-        {/* JMRI Step Number (bottom) */}
+        {/* JMRI Step Number (middle) */}
         <div className="text-xs font-mono text-slate-500 mt-1">
           {step}
+        </div>
+
+        {/* Speed Percentage (bottom) */}
+        <div className="text-xs font-mono text-slate-600">
+          {speedPercent}%
         </div>
       </div>
     );
