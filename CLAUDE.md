@@ -903,6 +903,212 @@ Session 3: ONLY 100% tested
 
 ---
 
+### 2025-01-17 - 📄 **CSV Export JMRI-Compatible + Phase 2 Design Documentation**
+
+**Status**: ✅ **COMPLETED**
+
+**Objective**: Finalize Phase 1 CSV export for seamless JMRI DecoderPro import workflow + comprehensive Phase 2 design documentation
+
+**Implementation Time**: ~3-4 hours (research JMRI import, refactor CSV export, write extensive Phase 2 docs)
+
+---
+
+#### Part 1: CSV Export JMRI-Compatible
+
+**Research**: JMRI DecoderPro CSV import capabilities
+- ✅ Confirmed: JMRI supports CSV import via File → Import → CSV
+- ✅ Format required: Simple 2-column `CV,value` (no extra metadata)
+- ⚠️ Historical bug: Quoted headers caused import failures (fixed in JMRI 5.x+)
+
+**Changes**:
+```javascript
+// OLD (multi-column, not importable):
+'JMRI Step,CV Index,Current Value,Suggested Value,Delta,Critical Count,Warning Count,Notes\n'
+'20,86,128,126,-2,12,5,"Needs adjustment"\n'
+
+// NEW (JMRI-ready):
+'CV,value\n'
+'86,126\n'
+```
+
+**Logic Update**:
+- If CV has recommendation → use **suggested value** (optimized)
+- If CV is OK → use **current value** (no change)
+- Result: CSV contains speed table ready to apply directly
+
+**UI Changes**:
+- Button label: "Export CSV" → **"Export for JMRI"**
+- Filename suffix: `_JMRI.csv` (clarifies purpose)
+- Tooltip: Added JMRI menu path "(File → Import → CSV)"
+
+**User Workflow** (zero friction):
+1. Click "Export for JMRI" in Speed Table Viewer
+2. Download `speed_table_consist_11_loco_7_JMRI.csv`
+3. JMRI DecoderPro → File → Import → CSV → Select file
+4. Write to decoder (ops mode or programming track)
+
+**Commits**:
+- Frontend: `web/src/components/charts/SpeedTableViewer.jsx` (lines 48-77, 237-241, 293)
+
+---
+
+#### Part 2: Phase 2 Design Documentation (Comprehensive)
+
+**Documented in**: `docs/SPEED_TABLE_VIEWER.md` (new section ~400 lines)
+
+**Topics Covered**:
+
+1. **JMRI Checkpoint System** (How It Works)
+   - Checkbox-based fixed points (user controls which steps)
+   - Automatic linear interpolation between checkpoints
+   - Edit behavior (modify checkpoint → all intermediate steps recalculate)
+   - Mathematical formula with examples
+
+2. **Checkpoint Strategy: Operational Speed Percentages**
+   - **Key Insight**: Checkpoints should match controller usage (10%, 20%, ..., 100%)
+   - **Default checkpoints**: Steps `[3, 6, 9, 12, 15, 17, 20, 23, 26, 28]`
+   - **Rationale**: Users never command intermediate steps directly (only used by decoder during acceleration)
+   - Mapping table: Percentage → DCC Speed → JMRI Step → CV Index
+
+3. **The Rounding Problem** (Critical Design Decision)
+   - **Issue**: Integer-only math prevents gradual adjustments from propagating
+   - **Example**: Adjusting step 20 by -1 requires -3 to -4 iterations before adjacent steps change
+   - **Solution**: Float precision internally, round only on display/export
+   - **Benefits**: Mathematically accurate, gradual propagation works correctly, JMRI-compatible
+
+4. **Implementation Plan** (Detailed)
+   - UI changes: Checkpoint checkboxes, interactive editing, real-time preview
+   - Data structure: Float precision state (`cvValuesFloat`)
+   - Interpolation algorithm: Linear between checkpoints (code examples)
+   - Edge cases: First/last checkpoint handling
+   - Backend changes: Minimal (endpoint already complete)
+
+5. **Features Roadmap**
+   - Core (required): Checkpoint editing, float precision, interactive adjustment
+   - Optional: Auto-apply to decoder, validation, undo/redo, preset curves
+
+6. **Timeline Estimate**: 12-16 hours total effort
+
+**Code Examples**: Complete JavaScript/JSX snippets for all major functions
+
+**Benefits**:
+- ✅ Zero ambiguity for future implementation
+- ✅ Captures JMRI workflow understanding
+- ✅ Documents float precision rationale (critical decision)
+- ✅ Ready for Phase 2 kickoff (no rework needed)
+
+---
+
+**Files Modified**:
+- `web/src/components/charts/SpeedTableViewer.jsx` - CSV export refactor
+- `docs/SPEED_TABLE_VIEWER.md` - Phase 2 section (~400 lines added)
+- `CLAUDE.md` - This changelog entry
+
+**Key Insight Captured** (from user):
+> "I checkpoint attivi di default devono sempre essere quelli corrispondenti alle speed percentuali 10 20 30 40 etc, perchè muovendo le loco sempre usando gli step percentuali, che è come facciamo sempre noi, andiamo ad interpolare solo i valori intermedi"
+
+**Result**: Phase 1 finalized (JMRI-ready export), Phase 2 fully designed and documented. Ready to implement when user validates Phase 1 in production.
+
+---
+
+### 2025-01-17 - 🎯 **Phase 2 User Approval Workflow Design**
+
+**Status**: ✅ **DOCUMENTED**
+
+**Objective**: Define semi-automatic CV adjustment workflow with user approval
+
+**User Request**:
+> "Io preferisco il 2 ma mi piacerebbe che la preview fosse cmq in realtime sulle barre e poi approve finale, la uno è troppo granulare, non è rocket science"
+
+**Approach Finalized**: Checkboxes + Real-Time Preview + Final Approval
+
+---
+
+#### Design Decisions
+
+**What User Wanted**:
+- ✅ Batch approval (not per-CV granular)
+- ✅ Real-time preview on bars (visual feedback immediate)
+- ✅ Single final approval (not rocket science)
+
+**How It Works**:
+
+1. **Recommendations List** (with checkboxes)
+   - Default: All recommendations checked (opt-out model)
+   - User unchecks recommendations they don't want to apply
+   - Select All / Deselect All buttons
+
+2. **Real-Time Preview** (on speed table bars)
+   - Checked recommendation → Bar changes color immediately (blue → orange)
+   - Checkpoint bars: Solid orange (direct modification)
+   - Interpolated bars: Light orange (auto-calculated)
+   - Unchecked → Bar reverts to blue (no change)
+   - Tooltip: "Current: 128 → New: 127 (float: 126.67)"
+
+3. **Impact Summary**
+   - "2 checkpoints + 8 interpolated = 10 CVs will change"
+   - User sees EXACTLY what will be modified before approval
+
+4. **Final Approval Button**
+   - "Apply 2 Selected Changes"
+   - Disabled if no checkboxes selected
+   - Opens confirmation dialog with summary
+
+5. **Confirmation Dialog**
+   - Summary: "2 checkpoint values, 8 interpolated, Total: 10 CVs"
+   - Choose method: Export to JMRI CSV OR Write via POM (Z21)
+   - Cancel button always available
+
+**Benefits**:
+- ✅ Not too granular (single approval, not per-CV)
+- ✅ Visual feedback (bars change in real-time)
+- ✅ Safe (confirmation dialog before write)
+- ✅ Flexible (user can select/deselect)
+- ✅ Simple ("not rocket science")
+- ✅ WYSIWYG (bars show exact effect)
+
+**Implementation Details**: Full code examples in `docs/SPEED_TABLE_VIEWER.md` (~200 lines added)
+- State management (selected recommendations, projected CV values)
+- Checkbox handlers (toggle, select all, deselect all)
+- Real-time preview calculation (useEffect on selection change)
+- Bar rendering with color coding (checkpoint vs interpolated)
+- Apply button handler (confirmation dialog + export/write)
+
+**Safety Features**:
+- Visual validation (color-coded bars)
+- Tooltip precision (shows float values)
+- Confirmation dialog (summary before write)
+- Optional warnings (monotonicity, large jumps, range check)
+- Undo capability (reset to original values)
+
+**User Experience Flow**: 5 steps documented
+1. View recommendations (all checked by default)
+2. Adjust selections (uncheck unwanted, bars update real-time)
+3. Review visual preview (hover for exact values)
+4. Click "Apply Selected Changes" (confirmation dialog)
+5. Choose method (Export CSV or POM write)
+
+**Files Modified**:
+- `docs/SPEED_TABLE_VIEWER.md` - User Approval Workflow section (~200 lines)
+- `CLAUDE.md` - This changelog entry
+
+**Key Insight Captured**: Batch approval with real-time preview strikes optimal balance between safety and usability. Per-CV approval is overkill for simple CV adjustments.
+
+**Recommendation Persistence Clarified**:
+- Recommendations are **persistent** (calculated on-the-fly from cumulative historical data)
+- Cancel button does NOT consume recommendations (they remain until resolved)
+- Two resolution paths:
+  1. Manual: User applies changes via JMRI/POM
+  2. Automatic: New test session shows speed FIXED (< 20% CRITICAL rate)
+- Iterative workflow: Apply -1 → test → if still problematic, apply -1 again
+- Database: No changes on Cancel, recommendations recalculated from same historical events
+
+**Files Modified**:
+- `docs/SPEED_TABLE_VIEWER.md` - Recommendation Persistence section (~80 lines)
+- `CLAUDE.md` - This clarification
+
+---
+
 ## 📋 TODO / Future Enhancements
 
 **Note**: Nessun TODO attivo. Vedi sezioni precedenti per roadmap features (Speed Table Phase 2, YOLO expansion, etc.)

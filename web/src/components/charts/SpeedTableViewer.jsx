@@ -45,14 +45,14 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     fetchSpeedTableData();
   }, [consistId, sessionId]); // Refresh when session changes
 
-  // Export speed table to CSV
+  // Export speed table to CSV (JMRI-compatible format)
   const exportToCSV = () => {
     if (!data || !data.cv_values) return;
 
-    // CSV Header
-    let csv = 'JMRI Step,CV Index,Current Value,Suggested Value,Delta,Critical Count,Warning Count,Notes\n';
+    // JMRI-compatible CSV Header (CV,value format)
+    let csv = 'CV,value\n';
 
-    // Build rows (28 steps)
+    // Build rows (28 steps, CV67-94)
     for (let step = 1; step <= 28; step++) {
       const cvIndex = 66 + step; // CV67-94
       const currentValue = data.cv_values[cvIndex] || 0;
@@ -60,13 +60,10 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
       // Find recommendation for this CV (if any)
       const recommendation = data.recommendations?.find(r => r.cv_index === cvIndex);
 
-      if (recommendation) {
-        // Has recommendation
-        csv += `${step},${cvIndex},${currentValue},${recommendation.cv_suggested},${recommendation.cv_delta},${recommendation.critical_count},${recommendation.warning_count},"Needs adjustment"\n`;
-      } else {
-        // No recommendation (OK)
-        csv += `${step},${cvIndex},${currentValue},${currentValue},0,0,0,"OK"\n`;
-      }
+      // Use suggested value if recommendation exists, otherwise current value
+      const finalValue = recommendation ? recommendation.cv_suggested : currentValue;
+
+      csv += `${cvIndex},${finalValue}\n`;
     }
 
     // Download CSV file
@@ -74,7 +71,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `speed_table_consist_${consistId}_loco_${data.adjust_loco_address}.csv`;
+    link.download = `speed_table_consist_${consistId}_loco_${data.adjust_loco_address}_JMRI.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -241,7 +238,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
         >
           <i className="fa-solid fa-download"></i>
-          <span>Export CSV</span>
+          <span>Export for JMRI</span>
         </button>
       </div>
 
@@ -293,7 +290,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
             ))}
           </div>
           <p className="text-xs text-slate-500 mt-4">
-            💡 Export to CSV and import via JMRI DecoderPro to apply these adjustments
+            💡 Export to CSV and import via JMRI DecoderPro (File → Import → CSV) to apply these adjustments
           </p>
         </div>
       ) : (

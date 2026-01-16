@@ -516,18 +516,795 @@ JMRI Step,CV Index,Current Value,Suggested Value,Delta,Critical Count,Warning Co
 
 ---
 
-## Phase 2 Preview
+## Phase 2 Planning - Interactive CV Editing with Smoothing
 
-**Features Planned**:
-1. Interactive CV editing (keyboard arrows, drag, numeric input)
-2. CV smoothing (±3 adjacent steps with Gaussian/linear interpolation)
-3. Auto-apply to decoder (direct POM writes, no JMRI required)
-4. Speed table validation (warn about monotonicity violations, large jumps)
-5. Multi-session recommendations (average across sessions for stability)
-6. Undo/redo for CV changes
-7. Preset curves (linear, exponential, S-curve templates)
+**Status**: 📋 DESIGN PHASE (2025-01-17)
+**Target**: TBD (after Phase 1 production validation)
 
-**Timeline**: TBD (after Phase 1 user validation)
+---
+
+### Overview
+
+Phase 2 will add **interactive CV editing** with **automatic smoothing** via JMRI-compatible checkpoint system. This allows users to adjust problematic CV values directly in the UI while maintaining smooth speed curves through linear interpolation.
+
+**Key Principle**: Match JMRI DecoderPro's checkpoint-based interpolation workflow for zero cognitive load and seamless integration.
+
+---
+
+### JMRI Checkpoint System (How It Works)
+
+**JMRI DecoderPro Speed Table Editor** uses a checkpoint-based interpolation system:
+
+1. **Checkpoints**: Each of the 28 CV bars has a **checkbox** underneath
+2. **Fixed Points**: Checked steps are "fixed" - their values are manually controlled
+3. **Interpolation**: Unchecked steps are **automatically interpolated** between checkpoints
+4. **Edit Behavior**: When you modify a checkpoint value, all intermediate steps recalculate automatically
+
+**Example**:
+```
+Steps:     1    5    10   15   20   25   28
+Checkbox:  ☑    ☐    ☑    ☐    ☑    ☐    ☑   ← User controls checkpoints
+Values:    10   ?    80   ?    128  ?    255 ← ? = auto-calculated
+
+When user modifies step 20 (128 → 127):
+- Steps 11-19 recalculate (linear interpolation between 80 and 127)
+- Steps 21-27 recalculate (linear interpolation between 127 and 255)
+- Step 10 and 28 remain unchanged (fixed checkpoints)
+```
+
+**Interpolation Formula** (linear between checkpoints A and B):
+```python
+value_x = value_a + (value_b - value_a) * (step_x - step_a) / (step_b - step_a)
+
+# Example: Interpolate step 15 between checkpoint 10 (value 80) and 20 (value 127)
+value_15 = 80 + (127 - 80) * (15 - 10) / (20 - 10)
+         = 80 + 47 * 0.5
+         = 103.5
+```
+
+---
+
+### Checkpoint Strategy: Operational Speed Percentages
+
+**Default Checkpoints**: Steps corresponding to controller speed percentages (10%, 20%, ..., 100%)
+
+**Rationale**: Users always control locomotives using percentage steps (not intermediate values), so checkpoints should match operational usage.
+
+**Mapping** (DCC Speed → JMRI Step → CV Index):
+```
+Percentage → DCC Speed → JMRI Step → CV Index → Checkpoint
+10%        →    13      →   step 3  →  CV69    → ☑
+20%        →    25      →   step 6  →  CV72    → ☑
+30%        →    38      →   step 9  →  CV75    → ☑
+40%        →    50      →   step 12 →  CV78    → ☑
+50%        →    63      →   step 15 →  CV81    → ☑
+60%        →    76      →   step 17 →  CV83    → ☑
+70%        →    88      →   step 20 →  CV86    → ☑
+80%        →   101      →   step 23 →  CV89    → ☑
+90%        →   113      →   step 26 →  CV92    → ☑
+100%       →   126      →   step 28 →  CV94    → ☑
+```
+
+**Default Checkpoints**: `[3, 6, 9, 12, 15, 17, 20, 23, 26, 28]` (10 checkpoints)
+
+**Benefit**: When adjusting step 20 (70%), intermediate steps (18, 19, 21, 22) auto-recalculate. These intermediate values are ONLY used by decoder during acceleration/deceleration, never commanded directly.
+
+**User Workflow**:
+```
+1. User commands: 70% speed
+2. Backend translates: DCC speed 88
+3. Decoder reads: CV86 (step 20) ← CHECKPOINT VALUE
+4. During acceleration from 60% to 70%:
+   - Decoder interpolates through steps 18-19 (auto-calculated by Phase 2)
+   - Result: Smooth speed curve, no jumps
+```
+
+---
+
+### The Rounding Problem (Float Precision Required)
+
+**Issue**: CV values are integers (0-255), but interpolation produces floats. Naive rounding causes loss of precision and prevents gradual adjustments from propagating.
+
+#### Scenario: Gradual CV Adjustment (-1 per iteration)
+
+**Setup**:
+```
+Step 17 (60%): 140  ← checkpoint (FIXED)
+Step 20 (70%): 160  ← checkpoint (will adjust)
+Step 23 (80%): 180  ← checkpoint (FIXED)
+
+Intermediate steps (18, 19, 21, 22) interpolated between checkpoints
+```
+
+**Adjust 1**: Step 20: 160 → 159
+```
+Step 18 = 140 + (159-140) * 1/3 = 140 + 6.33 = 146.33 → round(146.33) = 146
+Step 19 = 140 + (159-140) * 2/3 = 140 + 12.67 = 152.67 → round(152.67) = 153
+
+Problem: If step 18 was already 146 before adjustment, NO VISUAL CHANGE!
+         Rounding suppresses propagation of -1 adjustment to adjacent steps.
+```
+
+**After 4 adjustments** (160 → 156):
+```
+Step 18 finally changes from 146 → 145 (took -4 to checkpoint before propagating!)
+Step 19 changed earlier at 158 (took -2)
+```
+
+**Problem Summary**: Integer-only math requires -3 to -4 adjustments to checkpoint before adjacent steps visibly change. This breaks the "gradual adjustment" workflow.
+
+#### Solution: Float Precision Internally, Round Only on Export
+
+**Implementation**:
+1. **Internal State**: Store CV values as **floats** (decimal precision)
+2. **Interpolation**: Calculate without rounding (pure float math)
+3. **Display**: Round for UI (show integer to user)
+4. **Export CSV**: Round for JMRI import (integer 0-255)
+
+**Code Example**:
+```javascript
+// State stores floats (decimal precision)
+const [cvValuesFloat, setCvValuesFloat] = useState({
+  67: 10.0,
+  68: 18.333,
+  69: 26.667,
+  // ...
+});
+
+// Interpolation preserves float precision
+function interpolate(stepA, valueA, stepB, valueB, stepX) {
+  return valueA + (valueB - valueA) * (stepX - stepA) / (stepB - stepA);
+  // Returns float! (e.g., 146.333...)
+}
+
+// Apply checkpoint adjustment (maintains float precision)
+function applyInterpolation(modifiedStep, newValue) {
+  const updatedValues = { ...cvValuesFloat };
+
+  // Update checkpoint (exact integer or float)
+  updatedValues[66 + modifiedStep] = newValue;
+
+  // Recalculate intermediate steps (float math, NO rounding)
+  for (let step = prevCheckpoint + 1; step < modifiedStep; step++) {
+    updatedValues[66 + step] = interpolate(...); // Float result preserved
+  }
+
+  setCvValuesFloat(updatedValues);
+}
+
+// Display in UI (round only for presentation)
+function getDisplayValue(step) {
+  return Math.round(cvValuesFloat[66 + step]);
+}
+
+// Export CSV (round only for JMRI compatibility)
+function exportToCSV() {
+  for (let step = 1; step <= 28; step++) {
+    const value = Math.round(cvValuesFloat[66 + step]); // Integer for decoder
+    csv += `${66 + step},${value}\n`;
+  }
+}
+```
+
+**Result with Float Precision**:
+```
+Adjust 1: Step 20: 160.0 → 159.0
+  Step 18: 146.333... (display: 146)
+  Step 19: 152.667... (display: 153)
+  Internal state changes, but display unchanged (OK!)
+
+Adjust 2: Step 20: 159.0 → 158.0
+  Step 18: 146.0 (display: 146) ← still unchanged
+  Step 19: 152.0 (display: 152) ← VISUAL CHANGE! ✅
+
+Adjust 3: Step 20: 158.0 → 157.0
+  Step 18: 145.667... (display: 146) ← still 146
+  Step 19: 151.333... (display: 151) ← VISUAL CHANGE! ✅
+
+Adjust 4: Step 20: 157.0 → 156.0
+  Step 18: 145.333... (display: 145) ← VISUAL CHANGE! ✅
+  Step 19: 150.667... (display: 151)
+```
+
+**Benefits**:
+- ✅ Gradual propagation works correctly (no "stuck" values)
+- ✅ Mathematically accurate interpolation (no cumulative rounding errors)
+- ✅ JMRI-compatible export (final rounding to integer)
+- ✅ User-friendly display (shows integers, hides float complexity)
+
+---
+
+### CSV Export Format (JMRI-Compatible)
+
+**Implemented**: 2025-01-17 (Phase 1 update)
+
+**Format**: Simple 2-column CSV (`CV,value`) compatible with JMRI DecoderPro File → Import → CSV
+
+**Before** (Phase 1 initial):
+```csv
+JMRI Step,CV Index,Current Value,Suggested Value,Delta,Critical Count,Warning Count,Notes
+1,67,10,10,0,0,0,"OK"
+20,86,128,126,-2,12,5,"Needs adjustment"
+```
+
+**After** (JMRI-ready):
+```csv
+CV,value
+67,10
+86,126
+94,255
+```
+
+**Logic**:
+- If CV has recommendation → use **suggested value** ✅
+- If CV is OK → use **current value** ✅
+- Result: CSV contains optimized speed table ready to apply
+
+**User Workflow**:
+1. Click "Export for JMRI" in Speed Table Viewer
+2. Download `speed_table_consist_11_loco_7_JMRI.csv`
+3. JMRI DecoderPro → File → Import → CSV → Select file
+4. Write to decoder (operations mode or programming track)
+
+**Filename**: `speed_table_consist_{id}_loco_{addr}_JMRI.csv` (suffix clarifies purpose)
+
+**Button Label**: "Export for JMRI" (was "Export CSV")
+
+**Tooltip**: "Export to CSV and import via JMRI DecoderPro (File → Import → CSV) to apply these adjustments"
+
+---
+
+### Implementation Plan (Phase 2)
+
+#### UI Changes
+
+**1. Checkpoint Checkboxes**
+```jsx
+// SpeedTableViewer.jsx - Add checkbox below each bar
+
+const DEFAULT_CHECKPOINTS = [3, 6, 9, 12, 15, 17, 20, 23, 26, 28]; // 10%-100%
+const [checkpoints, setCheckpoints] = useState(DEFAULT_CHECKPOINTS);
+
+{bars.map((bar, idx) => {
+  const step = idx + 1;
+  const isCheckpoint = checkpoints.includes(step);
+
+  return (
+    <div key={idx} className="flex flex-col items-center">
+      {bar}
+      <input
+        type="checkbox"
+        checked={isCheckpoint}
+        onChange={() => toggleCheckpoint(step)}
+        className="mt-1"
+      />
+      {isCheckpoint && (
+        <span className="text-xs text-blue-400 mt-1">
+          {getPercentageLabel(step)} {/* "70%" etc. */}
+        </span>
+      )}
+    </div>
+  );
+})}
+```
+
+**2. Interactive CV Editing**
+- Click bar → numeric input popup
+- Keyboard arrows ↑/↓ to adjust value
+- Drag bar up/down for visual adjustment
+- Accept/reject recommendation buttons
+
+**3. Real-time Interpolation Preview**
+- Show interpolated values in gray (non-checkpoint bars)
+- Highlight modified checkpoints in different color
+- Display float precision in tooltip (e.g., "146.33 → rounds to 146")
+
+#### Data Structure Changes
+
+**Float Precision State**:
+```javascript
+// Current: Integer values only
+const [cvValues, setCvValues] = useState({ 67: 10, 68: 18, ... });
+
+// Phase 2: Float precision for interpolation
+const [cvValuesFloat, setCvValuesFloat] = useState({
+  67: 10.0,
+  68: 18.333,
+  69: 26.667,
+  // ...
+});
+
+// Display helper
+function getDisplayValue(step) {
+  return Math.round(cvValuesFloat[66 + step]);
+}
+
+// Export helper
+function getExportValue(step) {
+  return Math.round(cvValuesFloat[66 + step]); // Integer for JMRI/decoder
+}
+```
+
+#### Backend Changes
+
+**Minimal**: Export endpoint already returns complete cv_values (CV67-94), no changes needed.
+
+**Optional Enhancements**:
+- Validate speed table (monotonicity check, jump detection)
+- Direct CV write via POM (operations mode) - requires Z21 integration
+- Undo/redo tracking via database
+
+#### Interpolation Logic
+
+**Core Algorithm**:
+```javascript
+function applyInterpolation(modifiedStep, newValue) {
+  const sortedCheckpoints = [...checkpoints].sort((a, b) => a - b);
+  const currentIdx = sortedCheckpoints.indexOf(modifiedStep);
+  const prevCheckpoint = sortedCheckpoints[currentIdx - 1] || 1;
+  const nextCheckpoint = sortedCheckpoints[currentIdx + 1] || 28;
+
+  const updatedValues = { ...cvValuesFloat };
+  updatedValues[66 + modifiedStep] = newValue; // Update checkpoint
+
+  // Interpolate zone: prevCheckpoint → modifiedStep
+  for (let step = prevCheckpoint + 1; step < modifiedStep; step++) {
+    const cvIndex = 66 + step;
+    updatedValues[cvIndex] = interpolate(
+      prevCheckpoint, cvValuesFloat[66 + prevCheckpoint],
+      modifiedStep, newValue,
+      step
+    ); // Returns float, NO rounding
+  }
+
+  // Interpolate zone: modifiedStep → nextCheckpoint
+  for (let step = modifiedStep + 1; step < nextCheckpoint; step++) {
+    const cvIndex = 66 + step;
+    updatedValues[cvIndex] = interpolate(
+      modifiedStep, newValue,
+      nextCheckpoint, cvValuesFloat[66 + nextCheckpoint],
+      step
+    ); // Returns float, NO rounding
+  }
+
+  setCvValuesFloat(updatedValues);
+}
+
+function interpolate(stepA, valueA, stepB, valueB, stepX) {
+  return valueA + (valueB - valueA) * (stepX - stepA) / (stepB - stepA);
+}
+```
+
+**Edge Cases**:
+- First checkpoint (step 1): No prev checkpoint → interpolate to step 1 from step 1 (no-op)
+- Last checkpoint (step 28): No next checkpoint → interpolate from step 28 to step 28 (no-op)
+- Single checkpoint modified: Recalculates both zones (prev-current, current-next)
+
+---
+
+### User Approval Workflow (Semi-Automatic)
+
+**Principle**: CV changes require user approval before writing to decoder. "It's not rocket science" - batch approval with real-time preview is sufficient.
+
+**Approach**: Checkboxes + Real-Time Preview + Final Approval
+
+---
+
+#### UI Design
+
+```
+╔═══════════════════════════════════════════════════════════╗
+║ Recommended CV Adjustments (3)                           ║
+╠═══════════════════════════════════════════════════════════╣
+║                                                           ║
+║ ☑ Step 20 (CV86) - 70%                                   ║
+║    128 → 127 (-1) | 12 CRITICAL, Δt -0.8s               ║
+║                                                           ║
+║ ☑ Step 23 (CV89) - 80%                                   ║
+║    180 → 179 (-1) | 5 CRITICAL, Δt -0.5s                ║
+║                                                           ║
+║ ☐ Step 28 (CV94) - 100%                                  ║
+║    255 → 254 (-1) | 8 CRITICAL, Δt -1.2s                ║
+║                                                           ║
+║ [Select All]  [Deselect All]                            ║
+║                                                           ║
+╟───────────────────────────────────────────────────────────╢
+║                                                           ║
+║ [28 vertical bars with real-time preview]                ║
+║                                                           ║
+║ Preview shows: 2 checkpoints + 8 interpolated = 10 CVs  ║
+║ will change                                              ║
+║                                                           ║
+╟───────────────────────────────────────────────────────────╢
+║                                                           ║
+║ [Apply 2 Selected Changes]  [Export to JMRI]            ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+```
+
+#### Behavior
+
+**1. Checkboxes (Select Recommendations)**:
+- Default: All recommendations **checked** (opt-out model)
+- User unchecks recommendations they don't want to apply
+- `[Select All]` / `[Deselect All]` for bulk operations
+
+**2. Real-Time Preview on Bars**:
+- **When checkbox checked**: Bar changes color immediately (e.g., blue → orange)
+  - Checkpoint bar: Solid color (e.g., orange)
+  - Interpolated bars: Lighter shade (e.g., light orange)
+  - Tooltip shows: "Current: 128 → New: 127 (float: 126.67)"
+- **When checkbox unchecked**: Bar reverts to original color (blue)
+- **Visual feedback**: User sees EXACTLY what will change before final approval
+
+**3. Impact Summary**:
+```
+Preview Impact:
+- 2 checkpoint values modified (CV86, CV89)
+- 8 interpolated values changed (CV87-88, CV90-92)
+- Total: 10 CVs will be written
+```
+
+**4. Final Approval Button**:
+```jsx
+[Apply 2 Selected Changes]  // Disabled if no checkboxes selected
+```
+
+Click → **Confirmation Dialog**:
+
+```
+╔═══════════════════════════════════════════════════════════╗
+║ Apply CV Changes to Decoder?                             ║
+╠═══════════════════════════════════════════════════════════╣
+║                                                           ║
+║ This will modify:                                        ║
+║ • 2 checkpoint values (CV86, CV89)                       ║
+║ • 8 interpolated values (CV87-88, CV90-92)               ║
+║ • Total: 10 CVs                                          ║
+║                                                           ║
+║ Choose method:                                           ║
+║                                                           ║
+║ [Export to JMRI CSV]  [Write via POM (Z21)]             ║
+║                                                           ║
+║ [Cancel]                                                 ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+```
+
+**5. Apply Methods**:
+
+**Option A: Export to JMRI** (Phase 1, available now)
+- Downloads CSV with new values
+- User imports via JMRI DecoderPro → File → Import → CSV
+- JMRI writes to decoder (ops mode or programming track)
+
+**Option B: Write via POM** (Phase 2B, future)
+- Direct Z21 operations mode write (`write_cv_ops_mode()`)
+- Progress bar: "Writing CV86... 1/10"
+- Success notification: "10 CVs written successfully"
+- Error handling: Retry on failure, rollback on critical error
+
+---
+
+#### Implementation (Phase 2)
+
+**State Management**:
+```javascript
+// Selected recommendations (checkboxes)
+const [selectedRecommendations, setSelectedRecommendations] = useState(
+  new Set(data.recommendations.map(r => r.cv_index)) // Default: all checked
+);
+
+// Projected CV values (real-time preview)
+const [projectedCVValues, setProjectedCVValues] = useState(null);
+
+// Update preview when selections change
+useEffect(() => {
+  const projected = calculateProjectedValues(selectedRecommendations);
+  setProjectedCVValues(projected);
+}, [selectedRecommendations, data.recommendations]);
+
+function calculateProjectedValues(selected) {
+  const newValues = { ...cvValuesFloat };
+
+  // Apply selected recommendations
+  selected.forEach(cvIndex => {
+    const rec = data.recommendations.find(r => r.cv_index === cvIndex);
+    if (rec) {
+      const step = cvIndex - 66;
+      newValues[cvIndex] = rec.cv_suggested;
+
+      // Recalculate interpolated values
+      applyInterpolation(step, rec.cv_suggested, newValues);
+    }
+  });
+
+  return newValues;
+}
+```
+
+**Checkbox Handler**:
+```javascript
+function handleToggleRecommendation(cvIndex) {
+  setSelectedRecommendations(prev => {
+    const newSet = new Set(prev);
+    if (newSet.has(cvIndex)) {
+      newSet.delete(cvIndex); // Uncheck
+    } else {
+      newSet.add(cvIndex); // Check
+    }
+    return newSet;
+  });
+}
+```
+
+**Bar Rendering (with preview)**:
+```javascript
+{bars.map((bar, idx) => {
+  const step = idx + 1;
+  const cvIndex = 66 + step;
+
+  // Determine bar color based on preview state
+  const isModifiedCheckpoint = selectedRecommendations.has(cvIndex);
+  const isModifiedInterpolated = projectedCVValues &&
+    projectedCVValues[cvIndex] !== cvValuesFloat[cvIndex];
+
+  let barColor = 'bg-blue-500'; // Default
+  if (isModifiedCheckpoint) {
+    barColor = 'bg-orange-500'; // Checkpoint modified
+  } else if (isModifiedInterpolated) {
+    barColor = 'bg-orange-300'; // Interpolated modified
+  }
+
+  return (
+    <div key={idx} className={`bar ${barColor}`}>
+      {/* Bar content */}
+      <div className="tooltip">
+        {projectedCVValues && projectedCVValues[cvIndex] !== cvValuesFloat[cvIndex] ? (
+          <>
+            Current: {Math.round(cvValuesFloat[cvIndex])} →
+            New: {Math.round(projectedCVValues[cvIndex])}
+            (float: {projectedCVValues[cvIndex].toFixed(2)})
+          </>
+        ) : (
+          <>Value: {Math.round(cvValuesFloat[cvIndex])}</>
+        )}
+      </div>
+    </div>
+  );
+})}
+```
+
+**Apply Button Handler**:
+```javascript
+function handleApplySelected() {
+  if (selectedRecommendations.size === 0) return;
+
+  // Count total changes (checkpoints + interpolated)
+  const checkpointCount = selectedRecommendations.size;
+  const interpolatedCount = countInterpolatedChanges(projectedCVValues);
+
+  // Show confirmation dialog
+  showConfirmDialog({
+    title: "Apply CV Changes to Decoder?",
+    message: `
+      This will modify:
+      • ${checkpointCount} checkpoint values
+      • ${interpolatedCount} interpolated values
+      • Total: ${checkpointCount + interpolatedCount} CVs
+    `,
+    actions: [
+      {
+        label: "Export to JMRI CSV",
+        onClick: () => exportToJMRI(projectedCVValues)
+      },
+      {
+        label: "Write via POM (Z21)", // Phase 2B
+        onClick: () => writeToPOM(projectedCVValues),
+        disabled: !isPOMWriteAvailable
+      },
+      {
+        label: "Cancel",
+        onClick: closeDialog
+      }
+    ]
+  });
+}
+```
+
+---
+
+#### Safety Features
+
+**1. Visual Validation**:
+- Real-time bar color changes (see EXACTLY what will change)
+- Tooltip shows old→new values with float precision
+- Impact summary: "10 CVs will change"
+
+**2. Confirmation Dialog**:
+- Final approval before any decoder write
+- Clear summary of modifications (checkpoint + interpolated)
+- Cancel button always available
+
+**3. Validation Checks** (optional warnings):
+- **Monotonicity**: Warn if CV[n] > CV[n+1] (non-monotonic curve)
+- **Large jumps**: Warn if |CV[n+1] - CV[n]| > 20 (jerky acceleration)
+- **Range check**: Error if any value outside 0-255
+
+**4. Undo Capability** (nice-to-have):
+- "Reset All" button clears all selections
+- Reverts to original values from roster XML
+- No confirmation needed (just unchecking checkboxes)
+
+---
+
+#### User Experience Flow
+
+**Step 1**: View recommendations
+```
+3 recommendations shown with checkboxes (all checked by default)
+Bars show ORANGE preview (2 checkpoints + 8 interpolated)
+```
+
+**Step 2**: Adjust selections (optional)
+```
+User unchecks CV94 (doesn't want to modify 100% speed)
+Bars update in REAL-TIME: CV94 + interpolated steps 29-31 revert to BLUE
+Preview summary updates: "2 checkpoints + 5 interpolated = 7 CVs"
+```
+
+**Step 3**: Review visual preview
+```
+User hovers bars to see exact values: "Current: 128 → New: 127"
+Confirms changes look correct visually
+```
+
+**Step 4**: Click "Apply 2 Selected Changes"
+```
+Confirmation dialog appears with summary
+User chooses "Export to JMRI CSV"
+CSV downloads with 28 values (7 modified, 21 unchanged)
+```
+
+**Step 5**: Import to JMRI (Phase 1) or Auto-Write (Phase 2B)
+```
+Phase 1: Manual import via JMRI DecoderPro
+Phase 2B: Direct POM write with progress bar
+```
+
+---
+
+#### Why This Approach Works
+
+✅ **Not too granular**: Single approval for all changes (not per-CV)
+✅ **Visual feedback**: Real-time preview on bars (see effect immediately)
+✅ **Safe**: Confirmation dialog before any write
+✅ **Flexible**: User can select/deselect recommendations
+✅ **Simple**: "It's not rocket science" - straightforward UX
+✅ **Zero ambiguity**: Bars change color = WYSIWYG
+
+**User Quote Captured**:
+> "Io preferisco il 2 ma mi piacerebbe che la preview fosse cmq in realtime sulle barre e poi approve finale, la uno è troppo granulare, non è rocket science"
+
+---
+
+#### Recommendation Persistence & Cancel Behavior
+
+**Important**: Recommendations are **persistent** and NOT consumed when you open the UI or click Cancel.
+
+**How It Works**:
+
+1. **Recommendations are calculated on-the-fly** from cumulative historical data
+   - Backend queries ALL delta_t events (not just current session)
+   - Calculates CRITICAL counts and mean Δt per speed
+   - Applies "Fixed" detection (last session < 20% CRITICAL rate)
+   - Generates CV recommendations with ±1 adjustment
+
+2. **Cancel Button** (two places):
+   - **Speed Table view**: "Cancel" button next to "Apply Selected"
+     - Effect: Closes preview, no changes applied
+     - Recommendations: Remain visible (nothing happens)
+   - **Confirmation Dialog**: "Cancel" button
+     - Effect: Closes dialog, returns to Speed Table
+     - Recommendations: Still checked (can retry Apply)
+
+3. **Recommendations persist until resolved**:
+   - **Manual resolution**: User applies changes via JMRI/POM
+   - **Automatic resolution**: New test session shows speed is FIXED (< 20% CRITICAL)
+   - **NOT cleared**: By opening UI, by clicking Cancel, by refreshing page
+
+**Examples**:
+
+**Scenario A: User Cancels (Recommendations Persist)**
+```
+Day 1:
+  Session 1: Speed 70% → 12 CRITICAL
+  User opens Speed Table → Sees CV86 -1 recommendation
+  User clicks Cancel (not ready to apply)
+
+Day 2:
+  User reopens Speed Table → SAME CV86 -1 recommendation ✅
+  (Recommendation persists because underlying data unchanged)
+```
+
+**Scenario B: User Applies (Recommendations May Clear)**
+```
+Day 1:
+  Session 1: Speed 70% → 12 CRITICAL
+  User applies CV86 -1 via JMRI
+
+Day 2:
+  Session 2: Speed 70% tested → 6 events, 0 CRITICAL (0% rate)
+  User reopens Speed Table → CV86 recommendation GONE ✅
+  (Auto-cleared due to "Fixed" detection: 0% CRITICAL < 20% threshold)
+```
+
+**Scenario C: Problem Persists (Recommendation Stays)**
+```
+Day 1:
+  Session 1: Speed 70% → 12 CRITICAL
+  User applies CV86 -1 via JMRI
+
+Day 2:
+  Session 2: Speed 70% tested → 8 events, 5 CRITICAL (62.5% rate)
+  User reopens Speed Table → CV86 -1 recommendation STILL THERE ✅
+  (Not fixed yet: 62.5% CRITICAL > 20% threshold)
+  User can apply -1 again (iterative adjustment)
+```
+
+**Why This Design**:
+- ✅ **Safe**: User can review recommendations multiple times before applying
+- ✅ **No loss**: Canceling doesn't "consume" recommendations
+- ✅ **Auto-clearing**: Recommendations disappear when actually fixed (not manually dismissed)
+- ✅ **Cumulative**: Historical data ensures recommendations persist until problem resolved
+- ✅ **Iterative**: User can apply -1, test, apply -1 again if needed
+
+**Database Perspective**:
+```
+Recommendations = f(cumulative_delta_t_events)
+
+Click Cancel:
+  → No database changes
+  → cumulative_delta_t_events unchanged
+  → f() returns same recommendations next time
+
+Apply + Test Successful:
+  → New delta_t events added (0% CRITICAL)
+  → cumulative_delta_t_events updated
+  → f() excludes this speed (Fixed detection)
+  → Recommendation disappears
+```
+
+---
+
+### Features Planned (Phase 2)
+
+**Core** (Required):
+1. ✅ Checkpoint-based editing (default: 10%-100% percentages)
+2. ✅ Float precision interpolation (round only on display/export)
+3. ✅ Interactive CV adjustment (click/drag/keyboard)
+4. ✅ Real-time interpolation preview (gray bars for auto-calculated values)
+
+**Optional** (Nice-to-Have):
+5. Auto-apply to decoder (direct POM writes via Z21, bypass JMRI)
+6. Speed table validation (monotonicity warnings, large jump detection)
+7. Undo/redo for CV changes (database-backed history)
+8. Preset curves (linear, exponential, S-curve templates)
+9. Multi-session recommendation averaging (stability over time)
+
+---
+
+### Timeline
+
+**Phase 2 Start**: TBD (after Phase 1 production validation and user feedback)
+
+**Estimated Effort**: 12-16 hours
+- UI changes: 4-6 hours (checkboxes, interactive edit, preview)
+- Float precision refactor: 2-3 hours (state management, helpers)
+- Interpolation logic: 3-4 hours (algorithm, edge cases, testing)
+- Testing/debugging: 3-4 hours (production validation with real locomotives)
+
+**Blockers**: None (Phase 1 complete, CSV export JMRI-compatible already implemented)
 
 ---
 
