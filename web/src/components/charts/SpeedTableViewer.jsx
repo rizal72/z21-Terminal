@@ -283,6 +283,8 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
 
       if (result.success) {
         setWriteSuccess(`Successfully wrote 28 CVs to loco ${result.adjust_loco_address} (${result.total_time}s)`);
+        // Reload speed table data to sync UI (remove asterisks and highlights)
+        await fetchSpeedTableData();
       } else {
         setWriteError(`Partial write: ${result.cvs_written}/28 CVs written (failed: ${result.failed_cvs.join(', ')})`);
       }
@@ -326,7 +328,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
       if (result.success) {
         setWriteSuccess(`Undo successful! ${result.cvs_written}/28 CVs restored in ${result.total_time}s`);
         // Reload speed table data
-        await fetchData();
+        await fetchSpeedTableData();
       } else {
         setWriteError(`Undo partially successful: ${result.failed_cvs.length}/28 CVs failed`);
       }
@@ -364,7 +366,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
       if (result.success) {
         setWriteSuccess(`Re-import successful! CV values synced from JMRI roster for loco ${result.adjust_loco_address}`);
         // Reload speed table data
-        await fetchData();
+        await fetchSpeedTableData();
       } else {
         setWriteError('Re-import failed');
       }
