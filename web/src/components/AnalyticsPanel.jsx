@@ -295,12 +295,27 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
 
     // Auto-select consist when switching to Speed Tuning tab
     if (newView === 'speed-tuning' && consistFilter === 'all') {
-      // Find which consists have events in current session
+      // Strategy: Find which consist(s) were active in the most recent session
+      // 1. Try current session delta_t events (if session is running/validated)
+      // 2. Fallback: use last validated session from reports data
+
       const consistsWithEvents = new Set();
-      if (cumulativeData?.delta_t_events) {
+
+      // Check current session events
+      if (cumulativeData?.delta_t_events && cumulativeData.delta_t_events.length > 0) {
         cumulativeData.delta_t_events.forEach(event => {
           consistsWithEvents.add(event.consist_id);
         });
+      }
+
+      // Fallback: if current session empty, check last validated session from reports
+      if (consistsWithEvents.size === 0 && reportsData?.sessions && reportsData.sessions.length > 0) {
+        const lastSession = reportsData.sessions[0]; // Most recent session
+        if (lastSession.consists) {
+          Object.keys(lastSession.consists).forEach(cid => {
+            consistsWithEvents.add(parseInt(cid, 10));
+          });
+        }
       }
 
       // Auto-select consist:
