@@ -156,9 +156,10 @@ def calculate_cv_recommendations(
         # Get mean delta_t for this speed (default 0 if no data)
         mean_delta_t = mean_delta_t_by_speed.get(speed, 0.0)
 
-        # Calculate adjustment magnitude based on severity
-        # Conservative heuristic: 2 per 5 CRITICAL events (user validated safe increment)
-        adjustment_magnitude = (critical_count // 5) * 2
+        # Fixed adjustment: ±2 (user validated manual process)
+        # CV misconfiguration is constant regardless of CRITICAL count
+        # More CRITICALs = more confirmation of problem, not bigger CV error
+        adjustment_magnitude = 2
 
         # Determine direction based on delta_t sign
         # delta_t = arrival_adjust - arrival_reference
