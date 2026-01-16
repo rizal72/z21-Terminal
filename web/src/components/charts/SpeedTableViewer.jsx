@@ -118,11 +118,15 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
   // Calculate which steps correspond to round percentages (10%, 20%, 30%...)
   // Approach: For each round percentage, find the closest step
   const percentToStep = {};
-  for (let percent = 10; percent <= 100; percent += 10) {
+  for (let percent = 10; percent <= 90; percent += 10) {
     const dccSpeed = (percent / 100) * 126; // 10% = 12.6, 20% = 25.2, etc.
     const closestStep = Math.round((dccSpeed / 4.5) + 0.5); // Inverse of (step - 0.5) * 4.5
-    percentToStep[closestStep] = `${percent}%`;
+    if (closestStep >= 1 && closestStep <= 28) {
+      percentToStep[closestStep] = `${percent}%`;
+    }
   }
+  // Force 100% at step 28 (last step, actually ~98% but user expects 100%)
+  percentToStep[28] = '100%';
 
   const getPercentLabel = (step) => {
     return percentToStep[step] || null;
