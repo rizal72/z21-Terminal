@@ -725,7 +725,15 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   <i className={`fa-solid fa-chevron-${collapsedPanels.statsCards ? 'right' : 'down'} text-slate-400 transition-transform`}></i>
                 </div>
                 {!collapsedPanels.statsCards && (
-                  <div className="grid grid-cols-3 gap-4 p-4 pt-0">
+                  <div className="p-4 pt-0">
+                    {/* Current Session ID (only in Current view) */}
+                    {viewMode === 'current' && currentSession && currentSession.session_id && (
+                      <div className="mb-3 text-xs text-slate-500">
+                        <span className="font-semibold">Current Session:</span>{' '}
+                        <span className="font-mono text-slate-400">{currentSession.session_id}</span>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-3 gap-4">
                 {/* Card 1: Session Duration (Current) or Total Sessions (Overview) */}
                 <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                   <div className="text-sm text-slate-400">
@@ -799,6 +807,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     })()}
                   </div>
                 </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -993,16 +1002,25 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredReportsSessions.map(session => (
+                        {filteredReportsSessions.map(session => {
+                          const isRunning = session.end_time === null;
+                          return (
                           <tr
                             key={session.id}
                             onClick={() => {
                               setSelectedSession(session);
                               setShowSessionDetail(true);
                             }}
-                            className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer transition-colors"
+                            className={`border-b ${isRunning ? 'border-green-500/50 bg-green-900/10' : 'border-slate-700/50'} hover:bg-slate-700/30 cursor-pointer transition-colors`}
                           >
-                            <td className="px-4 py-3 text-sm font-mono text-slate-300">{session.id}</td>
+                            <td className="px-4 py-3 text-sm font-mono text-slate-300">
+                              {session.id}
+                              {isRunning && (
+                                <span className="ml-2 px-2 py-0.5 text-xs font-semibold bg-green-600 text-white rounded">
+                                  RUNNING
+                                </span>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-sm text-slate-300">{session.date}</td>
                             <td className="px-4 py-3 text-sm text-slate-300">{session.duration_formatted}</td>
                             <td className="px-4 py-3 text-sm text-slate-300">{session.total_events}</td>
@@ -1036,7 +1054,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                               return null;
                             })}
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
