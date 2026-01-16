@@ -80,8 +80,12 @@ def read_cv_speed_table(loco_address: int) -> Optional[Dict[int, int]]:
             if loco_elem is None:
                 continue
 
-            # Get DCC address from XML
-            addr_elem = loco_elem.find('.//dcclocoaddress')
+            # Get DCC address from XML (path: locomotive -> locoaddress -> dcclocoaddress)
+            locoaddress_elem = loco_elem.find('.//locoaddress')
+            if locoaddress_elem is None:
+                continue
+
+            addr_elem = locoaddress_elem.find('.//dcclocoaddress')
             if addr_elem is None:
                 continue
 
