@@ -110,19 +110,18 @@ async def get_cumulative_stats(
         yolo_performance = lttb_downsample(yolo_performance, max_points, x_key='timestamp', y_key='avg_fps')
         # Note: loco_operating_time not sampled (aggregate stats chart, not timeline)
 
-        # Log ONLY if debug enabled in config AND sampling reduction is significant
-        if debug_enabled:
-            delta_reduction = original_delta_t_count - len(delta_t_events)
-            yolo_reduction = original_yolo_count - len(yolo_performance)
+        # Log if sampling reduction is significant (always visible, not debug-only)
+        delta_reduction = original_delta_t_count - len(delta_t_events)
+        yolo_reduction = original_yolo_count - len(yolo_performance)
 
-            # Significant = reduced >10% OR reduced >100 events
-            is_significant = (delta_reduction > original_delta_t_count * 0.1 or delta_reduction > 100 or
-                            yolo_reduction > original_yolo_count * 0.1 or yolo_reduction > 100)
+        # Significant = reduced >10% OR reduced >100 events
+        is_significant = (delta_reduction > original_delta_t_count * 0.1 or delta_reduction > 100 or
+                        yolo_reduction > original_yolo_count * 0.1 or yolo_reduction > 100)
 
-            if is_significant:
-                print(f"[DEBUG] LTTB downsampling applied (maxPoints={max_points}) | "
-                      f"dT: {original_delta_t_count}->{len(delta_t_events)} (critical preserved) | "
-                      f"YOLO: {original_yolo_count}->{len(yolo_performance)}")
+        if is_significant:
+            log('[ANALYTICS]', f"LTTB downsampling applied (maxPoints={max_points}) | "
+                  f"dT: {original_delta_t_count}->{len(delta_t_events)} (critical preserved) | "
+                  f"YOLO: {original_yolo_count}->{len(yolo_performance)}")
 
     # Note: delta_t_events already includes current session events (written by flush task every 10s)
     # Total count is accurate because query includes all events from DB
