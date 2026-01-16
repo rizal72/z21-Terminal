@@ -181,7 +181,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
         </div>
 
         {/* Speed Percentage (bottom) - only for round percentages */}
-        <div className="text-xs font-mono text-slate-600 h-4">
+        <div className="text-xs font-mono text-white h-4">
           {percentLabel || ''}
         </div>
       </div>

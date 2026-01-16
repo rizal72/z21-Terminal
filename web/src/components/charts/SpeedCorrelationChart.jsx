@@ -141,7 +141,7 @@ const SpeedCorrelationChart = ({ data, thresholds, consistColor }) => {
           axisLine={false}
           tickLine={false}
           dy={20}
-          tick={{ fill: '#64748B', fontSize: 11 }}
+          tick={{ fill: '#FFFFFF', fontSize: 11 }}
         />
         <YAxis
           type="number"
