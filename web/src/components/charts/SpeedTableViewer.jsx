@@ -354,11 +354,15 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     const hasRecommendation = data.recommendations?.some(r => r.cv_index === cvIndex);
     const recommendation = data.recommendations?.find(r => r.cv_index === cvIndex);
 
-    // Border/fill color based on severity
+    // Check if this CV was modified (manual edit or applied recommendation)
+    const isModified = data.cv_values && cvValueFloat !== data.cv_values[cvIndex];
+
+    // Border/fill color based on severity (priority: CRITICAL > modified > default)
     let borderColor = 'border-slate-600'; // Default
     let fillColor = 'bg-slate-600'; // Default
 
     if (hasRecommendation && recommendation) {
+      // CRITICAL overrides everything
       if (recommendation.critical_count >= 10) {
         borderColor = 'border-red-500';
         fillColor = 'bg-red-500';
@@ -366,6 +370,9 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
         borderColor = 'border-amber-500';
         fillColor = 'bg-amber-500';
       }
+    } else if (isModified) {
+      // Modified (no CRITICAL) shows blue border
+      borderColor = 'border-blue-400';
     }
 
     const percentLabel = getPercentLabel(step);
@@ -385,7 +392,6 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
               onChange={(e) => setEditingValue(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') saveEdit();
-                if (e.key === 'Escape') cancelEdit();
               }}
               onBlur={saveEdit}
               className="w-12 px-1 text-xs font-mono text-center bg-slate-700 text-white border border-blue-500 rounded"
@@ -394,11 +400,12 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           </div>
         ) : (
           <div
-            className={`text-xs font-mono mb-1 h-4 ${isCheckpoint ? 'text-blue-400 font-bold cursor-pointer hover:text-blue-300' : 'text-slate-400'}`}
+            className={`text-xs font-mono mb-1 h-4 flex items-center gap-0.5 ${isCheckpoint ? 'text-blue-400 font-bold cursor-pointer hover:text-blue-300' : 'text-slate-400'}`}
             onClick={() => isCheckpoint && startEditing(step)}
             title={isCheckpoint ? 'Click to edit' : 'Auto-interpolated'}
           >
-            {cvValue}
+            <span>{cvValue}</span>
+            {isModified && <span className="text-blue-400 text-xs">*</span>}
           </div>
         )}
 
