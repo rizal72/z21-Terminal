@@ -606,6 +606,85 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2025-01-17 - ⚙️ **Speed Table Viewer: Phase 2 Interactive Editing** (Complete)
+
+**Status**: ✅ **DEPLOYED TO PRODUCTION** - JMRI-compatible checkpoint-based editing with float precision
+
+**Objective**: Transform read-only speed table into fully interactive editor with automatic smoothing via checkpoint interpolation.
+
+**Implementation Time**: ~2 hours (9 tasks)
+
+**Features Implemented**:
+
+1. **Float Precision State** (`cvValuesFloat`):
+   - Stores CV values as floats internally (e.g., 146.333...)
+   - Rounds only on display (UI shows integers)
+   - Rounds only on export (JMRI CSV compatibility)
+   - Prevents gradual adjustment propagation loss
+   - Example: Adjust CV86 by -1, four times → adjacent CVs smoothly update (no "stuck" values)
+
+2. **Checkpoint System**:
+   - Default 10 checkpoints at operational speeds: `[3, 6, 9, 12, 15, 17, 20, 23, 26, 28]` (10%-100%)
+   - Checkboxes under all 28 bars (user can customize)
+   - Minimum 2 checkpoints enforced (interpolation requires bounds)
+   - Toggle on/off with visual feedback
+
+3. **Linear Interpolation**:
+   - Auto-recalculates non-checkpoint steps when checkpoint modified
+   - Formula: `value = valueA + (valueB - valueA) * (stepX - stepA) / (stepB - stepA)`
+   - Interpolates both zones: prev→modified, modified→next
+   - Pure float math (no rounding until display/export)
+
+4. **Interactive Editing**:
+   - Click checkpoint value (blue bold) → numeric input appears
+   - Click checkpoint bar → same input
+   - Type new value (0-255), Enter to save, Escape to cancel
+   - Keyboard navigation, auto-focus, validation
+   - Non-checkpoints: gray text, read-only (auto-interpolated)
+
+5. **Recommendations Approval Workflow**:
+   - Checkbox per recommendation (default all checked)
+   - Select All / Deselect All buttons
+   - "Apply N Selected" button (disabled if 0 selected)
+   - Visual feedback: unchecked recommendations opacity 50%
+   - Apply → calls `applyInterpolation()` for each selected CV
+   - Selection clears after apply
+
+6. **CSV Export Updated**:
+   - Phase 1: Exported original + suggested recommendations
+   - Phase 2: Exports current `cvValuesFloat` (includes all user edits + applied recommendations)
+   - JMRI-compatible format unchanged (CV,value)
+
+**UI/UX Enhancements**:
+- Checkpoint values: **blue bold, cursor pointer** (click to edit)
+- Non-checkpoint values: gray (auto-interpolated, read-only)
+- Percent labels: shown only on checkpoints
+- Tooltips: "Click to edit" vs "Auto-interpolated"
+- Smooth Tailwind transitions on all changes
+
+**Technical Details**:
+- State: `cvValuesFloat` (CV67-94 as floats), `checkpoints` (Set), `editingStep`, `selectedRecommendations` (Set)
+- Functions: `interpolate()`, `applyInterpolation()`, `startEditing()`, `saveEdit()`, `toggleCheckpoint()`, `toggleRecommendation()`
+- Safety: CV range validation (0-255), minimum 2 checkpoints
+- Real-time: interpolation on every checkpoint modification
+
+**Commit**: `db1196a` - feat(speed-table): implement Phase 2 interactive editing (+295 lines, -57 lines)
+
+**Deployment**:
+- Deployed to PC production (z21-deploy-dev)
+- Frontend rebuilt (Vite 7.3.0, 3.88s)
+- Backend restarted (Task Scheduler)
+
+**Skill Update**: Added "Complete Workflow (Mac → PC)" section to `z21-deployment` skill:
+- Step 4 reminder: **MUST deploy to PC after push**
+- Clarified: Mac = development, PC = production environment
+
+**Testing**: Ready for user validation in production environment.
+
+**Next Phase**: Phase 2B (future) - Direct POM write via Z21 (optional, alternative to CSV export).
+
+---
+
 ### 2025-01-17 - 🧹 **CLAUDE.md Cleanup + Deployment Skill Creation**
 
 **Status**: ✅ **COMPLETED** - Documentation consolidation and skill-based workflow enforcement
