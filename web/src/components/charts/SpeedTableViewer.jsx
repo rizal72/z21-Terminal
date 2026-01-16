@@ -624,41 +624,23 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
             <i className="fa-solid fa-download"></i>
             <span>Export CSV Only</span>
           </button>
+
+          {/* Secondary actions (icon only, right-aligned) */}
           <button
             onClick={handleUndo}
             disabled={undoing}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-            title="Restore previous CV values from database snapshot"
+            className="ml-auto px-2 py-2 bg-amber-600/80 hover:bg-amber-600 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded transition-colors"
+            title="Undo last change (restore previous CV values)"
           >
-            {undoing ? (
-              <>
-                <i className="fa-solid fa-spinner fa-spin"></i>
-                <span>Undoing...</span>
-              </>
-            ) : (
-              <>
-                <i className="fa-solid fa-undo"></i>
-                <span>Undo Last Change</span>
-              </>
-            )}
+            <i className={`fa-solid ${undoing ? 'fa-spinner fa-spin' : 'fa-undo'}`}></i>
           </button>
           <button
             onClick={handleReimport}
             disabled={reimporting}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-            title="Force re-import CV values from JMRI roster to database"
+            className="px-2 py-2 bg-slate-600/80 hover:bg-slate-600 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded transition-colors"
+            title="Re-import from JMRI roster (sync database with JMRI)"
           >
-            {reimporting ? (
-              <>
-                <i className="fa-solid fa-spinner fa-spin"></i>
-                <span>Re-importing...</span>
-              </>
-            ) : (
-              <>
-                <i className="fa-solid fa-sync"></i>
-                <span>Re-import from JMRI</span>
-              </>
-            )}
+            <i className={`fa-solid ${reimporting ? 'fa-spinner fa-spin' : 'fa-sync'}`}></i>
           </button>
         </div>
       </div>
