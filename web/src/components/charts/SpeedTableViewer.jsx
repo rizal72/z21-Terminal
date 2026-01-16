@@ -116,17 +116,16 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
   }
 
   // Calculate which steps correspond to round percentages (10%, 20%, 30%...)
-  const getPercentLabel = (step) => {
-    // JMRI Step -> DCC speed center: (step - 0.5) * 4.5
-    // DCC speed -> Percentage: (speed / 126) * 100
-    const dccSpeed = (step - 0.5) * 4.5;
-    const speedPercent = Math.round((dccSpeed / 126) * 100);
+  // Approach: For each round percentage, find the closest step
+  const percentToStep = {};
+  for (let percent = 10; percent <= 100; percent += 10) {
+    const dccSpeed = (percent / 100) * 126; // 10% = 12.6, 20% = 25.2, etc.
+    const closestStep = Math.round((dccSpeed / 4.5) + 0.5); // Inverse of (step - 0.5) * 4.5
+    percentToStep[closestStep] = `${percent}%`;
+  }
 
-    // Show label only if it's a multiple of 10
-    if (speedPercent % 10 === 0 && speedPercent > 0 && speedPercent <= 100) {
-      return `${speedPercent}%`;
-    }
-    return null;
+  const getPercentLabel = (step) => {
+    return percentToStep[step] || null;
   };
 
   // Render 28 vertical bars (CV67-94)
