@@ -16,7 +16,7 @@ from services.speed_table_helpers import (
     jmri_step_to_cv,
     calculate_cv_recommendations
 )
-from services.config_manager import get_config
+from config_loader import load_config
 
 router = APIRouter()
 
@@ -43,26 +43,22 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
         500: Roster file not found or other errors
     """
     # Get config to identify adjust loco
-    config = get_config()
+    config = load_config()
 
-    # Find consist in config
-    consist_config = None
-    for consist in config.get('consists', []):
-        if consist['address'] == consist_id:
-            consist_config = consist
-            break
+    # Get consist from config (consists is a dict with string keys "10", "11", etc.)
+    consists = config.get('consists', {})
+    consist_config = consists.get(str(consist_id))
 
     if not consist_config:
         raise HTTPException(status_code=404, detail=f"Consist {consist_id} not found in config")
 
-    # Get adjust loco address from reference_locos mapping
-    reference_locos = consist_config.get('reference_locos', {})
-    adjust_loco_address = reference_locos.get('adjust')
+    # Get adjust loco address (direct field, not nested in reference_locos)
+    adjust_loco_address = consist_config.get('adjust_loco')
 
     if not adjust_loco_address:
         raise HTTPException(
             status_code=400,
-            detail=f"Consist {consist_id} has no adjust loco configured in reference_locos"
+            detail=f"Consist {consist_id} has no adjust_loco configured"
         )
 
     # Read CV67-94 from JMRI roster for adjust loco
