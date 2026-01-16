@@ -115,6 +115,20 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     );
   }
 
+  // Calculate which steps correspond to round percentages (10%, 20%, 30%...)
+  const getPercentLabel = (step) => {
+    // JMRI Step -> DCC speed center: (step - 0.5) * 4.5
+    // DCC speed -> Percentage: (speed / 126) * 100
+    const dccSpeed = (step - 0.5) * 4.5;
+    const speedPercent = Math.round((dccSpeed / 126) * 100);
+
+    // Show label only if it's a multiple of 10
+    if (speedPercent % 10 === 0 && speedPercent > 0 && speedPercent <= 100) {
+      return `${speedPercent}%`;
+    }
+    return null;
+  };
+
   // Render 28 vertical bars (CV67-94)
   const bars = [];
   for (let step = 1; step <= 28; step++) {
@@ -140,11 +154,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
       }
     }
 
-    // Calculate speed percentage for this step
-    // JMRI Step -> DCC speed center: (step - 0.5) * 4.5
-    // DCC speed -> Percentage: (speed / 126) * 100
-    const dccSpeed = (step - 0.5) * 4.5;
-    const speedPercent = Math.round((dccSpeed / 126) * 100);
+    const percentLabel = getPercentLabel(step);
 
     bars.push(
       <div key={step} className="flex flex-col items-center">
@@ -170,9 +180,9 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           {step}
         </div>
 
-        {/* Speed Percentage (bottom) */}
-        <div className="text-xs font-mono text-slate-600">
-          {speedPercent}%
+        {/* Speed Percentage (bottom) - only for round percentages */}
+        <div className="text-xs font-mono text-slate-600 h-4">
+          {percentLabel || ''}
         </div>
       </div>
     );
