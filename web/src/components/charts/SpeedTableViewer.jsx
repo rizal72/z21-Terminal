@@ -240,7 +240,11 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `speed_table_consist_${consistId}_loco_${data.adjust_loco_address}_JMRI.csv`;
+
+    // Add "_backup" suffix if no modifications (exporting original roster values)
+    const suffix = hasModifications ? '' : '_backup';
+    link.download = `speed_table_consist_${consistId}_loco_${data.adjust_loco_address}${suffix}.csv`;
+
     link.click();
     URL.revokeObjectURL(url);
   };
