@@ -27,13 +27,17 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
     """
     Get Speed Table Viewer data for a consist (Phase 1 - Read-Only).
 
+    Uses cumulative historical data with intelligent "fixed" detection:
+    - Aggregates CRITICAL/WARNING counts from all sessions
+    - Excludes speeds proven OK in their last tested session (>= 3 events, < 20% CRITICAL rate)
+
     Returns:
         - cv_values: CV67-94 current values from JMRI roster
-        - critical_events: CRITICAL event counts per speed (current session)
-        - warning_events: WARNING event counts per speed (current session)
-        - recommendations: List of CV adjustment suggestions
+        - critical_events: Historical CRITICAL event counts per speed
+        - warning_events: Historical WARNING event counts per speed
+        - recommendations: List of CV adjustment suggestions (excludes fixed speeds)
         - adjust_loco_address: Address of the locomotive being analyzed
-        - session_id: Current session ID (or None if no active session)
+        - session_id: Current session ID (for display only, or None if no active session)
         - session_validated: Whether session is validated
 
     Args:
@@ -99,18 +103,20 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
     session_id = current_session['id']
     session_validated = True  # get_validated_sessions only returns validated=1
 
-    # Get CRITICAL/WARNING events for current session + mean delta_t per speed
-    events_by_status = AnalyticsDB.get_critical_events_by_speed(consist_id, session_id)
+    # Get CRITICAL/WARNING events (historical cumulative with "fixed" detection)
+    events_by_status = AnalyticsDB.get_critical_events_by_speed(consist_id)
     critical_events = events_by_status.get('critical', {})
     warning_events = events_by_status.get('warning', {})
     mean_delta_t_by_speed = events_by_status.get('mean_delta_t', {})
+    fixed_speeds = events_by_status.get('fixed_speeds', set())
 
-    # Calculate CV recommendations (uses mean delta_t sign for adjustment direction)
+    # Calculate CV recommendations (excludes fixed speeds, uses mean delta_t sign for direction)
     recommendations = calculate_cv_recommendations(
         cv_values=cv_values,
         critical_events=critical_events,
         warning_events=warning_events,
         mean_delta_t_by_speed=mean_delta_t_by_speed,
+        fixed_speeds=fixed_speeds,
         critical_threshold=5  # Configurable threshold
     )
 

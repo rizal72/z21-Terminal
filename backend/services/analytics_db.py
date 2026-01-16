@@ -583,27 +583,32 @@ class AnalyticsDB:
         }
 
     @staticmethod
-    def get_critical_events_by_speed(consist_id: int, session_id: str) -> Dict[str, Dict[int, int]]:
+    def get_critical_events_by_speed(consist_id: int) -> Dict[str, Any]:
         """
-        Count CRITICAL/WARNING events grouped by speed for current session only.
-        Also calculates mean delta_t per speed (all events) for CV adjustment direction.
-        Used by Speed Table Viewer to identify problematic speeds.
+        Get cumulative CRITICAL/WARNING events per speed (all historical sessions),
+        with intelligent "fixed" detection.
+
+        A speed is considered "fixed" if in its last tested session:
+        - At least 3 delta_t events occurred at that speed
+        - CRITICAL rate < 20% (max 1 CRITICAL every 5 events)
+
+        Used by Speed Table Viewer Phase 1 for CV adjustment recommendations.
 
         Args:
             consist_id: Consist ID (10, 11, etc.)
-            session_id: Current session ID for filtering
 
         Returns:
             {
-                'critical': {10: 5, 20: 3, 88: 12, ...},
-                'warning': {10: 2, 20: 1, 88: 7, ...},
-                'mean_delta_t': {10: -0.5, 20: 0.3, 88: -1.2, ...}  # Avg delta_t per speed
+                'critical': {speed: count},      # Historical total CRITICAL count
+                'warning': {speed: count},       # Historical total WARNING count
+                'mean_delta_t': {speed: float},  # Historical average delta_t
+                'fixed_speeds': {speed, ...}     # Speeds proven OK in last session
             }
         """
         conn = AnalyticsDB.get_connection()
         cursor = conn.cursor()
 
-        # Query 1: Count CRITICAL/WARNING events per speed
+        # Query 1a: Count CRITICAL/WARNING per speed (all historical sessions)
         cursor.execute('''
             SELECT
                 json_extract(data, '$.speed') as speed,
@@ -612,12 +617,12 @@ class AnalyticsDB:
             FROM events
             WHERE event_type = 'delta_t'
               AND json_extract(data, '$.consist_id') = ?
-              AND session_id = ?
               AND json_extract(data, '$.status') IN ('CRITICAL', 'WARNING')
             GROUP BY speed, status
-        ''', (consist_id, session_id))
+        ''', (consist_id,))
 
-        results = {'critical': {}, 'warning': {}, 'mean_delta_t': {}}
+        results = {'critical': {}, 'warning': {}, 'mean_delta_t': {}, 'fixed_speeds': set()}
+
         for row in cursor.fetchall():
             speed, status, count = row
             if speed is not None:
@@ -627,8 +632,7 @@ class AnalyticsDB:
                 elif status == 'WARNING':
                     results['warning'][speed] = count
 
-        # Query 2: Calculate mean delta_t per speed (ALL events, not just CRITICAL/WARNING)
-        # This tells us if adjust loco is faster (negative) or slower (positive)
+        # Query 1b: Calculate mean delta_t per speed (ALL events, all status)
         cursor.execute('''
             SELECT
                 json_extract(data, '$.speed') as speed,
@@ -636,15 +640,56 @@ class AnalyticsDB:
             FROM events
             WHERE event_type = 'delta_t'
               AND json_extract(data, '$.consist_id') = ?
-              AND session_id = ?
             GROUP BY speed
-        ''', (consist_id, session_id))
+        ''', (consist_id,))
 
         for row in cursor.fetchall():
-            speed, mean_delta_t = row
-            if speed is not None and mean_delta_t is not None:
+            speed, mean_dt = row
+            if speed is not None and mean_dt is not None:
                 speed = int(speed)
-                results['mean_delta_t'][speed] = float(mean_delta_t)
+                results['mean_delta_t'][speed] = float(mean_dt)
+
+        # Query 2: For each speed with CRITICAL events, check if "fixed" in last session
+        for speed in results['critical'].keys():
+            # Find last session that tested this speed
+            cursor.execute('''
+                SELECT session_id
+                FROM events
+                WHERE event_type = 'delta_t'
+                  AND json_extract(data, '$.consist_id') = ?
+                  AND json_extract(data, '$.speed') = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+            ''', (consist_id, speed))
+
+            last_session_row = cursor.fetchone()
+            if not last_session_row:
+                continue
+
+            last_session_id = last_session_row[0]
+
+            # Count events in last session for this speed
+            cursor.execute('''
+                SELECT
+                    COUNT(*) as total_events,
+                    SUM(CASE WHEN json_extract(data, '$.status') = 'CRITICAL' THEN 1 ELSE 0 END) as critical_events
+                FROM events
+                WHERE event_type = 'delta_t'
+                  AND json_extract(data, '$.consist_id') = ?
+                  AND session_id = ?
+                  AND json_extract(data, '$.speed') = ?
+            ''', (consist_id, last_session_id, speed))
+
+            last_session_stats = cursor.fetchone()
+            if last_session_stats:
+                total_events, critical_events = last_session_stats
+                critical_events = critical_events or 0
+
+                # Check if "fixed": >= 3 events AND < 20% CRITICAL rate
+                if total_events >= 3:
+                    critical_rate = critical_events / total_events
+                    if critical_rate < 0.20:
+                        results['fixed_speeds'].add(speed)
 
         conn.close()
         return results

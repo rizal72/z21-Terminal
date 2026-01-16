@@ -94,16 +94,20 @@ def calculate_cv_recommendations(
     critical_events: Dict[int, int],
     warning_events: Dict[int, int],
     mean_delta_t_by_speed: Dict[int, float],
+    fixed_speeds: set,
     critical_threshold: int = 5
 ) -> List[Dict]:
     """
-    Calculate CV adjustment recommendations based on CRITICAL event counts and delta_t sign.
+    Calculate CV adjustment recommendations based on historical CRITICAL counts and delta_t sign.
+
+    Excludes speeds that are "fixed" in their last tested session (proven OK with >= 3 events, < 20% CRITICAL rate).
 
     Args:
         cv_values: Current CV67-94 values (CV index -> value)
-        critical_events: CRITICAL event counts per speed (speed -> count)
-        warning_events: WARNING event counts per speed (speed -> count)
-        mean_delta_t_by_speed: Mean delta_t per speed (speed -> avg_delta_t)
+        critical_events: Historical CRITICAL event counts per speed (speed -> count)
+        warning_events: Historical WARNING event counts per speed (speed -> count)
+        mean_delta_t_by_speed: Historical mean delta_t per speed (speed -> avg_delta_t)
+        fixed_speeds: Set of speeds proven OK in last session (no recommendation needed)
         critical_threshold: Minimum CRITICAL count to trigger recommendation (default: 5)
 
     Returns:
@@ -124,7 +128,8 @@ def calculate_cv_recommendations(
         ]
 
     Strategy:
-        - For each speed with CRITICAL count >= threshold
+        - For each speed with historical CRITICAL count >= threshold
+        - Skip if speed is in fixed_speeds set (proven OK in last session)
         - Use mean delta_t sign to determine adjustment direction:
           * delta_t < 0 → adjust loco FASTER (arrives first) → DECREASE CV (slow down)
           * delta_t > 0 → adjust loco SLOWER (arrives second) → INCREASE CV (speed up)
@@ -136,6 +141,10 @@ def calculate_cv_recommendations(
     for speed, critical_count in critical_events.items():
         if critical_count < critical_threshold:
             continue  # Not severe enough
+
+        # Skip if speed proven fixed in last session
+        if speed in fixed_speeds:
+            continue  # Speed is OK now
 
         # Map speed to JMRI step and CV index
         jmri_step = speed_to_jmri_step(speed)
