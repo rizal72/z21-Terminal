@@ -729,6 +729,85 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2025-01-17 - 🔄 **Speed Table Viewer: Cumulative Intelligent Recommendations**
+
+**Status**: ✅ **IMPLEMENTED**
+
+**Objective**: Replace single-session recommendations with cumulative historical data + intelligent "fixed" detection
+
+**User Request**: "Raccomandazioni dovrebbero essere incrementali - se risolvo speed 70%, raccomandazione sparisce, ma speed 100% non testata deve restare"
+
+**Implementation**:
+
+1. **Cumulative Historical Data**:
+   - `get_critical_events_by_speed()` - Removed `session_id` parameter, aggregates ALL sessions
+   - CRITICAL/WARNING counts from full history
+   - Mean Δt calculated across all historical events (more accurate direction)
+
+2. **Intelligent "Fixed" Detection**:
+   - For each speed with CRITICAL, check last session that tested it
+   - **Fixed criteria**: >= 3 Δt events AND < 20% CRITICAL rate (max 1/5 events)
+   - Fixed speeds excluded from recommendations (proven OK)
+   - Query iterates: find last session per speed → count events → calculate rate
+
+3. **Fixed ±1 CV Adjustment** (critical bug fix):
+   - **OLD (WRONG)**: `adjustment = (critical_count // 5) * 2` → 83 CRITICAL = -32! 😱
+   - **NEW (CORRECT)**: `adjustment = 1` (fixed)
+   - **User insight**: CV misconfiguration error is CONSTANT regardless of count
+     - 10 CRITICAL = CV too high by ~1
+     - 100 CRITICAL = STILL too high by ~1 (same config!)
+     - More CRITICALs = more confirmation, NOT bigger error
+   - Iterative workflow: adjust -1, retest, still problematic? -1 again
+
+4. **Non-Validated Session Display**:
+   - Added `get_latest_session()` method (returns any session, validated or not)
+   - Router always shows session_id (even if not validated)
+   - Frontend badge **"WAITING FOR FIRST ΔT"** (amber) when `session_validated = false`
+   - Historical recommendations always visible (independent from session state)
+   - Fixed frontend blocking condition (`if (!data || !session_validated)` → `if (!data)`)
+
+**Workflow Example** (C11 - Tracciato Esterno):
+```
+Session 1: 70% + 100% tested
+  Speed 70%: 12 events, 8 CRITICAL → CV82 -1
+  Speed 100%: 8 events, 7 CRITICAL → CV94 -1
+
+Session 2: ONLY 70% tested (validate fix)
+  Speed 70%: 6 events, 0 CRITICAL (0% rate) → FIXED! Recommendation disappears ✅
+  Speed 100%: NOT tested → CV94 -1 PERSISTS ⚠️
+
+Session 3: ONLY 100% tested
+  Speed 100%: 6 events, 1 CRITICAL (16.7% rate) → FIXED! Recommendation disappears ✅
+```
+
+**Phase 2 Smoothing Requirement** (documented):
+- User insight: "Se adjust continua a sommarsi solo su un CV, resta problema smoothing"
+- Auto-adjust MUST smooth adjacent CVs to preserve speed curve
+- Algorithm: CV target ±1, CV±1 adjacent ±0.5 (rounded)
+- Without smoothing: step/jump in curve → inconsistent loco behavior
+
+**Commits**:
+- `08353ce` - Implement cumulative intelligent recommendations
+- `6b8116a` - Show non-validated sessions with badge
+- `7b89eab` - Remove session_validated blocking condition (frontend fix)
+- `9729422` - Fix cumulative scaling bug (±2 became -32 with 83 CRITICAL!)
+- `fc7b313` - Change adjustment from ±2 to ±1 (iterative conservative)
+
+**Files Modified**:
+- `backend/services/analytics_db.py` - get_critical_events_by_speed(), get_latest_session()
+- `backend/services/speed_table_helpers.py` - calculate_cv_recommendations()
+- `backend/routers/speed_table.py` - use cumulative data + latest session
+- `web/src/components/charts/SpeedTableViewer.jsx` - badge + blocking fix
+- `docs/SPEED_TABLE_VIEWER.md` - comprehensive update section
+
+**Benefits**:
+- ✅ Zero cognitive load (system remembers all problems)
+- ✅ Iterative testing (adjust → retest → auto-clear if OK)
+- ✅ Conservative (±1 prevents overshooting)
+- ✅ Phase 2 ready (smoothing algorithm documented)
+
+---
+
 ## 📋 TODO / Future Enhancements
 
 **Note**: Nessun TODO attivo. Vedi sezioni precedenti per roadmap features (Speed Table Phase 2, YOLO expansion, etc.)

@@ -1,8 +1,78 @@
 # Speed Table Viewer - Phase 1 (Read-Only)
 
-**Status**: ✅ COMPLETED (2025-01-16)
+**Status**: ✅ COMPLETED (2025-01-16) | **Updated**: 2025-01-17 (Cumulative Recommendations)
 **Version**: v1.2 Phase 1
-**Next Phase**: Phase 2 - Interactive CV Editing + Auto-Apply
+**Next Phase**: Phase 2 - Interactive CV Editing + Auto-Apply + Smoothing
+
+---
+
+## 🆕 2025-01-17 Updates - Cumulative Intelligent Recommendations
+
+**Status**: ✅ IMPLEMENTED
+
+### Major Changes
+
+**1. Cumulative Historical Data** (was: single session only)
+- Recommendations now aggregate CRITICAL/WARNING events from **ALL historical sessions**
+- Mean Δt calculated across full history (more accurate direction)
+- Provides complete picture of CV performance over time
+
+**2. Intelligent "Fixed" Detection**
+- Speed considered **FIXED** if last tested session shows improvement:
+  - **>= 3 Δt events** at that speed
+  - **< 20% CRITICAL rate** (max 1 CRITICAL per 5 events)
+- Fixed speeds excluded from recommendations (proven OK)
+- Allows iterative testing: adjust CV → retest → recommendation disappears if improved
+
+**3. Fixed ±1 Adjustment** (was: scaling with CRITICAL count)
+- **OLD (WRONG)**: `adjustment = (critical_count // 5) * 2` → 83 CRITICAL = -32 adjustment 😱
+- **NEW (CORRECT)**: `adjustment = 1` (fixed) → all speeds get ±1
+- **Reasoning**: CV misconfiguration error is CONSTANT regardless of CRITICAL count
+  - 10 CRITICAL events → CV too high by ~1
+  - 100 CRITICAL events → STILL too high by ~1 (same config!)
+  - More CRITICALs = more confirmation of problem, NOT bigger CV error
+- **Iterative workflow**: adjust -1, retest, still problematic? -1 again, repeat until fixed
+
+**4. Non-Validated Session Display**
+- Speed Table now shows data even when session not validated (0 Δt events)
+- Badge **"WAITING FOR FIRST ΔT"** (amber) appears if session exists but not validated
+- Historical recommendations always visible (cumulative data independent from current session)
+
+**5. Phase 2 Smoothing Requirement** (documented)
+- Auto-adjust MUST smooth adjacent CVs to preserve speed curve
+- Algorithm: CV target ±1, CV adjacent ±0.5 (rounded)
+- Without smoothing: step/jump in speed curve → inconsistent behavior
+
+### Workflow Example (Cumulative Approach)
+
+```
+Session 1: Test speeds 70% and 100%
+  Speed 70%: 12 events, 8 CRITICAL (66.7% rate)
+    → Recommendation: CV82 -1 (mean Δt = -1.2s)
+
+  Speed 100%: 8 events, 7 CRITICAL (87.5% rate)
+    → Recommendation: CV94 -1 (mean Δt = -1.5s)
+
+Session 2: Test ONLY speed 70% (validate fix)
+  Speed 70%: 6 events, 0 CRITICAL (0% rate)
+    → FIXED! (>= 3 events, < 20% rate)
+    → Recommendation CV82 DISAPPEARS ✅
+
+  Speed 100%: NOT tested
+    → Recommendation CV94 PERSISTS ⚠️ (problem not resolved)
+
+Session 3: Test ONLY speed 100% (validate fix)
+  Speed 100%: 6 events, 1 CRITICAL (16.7% rate)
+    → FIXED! (>= 3 events, < 20% rate)
+    → Recommendation CV94 DISAPPEARS ✅
+```
+
+### Benefits
+
+- ✅ Zero cognitive load (system remembers all historical problems)
+- ✅ Iterative testing workflow (adjust → retest → auto-clear if OK)
+- ✅ Conservative adjustments (±1 prevents overshooting)
+- ✅ Phase 2 ready (smoothing algorithm documented)
 
 ---
 
@@ -115,7 +185,8 @@ backend/
 
 4. **`calculate_cv_recommendations()`** - Generate CV adjustment suggestions
    - Uses mean Δt sign for direction (negative → decrease CV, positive → increase CV)
-   - Magnitude based on CRITICAL count: `(count // 5) * 2` (conservative heuristic)
+   - **Fixed ±1 adjustment** (2025-01-17 update - was scaling with count)
+   - Excludes "fixed" speeds (proven OK in last session: >= 3 events, < 20% CRITICAL rate)
    - Clamps suggested CV between 0-255
 
 ### Frontend Components
@@ -290,7 +361,8 @@ else:
 **Not Validated** (`session_validated = false`):
 - ✅ Visible in Current view (session ID generated at start)
 - ❌ NOT in Reports list (requires validation)
-- ❌ NOT in Speed Table (no data yet)
+- ✅ **VISIBLE in Speed Table** (2025-01-17 update) with **"WAITING FOR FIRST ΔT"** badge
+- ✅ Historical cumulative recommendations shown (independent from current session)
 
 **Validated** (`session_validated = true`):
 - ✅ Visible in all tabs (Current, Reports, Speed Table)
