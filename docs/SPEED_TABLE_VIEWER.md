@@ -1,8 +1,78 @@
-# Speed Table Viewer - Phase 1 (Read-Only)
+# Speed Table Viewer - Complete (Interactive + Direct CV Write)
 
-**Status**: ✅ COMPLETED (2025-01-16) | **Updated**: 2025-01-17 (Cumulative Recommendations)
-**Version**: v1.2 Phase 1
-**Next Phase**: Phase 2 - Interactive CV Editing + Auto-Apply + Smoothing
+**Status**: ✅ **PHASE 2 COMPLETED** (2025-01-17) - Direct CV write via Z21 POM
+**Version**: v1.0.0 (Production Ready)
+**Phase 1**: Read-only visualization (2025-01-16)
+**Phase 2**: Interactive editing + direct CV write (2025-01-17)
+
+**🚀 Next Enhancement**: Database migration for JMRI independence (design complete)
+- See: [SPEED_TABLE_DB_MIGRATION.md](SPEED_TABLE_DB_MIGRATION.md)
+- Scope: CV67-94 in DB, config refactoring, undo support, re-import button
+- Status: Design complete, ready to implement (~4-5 hours)
+
+---
+
+## 🆕 2025-01-17 Updates - Phase 2: Direct CV Write to Decoder
+
+**Status**: ✅ **PRODUCTION TESTED** - Successfully wrote CV86 80→82 on loco 7
+
+### Phase 2 Features Implemented
+
+**1. Centralized CV Write Delay** (z21.py refactoring)
+- Moved `time.sleep(0.1)` into `write_cv_ops_mode()` method
+- DRY principle: automatic spacing between CV writes
+- Prevents decoder overload without explicit sleeps in caller code
+
+**2. Direct CV Write Endpoint**
+- `POST /api/speed-table/write/{consist_id}`
+- Writes all 28 CVs (CV67-94) via Z21 POM operations mode
+- Returns: success status, failed CVs list, total time (~2.8s), loco address
+- Compatible with ESU and Hornby decoders
+
+**3. Dual-Button Workflow**
+- **"Apply & Write to Decoder"**: Writes CVs to decoder + exports CSV backup
+- **"Export CSV Only"**: Exports current values without decoder write
+- Both buttons disabled when no modifications present
+- Visual feedback: success/error messages with timing
+
+**4. Visual Feedback for Modifications**
+- Blue border on modified CV bars (`border-blue-400`)
+- Blue asterisk next to CV value (e.g., "128*")
+- Priority: CRITICAL (red/amber) > modified (blue) > default (slate)
+- User sees EXACTLY which CVs were changed before writing
+
+**5. Button Disable Logic**
+- Compares `cvValuesFloat` vs original `data.cv_values`
+- Write button disabled with tooltip: "No modifications to write"
+- Button always visible (user knows feature exists)
+
+**6. onBlur Fix** (prevent unwanted interpolation)
+- Bug: Clicking checkpoint without changing value still triggered interpolation
+- Fix: Compare old vs new value before calling `saveEdit()`
+- Only interpolate if value actually changed
+
+**7. ESC Key Priority** (emergency stop)
+- Removed ESC handler from checkpoint editor
+- ESC now always bubbles to global emergency stop handler
+- Safety first: emergency stop > editor cancel
+
+**8. CSV Export Backup Suffix**
+- No modifications: `speed_table_consist_11_loco_7_backup.csv`
+- With modifications: `speed_table_consist_11_loco_7.csv`
+- Clarifies purpose: backup = original roster values
+
+### Production Testing (2025-01-17)
+- ✅ CV86 written from 80 → 82 on loco 7 (Consist 11)
+- ✅ Verified via Hornby Bluetooth app (decoder shows CV86 = 82)
+- ✅ All 28 CVs written successfully in 2.81 seconds
+- ✅ Visual feedback worked (blue borders, asterisks)
+- ✅ Button disable logic correct (no modifications = disabled)
+
+### Technical Details
+- CV write uses Z21 POM (Program On Main) - no programming track needed
+- Float precision state preserved throughout editing workflow
+- Checkpoint interpolation applied before write (smooth speed curves)
+- Compatible with ESU (loco 1,2,5,6,8) and Hornby (loco 7) decoders
 
 ---
 

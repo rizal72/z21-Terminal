@@ -42,6 +42,7 @@ Per dettagli tecnici completi, vedi:
 - **[docs/COMPUTER_VISION.md](docs/COMPUTER_VISION.md)** - Sistema YOLO tracking, gate detection, Virtual Mode
 - **[docs/CONSIST_MAPPING.md](docs/CONSIST_MAPPING.md)** - Logica Lead/Rear → Reference/Adjust (YOLO + Virtual Mode)
 - **[docs/CONFIG_REFACTOR.md](docs/CONFIG_REFACTOR.md)** - Refactoring config.json structure (2025-01-03)
+- **[docs/SPEED_TABLE_DB_MIGRATION.md](docs/SPEED_TABLE_DB_MIGRATION.md)** - Speed Table CV67-94 DB migration + config refactoring (2025-01-17)
 - **[docs/CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md)** - Changelog 2025-12-16 → 2025-12-24
 
 ---
@@ -606,6 +607,153 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2025-01-17 - 📋 **DESIGN: Speed Table DB Migration + Config Refactoring**
+
+**Status**: 📋 DESIGN COMPLETE - Ready to implement
+**Time Estimate**: 4-5 hours
+
+**Objective**: Eliminate JMRI dependency for daily speed table operations.
+
+**Scope**:
+1. ✅ Unified `locomotives` section in config.json (merge `locomotive_colors` + `cv_profiles`)
+2. ✅ CV67-94 stored in analytics.db (`locomotive_speed_table` table)
+3. ✅ Import script: JMRI roster → config + DB (one-time setup)
+4. ✅ Backend: Read DB first, fallback JMRI
+5. ✅ Write endpoint: POM decoder + UPDATE DB
+6. ✅ Undo support: 1-level snapshot (`previous_values`)
+7. ✅ Re-import button: Sync from JMRI when needed
+8. ✅ Backward compatible: Old config format fallback
+
+**Benefits**:
+- CV modifications visible immediately (no JMRI export/import)
+- Locomotive metadata centralized (single source of truth)
+- Undo last change with 1 click
+- Audit trail (timestamp + source tracking)
+
+**Documentation**: Complete design in `docs/SPEED_TABLE_DB_MIGRATION.md`
+- Architecture diagram
+- Config before/after comparison
+- Database schema (28 CV columns + undo snapshot)
+- Import script workflow
+- Backend API changes (3 new endpoints)
+- Frontend UI (2 buttons: Undo, Re-import)
+- Testing plan (6 unit tests + integration)
+- Migration checklist (8 phases)
+- Rollback plan
+
+**Next**: Implement when ready (all components designed and documented)
+
+---
+
+### 2025-01-17 - 🎯 **Speed Table Viewer Phase 2: Direct CV Write** (v1.0.0 FINAL)
+
+**Status**: ✅ **PRODUCTION READY** - Complete interactive CV editor with direct decoder programming
+
+**Implementation Time**: ~6 hours (centralized CV write, API endpoint, UI refinements, testing)
+
+**Objective**: Transform read-only Speed Table Viewer into full interactive editor with direct CV write via POM.
+
+**Major Features**:
+
+1. **Centralized CV Write Delay** (z21.py refactoring):
+   - Moved `time.sleep(0.1)` into `write_cv_ops_mode()` method
+   - Removed explicit sleeps from 4 call sites in `z21_manager.py`
+   - DRY principle: centralized logic prevents decoder overload automatically
+   - **Files**: `scripts/z21.py`, `backend/z21_manager.py`
+
+2. **Direct CV Write Endpoint** (`POST /api/speed-table/write/{consist_id}`):
+   - Writes all 28 CVs (CV67-94) via POM operations mode
+   - Accepts `cv_values` dict from frontend (all 28 speed table values)
+   - Returns: success status, failed CVs list, total time, loco address
+   - Tested: 28 CVs written in ~2.8 seconds
+   - **Files**: `backend/routers/speed_table.py` (lines 126-217)
+
+3. **Dual-Button Workflow** (frontend):
+   - **"Apply & Write to Decoder"**: Writes CVs + exports CSV backup
+   - **"Export CSV Only"**: Exports current values without decoder write
+   - Both buttons disabled when no modifications present
+   - Visual feedback: success/error messages with timing
+   - **Files**: `web/src/components/charts/SpeedTableViewer.jsx`
+
+4. **Visual Feedback for Modifications**:
+   - Blue border (`border-blue-400`) on modified CV bars
+   - Blue asterisk next to CV value (e.g., "128*")
+   - Priority: CRITICAL (red/amber) > modified (blue) > default (slate)
+   - User sees EXACTLY which CVs were changed before writing
+   - **Files**: `web/src/components/charts/SpeedTableViewer.jsx` (lines 260-280)
+
+5. **Button Disable Logic**:
+   - `hasModifications` check compares `cvValuesFloat` vs original `data.cv_values`
+   - Write button disabled with tooltip: "No modifications to write"
+   - Button always visible (user knows feature exists)
+   - **Files**: `web/src/components/charts/SpeedTableViewer.jsx` (lines 53-57, 298)
+
+6. **onBlur Fix** (prevent unwanted interpolation):
+   - **Bug**: Clicking checkpoint without changing value still triggered interpolation
+   - **Fix**: Compare old vs new value before calling `saveEdit()`
+   - Only interpolate if value actually changed
+   - **Files**: `web/src/components/charts/SpeedTableViewer.jsx` (lines 191-199)
+
+7. **ESC Key Priority** (emergency stop):
+   - Removed ESC handler from checkpoint editor
+   - ESC now always bubbles to global emergency stop handler
+   - Safety first: emergency stop > editor cancel
+   - **Files**: `web/src/components/charts/SpeedTableViewer.jsx` (line removed from input)
+
+8. **CSV Export Backup Suffix**:
+   - No modifications: `speed_table_consist_11_loco_7_backup.csv`
+   - With modifications: `speed_table_consist_11_loco_7.csv`
+   - Clarifies purpose: backup = original roster values
+   - **Files**: `web/src/components/charts/SpeedTableViewer.jsx` (lines 48-50)
+
+**Critical Analytics Bug Fixed**:
+- **Problem**: Overview mode showed 673 events instead of 500 (downsampling never applied)
+- **Root Cause**: Parameter name mismatch - backend `max_points` (snake_case) vs frontend `maxPoints` (camelCase)
+- **Fix**: Renamed all `max_points` → `maxPoints` in `backend/routers/analytics.py`
+- **Result**: 673→500 delta_t (25% reduction), 1646→500 YOLO (70% reduction)
+- **Log Visibility**: Moved verbose logs under `debug_enabled` flag, kept summary always visible
+- **Files**: `backend/routers/analytics.py` (lines 48-131)
+
+**Production Testing** (2025-01-17):
+- ✅ CV86 written from 80 → 82 on loco 7 (Consist 11)
+- ✅ Verified via Hornby Bluetooth app (decoder shows CV86 = 82)
+- ✅ All 28 CVs written successfully in 2.81 seconds
+- ✅ Visual feedback worked (blue borders, asterisks)
+- ✅ Button disable logic correct (no modifications = disabled)
+- ✅ Analytics downsampling: Overview chart readable (500 points, smooth curves)
+
+**Key Technical Details**:
+- CV write uses Z21 POM (Program On Main) - no programming track needed
+- Float precision state preserved throughout editing workflow
+- Checkpoint interpolation applied before write (smooth speed curves)
+- Compatible with ESU (loco 1,2,5,6,8) and Hornby (loco 7) decoders
+
+**Deployment**:
+- ✅ Pushed to GitHub (develop branch)
+- ✅ Deployed to PC production via `z21-deploy-dev`
+- ✅ Frontend rebuilt (Vite 7.3.0)
+- ✅ Backend restarted (Task Scheduler)
+
+**Files Modified** (14 total):
+- `scripts/z21.py` - Centralized CV write delay
+- `backend/z21_manager.py` - Removed explicit sleeps (4 locations)
+- `backend/routers/speed_table.py` - New CV write endpoint
+- `backend/routers/analytics.py` - Fixed camelCase parameter bug
+- `web/src/components/charts/SpeedTableViewer.jsx` - UI improvements
+- `CLAUDE.md` - This changelog entry
+- `docs/SPEED_TABLE_VIEWER.md` - Phase 2 documentation (to be updated)
+
+**Versioning History**:
+- Initially tagged v1.0.0 (prematurely - CV write not implemented)
+- Changed to v0.9.5 (discovered CV write missing)
+- Now v1.0.0 FINAL (CV write complete and tested)
+
+**User Feedback**: "perfetto, valori scritti correttamente!" ✅
+
+**Next Steps**: Evaluate "particolare" (user will specify)
+
+---
+
 ### 2025-01-17 - 🎉 **v1.0.0 - Production Release**
 
 **Status**: ✅ **PRODUCTION READY** - Complete locomotive control system with AI-powered speed optimization
@@ -614,17 +762,24 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 - ✅ Dual consist control (C10, C11) with real-time WebSocket sync
 - ✅ YOLO-based computer vision tracking (4 locomotives, OBB model, TensorRT GPU acceleration)
 - ✅ Automatic speed compensation via Virtual Consist Mode
-- ✅ Interactive Speed Table Viewer with JMRI-compatible checkpoint interpolation
+- ✅ Interactive Speed Table Viewer with direct CV write to decoder (POM)
+- ✅ JMRI-compatible checkpoint interpolation with float precision
 - ✅ Cumulative intelligent CV recommendations with auto-clear on fix
 - ✅ Session tracking with running session display (green badge in Reports)
-- ✅ Analytics dashboard with historical trend analysis
+- ✅ Analytics dashboard with intelligent downsampling (LTTB algorithm)
 - ✅ Mobile-first PWA design with Tailscale HTTPS access
 
 **What's New in v1.0.0**:
-- Speed Table Viewer Phase 2 complete (interactive editing, float precision, live interpolation)
-- Running sessions visible in Reports tab with green border + "RUNNING" badge
-- Deployment workflow skill created (Mac → PC automation reminder)
-- Documentation consolidated (CLAUDE.md, skills, comprehensive guides)
+- **Speed Table Viewer Phase 2** complete:
+  - Interactive editing with checkpoint-based interpolation
+  - Direct CV write to decoder via Z21 POM (28 CVs in ~2.8s)
+  - Dual-button workflow (Apply & Write vs Export Only)
+  - Visual feedback for modifications (blue borders, asterisks)
+  - Float precision state (prevents rounding loss)
+- **Analytics Downsampling Fix**: Fixed critical bug (673→500 events in Overview mode)
+- **Running Sessions**: Visible in Reports tab with green border + "RUNNING" badge
+- **Deployment Workflow**: Skill created for Mac → PC automation
+- **Documentation**: Consolidated (CLAUDE.md, skills, comprehensive guides)
 
 **Technical Stack**:
 - Backend: FastAPI + WebSocket + SQLite + YOLO v8 nano OBB + TensorRT
@@ -632,6 +787,8 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 - Hardware: Roco Z21 Bianca, Tapo IP camera 720P, PC Windows 11 + GPU
 
 **Production Deployment**: PC Windows (gaming-pc) via z21-deploy-dev
+
+**Production Testing**: CV write verified on loco 7 (CV86: 80→82, confirmed via Hornby app)
 
 **Next Phase**: v1.1.0+ (optional enhancements - system is feature-complete)
 
