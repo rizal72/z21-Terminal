@@ -2701,3 +2701,631 @@ backend/
 **Commits**: `cbd1e60` - Phase 2.2: Extract config router + Plan file venv documentation
 
 ---
+---
+
+## Archived Changelog Entries (Moved from CLAUDE.md 2025-01-17)
+
+These entries were moved to keep CLAUDE.md under 40KB.
+Only v1.0.0 JMRI Independence, Speed Table Phase 2, and Phase 1 remain in main file.
+
+---
+
+## ⛔ KNOWN ISSUES / FAILED EXPERIMENTS
+
+**🚫 NON RIPROVARE QUESTI APPROCCI - GIÀ TESTATI E FALLITI**
+
+### 1. ⛔ Start-Process per Finestre Detached (Windows)
+**Tentato**: 2025-01-09 + 2025-01-11
+**Problema**: `Start-Process pwsh.exe -WindowStyle Hidden/Normal` NON crea processi veramente detached
+- Processo resta legato alla sessione SSH
+- Chiudi SSH → processo termina
+- Riapri SSH → backend morto
+- La finestra non appare o si chiude immediatamente
+
+**Soluzione funzionante**: ✅ **Windows Task Scheduler**
+- `Register-ScheduledTask` + `Start-ScheduledTask`
+- Processo veramente detached dal sistema operativo
+- Sopravvive a: SSH close, logout, reboot
+- Usato attualmente in `z21-start` function
+
+**Riferimenti**: CHANGELOG_ARCHIVE.md riga 299-335
+
+---
+
+### 2. ⛔ Motion Detection Puro per Locomotive Tracking
+**Tentato**: 2025-12-29 (Phase 3 sospesa)
+**Problema**: Background subtraction MOG2 NON sufficiente per tracking affidabile
+- Troppo sensibile a: illuminazione, ombre, elementi statici del plastico
+- Impossibile distinguere lead da rear locomotive senza ML
+- Bounding box include loco + carrozze → centro ≠ posizione reale locomotiva
+- Tracciato ovale = direzioni multiple → pattern analysis troppo complesso
+
+**Approcci falliti**:
+- Motion detection con pattern analysis (tetti, pantografi, scoring)
+- Calcolo vettore direzione per estremità bounding box
+- Ottimizzazioni background subtractor (varThreshold, learningRate, morphology)
+- Versione minimalista (solo area filtering)
+
+**Soluzione funzionante**: ✅ **YOLO Custom Training**
+- YOLOv8 nano trained su 4 locomotive specifiche
+- Dataset Roboflow con annotazioni manuali
+- mAP50 = 93.1% (standard) / 91.7% (OBB)
+- Detection robusta a tutte le distanze e angoli
+
+**Riferimenti**: CHANGELOG_ARCHIVE.md riga 1364-1497
+
+---
+
+### 3. ⛔ PowerShell 7 Task Scheduler con Colori ANSI
+**Tentato**: 2025-01-11
+**Problema**: PS7 encoding UTF-8 vs console Task Scheduler codepage 850/1252
+- **PlainText mode** (`$PSStyle.OutputRendering = 'PlainText'`): Funziona ma solo B/N, niente colori
+- **Ansi mode** (`$PSStyle.OutputRendering = 'Ansi'`): Mostra codici ANSI grezzi `[97m[INIT][0m` invece dei colori
+- La console Task Scheduler non interpreta ANSI codes correttamente
+
+**Soluzione funzionante**: ✅ **Hybrid Configuration**
+- **SSH**: PowerShell 7 (migliore sintassi, comandi riescono al primo tentativo)
+- **Task Scheduler**: PowerShell 5.1 (colori perfetti, encoding Windows-1252 nativo)
+- `start-backend.ps1` ha fix encoding PS7 (inattivo con PS5.1, pronto se serve)
+
+**Riferimenti**: CLAUDE.md 2025-01-11 changelog
+
+---
+
+### 4. ⛔ Idle Line Breaks Visualization in Δt Chart (Recharts Limitation)
+**Tentato**: 2025-01-13 (5 approcci diversi, tutti falliti)
+**Problema**: Recharts non supporta line breaks visuali basate su gap temporali in dataset con null naturali
+- Ogni evento ha UN solo consist (gate crossing = single consist per timestamp)
+- Dataset naturalmente ha: `{delta_t_c10: value, delta_t_c11: null}` OR viceversa
+- Recharts `connectNulls` prop gestisce SOLO null consecutivi, non gap temporali
+
+**Approcci falliti** (tutti revertati via git reset --hard):
+
+1. **Segment-based + separate data arrays** (commit `f3c40da`)
+   - Multiple Line components, ognuno con proprio data array
+   - Problema: Tutti i segmenti sovrapposti a sinistra del chart (no timeline corretta)
+   - Legend duplicata (7+ voci per consist invece di 2)
+
+2. **Unified dataset + null boundaries** (commit `615f68e`)
+   - Dataset unificato con null points inseriti ai gap boundaries
+   - connectNulls={false} per rompere linee
+   - Problema: Solo mini-segmenti 2-3 punti (rompe su OGNI null, inclusi naturali)
+
+3. **Selective null boundaries** (commit `63e508e`)
+   - Null SOLO per consist con gap, non tutti i consist
+   - Problema: Stesso del #2 (ogni null naturale rompe la linea)
+
+4. **Double-null strategy + connectNulls=true** (commit `f470b53`)
+   - connectNulls={true} per connettere null singoli (naturali)
+   - Null doppi (tutti i consist) ai gap boundaries
+   - Problema: Recharts IGNORA completamente double-null points → nessun line break
+
+5. **Segment-based + XAxis numerico** (commit `8037997`)
+   - XAxis type="number" con timestamp domain
+   - Multiple Line components con data separati
+   - Problema DISASTROSO:
+     - Punti allineati verticalmente (scale compressione)
+     - Legend con 1000+ voci ("delta" ripetuto)
+     - Overview chart illeggibile (legend riempie schermo)
+     - Nessuna linea (rarissimi casi)
+
+**Root Cause** (Recharts design limitation):
+- Recharts non ha concetto di "gap temporale" tra punti
+- `connectNulls` gestisce solo presenza/assenza valori, non timing
+- XAxis numerico con data separati non condivide domain correttamente
+- Multiple Line con data props generano legend entries duplicate
+
+**Decisione**: ✅ **FEATURE ABBANDONATA**
+- Hard reset a commit `19d227e` (ultima versione stabile)
+- 5 commit revertati completamente
+- Analytics Dashboard funziona perfettamente SENZA idle line breaks
+- Linee continue = accettabile (user può vedere gap negli stats cards)
+
+**Alternative considerate MA non perseguite**:
+- Custom SVG paths (troppo complesso, reinventare Recharts)
+- Switch a libreria diversa (Plotly, Victory) → breaking change enorme
+- Dashed lines durante idle → già provato in passato, stesso problema
+
+**Riferimenti**: Git commits f3c40da → 8037997 (tutti revertati)
+
+---
+
+
+**💡 REGOLA GENERALE**: Se un approccio è nell'archive come "FALLITO" o "SOSPESO", NON riprovarlo senza una ragione tecnica specifica nuova (es. nuova versione software, hardware diverso).
+
+---
+
+
+---
+
+### 2025-01-17 - 🎉 **v1.0.0 - Production Release**
+
+**Status**: ✅ **PRODUCTION READY** - Complete locomotive control system with AI-powered speed optimization
+
+**Milestone**: First production release with full feature set:
+- ✅ Dual consist control (C10, C11) with real-time WebSocket sync
+- ✅ YOLO-based computer vision tracking (4 locomotives, OBB model, TensorRT GPU acceleration)
+- ✅ Automatic speed compensation via Virtual Consist Mode
+- ✅ Interactive Speed Table Viewer with direct CV write to decoder (POM)
+- ✅ JMRI-compatible checkpoint interpolation with float precision
+- ✅ Cumulative intelligent CV recommendations with auto-clear on fix
+- ✅ Session tracking with running session display (green badge in Reports)
+- ✅ Analytics dashboard with intelligent downsampling (LTTB algorithm)
+- ✅ Mobile-first PWA design with Tailscale HTTPS access
+
+**What's New in v1.0.0**:
+- **Speed Table Viewer Phase 2** complete:
+  - Interactive editing with checkpoint-based interpolation
+  - Direct CV write to decoder via Z21 POM (28 CVs in ~2.8s)
+  - Dual-button workflow (Apply & Write vs Export Only)
+  - Visual feedback for modifications (blue borders, asterisks)
+  - Float precision state (prevents rounding loss)
+- **Analytics Downsampling Fix**: Fixed critical bug (673→500 events in Overview mode)
+- **Running Sessions**: Visible in Reports tab with green border + "RUNNING" badge
+- **Deployment Workflow**: Skill created for Mac → PC automation
+- **Documentation**: Consolidated (CLAUDE.md, skills, comprehensive guides)
+
+**Technical Stack**:
+- Backend: FastAPI + WebSocket + SQLite + YOLO v8 nano OBB + TensorRT
+- Frontend: React 18.3 + Vite 6.0 + Tailwind CSS
+- Hardware: Roco Z21 Bianca, Tapo IP camera 720P, PC Windows 11 + GPU
+
+**Production Deployment**: PC Windows (gaming-pc) via z21-deploy-dev
+
+**Production Testing**: CV write verified on loco 7 (CV86: 80→82, confirmed via Hornby app)
+
+**Next Phase**: v1.1.0+ (optional enhancements - system is feature-complete)
+
+---
+
+### 2025-01-17 - 🐛 **Fix: Running Sessions in Reports Tab**
+
+**Status**: ✅ **FIXED AND DEPLOYED**
+
+**Bug**: Running sessions (end_time = NULL) were excluded from Reports list due to SQL filter.
+
+**Impact**: Current active session invisible in Reports tab despite UI supporting green badge.
+
+**Fix**:
+- Removed `AND end_time IS NOT NULL` filter in `get_reports_data()` query
+- Calculate duration using `time.time()` if `end_time` is NULL (shows elapsed time)
+- Added missing `import time` for time module
+
+**Result**: Running sessions now visible in Reports with:
+- Green border (`border-green-500/50`)
+- Green background (`bg-green-900/10`)
+- "RUNNING" badge (green)
+- Real-time duration updates on refresh
+
+**Commit**: `54d7e7d` - fix(reports): include running sessions in Reports tab
+
+**Deployed**: Backend restarted on PC production
+
+---
+
+### 2025-01-17 - ⚙️ **Speed Table Viewer: Phase 2 Interactive Editing** (Complete)
+
+**Status**: ✅ **DEPLOYED TO PRODUCTION** - JMRI-compatible checkpoint-based editing with float precision
+
+**Objective**: Transform read-only speed table into fully interactive editor with automatic smoothing via checkpoint interpolation.
+
+**Implementation Time**: ~2 hours (9 tasks)
+
+**Features Implemented**:
+
+1. **Float Precision State** (`cvValuesFloat`):
+   - Stores CV values as floats internally (e.g., 146.333...)
+   - Rounds only on display (UI shows integers)
+   - Rounds only on export (JMRI CSV compatibility)
+   - Prevents gradual adjustment propagation loss
+   - Example: Adjust CV86 by -1, four times → adjacent CVs smoothly update (no "stuck" values)
+
+2. **Checkpoint System**:
+   - Default 10 checkpoints at operational speeds: `[3, 6, 9, 12, 15, 17, 20, 23, 26, 28]` (10%-100%)
+   - Checkboxes under all 28 bars (user can customize)
+   - Minimum 2 checkpoints enforced (interpolation requires bounds)
+   - Toggle on/off with visual feedback
+
+3. **Linear Interpolation**:
+   - Auto-recalculates non-checkpoint steps when checkpoint modified
+   - Formula: `value = valueA + (valueB - valueA) * (stepX - stepA) / (stepB - stepA)`
+   - Interpolates both zones: prev→modified, modified→next
+   - Pure float math (no rounding until display/export)
+
+4. **Interactive Editing**:
+   - Click checkpoint value (blue bold) → numeric input appears
+   - Click checkpoint bar → same input
+   - Type new value (0-255), Enter to save, Escape to cancel
+   - Keyboard navigation, auto-focus, validation
+   - Non-checkpoints: gray text, read-only (auto-interpolated)
+
+5. **Recommendations Approval Workflow**:
+   - Checkbox per recommendation (default all checked)
+   - Select All / Deselect All buttons
+   - "Apply N Selected" button (disabled if 0 selected)
+   - Visual feedback: unchecked recommendations opacity 50%
+   - Apply → calls `applyInterpolation()` for each selected CV
+   - Selection clears after apply
+
+6. **CSV Export Updated**:
+   - Phase 1: Exported original + suggested recommendations
+   - Phase 2: Exports current `cvValuesFloat` (includes all user edits + applied recommendations)
+   - JMRI-compatible format unchanged (CV,value)
+
+**UI/UX Enhancements**:
+- Checkpoint values: **blue bold, cursor pointer** (click to edit)
+- Non-checkpoint values: gray (auto-interpolated, read-only)
+- Percent labels: shown only on checkpoints
+- Tooltips: "Click to edit" vs "Auto-interpolated"
+- Smooth Tailwind transitions on all changes
+
+**Technical Details**:
+- State: `cvValuesFloat` (CV67-94 as floats), `checkpoints` (Set), `editingStep`, `selectedRecommendations` (Set)
+- Functions: `interpolate()`, `applyInterpolation()`, `startEditing()`, `saveEdit()`, `toggleCheckpoint()`, `toggleRecommendation()`
+- Safety: CV range validation (0-255), minimum 2 checkpoints
+- Real-time: interpolation on every checkpoint modification
+
+**Commit**: `db1196a` - feat(speed-table): implement Phase 2 interactive editing (+295 lines, -57 lines)
+
+**Deployment**:
+- Deployed to PC production (z21-deploy-dev)
+- Frontend rebuilt (Vite 7.3.0, 3.88s)
+- Backend restarted (Task Scheduler)
+
+**Skill Update**: Added "Complete Workflow (Mac → PC)" section to `z21-deployment` skill:
+- Step 4 reminder: **MUST deploy to PC after push**
+- Clarified: Mac = development, PC = production environment
+
+**Testing**: Ready for user validation in production environment.
+
+**Next Phase**: Phase 2B (future) - Direct POM write via Z21 (optional, alternative to CSV export).
+
+---
+
+### 2025-01-17 - 🧹 **CLAUDE.md Cleanup + Deployment Skill Creation**
+
+**Status**: ✅ **COMPLETED** - Documentation consolidation and skill-based workflow enforcement
+
+**Objective**: Eliminate duplication between CLAUDE.md and new deployment skill, enforce correct workflow usage
+
+**Trigger**: I manually executed deployment commands instead of using PowerShell aliases. User corrected: "ma non hai eseguito l'alias!!! Hai fatto tutto a mano"
+
+**Implementation**:
+
+1. **Created Deployment Skill** (`~/.claude/skills/z21-deployment/SKILL.md` - 314 lines):
+   - Deployment decision tree (docs/backend/frontend → correct command)
+   - PowerShell aliases (z21-deploy-dev, z21-deploy, z21-restart, z21-stop, z21-log)
+   - 8 CRITICAL rules (venv, CV test mode, git workflow, frontend rebuild, secrets, SSH protocol, encoding, README language)
+   - Pre-deploy checklist (7 items)
+   - Config files behavior (config.json vs config.local.json)
+   - PC info (SSH, paths, shell, logs)
+
+2. **Consolidated Skill** (404 → 314 lines, 22% reduction):
+   - Removed CRITICAL Rule #9 (PowerShell Aliases) - redundant with dedicated section
+   - Removed CRITICAL Rule #10 (SSH Username) - evident from examples
+   - Removed Common Scenarios - redundant with Decision Tree
+   - Removed Quick Reference Table - redundant with PowerShell Aliases
+
+3. **Simplified CLAUDE.md** (~73 lines removed):
+   - Python Virtual Environment section: 56 lines → 8 lines
+   - Production Deployment section: 35 lines → 10 lines
+   - Replaced with references to `~/.claude/skills/z21-deployment/SKILL.md`
+
+**Benefits**:
+- ✅ Single source of truth (skill file)
+- ✅ Auto-triggered on deployment requests
+- ✅ Prevents manual command execution
+- ✅ CLAUDE.md cleaner, more maintainable
+- ✅ Zero duplication
+
+**User Feedback During Creation**:
+- "dove possibile userei comandi one line"
+- "SSH gaming-pc da solo ti da errore, serve sempre l'username"
+- "ci sono altri aliases su PC che potrsti usare in altri scenari, uno su tutti z21-log"
+- "recentemente abbiamo deciso di mettere su git anche claude ed altri files md, per cui quella parte la devi togliere"
+- "hai fatto un check per vedere se alcune regole sono duplicate?"
+
+**Files Created**:
+- `~/.claude/skills/z21-deployment/SKILL.md` - Complete deployment workflow
+
+**Files Modified**:
+- `/Users/riccardosallusti/Documents/_PROGETTI/z21-Terminal/CLAUDE.md` - Simplified deployment sections
+
+---
+
+### 2025-01-17 - 🔄 **SPEED TABLE VIEWER: Cumulative Intelligent Recommendations** (v0.9.0)
+
+**Status**: ✅ **MILESTONE ACHIEVED** - Iterative testing workflow with intelligent "fixed" detection
+
+**Objective**: Transform single-session recommendations into cumulative historical analysis that persists across sessions but auto-clears when speeds are proven OK.
+
+**Implementation Time**: ~6-8 hours (14 commits with multiple iterations on auto-select logic)
+
+**Major Changes**:
+
+1. **Cumulative Historical Data** (Backend):
+   - `get_critical_events_by_speed()` now aggregates ALL sessions (removed `session_id` parameter)
+   - Cumulative CRITICAL/WARNING counts provide complete problem picture
+   - Commit: `08353ce`
+
+2. **Intelligent "Fixed" Detection** (Backend):
+   - Speed considered fixed if last tested session has ≥3 Δt events AND <20% CRITICAL rate
+   - Fixed speeds excluded from recommendations (problem resolved)
+   - Enables iterative workflow: adjust CV → retest → recommendation auto-disappears
+   - Commit: `08353ce`
+
+3. **Fixed ±1 CV Adjustment** (Backend - CRITICAL FIX):
+   - **Bug**: Cumulative scaling caused massive adjustments (CV86 80→48 = -32!)
+   - **User Insight**: "CV misconfiguration error is CONSTANT regardless of CRITICAL count"
+   - **Fix**: Changed from `(critical_count // 5) * 2` to fixed `adjustment_magnitude = 1`
+   - **Reasoning**: More CRITICALs = more confirmation, NOT bigger CV error
+   - **Result**: Conservative iterative approach (adjust -1, retest, repeat)
+   - Commits: `9729422`, `fc7b313`
+
+4. **Non-Validated Session Display** (Frontend):
+   - Show UI even when session not validated (was blocking entire UI)
+   - Added amber badge "WAITING FOR FIRST ΔT" when session exists but no events yet
+   - Backend returns latest session regardless of validation state
+   - Commits: `6b8116a`, `7b89eab`
+
+5. **Summary Cards Redesign** (Frontend):
+   - **Removed**: "Problematic Speeds" card (redundant with Recommendations)
+   - **Added**: "Fixed Speeds" card (positive feedback, green theme)
+   - **Result**: Card 2 = actionable (what to do), Card 3 = success feedback (what you fixed)
+   - Commit: `7e3f6a0`
+
+6. **Step Prominence** (Frontend):
+   - "Step 20 (CV86)" format with Step in white font-semibold
+   - CV index secondary in gray parentheses
+   - Horizontal layout preserved (user preference)
+   - Commits: `880ab5a`, `0dd9b98`
+
+7. **Auto-Select Consist** (Frontend - Multiple Iterations):
+   - **Goal**: Avoid extra click when opening Speed Tuning tab
+   - **Challenge**: Race conditions + wrong data source (cumulativeData has ALL history)
+   - **Final Solution**: Use ONLY `reportsData.sessions[0].consists` (last validated session)
+   - **Result**: Auto-selects whichever consist(s) ran most recently
+   - Commits: `3602259`, `37a8966`, `77c5822` (debug), `0190c1a` (fix), `5118e21` (cleanup)
+
+**Key User Insights Captured**:
+- "se adjust continua a sommarsi solo su un CV, resta problema smoothing" → Phase 2 requirement documented
+- "io manualmente vado sempre di + o - 2 al massimo" → informed ±1 conservative approach
+- "la visualizzazione tutta orizzontale di prima mi piaceva!" → UI preference preserved
+
+**Testing Results**:
+- ✅ Cumulative recommendations aggregate historical data correctly
+- ✅ Fixed detection works (speed 70% cleared after good session)
+- ✅ Non-validated sessions show UI with amber badge
+- ✅ Auto-select picks correct consist from last session
+- ✅ ±1 adjustment prevents massive CV changes
+
+**Documentation Updated**:
+- `docs/SPEED_TABLE_VIEWER.md` - Added "🆕 2025-01-17 Updates" section
+- Workflow example showing 3-session iterative testing
+- Phase 2 smoothing requirement documented
+
+**Commits**: 14 total (`08353ce` → `5118e21`)
+
+**Files Modified**:
+- `backend/services/analytics_db.py` - Cumulative queries + fixed detection
+- `backend/services/speed_table_helpers.py` - Fixed ±1 adjustment
+- `backend/routers/speed_table.py` - Latest session (any state)
+- `web/src/components/charts/SpeedTableViewer.jsx` - UI improvements
+- `web/src/components/AnalyticsPanel.jsx` - Auto-select consist logic
+- `docs/SPEED_TABLE_VIEWER.md` - Feature documentation
+- `CLAUDE.md` - This changelog entry
+
+**Versioning Decision**: Tagged as **v0.9.0** (not v1.4)
+- Current: Feature-complete Phase 1 (Speed Table Viewer read-only)
+- Future v1.0.0: Phase 2 Auto CV Adjust with smoothing (automation completa)
+- Reasoning: 0.x = "stable but evolving", 1.0 = production-ready auto-tuning
+
+---
+
+### 2025-01-17 - 📄 **CSV Export JMRI-Compatible + Phase 2 Design Documentation**
+
+**Status**: ✅ **COMPLETED**
+
+**Objective**: Finalize Phase 1 CSV export for seamless JMRI DecoderPro import workflow + comprehensive Phase 2 design documentation
+
+**Implementation Time**: ~3-4 hours (research JMRI import, refactor CSV export, write extensive Phase 2 docs)
+
+---
+
+#### Part 1: CSV Export JMRI-Compatible
+
+**Research**: JMRI DecoderPro CSV import capabilities
+- ✅ Confirmed: JMRI supports CSV import via File → Import → CSV
+- ✅ Format required: Simple 2-column `CV,value` (no extra metadata)
+- ⚠️ Historical bug: Quoted headers caused import failures (fixed in JMRI 5.x+)
+
+**Changes**:
+```javascript
+// OLD (multi-column, not importable):
+'JMRI Step,CV Index,Current Value,Suggested Value,Delta,Critical Count,Warning Count,Notes\n'
+'20,86,128,126,-2,12,5,"Needs adjustment"\n'
+
+// NEW (JMRI-ready):
+'CV,value\n'
+'86,126\n'
+```
+
+**Logic Update**:
+- If CV has recommendation → use **suggested value** (optimized)
+- If CV is OK → use **current value** (no change)
+- Result: CSV contains speed table ready to apply directly
+
+**UI Changes**:
+- Button label: "Export CSV" → **"Export for JMRI"**
+- Filename suffix: `_JMRI.csv` (clarifies purpose)
+- Tooltip: Added JMRI menu path "(File → Import → CSV)"
+
+**User Workflow** (zero friction):
+1. Click "Export for JMRI" in Speed Table Viewer
+2. Download `speed_table_consist_11_loco_7_JMRI.csv`
+3. JMRI DecoderPro → File → Import → CSV → Select file
+4. Write to decoder (ops mode or programming track)
+
+**Commits**:
+- Frontend: `web/src/components/charts/SpeedTableViewer.jsx` (lines 48-77, 237-241, 293)
+
+---
+
+#### Part 2: Phase 2 Design Documentation (Comprehensive)
+
+**Documented in**: `docs/SPEED_TABLE_VIEWER.md` (new section ~400 lines)
+
+**Topics Covered**:
+
+1. **JMRI Checkpoint System** (How It Works)
+   - Checkbox-based fixed points (user controls which steps)
+   - Automatic linear interpolation between checkpoints
+   - Edit behavior (modify checkpoint → all intermediate steps recalculate)
+   - Mathematical formula with examples
+
+2. **Checkpoint Strategy: Operational Speed Percentages**
+   - **Key Insight**: Checkpoints should match controller usage (10%, 20%, ..., 100%)
+   - **Default checkpoints**: Steps `[3, 6, 9, 12, 15, 17, 20, 23, 26, 28]`
+   - **Rationale**: Users never command intermediate steps directly (only used by decoder during acceleration)
+   - Mapping table: Percentage → DCC Speed → JMRI Step → CV Index
+
+3. **The Rounding Problem** (Critical Design Decision)
+   - **Issue**: Integer-only math prevents gradual adjustments from propagating
+   - **Example**: Adjusting step 20 by -1 requires -3 to -4 iterations before adjacent steps change
+   - **Solution**: Float precision internally, round only on display/export
+   - **Benefits**: Mathematically accurate, gradual propagation works correctly, JMRI-compatible
+
+4. **Implementation Plan** (Detailed)
+   - UI changes: Checkpoint checkboxes, interactive editing, real-time preview
+   - Data structure: Float precision state (`cvValuesFloat`)
+   - Interpolation algorithm: Linear between checkpoints (code examples)
+   - Edge cases: First/last checkpoint handling
+   - Backend changes: Minimal (endpoint already complete)
+
+5. **Features Roadmap**
+   - Core (required): Checkpoint editing, float precision, interactive adjustment
+   - Optional: Auto-apply to decoder, validation, undo/redo, preset curves
+
+6. **Timeline Estimate**: 12-16 hours total effort
+
+**Code Examples**: Complete JavaScript/JSX snippets for all major functions
+
+**Benefits**:
+- ✅ Zero ambiguity for future implementation
+- ✅ Captures JMRI workflow understanding
+- ✅ Documents float precision rationale (critical decision)
+- ✅ Ready for Phase 2 kickoff (no rework needed)
+
+---
+
+**Files Modified**:
+- `web/src/components/charts/SpeedTableViewer.jsx` - CSV export refactor
+- `docs/SPEED_TABLE_VIEWER.md` - Phase 2 section (~400 lines added)
+- `CLAUDE.md` - This changelog entry
+
+**Key Insight Captured** (from user):
+> "I checkpoint attivi di default devono sempre essere quelli corrispondenti alle speed percentuali 10 20 30 40 etc, perchè muovendo le loco sempre usando gli step percentuali, che è come facciamo sempre noi, andiamo ad interpolare solo i valori intermedi"
+
+**Result**: Phase 1 finalized (JMRI-ready export), Phase 2 fully designed and documented. Ready to implement when user validates Phase 1 in production.
+
+---
+
+### 2025-01-17 - 🎯 **Phase 2 User Approval Workflow Design**
+
+**Status**: ✅ **DOCUMENTED**
+
+**Objective**: Define semi-automatic CV adjustment workflow with user approval
+
+**User Request**:
+> "Io preferisco il 2 ma mi piacerebbe che la preview fosse cmq in realtime sulle barre e poi approve finale, la uno è troppo granulare, non è rocket science"
+
+**Approach Finalized**: Checkboxes + Real-Time Preview + Final Approval
+
+---
+
+#### Design Decisions
+
+**What User Wanted**:
+- ✅ Batch approval (not per-CV granular)
+- ✅ Real-time preview on bars (visual feedback immediate)
+- ✅ Single final approval (not rocket science)
+
+**How It Works**:
+
+1. **Recommendations List** (with checkboxes)
+   - Default: All recommendations checked (opt-out model)
+   - User unchecks recommendations they don't want to apply
+   - Select All / Deselect All buttons
+
+2. **Real-Time Preview** (on speed table bars)
+   - Checked recommendation → Bar changes color immediately (blue → orange)
+   - Checkpoint bars: Solid orange (direct modification)
+   - Interpolated bars: Light orange (auto-calculated)
+   - Unchecked → Bar reverts to blue (no change)
+   - Tooltip: "Current: 128 → New: 127 (float: 126.67)"
+
+3. **Impact Summary**
+   - "2 checkpoints + 8 interpolated = 10 CVs will change"
+   - User sees EXACTLY what will be modified before approval
+
+4. **Final Approval Button**
+   - "Apply 2 Selected Changes"
+   - Disabled if no checkboxes selected
+   - Opens confirmation dialog with summary
+
+5. **Confirmation Dialog**
+   - Summary: "2 checkpoint values, 8 interpolated, Total: 10 CVs"
+   - Choose method: Export to JMRI CSV OR Write via POM (Z21)
+   - Cancel button always available
+
+**Benefits**:
+- ✅ Not too granular (single approval, not per-CV)
+- ✅ Visual feedback (bars change in real-time)
+- ✅ Safe (confirmation dialog before write)
+- ✅ Flexible (user can select/deselect)
+- ✅ Simple ("not rocket science")
+- ✅ WYSIWYG (bars show exact effect)
+
+**Implementation Details**: Full code examples in `docs/SPEED_TABLE_VIEWER.md` (~200 lines added)
+- State management (selected recommendations, projected CV values)
+- Checkbox handlers (toggle, select all, deselect all)
+- Real-time preview calculation (useEffect on selection change)
+- Bar rendering with color coding (checkpoint vs interpolated)
+- Apply button handler (confirmation dialog + export/write)
+
+**Safety Features**:
+- Visual validation (color-coded bars)
+- Tooltip precision (shows float values)
+- Confirmation dialog (summary before write)
+- Optional warnings (monotonicity, large jumps, range check)
+- Undo capability (reset to original values)
+
+**User Experience Flow**: 5 steps documented
+1. View recommendations (all checked by default)
+2. Adjust selections (uncheck unwanted, bars update real-time)
+3. Review visual preview (hover for exact values)
+4. Click "Apply Selected Changes" (confirmation dialog)
+5. Choose method (Export CSV or POM write)
+
+**Files Modified**:
+- `docs/SPEED_TABLE_VIEWER.md` - User Approval Workflow section (~200 lines)
+- `CLAUDE.md` - This changelog entry
+
+**Key Insight Captured**: Batch approval with real-time preview strikes optimal balance between safety and usability. Per-CV approval is overkill for simple CV adjustments.
+
+**Recommendation Persistence Clarified**:
+- Recommendations are **persistent** (calculated on-the-fly from cumulative historical data)
+- Cancel button does NOT consume recommendations (they remain until resolved)
+- Two resolution paths:
+  1. Manual: User applies changes via JMRI/POM
+  2. Automatic: New test session shows speed FIXED (< 20% CRITICAL rate)
+- Iterative workflow: Apply -1 → test → if still problematic, apply -1 again
+- Database: No changes on Cancel, recommendations recalculated from same historical events
+
+**Files Modified**:
+- `docs/SPEED_TABLE_VIEWER.md` - Recommendation Persistence section (~80 lines)
+- `CLAUDE.md` - This clarification
+
+---
+
+## 📋 TODO / Future Enhancements
