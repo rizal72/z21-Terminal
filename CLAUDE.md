@@ -607,49 +607,104 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
-### 2025-01-17 - 🗄️ **Speed Table DB Migration + Config Refactoring** (v1.0.0)
+### 2025-01-17 - 🎉 **JMRI INDEPENDENCE ACHIEVED** (v1.0.0)
 
-**Status**: ✅ **PRODUCTION COMPLETE** - JMRI independence achieved for speed table operations
+**Status**: ✅ **MILESTONE COMPLETE** - z21-Terminal is now fully autonomous for daily operations
 
-**Implementation Time**: ~8 hours (14 commits total: design → code → test → deploy → bugfixes)
+**Implementation**: 17+ commits spanning function labels migration, broadcast fixes, and config-based locomotive loading
 
-**Objective**: Eliminate JMRI dependency for daily speed table operations by migrating CV67-94 storage from JMRI roster XML to SQLite database.
+**Achievement**: **JMRI now optional** - only needed for import script when adding new locomotives to the roster
 
-**Architecture Changes**:
+**Liberation Day**: Complete self-sufficiency for daily railway operations without external dependencies
 
-1. **Config Refactoring** - Unified locomotive metadata:
+**What Changed**:
+
+1. **Function Labels F0-F28** → `config.json` (was: JMRI roster XML only):
    ```json
-   // OLD (scattered)
-   {
-     "locomotive_colors": {"1": "#FFFF00", "7": "#00FF00"},
-     "cv_profiles": {"1": {"normal": {"cv3": 78, "cv4": 58}}}
-   }
-
-   // NEW (unified)
    {
      "locomotives": {
        "1": {
-         "name": "Gr.675 017",
-         "decoder": "LokSound V4.0",
-         "color": "#FFFF00",
-         "cv_profiles": {"normal": {"cv3": 78, "cv4": 58}},
-         "notes": "Lead C10 Interno"
+         "functions": [
+           {"number": 0, "label": "light", "lockable": true},
+           {"number": 1, "label": "sound", "lockable": true},
+           ...
+         ]
        }
      }
    }
    ```
+   - New script: `import_functions_from_jmri.py` (one-time migration)
+   - Backend reads config first, JMRI roster fallback
+   - Web dashboard displays function labels from config
 
-2. **Database Migration** - CV67-94 in analytics.db:
-   - Table: `locomotive_speed_table` (28 CV columns + undo snapshot)
-   - Fields: `loco_address`, `cv67`-`cv94`, `previous_values` (JSON), `last_updated`, `source`
-   - 1-level undo with swap mechanism (can undo the undo)
-   - Audit trail: source tracking ('web_ui', 'jmri_import', 'undo', 'jmri_reimport')
+2. **Locomotive Roster** → `config.json` (was: JMRI roster XML required):
+   - `load_all_locomotives_from_config()` in roster_loader.py
+   - Backend loads all 7 locomotives from config (address, name, decoder, color, cv_profiles, functions)
+   - Dropdown list shows consists + individual locomotives ✅
+   - **Tested**: Renamed `roster/` → `roster.backup/` on PC → backend still works! 🎉
 
-3. **Data Flow**:
-   - **Read**: DB primary → JMRI roster fallback (seamless migration)
-   - **Write**: Decoder POM → DB update (instant visibility)
-   - **Undo**: DB previous_values → Decoder POM (1-click restore)
-   - **Re-import**: JMRI roster → DB (manual sync when needed)
+3. **Speed Tables CV67-94** → `analytics.db` (was: JMRI roster XML):
+   - Editable via web UI (Speed Table Viewer)
+   - Undo/Re-import functionality
+   - See detailed changelog sections below for implementation
+
+4. **CV19 Consist Management** → Automatic (was: JMRI required):
+   - Virtual Mode / DCC Mode toggle in web UI
+   - Operations mode CV write (no programming track needed)
+   - State persisted in config.json
+
+5. **Consist CRUD** → Web UI (was: JMRI required):
+   - Create, edit, delete consists via web dashboard
+   - Consist configuration in config.json
+
+**The Ultimate Test** 🎯:
+
+```bash
+# PC Windows - Rename JMRI roster directory
+Rename-Item 'roster' -NewName 'roster.backup'
+
+# Restart backend
+z21-restart
+
+# Result:
+[INIT] Loading all locomotives from config.json...
+[INIT] Loaded 7 locomotives
+[INIT] Initialized locomotive 1 (in consist 10)
+[INIT] Initialized locomotive 2
+[INIT] Initialized locomotive 4
+[INIT] Initialized locomotive 5 (in consist 10)
+[INIT] Initialized locomotive 6
+[INIT] Initialized locomotive 7 (in consist 11)
+[INIT] Initialized locomotive 8 (in consist 11)
+```
+
+✅ **Backend runs perfectly without JMRI roster!**
+✅ **Web dashboard shows all 9 entries** (2 consists + 7 locomotives)
+✅ **Function clicks work** (no more `[WARN] Address X not found`)
+✅ **JMRI now optional** - only needed for import scripts when adding new locomotives
+
+**Key Commits**:
+- `f64da28` - Function labels migration to config.json
+- `5192495` - Fix broadcast.py typo (_locomotive_dict → _locomotive_data)
+- `5d77537` - Load locomotives from config.json (JMRI fallback)
+- Plus all Speed Table DB Migration commits (see detailed section below)
+
+**Import Scripts**:
+- `scripts/utils/import_speed_tables_from_jmri.py` - Speed tables + config refactoring
+- `scripts/utils/import_functions_from_jmri.py` - Function labels F0-F28 migration
+
+**Documentation Updated**:
+- ✅ `docs/LOCOMOTIVE_SYNC_MAC_PC.md` (Mac/PC workflow for adding new locos)
+- ✅ `docs/JMRI_INTEGRATION.md` (updated independence status)
+- ✅ `docs/Z21_PROTOCOL.md`, `docs/CONSIST_ROSTER.md` (comprehensive specs)
+
+**User Quote**: "Questa è la vera release 1.0.0" 🎉
+
+**For detailed implementation notes** (Speed Table DB Migration, Interactive Editing, etc.), see sections below.
+
+---
+
+**Detailed Implementation Sections** (Speed Table Feature Development):
 
 **Backend Implementation**:
 
