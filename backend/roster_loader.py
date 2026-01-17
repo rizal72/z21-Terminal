@@ -4,6 +4,7 @@ Utility per caricare dati roster e consist da file XML JMRI
 import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from services.config_helpers import get_locomotive_functions
 
 # Path al roster JMRI (standard macOS)
 JMRI_ROSTER_PATH = Path.home() / "Library/Preferences/JMRI/La_mia_Ferrovia_in_JMRI.jmri/roster"
@@ -89,6 +90,10 @@ def load_functions_from_roster(address):
     """
     Carica funzioni F0-F28 dal file roster XML per una locomotiva
 
+    Priority:
+    1. config.json (locomotives.functions) - if available
+    2. JMRI roster XML - fallback if not in config
+
     Args:
         address (int): DCC address della locomotiva
 
@@ -99,6 +104,12 @@ def load_functions_from_roster(address):
             ...
         ]
     """
+    # Try config.json first (preferred)
+    functions = get_locomotive_functions(address)
+    if functions is not None:
+        return functions
+
+    # Fallback to JMRI roster XML
     functions = []
 
     # Find roster file for this address
@@ -203,21 +214,24 @@ def load_all_locomotives():
                 # Get name (roster ID)
                 name = loco_elem.get('id', f'Loco {address}')
 
-                # Load functions
-                functions = []
-                for fn_elem in root.findall('.//functionlabel'):
-                    fn_num = int(fn_elem.get('num', -1))
-                    fn_label = fn_elem.text or f"F{fn_num}"
-                    fn_lockable = fn_elem.get('lockable', 'true').lower() == 'true'
+                # Load functions (config.json first, JMRI XML fallback)
+                functions = get_locomotive_functions(address)
+                if functions is None:
+                    # Fallback to JMRI roster XML
+                    functions = []
+                    for fn_elem in root.findall('.//functionlabel'):
+                        fn_num = int(fn_elem.get('num', -1))
+                        fn_label = fn_elem.text or f"F{fn_num}"
+                        fn_lockable = fn_elem.get('lockable', 'true').lower() == 'true'
 
-                    if fn_num >= 0:
-                        functions.append({
-                            'number': fn_num,
-                            'label': fn_label,
-                            'lockable': fn_lockable
-                        })
+                        if fn_num >= 0:
+                            functions.append({
+                                'number': fn_num,
+                                'label': fn_label,
+                                'lockable': fn_lockable
+                            })
 
-                functions.sort(key=lambda x: x['number'])
+                    functions.sort(key=lambda x: x['number'])
 
                 locomotives[address] = {
                     'address': address,

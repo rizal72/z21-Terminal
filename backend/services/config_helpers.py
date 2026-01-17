@@ -9,7 +9,7 @@ Allows gradual migration without breaking existing code.
 """
 
 from config_loader import load_config
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 
 def get_locomotive_color(address: int) -> str:
@@ -99,6 +99,26 @@ def get_locomotive_decoder(address: int) -> Optional[str]:
 
     if 'locomotives' in config and address_str in config['locomotives']:
         return config['locomotives'][address_str].get('decoder')
+
+    return None
+
+
+def get_locomotive_functions(address: int) -> Optional[List[Dict[str, Any]]]:
+    """
+    Get locomotive function labels from config.
+
+    Args:
+        address: Locomotive DCC address (1-8)
+
+    Returns:
+        List of function dicts: [{"number": 0, "label": "light", "lockable": true}, ...]
+        Returns None if functions not configured for this locomotive
+    """
+    config = load_config()
+    address_str = str(address)
+
+    if 'locomotives' in config and address_str in config['locomotives']:
+        return config['locomotives'][address_str].get('functions')
 
     return None
 

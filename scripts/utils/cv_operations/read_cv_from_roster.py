@@ -41,6 +41,9 @@ class Locomotive:
         # Leggi CV speed
         self.cv = self._read_cv(root)
 
+        # Leggi function labels
+        self.functions = self._read_functions(root)
+
     def _read_cv(self, root) -> Dict[int, int]:
         """Legge TUTTI i CV dal file XML."""
         cv = {}
@@ -57,6 +60,36 @@ class Locomotive:
                     pass  # Ignora CV con valori non numerici
 
         return cv
+
+    def _read_functions(self, root) -> List[Dict]:
+        """Legge function labels dal file XML."""
+        functions = []
+
+        # Cerca tag functionlabels
+        functionlabels = root.find('.//functionlabels')
+        if functionlabels is None:
+            return functions
+
+        # Leggi ogni functionlabel
+        for func_elem in functionlabels.findall('functionlabel'):
+            try:
+                num = int(func_elem.get('num', -1))
+                label = func_elem.text or ''
+                lockable = func_elem.get('lockable', 'false').lower() == 'true'
+
+                if num >= 0:  # Valid function number
+                    functions.append({
+                        'number': num,
+                        'label': label,
+                        'lockable': lockable
+                    })
+            except (ValueError, TypeError):
+                pass  # Skip invalid entries
+
+        # Sort by function number
+        functions.sort(key=lambda f: f['number'])
+
+        return functions
 
     def __str__(self) -> str:
         """Rappresentazione testuale."""
