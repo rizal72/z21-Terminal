@@ -1,22 +1,37 @@
-# CV Speed Table Storage Refactor
+# Locomotive Synchronization: Mac ↔ PC
 
 **Status**: 📋 DOCUMENTED - Not Yet Implemented
-**Priority**: LOW (current implementation works, refactor when adding new locomotives)
+**Priority**: LOW (current manual workaround acceptable for rare operations)
 **Date**: 2025-01-17
 
 ---
 
 ## Problem Statement
 
-**Current Implementation** (v1.0.0):
-- CV67-94 speed table stored in `backend/data/analytics.db` (`locomotive_speed_table` table)
-- DB contains BOTH configuration data (CV) AND analytics data (sessions, events)
+**Core Issue**: Adding new locomotives requires manual coordination between Mac (JMRI) and PC (production)
 
-**Why This Is Wrong**:
-- **DB is runtime analytics** - changes continuously during operations (sessions, gate crossings, YOLO stats)
-- **CV are configuration** - change rarely (only when user edits speed table)
-- **Git sync impossible**: DB in gitignore → can't sync CV changes Mac ↔ PC
-- **Architecture violation**: Mixing configuration with analytics in same database
+**Mac Environment**:
+- ✅ Has JMRI DecoderPro (programming track setup)
+- ✅ Has JMRI roster XML files (locomotive definitions)
+- ❌ No `analytics.db` (production DB only on PC)
+
+**PC Environment**:
+- ✅ Has `analytics.db` (locomotive_speed_table with CV67-94)
+- ❌ No JMRI (roster XML manually copied from Mac)
+- ✅ Production deployment
+
+**Workflow Breakdown**:
+1. **Mac**: Setup new loco with JMRI → roster XML created
+2. **Manual Copy**: Roster XML Mac → PC (error-prone)
+3. **PC**: Run import script → writes CV to analytics.db
+4. **Result**: New loco available in z21-Terminal
+
+**Why This Is a Problem**:
+- ❌ Manual file copying (friction, error-prone)
+- ❌ Can't test import script on Mac (no analytics.db)
+- ❌ CV modifications via web UI not synced Mac ↔ PC
+- ❌ DB in gitignore → no git sync possible
+- ❌ Architecture issue: CV (configuration) mixed with analytics (runtime) in same DB
 
 ---
 
