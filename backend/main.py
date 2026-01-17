@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from z21_manager import Z21Manager
-from roster_loader import load_consist_with_functions, load_all_locomotives, load_consists_from_config
+from roster_loader import load_consist_with_functions, load_all_locomotives, load_all_locomotives_from_config, load_consists_from_config
 from tracking_manager import TrackingManager
 import video_feed as video_feed_module
 from video_feed import generate_video_frames
@@ -282,12 +282,12 @@ async def lifespan(app: FastAPI):
             save_config(config)
             log('[INIT]', f"Saved {len(consist_data)} consists to config.json")
 
-    # Load all locomotives from JMRI
-    log('[INIT]', f"Loading all locomotives from JMRI...")
-    locomotive_data = load_all_locomotives()
+    # Load all locomotives from config.json (JMRI fallback)
+    log('[INIT]', f"Loading all locomotives from config.json...")
+    locomotive_data = load_all_locomotives_from_config()
 
     if not locomotive_data:
-        log('[WARN]', f"Warning: No locomotives loaded from JMRI")
+        log('[WARN]', f"Warning: No locomotives loaded")
     else:
         if debug_enabled:
             log('[INIT]', f"Loaded {len(locomotive_data)} locomotives")
@@ -496,12 +496,12 @@ async def reload_roster_data():
         if debug_enabled and consist_data:
             log('[INIT]', f"Loaded {len(consist_data)} consists from JMRI")
 
-    # Always load locomotives from JMRI (names, functions)
-    log('[INIT]', f"Loading locomotives from JMRI...")
-    locomotive_data = load_all_locomotives()
+    # Always load locomotives from config.json (JMRI fallback)
+    log('[INIT]', f"Loading locomotives from config.json...")
+    locomotive_data = load_all_locomotives_from_config()
 
     if not locomotive_data:
-        log('[WARN]', f"Warning: No locomotives loaded from JMRI")
+        log('[WARN]', f"Warning: No locomotives loaded")
     else:
         if debug_enabled:
             log('[INIT]', f"Loaded {len(locomotive_data)} locomotives")

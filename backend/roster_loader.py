@@ -252,6 +252,78 @@ def load_all_locomotives():
     return locomotives
 
 
+def load_all_locomotives_from_config():
+    """
+    Carica tutte le locomotive da config.json invece di JMRI roster
+
+    Priority:
+    1. config.json (locomotives section) - preferred
+    2. JMRI roster XML - fallback if config missing
+
+    Returns:
+        dict: {
+            1: {'address': 1, 'name': 'Gr.675 017', 'functions': [...], 'in_consist': 10},
+            5: {'address': 5, 'name': 'D645 014', 'functions': [...], 'in_consist': 10},
+            ...
+        }
+    """
+    from config_loader import load_config
+    from services.config_helpers import get_all_locomotives
+
+    locomotives = {}
+
+    try:
+        config = load_config()
+
+        # Get locomotives from config
+        config_locomotives = get_all_locomotives()
+
+        if not config_locomotives:
+            # Fallback to JMRI roster if config empty
+            return load_all_locomotives()
+
+        # Get consist assignments from config
+        consists = config.get('consists', {})
+        locos_in_consist = {}  # {loco_address: consist_address}
+
+        for consist_addr_str, consist_data in consists.items():
+            try:
+                consist_addr = int(consist_addr_str)
+                lead_addr = consist_data.get('lead_address')
+                rear_addr = consist_data.get('rear_address')
+
+                if lead_addr:
+                    locos_in_consist[lead_addr] = consist_addr
+                if rear_addr:
+                    locos_in_consist[rear_addr] = consist_addr
+            except (ValueError, TypeError):
+                continue
+
+        # Build locomotives dict
+        for address_str, loco_data in config_locomotives.items():
+            try:
+                address = int(address_str)
+
+                locomotives[address] = {
+                    'address': address,
+                    'name': loco_data.get('name', f'Loco {address}'),
+                    'functions': loco_data.get('functions', []),
+                    'in_consist': locos_in_consist.get(address),  # None if not in consist
+                    'speed': 0,
+                    'direction': 'forward',
+                    'power': True
+                }
+            except (ValueError, TypeError):
+                continue
+
+    except Exception as e:
+        print(f"Error loading locomotives from config: {e}")
+        # Fallback to JMRI roster on error
+        return load_all_locomotives()
+
+    return locomotives
+
+
 def load_consists_from_config(config_path=None):
     """
     Carica consist da config.json invece che da JMRI
