@@ -607,41 +607,238 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
-### 2025-01-17 - 📋 **DESIGN: Speed Table DB Migration + Config Refactoring**
+### 2025-01-17 - 🗄️ **Speed Table DB Migration + Config Refactoring** (v1.0.0)
 
-**Status**: 📋 DESIGN COMPLETE - Ready to implement
-**Time Estimate**: 4-5 hours
+**Status**: ✅ **PRODUCTION COMPLETE** - JMRI independence achieved for speed table operations
 
-**Objective**: Eliminate JMRI dependency for daily speed table operations.
+**Implementation Time**: ~8 hours (14 commits total: design → code → test → deploy → bugfixes)
 
-**Scope**:
-1. ✅ Unified `locomotives` section in config.json (merge `locomotive_colors` + `cv_profiles`)
-2. ✅ CV67-94 stored in analytics.db (`locomotive_speed_table` table)
-3. ✅ Import script: JMRI roster → config + DB (one-time setup)
-4. ✅ Backend: Read DB first, fallback JMRI
-5. ✅ Write endpoint: POM decoder + UPDATE DB
-6. ✅ Undo support: 1-level snapshot (`previous_values`)
-7. ✅ Re-import button: Sync from JMRI when needed
-8. ✅ Backward compatible: Old config format fallback
+**Objective**: Eliminate JMRI dependency for daily speed table operations by migrating CV67-94 storage from JMRI roster XML to SQLite database.
 
-**Benefits**:
-- CV modifications visible immediately (no JMRI export/import)
-- Locomotive metadata centralized (single source of truth)
-- Undo last change with 1 click
-- Audit trail (timestamp + source tracking)
+**Architecture Changes**:
 
-**Documentation**: Complete design in `docs/SPEED_TABLE_DB_MIGRATION.md`
-- Architecture diagram
-- Config before/after comparison
-- Database schema (28 CV columns + undo snapshot)
-- Import script workflow
-- Backend API changes (3 new endpoints)
-- Frontend UI (2 buttons: Undo, Re-import)
-- Testing plan (6 unit tests + integration)
-- Migration checklist (8 phases)
-- Rollback plan
+1. **Config Refactoring** - Unified locomotive metadata:
+   ```json
+   // OLD (scattered)
+   {
+     "locomotive_colors": {"1": "#FFFF00", "7": "#00FF00"},
+     "cv_profiles": {"1": {"normal": {"cv3": 78, "cv4": 58}}}
+   }
 
-**Next**: Implement when ready (all components designed and documented)
+   // NEW (unified)
+   {
+     "locomotives": {
+       "1": {
+         "name": "Gr.675 017",
+         "decoder": "LokSound V4.0",
+         "color": "#FFFF00",
+         "cv_profiles": {"normal": {"cv3": 78, "cv4": 58}},
+         "notes": "Lead C10 Interno"
+       }
+     }
+   }
+   ```
+
+2. **Database Migration** - CV67-94 in analytics.db:
+   - Table: `locomotive_speed_table` (28 CV columns + undo snapshot)
+   - Fields: `loco_address`, `cv67`-`cv94`, `previous_values` (JSON), `last_updated`, `source`
+   - 1-level undo with swap mechanism (can undo the undo)
+   - Audit trail: source tracking ('web_ui', 'jmri_import', 'undo', 'jmri_reimport')
+
+3. **Data Flow**:
+   - **Read**: DB primary → JMRI roster fallback (seamless migration)
+   - **Write**: Decoder POM → DB update (instant visibility)
+   - **Undo**: DB previous_values → Decoder POM (1-click restore)
+   - **Re-import**: JMRI roster → DB (manual sync when needed)
+
+**Backend Implementation**:
+
+1. **`backend/services/config_helpers.py`** (NEW - 127 lines):
+   - Backward compatible loaders for gradual migration
+   - `get_locomotive_color(address)` - unified format with fallback
+   - `get_locomotive_cv_profile(address, mode)` - cv3/cv4 retrieval
+   - `get_locomotive_name(address)` - name from config
+   - `get_all_locomotives()` - complete roster with fallback
+
+2. **`backend/services/speed_table_helpers.py`** (MODIFIED - added 160 lines):
+   - `read_cv_speed_table_from_db(loco_address)` - DB read (source of truth)
+   - `update_cv_speed_table_in_db(loco_address, cv_values, source)` - DB write with undo snapshot
+   - `undo_cv_speed_table(loco_address)` - Swap current ↔ previous values
+   - All functions use `data/analytics.db` (PC production only)
+
+3. **`backend/routers/speed_table.py`** (MODIFIED - added 164 lines):
+   - **Modified GET** `/api/speed-table/{consist_id}` - Read DB first, JMRI fallback
+   - **Modified POST** `/api/speed-table/write/{consist_id}` - Write POM + update DB
+   - **NEW POST** `/api/speed-table/undo/{consist_id}` - Restore previous + write to decoder
+   - **NEW POST** `/api/speed-table/reimport/{consist_id}` - Force sync from JMRI roster
+
+4. **`backend/z21_manager.py`** + **`backend/video_feed.py`** (MODIFIED):
+   - Updated to use `config_helpers` for locomotive data
+   - Backward compatible with old config format
+
+**Import Script**:
+
+**`scripts/utils/import_speed_tables_from_jmri.py`** (NEW - 330 lines):
+- Standalone script (no backend needed, works without GPU)
+- Workflow:
+  1. Load JMRI roster (reuses existing `Locomotive` class)
+  2. Backup config.json (timestamped)
+  3. Refactor config.json (merge scattered data → unified `locomotives`)
+  4. Populate database (CV67-94 for all roster)
+- Tested standalone on Mac (with DB copied from PC)
+- Result: 7 locomotives imported successfully
+
+**Frontend Implementation**:
+
+**`web/src/components/charts/SpeedTableViewer.jsx`** (MAJOR CHANGES):
+
+1. **Component-Level fetchSpeedTableData** (fixed scope bug):
+   ```jsx
+   const fetchSpeedTableData = async () => {
+     // Moved from useEffect to component level
+     // Now accessible from writeToDecoder, handleUndo, handleReimport
+   };
+   ```
+
+2. **Undo Handler**:
+   ```jsx
+   const handleUndo = async () => {
+     // POST /api/speed-table/undo/{consistId}
+     // Restores previous_values from DB
+     // Writes CVs to decoder via POM
+     // Reloads UI (removes asterisks)
+   };
+   ```
+
+3. **Re-import Handler**:
+   ```jsx
+   const handleReimport = async () => {
+     // POST /api/speed-table/reimport/{consistId}
+     // Reads CV67-94 from JMRI roster
+     // Updates DB with JMRI values
+     // Reloads UI (syncs with JMRI)
+   };
+   ```
+
+4. **UI Redesign** (after user feedback):
+   - **Primary buttons** (left-aligned, prominent): Write, Export CSV
+   - **Secondary buttons** (right-aligned, icon-only, semitransparent):
+     - Undo: `fa-undo` icon, amber color, tooltip "Undo last change"
+     - Re-import: `fa-sync` icon, slate color, tooltip "Re-import from JMRI"
+   - Visual hierarchy clear: write/export = main actions, undo/reimport = utilities
+
+5. **UI Refresh After Operations**:
+   - Write → `fetchSpeedTableData()` (removes asterisks, syncs CV values)
+   - Undo → `fetchSpeedTableData()` (shows restored values)
+   - Re-import → `fetchSpeedTableData()` (shows JMRI synced values)
+
+**Critical Bugs Fixed During Testing**:
+
+1. **Gate Crossings Count Bug** (`backend/routers/analytics.py`):
+   - **Problem**: Overview tab showed 500 events (downsampled) instead of real count (2000+)
+   - **Fix**: Save `original_delta_t_count` before downsampling, return as `total_delta_t_events`
+   - **Frontend**: Use `cumulativeData.total_delta_t_events` for accurate stats card
+
+2. **Button Design Rejected** (`web/src/components/charts/SpeedTableViewer.jsx`):
+   - **User Feedback**: "i due nuovi bottoni fanno cacare. Solo icona, meglio se rimpicciliti"
+   - **Fix**: Changed to icon-only, smaller (`px-2 py-2`), right-aligned with `ml-auto`
+
+3. **UI Not Refreshing After Write/Undo**:
+   - **Problem**: CV values updated in DB but asterisks remained in UI
+   - **Fix**: Added `await fetchSpeedTableData()` after successful operations
+
+4. **fetchSpeedTableData Scope Error**:
+   - **Problem**: Function defined inside `useEffect`, not accessible from handlers
+   - **Error**: `Can't find variable: fetchSpeedTableData`
+   - **Fix**: Moved function definition to component level (after state declarations)
+
+5. **Import Script Attribute Error**:
+   - **Problem**: `AttributeError: 'Locomotive' object has no attribute 'decoder'`
+   - **Fix**: Changed `loco.decoder` → `loco.decoder_model` (correct attribute name)
+
+**Testing Results**:
+
+**Mac (Development)**:
+- ✅ Import script executed successfully (standalone, no backend)
+- ✅ 7 locomotives imported to config.json + DB
+- ✅ Config.json refactored (unified locomotives section)
+- ✅ DB populated with CV67-94 values from JMRI roster
+- ✅ Syntax check: All backend files compiled without errors
+
+**PC (Production)**:
+- ✅ Full deployment via `z21-deploy-dev` (frontend build + backend restart)
+- ✅ Speed Table GET: DB values displayed correctly
+- ✅ CV Write: 28 CVs written + DB updated (asterisks removed after reload)
+- ✅ Undo: Previous values restored to decoder + DB swapped
+- ✅ Re-import: JMRI roster synced to DB (manual override)
+- ✅ Gate Crossings: Accurate count displayed (not downsampled)
+- ✅ Button layout: Primary prominent, secondary icon-only
+
+**Deployment Strategy**:
+
+1. **DB Location**: `backend/data/analytics.db` (PC only, not Mac)
+2. **Config Migration**: Backward compatible loaders (old format fallback)
+3. **Testing Workflow**:
+   - Copy DB from PC to Mac (temporary for import script test)
+   - Run import script on Mac (no GPU needed)
+   - Copy modified DB back to PC
+   - Deploy to PC production (full backend + frontend)
+
+**Backward Compatibility**:
+
+- Old config format (`locomotive_colors`, `cv_profiles`) still supported
+- `config_helpers.py` checks new format first, falls back to old
+- Gradual migration: can run with mixed old/new config
+- No breaking changes for existing code
+
+**Key Benefits Achieved**:
+
+1. ✅ **JMRI Independence**: Speed table operations work without JMRI running
+2. ✅ **Instant Visibility**: CV changes reflected immediately (no JMRI export/import)
+3. ✅ **Undo Support**: 1-click restore of previous CV values
+4. ✅ **Centralized Metadata**: All locomotive data in unified config section
+5. ✅ **Audit Trail**: Source tracking + timestamps for all DB changes
+6. ✅ **Manual Override**: Re-import button syncs from JMRI when needed
+7. ✅ **Zero Breaking Changes**: Backward compatible with existing code
+
+**Documentation**:
+
+- ✅ **Design Doc**: `docs/SPEED_TABLE_DB_MIGRATION.md` (634 lines)
+  - Complete architecture, schema, workflow, testing plan
+- ✅ **Usage Instructions**: Import script, undo, re-import workflows
+
+**Commits** (14 total):
+- `08353ce` - Speed table DB migration implementation (core feature)
+- `6b8116a` - Show non-validated sessions with badge (UI improvement)
+- `7b89eab` - Remove session_validated blocking (frontend fix)
+- `9729422` - Fix cumulative scaling bug (critical backend fix)
+- `fc7b313` - Change adjustment ±2 to ±1 (conservative iterative)
+- `7e3f6a0` - Summary cards redesign (removed Problematic, added Fixed)
+- `880ab5a` - Step prominence in speed recommendations (UI tweak)
+- `0dd9b98` - Revert horizontal format (user preference)
+- `3602259` - Auto-select consist (UX improvement)
+- `37a8966` - Fix auto-select logic (use reportsData)
+- `77c5822` - Debug console logging (temporary)
+- `0190c1a` - Use ONLY last session for auto-select (critical fix)
+- `5118e21` - Remove debug console.log (cleanup)
+- `[final]` - UI refresh + function scope fix (production ready)
+
+**Files Modified** (11 total):
+- `backend/services/config_helpers.py` (NEW)
+- `backend/services/speed_table_helpers.py` (MODIFIED)
+- `backend/routers/speed_table.py` (MODIFIED)
+- `backend/routers/analytics.py` (MODIFIED - Gate Crossings fix)
+- `backend/z21_manager.py` (MODIFIED - use config_helpers)
+- `backend/video_feed.py` (MODIFIED - use config_helpers)
+- `web/src/components/charts/SpeedTableViewer.jsx` (MAJOR CHANGES)
+- `web/src/components/AnalyticsPanel.jsx` (MODIFIED - accurate count)
+- `scripts/utils/import_speed_tables_from_jmri.py` (NEW)
+- `config.json` (TRANSFORMED - unified structure)
+- `docs/SPEED_TABLE_DB_MIGRATION.md` (NEW - design doc)
+
+**User Feedback**: "stupendo pare funzioni tutto" 🎯
+
+**Versioning**: Tagged as **v1.0.0** (JMRI independence milestone achieved)
 
 ---
 
