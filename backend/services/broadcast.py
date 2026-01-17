@@ -42,7 +42,7 @@ def init_broadcast_service(
     _connected_clients = clients
     _z21_manager = z21_mgr
     _consist_data = consist_dict
-    _locomotive_dict = locomotive_dict
+    _locomotive_data = locomotive_dict
     _controllers_config = controllers
 
 
