@@ -241,6 +241,9 @@ async def reimport_speed_table_from_jmri(consist_id: int) -> Dict[str, Any]:
     """
     Re-import speed table CV67-94 from JMRI roster to database.
 
+    **IMPORTANT**: Re-imports ONLY the adjust_loco of the specified consist.
+    Does NOT touch other locomotives in the roster. Safe targeted operation.
+
     Use case: User modified CV via JMRI DecoderPro and wants to sync DB with JMRI.
 
     Args:
@@ -248,7 +251,7 @@ async def reimport_speed_table_from_jmri(consist_id: int) -> Dict[str, Any]:
 
     Returns:
         - success: True if CV reimported successfully
-        - adjust_loco_address: Address of locomotive
+        - adjust_loco_address: Address of locomotive (ONLY this loco is reimported)
         - cv_values: CV67-94 values read from JMRI roster
         - source: 'jmri_reimport'
 

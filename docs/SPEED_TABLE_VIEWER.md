@@ -249,9 +249,10 @@ Visual JMRI-style speed table viewer (CV67-94) with interactive editing, direct 
   - Tooltip: "Undo last change (restore previous CV values)"
 
 - **Re-import** (fa-sync icon, slate) - Force sync from JMRI roster
-  - Reads CV67-94 from JMRI roster XML
+  - Reads CV67-94 from JMRI roster XML for **ONLY this locomotive** (adjust_loco)
   - Updates database with JMRI values (source='jmri_reimport')
-  - Use when roster changed outside the system
+  - **Safe operation**: Does NOT touch other locomotives in roster
+  - Use when roster changed outside the system (e.g., modified via JMRI DecoderPro)
   - Tooltip: "Re-import from JMRI roster (sync database with JMRI)"
 
 ---
@@ -494,6 +495,8 @@ Returns:
 ### `POST /api/speed-table/reimport/{consist_id}`
 
 **Description**: Force re-import CV67-94 from JMRI roster to database (manual sync)
+
+**IMPORTANT**: Re-imports ONLY the adjust_loco of the specified consist. Safe targeted operation - does NOT touch other locomotives.
 
 **Parameters**:
 - `consist_id` (path) - Consist ID (10, 11, etc.)
