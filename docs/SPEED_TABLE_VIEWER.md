@@ -1,14 +1,18 @@
-# Speed Table Viewer - Complete (Interactive + Direct CV Write)
+# Speed Table Viewer - Complete (Interactive + Direct CV Write + DB Storage)
 
-**Status**: ✅ **PHASE 2 COMPLETED** (2025-01-17) - Direct CV write via Z21 POM
+**Status**: ✅ **v1.0.0 COMPLETE** (2025-01-17) - JMRI Independence Achieved
 **Version**: v1.0.0 (Production Ready)
 **Phase 1**: Read-only visualization (2025-01-16)
 **Phase 2**: Interactive editing + direct CV write (2025-01-17)
+**DB Migration**: CV storage migrated to database (2025-01-17)
 
-**🚀 Next Enhancement**: Database migration for JMRI independence (design complete)
-- See: [SPEED_TABLE_DB_MIGRATION.md](SPEED_TABLE_DB_MIGRATION.md)
-- Scope: CV67-94 in DB, config refactoring, undo support, re-import button
-- Status: Design complete, ready to implement (~4-5 hours)
+**✅ All Features Complete**:
+- ✅ Interactive CV editing with checkpoint interpolation
+- ✅ Direct CV write to decoder via Z21 POM
+- ✅ CV67-94 stored in database (analytics.db)
+- ✅ Undo support (1-level, restore previous values)
+- ✅ Re-import from JMRI roster (manual sync when needed)
+- ✅ Backward compatible (JMRI roster fallback)
 
 ---
 
@@ -148,16 +152,20 @@ Session 3: Test ONLY speed 100% (validate fix)
 
 ## Overview
 
-Visual JMRI-style speed table viewer (CV67-94) with automatic CV adjustment recommendations based on real-time consist performance data.
+Visual JMRI-style speed table viewer (CV67-94) with interactive editing, direct CV write, and automatic recommendations based on real-time consist performance data.
 
 **Core Features**:
-- 28 vertical bars displaying current CV values from JMRI roster XML
-- Highlighting problematic speeds based on CRITICAL event counts
-- CV adjustment recommendations with direction based on mean Δt sign
-- CSV export for manual JMRI DecoderPro import
-- Real-time session tracking integration
+- ✅ 28 vertical bars displaying current CV values from **database** (JMRI roster fallback)
+- ✅ Interactive checkpoint editing with smooth interpolation
+- ✅ Direct CV write to decoder via Z21 POM (no programming track needed)
+- ✅ Highlighting problematic speeds based on CRITICAL event counts
+- ✅ CV adjustment recommendations with direction based on mean Δt sign
+- ✅ **Undo support** - Restore previous CV values with 1 click
+- ✅ **Re-import from JMRI** - Manual sync when roster changes
+- ✅ CSV export for backup/manual import
+- ✅ Real-time session tracking integration
 
-**Philosophy**: Phase 1 provides **read-only visualization and recommendations** to help users understand which CVs need tuning. Phase 2 will add interactive editing and auto-apply capabilities.
+**Philosophy**: Complete JMRI independence for daily operations. CV modifications visible immediately without JMRI export/import cycle. JMRI still used for initial locomotive setup and as fallback source.
 
 ---
 
@@ -221,6 +229,31 @@ Visual JMRI-style speed table viewer (CV67-94) with automatic CV adjustment reco
 - **Green** (+N) - Increase CV (speed up)
 - **Red** (-N) - Decrease CV (slow down)
 
+### Action Buttons
+
+**Primary Actions** (left-aligned, prominent with text):
+- **Apply & Write to Decoder** - Writes all 28 CVs via Z21 POM + updates database + exports CSV backup
+  - Disabled when no modifications present
+  - Shows success/error message with timing (~2.8s)
+  - Blue highlight on modified CVs (border + asterisk)
+
+- **Export CSV Only** - Exports current values without decoder write
+  - Useful for manual JMRI import or backup
+  - Filename suffix: `_backup.csv` if no modifications, regular if modified
+
+**Secondary Actions** (right-aligned, icon-only, semitransparent):
+- **Undo** (fa-undo icon, amber) - Restore previous CV values
+  - Reads `previous_values` from database
+  - Writes to decoder via POM
+  - Swaps current ↔ previous (can undo the undo)
+  - Tooltip: "Undo last change (restore previous CV values)"
+
+- **Re-import** (fa-sync icon, slate) - Force sync from JMRI roster
+  - Reads CV67-94 from JMRI roster XML
+  - Updates database with JMRI values (source='jmri_reimport')
+  - Use when roster changed outside the system
+  - Tooltip: "Re-import from JMRI roster (sync database with JMRI)"
+
 ---
 
 ## Technical Implementation
@@ -231,29 +264,46 @@ Visual JMRI-style speed table viewer (CV67-94) with automatic CV adjustment reco
 ```
 backend/
 ├── routers/
-│   └── speed_table.py          # API endpoint /api/speed-table/{consist_id}
+│   └── speed_table.py             # API endpoints (GET, POST write/undo/reimport)
 ├── services/
-│   ├── speed_table_helpers.py  # CV calculation logic
-│   └── analytics_db.py         # Query CRITICAL events + mean Δt
-└── scripts/utils/cv_operations/
-    └── read_cv_from_roster.py  # Reused JMRI roster XML parser
+│   ├── speed_table_helpers.py     # CV DB operations + calculations
+│   ├── config_helpers.py          # Backward compatible config loaders
+│   └── analytics_db.py            # Query CRITICAL events + mean Δt
+└── scripts/utils/
+    ├── cv_operations/
+    │   └── read_cv_from_roster.py # JMRI roster XML parser (fallback)
+    └── import_speed_tables_from_jmri.py  # One-time import script
 ```
 
-**Key Functions**:
+**Key Functions** (speed_table_helpers.py):
 
-1. **`read_cv_speed_table(loco_address)`** - Read CV67-94 from JMRI roster XML
+1. **`read_cv_speed_table_from_db(loco_address)`** - Read CV67-94 from database (primary)
+   - Queries `locomotive_speed_table` table in analytics.db
+   - Returns: `{67: 10, 68: 15, ..., 94: 255}` or `None` if not found
+
+2. **`read_cv_speed_table(loco_address)`** - Read CV67-94 from JMRI roster XML (fallback)
    - Reuses existing `Locomotive` class (DRY principle)
+   - Used when DB entry doesn't exist or manual sync needed
    - Returns: `{67: 10, 68: 15, ..., 94: 255}`
 
-2. **`speed_to_jmri_step(dcc_speed)`** - Map DCC speed (0-126) to JMRI step (1-28)
+3. **`update_cv_speed_table_in_db(loco_address, cv_values, source)`** - Update database after CV write
+   - Saves previous values as JSON snapshot (1-level undo)
+   - Tracks source: 'web_ui', 'jmri_import', 'undo', 'jmri_reimport'
+   - Returns: `True` on success
+
+4. **`undo_cv_speed_table(loco_address)`** - Restore previous CV values
+   - Swaps current ↔ previous_values (can undo the undo)
+   - Returns: Previous CV values dict or `None` if no undo available
+
+5. **`speed_to_jmri_step(dcc_speed)`** - Map DCC speed (0-126) to JMRI step (1-28)
    - Formula: `step = floor(speed / 4.5) + 1`
    - Example: DCC 63 → Step 15
 
-3. **`jmri_step_to_cv(step)`** - Map JMRI step to CV index
+6. **`jmri_step_to_cv(step)`** - Map JMRI step to CV index
    - Formula: `cv_index = 66 + step`
    - Example: Step 15 → CV81
 
-4. **`calculate_cv_recommendations()`** - Generate CV adjustment suggestions
+7. **`calculate_cv_recommendations()`** - Generate CV adjustment suggestions
    - Uses mean Δt sign for direction (negative → decrease CV, positive → increase CV)
    - **Fixed ±1 adjustment** (2025-01-17 update - was scaling with count)
    - Excludes "fixed" speeds (proven OK in last session: >= 3 events, < 20% CRITICAL rate)
@@ -287,11 +337,11 @@ Returns:
 
 ---
 
-## API Endpoint
+## API Endpoints
 
 ### `GET /api/speed-table/{consist_id}`
 
-**Description**: Get speed table data for a consist (Phase 1 - Read-Only)
+**Description**: Get speed table data for a consist (reads from DB, JMRI fallback)
 
 **Parameters**:
 - `consist_id` (path) - Consist ID (10, 11, etc.)
@@ -354,6 +404,124 @@ Returns:
 - `404` - Consist not found in config
 - `400` - Consist has no adjust_loco configured
 - `404` - Roster file not found for locomotive
+
+---
+
+### `POST /api/speed-table/write/{consist_id}`
+
+**Description**: Write modified CV67-94 values to decoder via Z21 POM, then update database
+
+**Parameters**:
+- `consist_id` (path) - Consist ID (10, 11, etc.)
+- `cv_values` (body) - Dict of CV values to write: `{"67": 10, "68": 15, ..., "94": 255}`
+
+**Request Body**:
+```json
+{
+  "cv_values": {
+    "67": 10,
+    "68": 15,
+    ...
+    "94": 255
+  }
+}
+```
+
+**Response** (success):
+```json
+{
+  "success": true,
+  "adjust_loco_address": 7,
+  "cvs_written": 28,
+  "cvs_failed": [],
+  "total_time": "2.81s"
+}
+```
+
+**Response** (partial failure):
+```json
+{
+  "success": false,
+  "adjust_loco_address": 7,
+  "cvs_written": 26,
+  "cvs_failed": [86, 89],
+  "total_time": "2.95s"
+}
+```
+
+**Error Codes**:
+- `404` - Consist not found
+- `400` - Invalid CV values
+
+---
+
+### `POST /api/speed-table/undo/{consist_id}`
+
+**Description**: Restore previous CV values from database and write to decoder
+
+**Parameters**:
+- `consist_id` (path) - Consist ID (10, 11, etc.)
+
+**Response** (success):
+```json
+{
+  "success": true,
+  "adjust_loco_address": 7,
+  "previous_values": {
+    "67": 10,
+    "68": 15,
+    ...
+    "94": 255
+  },
+  "cvs_written": 28,
+  "cvs_failed": [],
+  "total_time": "2.82s"
+}
+```
+
+**Response** (no undo available):
+```json
+{
+  "success": false,
+  "error": "No undo available for loco 7"
+}
+```
+
+**Note**: Undo uses swap mechanism - can undo the undo (1-level only)
+
+---
+
+### `POST /api/speed-table/reimport/{consist_id}`
+
+**Description**: Force re-import CV67-94 from JMRI roster to database (manual sync)
+
+**Parameters**:
+- `consist_id` (path) - Consist ID (10, 11, etc.)
+
+**Response** (success):
+```json
+{
+  "success": true,
+  "adjust_loco_address": 7,
+  "cv_values": {
+    "67": 10,
+    "68": 15,
+    ...
+    "94": 255
+  },
+  "source": "jmri_reimport"
+}
+```
+
+**Response** (error):
+```json
+{
+  "success": false,
+  "error": "Locomotive roster file not found"
+}
+```
+
+**Use Case**: Manual sync when JMRI roster CV values changed outside the system
 
 ---
 
