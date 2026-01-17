@@ -6,14 +6,24 @@ Per info essenziali, vedi main CLAUDE.md file.
 
 ---
 
-## IMPORTANTE: z21-Terminal è un'estensione di JMRI, non un sostituto
+## IMPORTANTE: z21-Terminal è sempre più indipendente da JMRI
 
-## Dipendenze
+### ✅ Già Indipendente (v1.0.0)
 
-- **JMRI è prerequisito**: z21-Terminal legge dati da file XML di JMRI
-  - Roster locomotive: `~/Library/Preferences/JMRI/.../roster/*.xml`
-  - Consist: `~/Library/Preferences/JMRI/.../roster/consist/consist.xml`
-  - Funzioni: Definizioni F0-F28 caricate dinamicamente dal roster
+- **CV67-94 Speed Table**: Stored in `analytics.db`, editable via web UI
+- **CV19 Consist Management**: Virtual/DCC Mode toggle writes CV19 automatically
+- **Locomotive Metadata**: `config.json` unified (name, decoder, color, cv_profiles)
+- **Consist Configuration**: `config.json` (lead_address, rear_address, virtual_mode)
+- **Consist CRUD**: Create/edit/delete consists via web UI
+
+### ❌ Dipendenza Rimasta
+
+- **Function Labels F0-F28**: Ancora letti da roster XML JMRI
+  - Percorso: `~/Library/Preferences/JMRI/.../roster/*.xml`
+  - Usati in: Web Dashboard ConsistController (pulsanti funzioni)
+  - **Roadmap**: Migrare a `config.json` `locomotives[address]['functions']`
+
+**Nota**: JMRI utile per initial locomotive setup, ma NON necessario per operazioni quotidiane
 
 ## Coesistenza
 
@@ -29,13 +39,15 @@ Per info essenziali, vedi main CLAUDE.md file.
 
 | Funzionalità | JMRI | z21-Terminal |
 |--------------|------|--------------|
-| Configurazione decoder (CV) | ✅ DecoderPro | ⏳ Futuro |
+| Configurazione decoder (CV) | ✅ DecoderPro | ✅ **CV67-94 speed table** (v1.0.0) |
+| **CV19 consist management** | ✅ DecoderPro | ✅ **Virtual/DCC Mode toggle** |
 | Programming track | ✅ | ⏳ Futuro |
-| Gestione roster/consist | ✅ | ❌ (solo lettura) |
-| Controllo locomotive | ✅ Throttle UI | ✅ Controller terminale |
+| Gestione roster/consist | ✅ | ✅ **Consist CRUD** (create/edit/delete) |
+| Controllo locomotive | ✅ Throttle UI | ✅ Controller terminale + Web Dashboard |
 | Automazione/scripting | ⚠️ Jython | ✅ Python 3 |
 | Controllo funzioni F0-F28 | ✅ | ✅ |
 | Lettura stato locomotiva | ✅ | ✅ |
+| **Function labels F0-F28** | ✅ XML roster | ❌ **Ancora da JMRI** (last dependency) |
 
 ## Workflow Operativo
 

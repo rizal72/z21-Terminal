@@ -14,7 +14,7 @@ Virtual Consist Mode permette di controllare locomotive in consist **SEPARATAMEN
 2. ✅ **Speed compensation real-time** usando Δt feedback da gate timing (Phase 4)
 3. ✅ **UI transparente**: utente vede UN solo slider, app controlla lead/rear separatamente
 4. ✅ **Reversibile istantaneamente**: toggle back a DCC mode in 1 click
-5. ✅ **Persist state**: consist_state.json mantiene mode tra restart
+5. ✅ **Persist state**: `config.json` `consists[id]['virtual_mode']` mantiene mode tra restart
 
 ---
 
@@ -56,7 +56,7 @@ def enable_virtual_mode(self, consist_address):
     if success_lead and success_rear:
         consist['virtual_mode'] = True
         consist['auto_compensation_enabled'] = True  # Default ON
-        self.save_consist_state()
+        self._save_persisted_state()  # Saves to config.json
         return True
     return False
 ```
@@ -79,7 +79,7 @@ def disable_virtual_mode(self, consist_address):
     if success_lead and success_rear:
         consist['virtual_mode'] = False
         consist['auto_compensation_enabled'] = False
-        self.save_consist_state()
+        self._save_persisted_state()  # Saves to config.json
         return True
     return False
 ```
@@ -126,24 +126,34 @@ def set_speed(self, consist_address, speed, direction):
     self.z21.set_loco_speed(rear_addr, speed_rear, direction)
 ```
 
-### State Persistence: consist_state.json
+### State Persistence: config.json
 
 ```json
 {
-  "10": {
-    "virtual_mode": false,
-    "auto_compensation_enabled": false
-  },
-  "11": {
-    "virtual_mode": true,
-    "auto_compensation_enabled": true
+  "consists": {
+    "10": {
+      "name": "Consist 10 - Tracciato Interno",
+      "lead_address": 1,
+      "rear_address": 5,
+      "virtual_mode": false,
+      "auto_compensation_enabled": false,
+      ...
+    },
+    "11": {
+      "name": "Consist 11 - Tracciato Esterno",
+      "lead_address": 7,
+      "rear_address": 8,
+      "virtual_mode": true,
+      "auto_compensation_enabled": true,
+      ...
+    }
   }
 }
 ```
 
-**File location**: `backend/consist_state.json` (gitignored)
+**File location**: `config.json` (committed to git)
 
-**Backup/Restore**: Vedere GPU_DEPLOYMENT.md Step 5 per copy instructions
+**Persistence**: `z21_manager._save_persisted_state()` saves `virtual_mode` and `auto_compensation_enabled` to config.json after every toggle
 
 ---
 
@@ -368,8 +378,8 @@ speed_rear = 80            (loco 8 unchanged)
 - [x] ✅ WebSocket reconnect preserves Virtual Mode state
 
 ### State Persistence
-- [x] ✅ consist_state.json created on first toggle
-- [x] ✅ State loaded on backend restart
+- [x] ✅ config.json updated on every Virtual/DCC Mode toggle
+- [x] ✅ State loaded on backend restart (`_load_persisted_state()`)
 - [x] ✅ State synced to frontend via initial_state message
 - [x] ✅ Multi-consist support (independent Virtual Mode per consist)
 
@@ -426,16 +436,15 @@ speed_rear = 80            (loco 8 unchanged)
 ## Files Modified
 
 **Backend**:
-- `backend/z21_manager.py` - enable/disable_virtual_mode(), speed compensation
+- `backend/z21_manager.py` - enable/disable_virtual_mode(), speed compensation, _save_persisted_state()
 - `backend/main.py` - WebSocket handlers (toggle_virtual_mode, toggle_auto_compensation)
-- `backend/consist_state.json.example` - State persistence template
 
 **Frontend**:
 - `web/src/components/ConsistController.jsx` - Virtual Mode toggle UI
 - `web/src/App.jsx` - WebSocket handlers integration
 
 **Config**:
-- `backend/consist_state.json` - Runtime state (gitignored)
+- `config.json` - Contains `consists[id]['virtual_mode']` and `auto_compensation_enabled` (committed to git)
 
 ---
 

@@ -458,7 +458,7 @@ def write_cv_ops_mode(self, address, cv_number, cv_value):
 - ✅ `consist_data` dict replaces all hardcoded variables
 - ✅ Generic `_update_gate_timing()` works for ANY consist
 - ✅ Multi-consist support via config.json
-- ✅ See `docs/PHASE5_CONSIST_TRACKING.md` for details
+- ✅ See `docs/CONSIST_TRACKING.md` for details
 
 **Implementation**: 7 steps completed
 1. ✅ Load `tracking_assignments` from config
