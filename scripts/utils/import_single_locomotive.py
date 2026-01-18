@@ -67,7 +67,7 @@ def backup_config():
     backup_path = CONFIG_PATH.with_suffix(f'.json.backup_{timestamp}')
 
     shutil.copy2(CONFIG_PATH, backup_path)
-    print(f"✅ Config backup created: {backup_path.name}")
+    print(f"[OK] Config backup created: {backup_path.name}")
 
     return backup_path
 
@@ -82,7 +82,7 @@ def save_config(config: dict):
     """Save config.json with pretty formatting."""
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
-    print(f"✅ Config saved: {CONFIG_PATH}")
+    print(f"[OK] Config saved: {CONFIG_PATH}")
 
 
 def get_locomotive_from_jmri(address: int) -> Optional[object]:
@@ -199,7 +199,7 @@ def write_speed_table_to_db(loco):
     conn.commit()
     conn.close()
 
-    print(f"✅ Speed table CV67-94 written to database for loco {loco.address}")
+    print(f"[OK] Speed table CV67-94 written to database for loco {loco.address}")
 
 
 def import_locomotive(address: int, dry_run: bool = False) -> bool:
@@ -214,7 +214,7 @@ def import_locomotive(address: int, dry_run: bool = False) -> bool:
         True if successful, False otherwise
     """
     print(f"\n{'='*60}")
-    print(f"🚂 Importing Locomotive {address} from JMRI Roster")
+    print(f"Importing Locomotive {address} from JMRI Roster")
     print(f"{'='*60}\n")
 
     # Step 1: Load locomotive from JMRI
@@ -222,17 +222,27 @@ def import_locomotive(address: int, dry_run: bool = False) -> bool:
     loco = get_locomotive_from_jmri(address)
 
     if not loco:
-        print(f"❌ Error: Locomotive with address {address} not found in JMRI roster")
+        print(f"[ERROR] Locomotive with address {address} not found in JMRI roster")
         print(f"   Available addresses: {', '.join(str(l.address) for l in load_all_locomotives())}")
         return False
 
-    print(f"✅ Found: {loco.name} (address {loco.address})")
+    print(f"[OK] Found: {loco.name} (address {loco.address})")
     print(f"   Decoder: {loco.decoder_model}")
     print(f"   Functions: {len(loco.functions)} defined (F0-F{max(loco.functions.keys())})")
     print(f"   Speed Table: CV67-94 ({len(loco.speed_table)} values)")
 
+    # Check if locomotive already exists in config
+    config = load_config()
+    exists_in_config = str(address) in config.get('locomotives', {})
+
+    if exists_in_config:
+        print(f"[INFO] Locomotive {address} already exists in config.json (will be updated)")
+    else:
+        print(f"[INFO] Locomotive {address} is NEW (will be added to config.json)")
+
     if dry_run:
-        print(f"\n[DRY RUN] Would add to config.json:")
+        action = "update" if exists_in_config else "add"
+        print(f"\n[DRY RUN] Would {action} in config.json:")
         loco_config = create_locomotive_config(loco)
         print(json.dumps(loco_config, indent=2, ensure_ascii=False))
         print(f"\n[DRY RUN] Would write speed table to database")
@@ -255,14 +265,14 @@ def import_locomotive(address: int, dry_run: bool = False) -> bool:
     config['locomotives'][str(address)] = loco_config
 
     save_config(config)
-    print(f"✅ Locomotive {address} added/updated in config.json")
+    print(f"[OK] Locomotive {address} added/updated in config.json")
 
     # Step 4: Write speed table to database
     print(f"\n[4/4] Writing speed table to database...")
     write_speed_table_to_db(loco)
 
     print(f"\n{'='*60}")
-    print(f"✅ Import Complete!")
+    print(f"[SUCCESS] Import Complete!")
     print(f"{'='*60}")
     print(f"\nLocomotive {address} ({loco.name}) imported successfully")
     print(f"Next steps:")
@@ -309,7 +319,7 @@ Examples:
 
     # Validate address range
     if not (1 <= args.address <= 10239):
-        print(f"❌ Error: Invalid DCC address {args.address} (must be 1-10239)")
+        print(f"[ERROR] Invalid DCC address {args.address} (must be 1-10239)")
         return 1
 
     # Import locomotive
