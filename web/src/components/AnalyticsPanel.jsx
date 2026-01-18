@@ -953,12 +953,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     </div>
                     <div className={`text-3xl font-bold mt-1 ${getConsistColorClass(consistFilter, trackingConfig.consists, 'text-white')}`}>
                       {(() => {
-                        let events = cumulativeData.delta_t_events || [];
-                        // Filter by consist
-                        if (consistFilter !== 'all') {
-                          events = events.filter(e => e.consist_id === consistFilter);
+                        if (consistFilter === 'all') {
+                          // Use accurate total count (not downsampled)
+                          return cumulativeData.total_delta_t_events || 0;
+                        } else {
+                          // Calculate consist-specific count by summing total_crossings from sessions
+                          return reportsData.sessions.reduce((sum, session) => {
+                            const stats = session.consists?.[String(consistFilter)];
+                            return sum + (stats?.total_crossings || 0);
+                          }, 0);
                         }
-                        return events.length;
                       })()}
                     </div>
                   </div>
@@ -971,14 +975,17 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     </div>
                     <div className={`text-3xl font-bold mt-1 ${getConsistColorClass(consistFilter, trackingConfig.consists, 'text-red-400')}`}>
                       {(() => {
-                        let events = cumulativeData.delta_t_events || [];
-                        // Filter by critical threshold (|Δt| >= 1.5s)
-                        events = events.filter(e => Math.abs(e.delta_t) >= 1.5);
-                        // Filter by consist
-                        if (consistFilter !== 'all') {
-                          events = events.filter(e => e.consist_id === consistFilter);
-                        }
-                        return events.length;
+                        // Calculate critical count by summing from sessions (accurate, not downsampled)
+                        return reportsData.sessions.reduce((sum, session) => {
+                          if (consistFilter === 'all') {
+                            // Sum critical_count from all consists
+                            return sum + Object.values(session.consists || {}).reduce((s, stats) => s + (stats.critical_count || 0), 0);
+                          } else {
+                            // Sum critical_count for specific consist
+                            const stats = session.consists?.[String(consistFilter)];
+                            return sum + (stats?.critical_count || 0);
+                          }
+                        }, 0);
                       })()}
                     </div>
                   </div>
