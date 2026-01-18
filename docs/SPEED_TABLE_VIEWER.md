@@ -9,7 +9,7 @@
 **✅ All Features Complete**:
 - ✅ Interactive CV editing with checkpoint interpolation
 - ✅ Direct CV write to decoder via Z21 POM
-- ✅ CV67-94 stored in database (analytics.db)
+- ✅ CV67-94 stored in database (data.db - locomotive_speed_table table)
 - ✅ Undo support (1-level, restore previous values)
 - ✅ Re-import from JMRI roster (manual sync when needed)
 - ✅ Backward compatible (JMRI roster fallback)
@@ -279,7 +279,7 @@ backend/
 **Key Functions** (speed_table_helpers.py):
 
 1. **`read_cv_speed_table_from_db(loco_address)`** - Read CV67-94 from database (primary)
-   - Queries `locomotive_speed_table` table in analytics.db
+   - Queries `locomotive_speed_table` table in data.db
    - Returns: `{67: 10, 68: 15, ..., 94: 255}` or `None` if not found
 
 2. **`read_cv_speed_table(loco_address)`** - Read CV67-94 from JMRI roster XML (fallback)

@@ -10,7 +10,7 @@ Per info essenziali, vedi main CLAUDE.md file.
 
 ### ✅ Già Indipendente (v1.0.0)
 
-- **CV67-94 Speed Table**: Stored in `analytics.db`, editable via web UI
+- **CV67-94 Speed Table**: Stored in `data.db` (locomotive_speed_table table), editable via web UI
 - **CV19 Consist Management**: Virtual/DCC Mode toggle writes CV19 automatically
 - **Locomotive Metadata**: `config.json` unified (name, decoder, color, cv_profiles)
 - **Consist Configuration**: `config.json` (lead_address, rear_address, virtual_mode)

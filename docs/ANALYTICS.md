@@ -294,6 +294,13 @@ return events.map(event => ({
 
 **✅ UNIVERSAL APPROACH - Applies to ALL charts and event types**
 
+**✅ NOW CONFIGURABLE** (2025-01-19): `tail` and `maxPoints` values no longer hardcoded
+- Config: `analytics.max_chart_events` (default 500, range 100-2000)
+- Settings UI: Analytics tab → Max Chart Events (hot reload, no restart)
+- Backend: Dynamic config load instead of hardcoded 500/1000
+- Current view: Shows last N events (full resolution)
+- Overview view: Downsamples to N if total > N (LTTB + critical events)
+
 **Concept**: Backend does intelligent sampling, frontend remains unchanged.
 
 **Implementation**:
@@ -301,9 +308,11 @@ return events.map(event => ({
 **Backend endpoint parameters** (mutually exclusive):
 ```python
 # Current view: Full resolution recent data
-GET /api/analytics/cumulative?tail=1000
+# tail = config.analytics.max_chart_events (default 500)
+GET /api/analytics/cumulative?tail=500
 
 # Overview view: Sampling across entire history
+# maxPoints = config.analytics.max_chart_events (default 500)
 GET /api/analytics/cumulative?maxPoints=500
 ```
 
@@ -378,10 +387,12 @@ if debug_enabled:
 4. **Intelligent**: LTTB algorithm preserves visual shape, critical events always included
 5. **Silent**: No log spam unless debug enabled + reduction significant
 
-**When to Enable**:
-- Monitor event counts in production
-- Current view: `tail=1000` (already active)
-- Overview view: `maxPoints=500` (already active, with LTTB)
+**Configuration**:
+- Adjust via Settings UI → Analytics tab → Max Chart Events (100-2000)
+- Or edit `config.json` → `analytics.max_chart_events` (default 500)
+- Lower values = better performance, less history visible
+- Higher values = more data, slower rendering
+- Recommended: 300-1000 depending on hardware
 - Debug log: `config.json` → `"debug": {"enabled": true}`
 
 **✅ IMPLEMENTED** (2025-01-13 - commit `683d263`):
