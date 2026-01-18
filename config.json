@@ -3,6 +3,27 @@
     "enabled": false,
     "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (INIT/OK/TIMING/TARGET/DETECT/VIDEO), gate crossing (GATE), warnings (WARN), mode changes (MODE/PAUSE). SUPPRESSED when false: YOLO pause/resume verbose (MUTE/UNMUTE)"
   },
+  "z21": {
+    "host": "192.168.1.111",
+    "port": 21105,
+    "notes": "Roco Z21 Bianca hardware controller"
+  },
+  "camera": {
+    "ip": "192.168.1.4",
+    "port": 554,
+    "stream": "stream2",
+    "resolution": {
+      "width": 1280,
+      "height": 720
+    },
+    "username": "",
+    "password": "",
+    "notes": "Camera credentials MUST be in config.local.json (gitignored)"
+  },
+  "video": {
+    "fps": 30,
+    "notes": "MJPEG video stream frame rate (hot reload, no restart needed)"
+  },
   "consists": {
     "10": {
       "name": "C10 Interno",
@@ -132,6 +153,301 @@
     "yolo_obb": false
   },
   "locomotives": {
+    "1": {
+      "name": "Gr.675 017",
+      "decoder": "LokSound V4.0",
+      "color": "#FFFF00",
+      "cv_profiles": {
+        "normal": {
+          "cv3": 78,
+          "cv4": 58
+        },
+        "testing": {
+          "cv3": 0,
+          "cv4": 0
+        }
+      },
+      "notes": "",
+      "functions": [
+        {
+          "number": 0,
+          "label": "light",
+          "lockable": true
+        },
+        {
+          "number": 1,
+          "label": "sound",
+          "lockable": true
+        },
+        {
+          "number": 2,
+          "label": "whistle L",
+          "lockable": false
+        },
+        {
+          "number": 3,
+          "label": "whistle S",
+          "lockable": false
+        },
+        {
+          "number": 4,
+          "label": "cabin",
+          "lockable": true
+        },
+        {
+          "number": 5,
+          "label": "air pump",
+          "lockable": true
+        },
+        {
+          "number": 6,
+          "label": "shunt",
+          "lockable": true
+        },
+        {
+          "number": 7,
+          "label": "curve",
+          "lockable": true
+        },
+        {
+          "number": 8,
+          "label": "front",
+          "lockable": true
+        },
+        {
+          "number": 9,
+          "label": "blow out",
+          "lockable": true
+        },
+        {
+          "number": 10,
+          "label": "sound fade",
+          "lockable": true
+        },
+        {
+          "number": 11,
+          "label": "coupler",
+          "lockable": false
+        },
+        {
+          "number": 12,
+          "label": "sanding",
+          "lockable": false
+        },
+        {
+          "number": 13,
+          "label": "brake rel",
+          "lockable": false
+        },
+        {
+          "number": 14,
+          "label": "brake sound O",
+          "lockable": true
+        },
+        {
+          "number": 15,
+          "label": "coal",
+          "lockable": false
+        },
+        {
+          "number": 16,
+          "label": "safety valve",
+          "lockable": false
+        },
+        {
+          "number": 17,
+          "label": "rail clank",
+          "lockable": true
+        },
+        {
+          "number": 18,
+          "label": "dumping",
+          "lockable": false
+        },
+        {
+          "number": 19,
+          "label": "water pump",
+          "lockable": false
+        },
+        {
+          "number": 20,
+          "label": "injection",
+          "lockable": false
+        },
+        {
+          "number": 21,
+          "label": "dynamo",
+          "lockable": true
+        }
+      ]
+    },
+    "2": {
+      "name": "E656 182",
+      "decoder": "LokPilot 5 DCC",
+      "color": "#FFFFFF",
+      "cv_profiles": {
+        "normal": {
+          "cv3": 23,
+          "cv4": 14
+        },
+        "testing": {
+          "cv3": 0,
+          "cv4": 0
+        }
+      },
+      "notes": "",
+      "functions": [
+        {
+          "number": 0,
+          "label": "light",
+          "lockable": true
+        },
+        {
+          "number": 1,
+          "label": "head",
+          "lockable": true
+        },
+        {
+          "number": 2,
+          "label": "cabin",
+          "lockable": true
+        },
+        {
+          "number": 3,
+          "label": "rear off",
+          "lockable": true
+        },
+        {
+          "number": 4,
+          "label": "hallway",
+          "lockable": true
+        },
+        {
+          "number": 6,
+          "label": "shunt",
+          "lockable": true
+        }
+      ]
+    },
+    "4": {
+      "name": "2048 010-9",
+      "decoder": "MX630 version 31",
+      "color": "#00FFFF",
+      "cv_profiles": {
+        "normal": {
+          "cv3": 0,
+          "cv4": 0
+        },
+        "testing": {
+          "cv3": 0,
+          "cv4": 0
+        }
+      },
+      "notes": "",
+      "functions": [
+        {
+          "number": 0,
+          "label": "light",
+          "lockable": true
+        },
+        {
+          "number": 1,
+          "label": "head",
+          "lockable": true
+        }
+      ]
+    },
+    "5": {
+      "name": "D645 014",
+      "decoder": "LokPilot 5 DCC",
+      "color": "#FF8000",
+      "cv_profiles": {
+        "normal": {
+          "cv3": 22,
+          "cv4": 16
+        },
+        "testing": {
+          "cv3": 0,
+          "cv4": 0
+        }
+      },
+      "notes": "",
+      "functions": [
+        {
+          "number": 0,
+          "label": "light",
+          "lockable": true
+        },
+        {
+          "number": 1,
+          "label": "rear off",
+          "lockable": true
+        },
+        {
+          "number": 3,
+          "label": "shunt",
+          "lockable": true
+        },
+        {
+          "number": 4,
+          "label": "momentum",
+          "lockable": true
+        }
+      ]
+    },
+    "6": {
+      "name": "D445 1140",
+      "decoder": "LokPilot 5 DCC",
+      "color": "#FF00FF",
+      "cv_profiles": {
+        "normal": {
+          "cv3": 23,
+          "cv4": 14
+        },
+        "testing": {
+          "cv3": 0,
+          "cv4": 0
+        }
+      },
+      "notes": "",
+      "functions": [
+        {
+          "number": 0,
+          "label": "Light",
+          "lockable": true
+        },
+        {
+          "number": 1,
+          "label": "Rear Off",
+          "lockable": true
+        },
+        {
+          "number": 2,
+          "label": "Head",
+          "lockable": true
+        },
+        {
+          "number": 3,
+          "label": "Shunt",
+          "lockable": true
+        },
+        {
+          "number": 4,
+          "label": "Momentum",
+          "lockable": true
+        },
+        {
+          "number": 5,
+          "label": "Cabin",
+          "lockable": true
+        },
+        {
+          "number": 6,
+          "label": "Fans",
+          "lockable": true
+        }
+      ]
+    },
     "7": {
       "name": "E656 239",
       "decoder": "Hornby TXS Class 91 Electric",
@@ -295,59 +611,6 @@
         }
       ]
     },
-    "6": {
-      "name": "D445 1140",
-      "decoder": "LokPilot 5 DCC",
-      "color": "#FF00FF",
-      "cv_profiles": {
-        "normal": {
-          "cv3": 23,
-          "cv4": 14
-        },
-        "testing": {
-          "cv3": 0,
-          "cv4": 0
-        }
-      },
-      "notes": "",
-      "functions": [
-        {
-          "number": 0,
-          "label": "Light",
-          "lockable": true
-        },
-        {
-          "number": 1,
-          "label": "Rear Off",
-          "lockable": true
-        },
-        {
-          "number": 2,
-          "label": "Head",
-          "lockable": true
-        },
-        {
-          "number": 3,
-          "label": "Shunt",
-          "lockable": true
-        },
-        {
-          "number": 4,
-          "label": "Momentum",
-          "lockable": true
-        },
-        {
-          "number": 5,
-          "label": "Cabin",
-          "lockable": true
-        },
-        {
-          "number": 6,
-          "label": "Fans",
-          "lockable": true
-        }
-      ]
-    },
     "8": {
       "name": "E444 056",
       "decoder": "LokPilot 5 DCC",
@@ -390,269 +653,6 @@
           "lockable": true
         }
       ]
-    },
-    "1": {
-      "name": "Gr.675 017",
-      "decoder": "LokSound V4.0",
-      "color": "#FFFF00",
-      "cv_profiles": {
-        "normal": {
-          "cv3": 78,
-          "cv4": 58
-        },
-        "testing": {
-          "cv3": 0,
-          "cv4": 0
-        }
-      },
-      "notes": "",
-      "functions": [
-        {
-          "number": 0,
-          "label": "light",
-          "lockable": true
-        },
-        {
-          "number": 1,
-          "label": "sound",
-          "lockable": true
-        },
-        {
-          "number": 2,
-          "label": "whistle L",
-          "lockable": false
-        },
-        {
-          "number": 3,
-          "label": "whistle S",
-          "lockable": false
-        },
-        {
-          "number": 4,
-          "label": "cabin",
-          "lockable": true
-        },
-        {
-          "number": 5,
-          "label": "air pump",
-          "lockable": true
-        },
-        {
-          "number": 6,
-          "label": "shunt",
-          "lockable": true
-        },
-        {
-          "number": 7,
-          "label": "curve",
-          "lockable": true
-        },
-        {
-          "number": 8,
-          "label": "front",
-          "lockable": true
-        },
-        {
-          "number": 9,
-          "label": "blow out",
-          "lockable": true
-        },
-        {
-          "number": 10,
-          "label": "sound fade",
-          "lockable": true
-        },
-        {
-          "number": 11,
-          "label": "coupler",
-          "lockable": false
-        },
-        {
-          "number": 12,
-          "label": "sanding",
-          "lockable": false
-        },
-        {
-          "number": 13,
-          "label": "brake rel",
-          "lockable": false
-        },
-        {
-          "number": 14,
-          "label": "brake sound O",
-          "lockable": true
-        },
-        {
-          "number": 15,
-          "label": "coal",
-          "lockable": false
-        },
-        {
-          "number": 16,
-          "label": "safety valve",
-          "lockable": false
-        },
-        {
-          "number": 17,
-          "label": "rail clank",
-          "lockable": true
-        },
-        {
-          "number": 18,
-          "label": "dumping",
-          "lockable": false
-        },
-        {
-          "number": 19,
-          "label": "water pump",
-          "lockable": false
-        },
-        {
-          "number": 20,
-          "label": "injection",
-          "lockable": false
-        },
-        {
-          "number": 21,
-          "label": "dynamo",
-          "lockable": true
-        }
-      ]
-    },
-    "4": {
-      "name": "2048 010-9",
-      "decoder": "MX630 version 31",
-      "color": "#00FFFF",
-      "cv_profiles": {
-        "normal": {
-          "cv3": 0,
-          "cv4": 0
-        },
-        "testing": {
-          "cv3": 0,
-          "cv4": 0
-        }
-      },
-      "notes": "",
-      "functions": [
-        {
-          "number": 0,
-          "label": "light",
-          "lockable": true
-        },
-        {
-          "number": 1,
-          "label": "head",
-          "lockable": true
-        }
-      ]
-    },
-    "5": {
-      "name": "D645 014",
-      "decoder": "LokPilot 5 DCC",
-      "color": "#FF8000",
-      "cv_profiles": {
-        "normal": {
-          "cv3": 22,
-          "cv4": 16
-        },
-        "testing": {
-          "cv3": 0,
-          "cv4": 0
-        }
-      },
-      "notes": "",
-      "functions": [
-        {
-          "number": 0,
-          "label": "light",
-          "lockable": true
-        },
-        {
-          "number": 1,
-          "label": "rear off",
-          "lockable": true
-        },
-        {
-          "number": 3,
-          "label": "shunt",
-          "lockable": true
-        },
-        {
-          "number": 4,
-          "label": "momentum",
-          "lockable": true
-        }
-      ]
-    },
-    "2": {
-      "name": "E656 182",
-      "decoder": "LokPilot 5 DCC",
-      "color": "#FFFFFF",
-      "cv_profiles": {
-        "normal": {
-          "cv3": 23,
-          "cv4": 14
-        },
-        "testing": {
-          "cv3": 0,
-          "cv4": 0
-        }
-      },
-      "notes": "",
-      "functions": [
-        {
-          "number": 0,
-          "label": "light",
-          "lockable": true
-        },
-        {
-          "number": 1,
-          "label": "head",
-          "lockable": true
-        },
-        {
-          "number": 2,
-          "label": "cabin",
-          "lockable": true
-        },
-        {
-          "number": 3,
-          "label": "rear off",
-          "lockable": true
-        },
-        {
-          "number": 4,
-          "label": "hallway",
-          "lockable": true
-        },
-        {
-          "number": 6,
-          "label": "shunt",
-          "lockable": true
-        }
-      ]
     }
-  },
-  "z21": {
-    "host": "192.168.1.111",
-    "port": 21105,
-    "notes": "Roco Z21 Bianca hardware controller"
-  },
-  "camera": {
-    "ip": "192.168.1.4",
-    "port": 554,
-    "stream": "stream2",
-    "resolution": {
-      "width": 1280,
-      "height": 720
-    },
-    "username": "",
-    "password": "",
-    "notes": "Camera credentials MUST be in config.local.json (gitignored)"
-  },
-  "video": {
-    "fps": 30,
-    "notes": "MJPEG video stream frame rate (hot reload, no restart needed)"
   }
 }
