@@ -245,7 +245,14 @@ def import_locomotive(address: int, dry_run: bool = False) -> bool:
         print(f"\n[DRY RUN] Would {action} in config.json:")
         loco_config = create_locomotive_config(loco)
         print(json.dumps(loco_config, indent=2, ensure_ascii=False))
-        print(f"\n[DRY RUN] Would write speed table to database")
+
+        # Show speed table CV values that would be written to DB
+        print(f"\n[DRY RUN] Would write speed table to database (locomotive_speed_table):")
+        cv_values = {}
+        for cv_index in range(67, 95):  # CV67-94 (28 steps)
+            if cv_index in loco.cv:
+                cv_values[cv_index] = loco.cv[cv_index]
+        print(json.dumps(cv_values, indent=2))
         return True
 
     # Step 2: Backup config.json
