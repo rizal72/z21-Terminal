@@ -606,12 +606,49 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 - Gate assignment not saved: Added `gate_assignment` to `ConsistForm` onSubmit payload
 - Emoticons removal: Replaced emoji in `config.json` notes with ASCII text (encoding compliance)
 
-**Commits** (4 total):
-- `1acd7a6` - feat: Consist Manager - gate_assignment UI implementation
-- `734d0b1` - fix: Consist Manager - load gate_assignment from config (broadcast.py)
-- `8fc154a` - fix: ConsistManagerModal - pass gate_assignment to edit form
-- `a61ad55` - fix: ConsistForm - pass gate_assignment on submit
+**Commits** (30 total today):
+
+**Database Refactoring** (Phase 0-2):
+- `22b24c8` - refactor: centralize DB access - analytics_db → data_db (Phase 0)
+- `d404c50` - refactor: rename database file analytics.db → data.db (Phase 1)
+- `0923003` - refactor: rename cv_profile_mode → test_mode (systematic rename)
+- `710a5c1` - feat(db): migrate operational state to database (Phase 2)
+- `24a40e3` - fix: replace all Unicode emojis with ASCII in migration script
+- `46156d8` - fix: add missing DataDB import in main.py
+- `e8ea15a` - fix: migration script Unicode error on Windows
+- `7d71995` - fix: update all remaining analytics.db → data.db references
+- `473b864` - feat: add merge script for analytics.db → data.db
+- `dd0eb91` - fix: correct merge script schema (event_type + data JSON)
+- `735787c` - docs: update DB_REFACTORING.md with Phase 0-2 completion log
+
+**Speed Correlation Chart Fixes**:
+- `4ba4169` - fix: restore speed percentage labels on X-axis
+- `285dd31` - fix: move CustomTick outside component and pass as reference
+- `734c075` - fix: remove overlapping 'DCC Speed' label from X-axis
+
+**Settings UI** (Phase 1-3):
+- `0620ef7` - docs: add comprehensive Settings UI design document
+- `19402d2` - refactor: remove Reload Roster button, add Settings button
+- `e4395dc` - feat: add Settings modal component (Phase 3 - Part 1)
+- `e131a9f` - feat: add config API endpoints (Phase 3 - Part 2)
+- `2c4b022` - feat: Phase 1 - Backend migration to unified config structure
+- `2c74aae` - feat: Phase 2 - Backend API expansion
+- `0c880d2` - feat: Phase 3 - Frontend Settings UI (7 tabs)
+- `1d64ed7` - fix: use correct decoder field name (decoder not decoder_model)
+- `9afd825` - fix: increase Settings modal width to max-w-6xl
+
+**Consist Manager - Gate Assignment**:
+- `1acd7a6` - feat: gate_assignment UI implementation
+- `734d0b1` - fix: load gate_assignment from config (broadcast.py)
+- `8fc154a` - fix: pass gate_assignment to edit form
+- `a61ad55` - fix: pass gate_assignment on submit
+
+**Cleanup**:
 - `0392b58` - refactor: remove emoticons from config.json notes
+
+**Documentation**:
+- `bfa1957` - docs: document timing_thresholds refactoring plan
+- `f9f0764` - docs: complete changelog for 2025-01-18
 
 **Files Modified** (15 total):
 - **Migration**: `migrate_config_unified.py` (NEW)
