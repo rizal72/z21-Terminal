@@ -864,7 +864,7 @@ function LocomotivesTab({ settings, setSettings }) {
                   Address {address}: {loco.name}
                 </div>
                 <div className="text-xs text-slate-400">
-                  {loco.decoder_model || 'Unknown decoder'} • {loco.functions?.length || 0} functions
+                  {loco.decoder || 'Unknown decoder'} • {loco.functions?.length || 0} functions
                 </div>
               </div>
             </div>
