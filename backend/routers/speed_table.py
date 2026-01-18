@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional
 import json
 import time
 
-from services.analytics_db import AnalyticsDB
+from services.data_db import DataDB
 from services.speed_table_helpers import (
     read_cv_speed_table,
     read_cv_speed_table_from_db,
@@ -91,7 +91,7 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
     adjust_loco_name = get_locomotive_name(adjust_loco_address)
 
     # Get latest session (validated or not)
-    current_session = AnalyticsDB.get_latest_session()
+    current_session = DataDB.get_latest_session()
 
     # Extract session info (or None if no sessions exist)
     session_id = current_session['id'] if current_session else None
@@ -99,7 +99,7 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
 
     # ALWAYS get CRITICAL/WARNING events (historical cumulative with "fixed" detection)
     # This is independent from current session state
-    events_by_status = AnalyticsDB.get_critical_events_by_speed(consist_id)
+    events_by_status = DataDB.get_critical_events_by_speed(consist_id)
     critical_events = events_by_status.get('critical', {})
     warning_events = events_by_status.get('warning', {})
     mean_delta_t_by_speed = events_by_status.get('mean_delta_t', {})

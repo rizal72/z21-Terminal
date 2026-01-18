@@ -12,7 +12,7 @@ Handles all analytics-related endpoints:
 
 from fastapi import APIRouter, Depends
 from typing import Optional
-from services.analytics_db import AnalyticsDB
+from services.data_db import DataDB
 from services.downsampling import smart_downsample_delta_t, lttb_downsample, format_duration_hms
 from dependencies import get_tracking_manager, get_debug_enabled
 from tracking_manager import TrackingManager
@@ -38,7 +38,7 @@ async def get_current_session(
 @router.get("/session/{session_id}")
 async def get_session_data(session_id: str):
     """Load full session data (events, Δt trends)"""
-    result = AnalyticsDB.get_session_by_id(session_id)
+    result = DataDB.get_session_by_id(session_id)
     if result is None:
         return {"error": "Session not found"}
     return result
@@ -67,7 +67,7 @@ async def get_cumulative_stats(
     Note: tail and maxPoints are mutually exclusive (tail takes precedence)
     """
     # Get validated sessions from DB
-    sessions = AnalyticsDB.get_validated_sessions()
+    sessions = DataDB.get_validated_sessions()
 
     # Include current session if running (validated but no end_time yet)
     if tracking_manager and tracking_manager.daemon and tracking_manager.daemon.analytics_logger:
@@ -85,12 +85,12 @@ async def get_cumulative_stats(
     total_sessions = len(sessions)
 
     # Get gate crossings aggregate
-    gate_crossings = AnalyticsDB.get_gate_crossings_aggregate()
+    gate_crossings = DataDB.get_gate_crossings_aggregate()
 
     # Get ALL events (chronologically ordered)
-    delta_t_events = AnalyticsDB.get_delta_t_events()
-    yolo_performance = AnalyticsDB.get_yolo_performance_events()
-    loco_operating_time_events = AnalyticsDB.get_loco_operating_time_events()
+    delta_t_events = DataDB.get_delta_t_events()
+    yolo_performance = DataDB.get_yolo_performance_events()
+    loco_operating_time_events = DataDB.get_loco_operating_time_events()
 
     # Save original counts BEFORE tail/maxPoints (for accurate stats cards)
     original_delta_t_count = len(delta_t_events)
@@ -190,7 +190,7 @@ async def get_analytics_reports(
         }
     """
     try:
-        sessions = AnalyticsDB.get_reports_data(
+        sessions = DataDB.get_reports_data(
             limit=limit,
             consist_filter=consist_filter,
             format_duration_callback=format_duration_hms
@@ -204,7 +204,7 @@ async def get_analytics_reports(
 async def get_locomotive_stats():
     """Get aggregated locomotive operating time statistics"""
     try:
-        locomotives = AnalyticsDB.get_locomotive_stats()
+        locomotives = DataDB.get_locomotive_stats()
         return {'locomotives': locomotives}
     except Exception as e:
         log('[ERROR]', f"Failed to load locomotive stats: {e}")
@@ -252,7 +252,7 @@ async def get_speed_correlation(
         }
     """
     try:
-        result = AnalyticsDB.get_speed_correlation(
+        result = DataDB.get_speed_correlation(
             consist_id=consist_id,
             limit=limit,
             bucket_size=bucket_size,

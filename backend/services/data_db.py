@@ -1,7 +1,11 @@
 """
-Analytics Database Service
+Data Database Service
 
-Centralizes all SQLite3 database access for analytics.
+Centralizes all SQLite3 database access:
+- Analytics (sessions, speed_data)
+- Speed Tables (cv_speed_table)
+- Operational State (consist_state, system_state)
+
 Eliminates code duplication across endpoints.
 """
 
@@ -17,8 +21,8 @@ from datetime import datetime
 DB_PATH = Path(__file__).parent.parent / "data" / "analytics.db"
 
 
-class AnalyticsDB:
-    """Analytics database access layer"""
+class DataDB:
+    """Centralized database access layer - analytics, speed tables, operational state"""
 
     @staticmethod
     def get_connection() -> sqlite3.Connection:
@@ -34,7 +38,7 @@ class AnalyticsDB:
             Session dict with id, start_time, end_time, validated, event_count
             or None if no sessions exist
         """
-        conn = AnalyticsDB.get_connection()
+        conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -71,7 +75,7 @@ class AnalyticsDB:
         Returns:
             List of session dicts with id, start_time, end_time, event_count, duration
         """
-        conn = AnalyticsDB.get_connection()
+        conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         query = "SELECT id, start_time, end_time, event_count FROM sessions WHERE validated = 1"
@@ -106,7 +110,7 @@ class AnalyticsDB:
         Returns:
             List of delta_t event dicts with session_id, timestamp, consist_id, delta_t, status, gate_type
         """
-        conn = AnalyticsDB.get_connection()
+        conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         if session_id:
@@ -145,7 +149,7 @@ class AnalyticsDB:
         Returns:
             List of YOLO event dicts with session_id, timestamp, avg_fps, avg_confidence, miss_rate
         """
-        conn = AnalyticsDB.get_connection()
+        conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         if session_id:
@@ -183,7 +187,7 @@ class AnalyticsDB:
         Returns:
             List of operating time event dicts with session_id, timestamp, address, duration_seconds, start_time, end_time
         """
-        conn = AnalyticsDB.get_connection()
+        conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         if session_id:
@@ -219,7 +223,7 @@ class AnalyticsDB:
         Returns:
             List of locomotive stats with address, name, total_operating_seconds, total_sessions, last_active_time
         """
-        conn = AnalyticsDB.get_connection()
+        conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         cursor.execute('''
@@ -258,7 +262,7 @@ class AnalyticsDB:
         Returns:
             Dict mapping consist_id to total crossing count
         """
-        conn = AnalyticsDB.get_connection()
+        conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         cursor.execute("SELECT data FROM events WHERE event_type = 'delta_t'")
@@ -281,7 +285,7 @@ class AnalyticsDB:
         Returns:
             Dict with session metadata and events list, or None if not found
         """
-        conn = AnalyticsDB.get_connection()
+        conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         # Get session metadata
@@ -340,7 +344,7 @@ class AnalyticsDB:
         if limit > 100:
             limit = 100
 
-        conn = AnalyticsDB.get_connection()
+        conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         # Get validated sessions (include running sessions for real-time display)
@@ -493,7 +497,7 @@ class AnalyticsDB:
         Returns:
             Dict with consist_id, total_speed_changes, correlated_samples, speed_buckets stats
         """
-        conn = AnalyticsDB.get_connection()
+        conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         # Fetch recent speed_setting events for this consist (most recent first)
@@ -642,7 +646,7 @@ class AnalyticsDB:
                 'fixed_speeds': {speed, ...}     # Speeds proven OK in last session
             }
         """
-        conn = AnalyticsDB.get_connection()
+        conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         # Query 1a: Count CRITICAL/WARNING per speed (all historical sessions)
@@ -730,3 +734,100 @@ class AnalyticsDB:
 
         conn.close()
         return results
+
+    # === Operational State Methods ===
+
+    @staticmethod
+    def get_consist_state(consist_id: int) -> dict:
+        """Get consist operational state (virtual_mode, auto_compensation)"""
+        conn = DataDB.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT virtual_mode, auto_compensation_enabled
+            FROM consist_state
+            WHERE consist_id = ?
+        """, (consist_id,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            # Default values if not found
+            return {
+                "virtual_mode": True,
+                "auto_compensation_enabled": True
+            }
+
+        return {
+            "virtual_mode": bool(row[0]),
+            "auto_compensation_enabled": bool(row[1])
+        }
+
+    @staticmethod
+    def set_virtual_mode(consist_id: int, enabled: bool):
+        """Update consist virtual mode"""
+        conn = DataDB.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO consist_state (consist_id, virtual_mode, auto_compensation_enabled)
+            VALUES (?, ?, (SELECT COALESCE(auto_compensation_enabled, 1) FROM consist_state WHERE consist_id = ?))
+            ON CONFLICT(consist_id) DO UPDATE SET
+                virtual_mode = excluded.virtual_mode,
+                last_updated = CURRENT_TIMESTAMP
+        """, (consist_id, enabled, consist_id))
+
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def set_auto_compensation(consist_id: int, enabled: bool):
+        """Update consist auto compensation"""
+        conn = DataDB.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO consist_state (consist_id, virtual_mode, auto_compensation_enabled)
+            VALUES (?, (SELECT COALESCE(virtual_mode, 1) FROM consist_state WHERE consist_id = ?), ?)
+            ON CONFLICT(consist_id) DO UPDATE SET
+                auto_compensation_enabled = excluded.auto_compensation_enabled,
+                last_updated = CURRENT_TIMESTAMP
+        """, (consist_id, consist_id, enabled))
+
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def get_cv_profile_mode() -> str:
+        """Get CV profile mode (testing or normal)"""
+        conn = DataDB.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT value
+            FROM system_state
+            WHERE key = 'cv_profile_mode'
+        """)
+
+        row = cursor.fetchone()
+        conn.close()
+
+        return row[0] if row else "normal"
+
+    @staticmethod
+    def set_cv_profile_mode(mode: str):
+        """Set CV profile mode (testing or normal)"""
+        conn = DataDB.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO system_state (key, value, last_updated)
+            VALUES ('cv_profile_mode', ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                last_updated = CURRENT_TIMESTAMP
+        """, (mode,))
+
+        conn.commit()
+        conn.close()
