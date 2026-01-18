@@ -275,6 +275,10 @@ def import_locomotive(address: int, dry_run: bool = False) -> bool:
 
 def main():
     """Main entry point."""
+    # Show help if no arguments provided
+    if len(sys.argv) == 1:
+        sys.argv.append('--help')
+
     parser = argparse.ArgumentParser(
         description='Import single locomotive from JMRI roster',
         formatter_class=argparse.RawDescriptionHelpFormatter,
