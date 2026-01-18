@@ -3,6 +3,7 @@ import ConsistController from './components/ConsistController';
 import VideoFeedPanel from './components/VideoFeedPanel';
 import MobileMenu from './components/MobileMenu';
 import ConsistManagerModal from './components/ConsistManagerModal';
+import SettingsModal from './components/SettingsModal';
 import TrackTelemetryPopover from './components/TrackTelemetryPopover';
 import Z21HealthPopover from './components/Z21HealthPopover';
 import WebSocketStatsPopover from './components/WebSocketStatsPopover';
@@ -1229,6 +1230,15 @@ function App() {
       {consistManagerOpen && (
         <ConsistManagerModal
           onClose={() => setConsistManagerOpen(false)}
+        />
+      )}
+
+      {/* Settings Modal (Phase 3) */}
+      {settingsOpen && (
+        <SettingsModal
+          isOpen={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          apiUrl={API_URL}
         />
       )}
 
