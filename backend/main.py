@@ -225,8 +225,14 @@ async def lifespan(app: FastAPI):
     try:
         config = load_config()
         consists = config.get('consists', {})
+        # Load Z21 network settings from unified config
+        z21_config = config.get('z21', {})
+        z21_host = z21_config.get('host', '192.168.1.111')  # Fallback to default
+        z21_port = z21_config.get('port', 21105)
     except Exception:
         consists = {}
+        z21_host = '192.168.1.111'  # Fallback on config load error
+        z21_port = 21105
 
     if consists:
         # Load from config.json (source of truth)
@@ -314,12 +320,12 @@ async def lifespan(app: FastAPI):
             log('[INIT]', f"Initialized 2 empty controllers")
 
     # Initialize Z21 Manager
-    log('[INIT]', f"Connecting to Z21...")
-    z21_manager = Z21Manager(z21_ip='192.168.1.111', verbose=False, reference_locos=reference_locos, timing_thresholds=timing_thresholds, debug_enabled=debug_enabled, config_path=CONFIG_PATH)
+    log('[INIT]', f"Connecting to Z21 at {z21_host}:{z21_port}...")
+    z21_manager = Z21Manager(z21_ip=z21_host, z21_port=z21_port, verbose=False, reference_locos=reference_locos, timing_thresholds=timing_thresholds, debug_enabled=debug_enabled, config_path=CONFIG_PATH)
 
     if z21_manager.connect():
         if debug_enabled:
-            log('[INIT]', f"Connected to Z21 at 192.168.1.111")
+            log('[INIT]', f"Connected to Z21 at {z21_host}:{z21_port}")
 
         # Initialize consist states in Z21 Manager
         for address, data in consist_data.items():

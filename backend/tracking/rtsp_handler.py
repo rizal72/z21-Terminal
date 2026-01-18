@@ -6,7 +6,7 @@ Used by both:
 - scripts/track_consist_yolo.py (standalone GUI testing)
 - backend/video_feed.py (MJPEG stream for web browser)
 
-All use the same 'stream' from camera_config.json (stream2 = 1280x720 SD).
+All use the same 'stream' from unified config.json (credentials from config.local.json).
 Handles camera config loading and RTSP stream setup with optimal buffering.
 """
 import cv2
@@ -14,49 +14,45 @@ import json
 import sys
 from pathlib import Path
 
-# Add backend to path for log_colors import
+# Add backend to path for log_colors and config_loader imports
 backend_path = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_path))
 from log_colors import log
-
-# Camera config path (project root)
-project_root = Path(__file__).parent.parent.parent  # z21-Terminal/ root
-CAMERA_CONFIG_PATH = project_root / 'camera_config.json'
+from config_loader import load_config
 
 
 def load_camera_config():
     """
-    Load camera configuration and build RTSP URL.
+    Load camera configuration from unified config.json and build RTSP URL.
+
+    Reads from config['camera'] section (credentials auto-merged from config.local.json).
 
     Returns:
         rtsp_url: RTSP URL string
 
     Raises:
-        SystemExit on config errors (file not found, missing fields, invalid JSON)
+        SystemExit on config errors (missing credentials, invalid config)
     """
     try:
-        with open(CAMERA_CONFIG_PATH, 'r') as f:
-            config = json.load(f)
+        config = load_config()  # Auto-merges config.local.json credentials
+        camera = config.get('camera', {})
 
-        camera_ip = config.get('camera_ip', '192.168.1.4')
-        camera_port = config.get('camera_port', 554)
-        stream = config.get('stream', 'stream2')
-        username = config['username']
-        password = config['password']
+        camera_ip = camera.get('ip', '192.168.1.4')
+        camera_port = camera.get('port', 554)
+        stream = camera.get('stream', 'stream2')
+        username = camera.get('username', '')
+        password = camera.get('password', '')
+
+        if not username or not password:
+            log('[ERROR]', 'Camera credentials missing')
+            print('   Add credentials to config.local.json (gitignored):')
+            print('   { "camera": { "username": "...", "password": "..." } }')
+            sys.exit(1)
 
         rtsp_url = f"rtsp://{username}:{password}@{camera_ip}:{camera_port}/{stream}"
         return rtsp_url
-    except FileNotFoundError:
-        log('[ERROR]', f"Camera config not found at {CAMERA_CONFIG_PATH}")
-        print(f"   Create it from template: cp {CAMERA_CONFIG_PATH}.example {CAMERA_CONFIG_PATH}")
-        print(f"   Then edit with your camera credentials.")
-        sys.exit(1)
-    except KeyError as e:
-        log('[ERROR]', f"Missing required field in camera config: {e}")
-        print(f"   Check {CAMERA_CONFIG_PATH} and ensure 'username' and 'password' are set.")
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        log('[ERROR]', f"Invalid JSON in camera config: {e}")
+    except Exception as e:
+        log('[ERROR]', f"Error loading camera config: {e}")
         sys.exit(1)
 
 

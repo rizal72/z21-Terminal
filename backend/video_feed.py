@@ -23,7 +23,6 @@ from log_colors import log
 # Configuration paths (all in project root)
 project_root = Path(__file__).parent.parent  # z21-Terminal/ root
 CONFIG_PATH = get_config_path()  # Use centralized config path
-CAMERA_CONFIG_PATH = project_root / 'camera_config.json'
 
 
 def hex_to_bgr(hex_color: str) -> tuple:
@@ -72,28 +71,33 @@ def load_locomotive_colors() -> Dict[int, tuple]:
 
 
 def load_camera_config() -> str:
-    """Load camera configuration and build RTSP URL for video feed."""
-    try:
-        with open(CAMERA_CONFIG_PATH, 'r') as f:
-            config = json.load(f)
+    """
+    Load camera configuration from unified config.json and build RTSP URL.
 
-        camera_ip = config.get('camera_ip', '192.168.1.4')
-        camera_port = config.get('camera_port', 554)
-        stream = config.get('stream', 'stream2')
-        username = config['username']
-        password = config['password']
+    Reads from config['camera'] section (credentials auto-merged from config.local.json).
+
+    Returns:
+        RTSP URL string or None on error
+    """
+    try:
+        config = load_config()  # Auto-merges config.local.json credentials
+        camera = config.get('camera', {})
+
+        camera_ip = camera.get('ip', '192.168.1.4')
+        camera_port = camera.get('port', 554)
+        stream = camera.get('stream', 'stream2')
+        username = camera.get('username', '')
+        password = camera.get('password', '')
+
+        if not username or not password:
+            log('[WARN]', 'Camera credentials missing - add to config.local.json')
+            log('[WARN]', '   { "camera": { "username": "...", "password": "..." } }')
+            return None
 
         rtsp_url = f"rtsp://{username}:{password}@{camera_ip}:{camera_port}/{stream}"
         return rtsp_url
-    except FileNotFoundError:
-        log('[ERROR]', f"Camera config not found at {CAMERA_CONFIG_PATH}")
-        print(f"   Create it from template: cp {CAMERA_CONFIG_PATH}.example {CAMERA_CONFIG_PATH}")
-        return None
-    except KeyError as e:
-        log('[ERROR]', f"Missing required field in camera config: {e}")
-        return None
-    except json.JSONDecodeError as e:
-        log('[ERROR]', f"Invalid JSON in camera config: {e}")
+    except Exception as e:
+        log('[ERROR]', f"Error loading camera config: {e}")
         return None
 
 

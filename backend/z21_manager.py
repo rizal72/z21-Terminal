@@ -31,12 +31,13 @@ class Z21Manager:
     Manager per gestire connessioni Z21 e stato consist
     """
 
-    def __init__(self, z21_ip='192.168.1.111', verbose=False, reference_locos=None, timing_thresholds=None, debug_enabled=False, config_path=None):
+    def __init__(self, z21_ip='192.168.1.111', z21_port=21105, verbose=False, reference_locos=None, timing_thresholds=None, debug_enabled=False, config_path=None):
         """
         Inizializza Z21Manager
 
         Args:
             z21_ip (str): Indirizzo IP della Z21
+            z21_port (int): Porta UDP della Z21 (default: 21105)
             verbose (bool): Modalità verbose per debug
             reference_locos (dict): Reference loco strategy config from config.json
             timing_thresholds (dict): Timing thresholds config {'normal': 1.0, 'warning': 1.5}
@@ -44,6 +45,7 @@ class Z21Manager:
             config_path (Path): Path to config.json for persisting virtual_mode state
         """
         self.z21_ip = z21_ip
+        self.z21_port = z21_port
         self.verbose = verbose
         self.debug_enabled = debug_enabled
         self.z21 = None
@@ -57,7 +59,7 @@ class Z21Manager:
     def connect(self):
         """Connetti alla Z21"""
         try:
-            self.z21 = Z21(ip=self.z21_ip, verbose=self.verbose)
+            self.z21 = Z21(ip=self.z21_ip, port=self.z21_port, verbose=self.verbose)
             if self.verbose:
                 print(f"Connected to Z21 at {self.z21_ip}")
             return True

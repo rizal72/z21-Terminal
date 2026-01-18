@@ -633,5 +633,26 @@
         }
       ]
     }
+  },
+  "z21": {
+    "host": "192.168.1.111",
+    "port": 21105,
+    "notes": "Roco Z21 Bianca hardware controller"
+  },
+  "camera": {
+    "ip": "192.168.1.4",
+    "port": 554,
+    "stream": "stream2",
+    "resolution": {
+      "width": 1280,
+      "height": 720
+    },
+    "username": "",
+    "password": "",
+    "notes": "Camera credentials MUST be in config.local.json (gitignored)"
+  },
+  "video": {
+    "fps": 30,
+    "notes": "MJPEG video stream frame rate (hot reload, no restart needed)"
   }
 }
