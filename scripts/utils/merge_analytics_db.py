@@ -68,6 +68,7 @@ def merge_databases():
     sessions = old_cursor.fetchall()
 
     copied_sessions = 0
+    newly_copied_session_ids = []
     for session in sessions:
         try:
             new_cursor.execute("""
@@ -76,36 +77,40 @@ def merge_databases():
             """, session)
             if new_cursor.rowcount > 0:
                 copied_sessions += 1
+                newly_copied_session_ids.append(session[0])  # Track newly copied sessions
         except Exception as e:
             print(f"  Warning: Failed to copy session {session[0]}: {e}")
 
     print(f"  Copied {copied_sessions} new sessions")
 
-    # Copy events
+    # Copy events (only for newly copied sessions to avoid duplicates)
     print("\n[2/2] Copying events...")
-    old_cursor.execute("""
-        SELECT session_id, timestamp, consist_id, delta_t, status, gate_id,
-               reference_time, adjust_time, yolo_fps, yolo_detections
-        FROM events
-    """)
-    events = old_cursor.fetchall()
 
-    copied_events = 0
-    for event in events:
-        try:
-            new_cursor.execute("""
-                INSERT OR IGNORE INTO events (
-                    session_id, timestamp, consist_id, delta_t, status, gate_id,
-                    reference_time, adjust_time, yolo_fps, yolo_detections
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, event)
-            if new_cursor.rowcount > 0:
+    if not newly_copied_session_ids:
+        print("  No new sessions copied - skipping events (idempotent)")
+        copied_events = 0
+    else:
+        # Build placeholders for IN clause
+        placeholders = ','.join('?' * len(newly_copied_session_ids))
+        old_cursor.execute(f"""
+            SELECT session_id, timestamp, event_type, data
+            FROM events
+            WHERE session_id IN ({placeholders})
+        """, newly_copied_session_ids)
+        events = old_cursor.fetchall()
+
+        copied_events = 0
+        for event in events:
+            try:
+                new_cursor.execute("""
+                    INSERT INTO events (session_id, timestamp, event_type, data)
+                    VALUES (?, ?, ?, ?)
+                """, event)
                 copied_events += 1
-        except Exception as e:
-            print(f"  Warning: Failed to copy event: {e}")
+            except Exception as e:
+                print(f"  Warning: Failed to copy event: {e}")
 
-    print(f"  Copied {copied_events} new events")
+        print(f"  Copied {copied_events} events for {len(newly_copied_session_ids)} new sessions")
 
     # Commit changes
     new_conn.commit()
