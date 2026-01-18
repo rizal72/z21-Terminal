@@ -134,6 +134,10 @@ def create_locomotive_config(loco) -> dict:
             "normal": {
                 "cv3": loco.cv.get(3, 0),
                 "cv4": loco.cv.get(4, 0)
+            },
+            "testing": {
+                "cv3": 0,
+                "cv4": 0
             }
         },
         "functions": functions
