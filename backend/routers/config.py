@@ -35,6 +35,14 @@ async def update_settings(request: dict):
     """
     Update config.json and determine which services need restart
 
+    Handles unified config structure:
+    - System (debug.enabled)
+    - Z21 Network (z21.host, z21.port)
+    - Camera (camera.* - credentials split to config.local.json)
+    - Video Feed (video.fps - hot reload)
+    - YOLO Model (tracking.yolo_* - restart tracker)
+    - Tracking (tracking.fps, tracking.timing_thresholds - restart tracker)
+
     Returns:
         {
             "status": "success",
@@ -45,61 +53,145 @@ async def update_settings(request: dict):
     try:
         # Load current config
         config = load_config()
+        config_local = {}  # Credentials to save separately
 
         # Track which services need restart
         restart_needed = []
 
-        # Z21 Network settings
-        if "z21" in request:
-            old_z21 = config.get("z21", {})
-            new_z21 = request["z21"]
-
-            if (old_z21.get("ip") != new_z21.get("ip") or
-                old_z21.get("port") != new_z21.get("port")):
-                restart_needed.append("backend")
-
-            config["z21"] = new_z21
-
-        # Video Feed settings
-        if "video" in request:
-            old_video = config.get("video", {})
-            new_video = request["video"]
-
-            if (old_video.get("width") != new_video.get("width") or
-                old_video.get("height") != new_video.get("height") or
-                old_video.get("rtsp_url") != new_video.get("rtsp_url")):
-                restart_needed.append("video_feed")
-
-            config["video"] = new_video
-
-        # YOLO Model settings
-        if "yolo" in request:
-            old_yolo = config.get("yolo", {})
-            new_yolo = request["yolo"]
-
-            if (old_yolo.get("confidence") != new_yolo.get("confidence") or
-                old_yolo.get("iou") != new_yolo.get("iou") or
-                old_yolo.get("obb") != new_yolo.get("obb")):
-                restart_needed.append("tracker")
-
-            config["yolo"] = new_yolo
-
-        # Gates settings (no restart needed - hot reload)
-        if "gates" in request:
-            config["gates"] = request["gates"]
-
-        # System settings
+        # System settings (debug.enabled)
         if "debug" in request:
-            old_debug = config.get("debug", False)
-            new_debug = request["debug"]
+            old_debug = config.get("debug", {}).get("enabled", False)
+            new_debug = request["debug"].get("enabled", False)
 
             if old_debug != new_debug:
                 restart_needed.append("backend")
 
-            config["debug"] = new_debug
+            if "debug" not in config:
+                config["debug"] = {}
+            config["debug"]["enabled"] = new_debug
 
-        # Save config
+        # Z21 Network settings (z21.host, z21.port)
+        if "z21" in request:
+            old_z21 = config.get("z21", {})
+            new_z21 = request["z21"]
+
+            if (old_z21.get("host") != new_z21.get("host") or
+                old_z21.get("port") != new_z21.get("port")):
+                restart_needed.append("backend")
+
+            config["z21"] = {
+                "host": new_z21.get("host", "192.168.1.111"),
+                "port": new_z21.get("port", 21105),
+                "notes": config.get("z21", {}).get("notes", "Roco Z21 Bianca hardware controller")
+            }
+
+        # Camera settings (camera.* - split credentials to config.local.json)
+        if "camera" in request:
+            old_camera = config.get("camera", {})
+            new_camera = request["camera"]
+
+            # Check if RTSP-related settings changed (requires restart)
+            if (old_camera.get("ip") != new_camera.get("ip") or
+                old_camera.get("port") != new_camera.get("port") or
+                old_camera.get("stream") != new_camera.get("stream")):
+                restart_needed.append("video_feed")
+                restart_needed.append("tracker")
+
+            # Split: public settings → config.json, credentials → config.local.json
+            config["camera"] = {
+                "ip": new_camera.get("ip", "192.168.1.4"),
+                "port": new_camera.get("port", 554),
+                "stream": new_camera.get("stream", "stream2"),
+                "resolution": new_camera.get("resolution", {"width": 1280, "height": 720}),
+                "username": "",  # Empty in config.json
+                "password": "",  # Empty in config.json
+                "notes": config.get("camera", {}).get("notes", "Camera credentials MUST be in config.local.json (gitignored)")
+            }
+
+            # Save credentials to config.local.json (gitignored)
+            if new_camera.get("username") or new_camera.get("password"):
+                config_local["camera"] = {
+                    "username": new_camera.get("username", ""),
+                    "password": new_camera.get("password", "")
+                }
+
+        # Video Feed settings (video.fps - hot reload, no restart)
+        if "video" in request:
+            new_video = request["video"]
+            config["video"] = {
+                "fps": new_video.get("fps", 30),
+                "notes": config.get("video", {}).get("notes", "MJPEG video stream frame rate (hot reload, no restart needed)")
+            }
+            # Note: video FPS is hot reload, no restart needed
+
+        # Tracking settings (tracking.* - restart tracker)
+        if "tracking" in request:
+            old_tracking = config.get("tracking", {})
+            new_tracking = request["tracking"]
+
+            # Check if any tracking setting changed
+            tracking_changed = False
+
+            # FPS settings
+            if "fps" in new_tracking:
+                old_fps = old_tracking.get("fps", {})
+                new_fps = new_tracking["fps"]
+                if (old_fps.get("active") != new_fps.get("active") or
+                    old_fps.get("idle") != new_fps.get("idle") or
+                    old_fps.get("video_feed") != new_fps.get("video_feed")):
+                    tracking_changed = True
+
+            # Idle timeout
+            if "idle_timeout_seconds" in new_tracking:
+                if old_tracking.get("idle_timeout_seconds") != new_tracking["idle_timeout_seconds"]:
+                    tracking_changed = True
+
+            # Timing thresholds
+            if "timing_thresholds" in new_tracking:
+                old_thresholds = old_tracking.get("timing_thresholds", {})
+                new_thresholds = new_tracking["timing_thresholds"]
+                if (old_thresholds.get("normal") != new_thresholds.get("normal") or
+                    old_thresholds.get("warning") != new_thresholds.get("warning") or
+                    old_thresholds.get("max_delta_t") != new_thresholds.get("max_delta_t")):
+                    tracking_changed = True
+
+            # YOLO settings (confidence, iou, imgsz, obb)
+            yolo_keys = ["yolo_confidence", "yolo_iou", "yolo_imgsz", "yolo_obb"]
+            for key in yolo_keys:
+                if key in new_tracking and old_tracking.get(key) != new_tracking[key]:
+                    tracking_changed = True
+
+            if tracking_changed:
+                restart_needed.append("tracker")
+
+            # Update tracking section
+            if "tracking" not in config:
+                config["tracking"] = {}
+            config["tracking"].update(new_tracking)
+
+        # Save config.json
         save_config(config)
+
+        # Save config.local.json (credentials only)
+        if config_local:
+            from pathlib import Path
+            config_local_path = get_config_path().parent / "config.local.json"
+
+            # Load existing config.local.json to merge
+            try:
+                with open(config_local_path, 'r') as f:
+                    existing_local = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                existing_local = {}
+
+            # Merge camera credentials
+            existing_local.update(config_local)
+
+            # Save merged config.local.json
+            with open(config_local_path, 'w') as f:
+                json.dump(existing_local, f, indent=2)
+
+            log('[SETTINGS]', 'Camera credentials saved to config.local.json')
 
         # Deduplicate restart list
         restart_needed = list(set(restart_needed))
@@ -119,6 +211,153 @@ async def update_settings(request: dict):
             "message": str(e),
             "restart_needed": []
         }
+
+
+@router.post("/api/settings/yolo-preset/load")
+async def load_yolo_preset(request: dict):
+    """
+    Load YOLO preset profile from config.json
+
+    Request body:
+        {"preset": "tracking_OBB"}  or  {"preset": "tracking_standard"}
+
+    Returns preset values to populate Settings UI form
+    """
+    try:
+        preset_name = request.get("preset")
+        if not preset_name:
+            return {"status": "error", "message": "Missing preset name"}
+
+        config = load_config()
+        preset_data = config.get(preset_name)
+
+        if not preset_data:
+            return {"status": "error", "message": f"Preset '{preset_name}' not found"}
+
+        log('[SETTINGS]', f"Loaded YOLO preset: {preset_name}")
+
+        return {
+            "status": "success",
+            "preset": preset_data,
+            "message": f"Preset '{preset_name}' loaded"
+        }
+
+    except Exception as e:
+        log('[ERROR]', f"Failed to load YOLO preset: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/api/settings/z21/test")
+async def test_z21_connection(request: dict):
+    """
+    Test Z21 connection with provided IP/port
+
+    Request body:
+        {"host": "192.168.1.111", "port": 21105}
+
+    Returns connection status
+    """
+    try:
+        import sys
+        from pathlib import Path
+
+        # Add scripts directory to path for z21.py import
+        scripts_dir = Path(__file__).parent.parent.parent / 'scripts'
+        sys.path.insert(0, str(scripts_dir))
+
+        from z21 import Z21
+
+        host = request.get("host", "192.168.1.111")
+        port = request.get("port", 21105)
+
+        log('[SETTINGS]', f"Testing Z21 connection: {host}:{port}")
+
+        # Try to connect and get status
+        z21 = Z21(ip=host, port=port, verbose=False)
+        status = z21.get_status()
+
+        if status:
+            log('[SETTINGS]', f"Z21 connection test: SUCCESS ({host}:{port})")
+            return {
+                "status": "success",
+                "message": f"Connected to Z21 at {host}:{port}",
+                "details": {
+                    "track_power": not status.get('track_power_off', False),
+                    "emergency_stop": status.get('emergency_stop', False)
+                }
+            }
+        else:
+            log('[SETTINGS]', f"Z21 connection test: FAILED ({host}:{port})")
+            return {
+                "status": "error",
+                "message": f"Failed to connect to Z21 at {host}:{port}"
+            }
+
+    except Exception as e:
+        log('[ERROR]', f"Z21 connection test failed: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/api/settings/camera/test")
+async def test_camera_stream(request: dict):
+    """
+    Test camera RTSP stream with provided settings
+
+    Request body:
+        {
+            "ip": "192.168.1.4",
+            "port": 554,
+            "stream": "stream2",
+            "username": "user",
+            "password": "pass"
+        }
+
+    Returns stream test result (can open, resolution)
+    """
+    try:
+        import cv2
+
+        ip = request.get("ip", "192.168.1.4")
+        port = request.get("port", 554)
+        stream = request.get("stream", "stream2")
+        username = request.get("username", "")
+        password = request.get("password", "")
+
+        if not username or not password:
+            return {"status": "error", "message": "Camera credentials required"}
+
+        rtsp_url = f"rtsp://{username}:{password}@{ip}:{port}/{stream}"
+
+        log('[SETTINGS]', f"Testing camera stream: {ip}:{port}/{stream}")
+
+        # Try to open stream
+        cap = cv2.VideoCapture(rtsp_url)
+
+        if not cap.isOpened():
+            log('[SETTINGS]', f"Camera stream test: FAILED (cannot open)")
+            return {"status": "error", "message": "Failed to open camera stream"}
+
+        # Read one frame to verify
+        ret, frame = cap.read()
+        cap.release()
+
+        if ret and frame is not None:
+            height, width = frame.shape[:2]
+            log('[SETTINGS]', f"Camera stream test: SUCCESS ({width}x{height})")
+            return {
+                "status": "success",
+                "message": f"Camera stream OK: {width}x{height}",
+                "details": {
+                    "resolution": {"width": width, "height": height}
+                }
+            }
+        else:
+            log('[SETTINGS]', f"Camera stream test: FAILED (cannot read frame)")
+            return {"status": "error", "message": "Failed to read frame from camera"}
+
+    except Exception as e:
+        log('[ERROR]', f"Camera stream test failed: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 @router.get("/api/consists")
