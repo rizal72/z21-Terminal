@@ -33,7 +33,7 @@ BACKUP_DIR = PROJECT_ROOT / "backups"
 def create_backup(filepath):
     """Create timestamped backup of file."""
     if not filepath.exists():
-        print(f"⚠️  File not found: {filepath}")
+        print(f"[WARN]  File not found: {filepath}")
         return None
 
     BACKUP_DIR.mkdir(exist_ok=True)
@@ -42,7 +42,7 @@ def create_backup(filepath):
 
     import shutil
     shutil.copy2(filepath, backup_path)
-    print(f"✅ Backup created: {backup_path}")
+    print(f"[OK] Backup created: {backup_path}")
     return backup_path
 
 
@@ -70,7 +70,7 @@ def create_tables(conn):
     """)
 
     conn.commit()
-    print("✅ Database tables created (consist_state, system_state)")
+    print("[OK] Database tables created (consist_state, system_state)")
 
 
 def migrate_data(config, conn):
@@ -110,7 +110,7 @@ def migrate_data(config, conn):
     migrated_count += 1
 
     conn.commit()
-    print(f"✅ Migrated {migrated_count} operational state entries")
+    print(f"[OK] Migrated {migrated_count} operational state entries")
     return migrated_count
 
 
@@ -149,10 +149,10 @@ def verify_migration(conn):
     cursor.execute("SELECT COUNT(*) FROM system_state WHERE key = 'test_mode'")
     system_count = cursor.fetchone()[0]
 
-    print(f"✅ Verification: {consist_count} consists, {system_count} system state entries")
+    print(f"[OK] Verification: {consist_count} consists, {system_count} system state entries")
 
     if consist_count == 0 or system_count == 0:
-        print("⚠️  Warning: Migration may be incomplete")
+        print("[WARN]  Warning: Migration may be incomplete")
         return False
 
     return True
@@ -167,11 +167,11 @@ def main():
     # Step 1: Validate files exist
     print("[1/7] Validating files...")
     if not CONFIG_PATH.exists():
-        print(f"❌ Error: config.json not found at {CONFIG_PATH}")
+        print(f"[ERROR] Error: config.json not found at {CONFIG_PATH}")
         sys.exit(1)
 
     if not DB_PATH.exists():
-        print(f"⚠️  Warning: Database not found at {DB_PATH}")
+        print(f"[WARN]  Warning: Database not found at {DB_PATH}")
         print("   Creating new database...")
 
     print(f"   Config: {CONFIG_PATH}")
@@ -181,7 +181,7 @@ def main():
     print("\n[2/7] Creating backup...")
     backup_path = create_backup(CONFIG_PATH)
     if not backup_path:
-        print("❌ Error: Failed to create backup")
+        print("[ERROR] Error: Failed to create backup")
         sys.exit(1)
 
     # Step 3: Load config.json
@@ -203,7 +203,7 @@ def main():
     # Step 6: Verify migration
     print("\n[6/7] Verifying migration...")
     if not verify_migration(conn):
-        print("❌ Error: Migration verification failed")
+        print("[ERROR] Error: Migration verification failed")
         conn.close()
         sys.exit(1)
 
@@ -222,7 +222,7 @@ def main():
 
     # Summary
     print("\n" + "="*70)
-    print("✅ MIGRATION COMPLETE")
+    print("[OK] MIGRATION COMPLETE")
     print("="*70)
     print(f"   Migrated entries: {migrated_count}")
     print(f"   Config backup: {backup_path}")
