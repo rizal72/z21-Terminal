@@ -407,6 +407,7 @@ async def create_consist(
         lead_address = request.get("lead_address")
         rear_address = request.get("rear_address")
         gate_ids = request.get("gate_ids", [])
+        gate_assignment = request.get("gate_assignment")  # None = symmetric, object = asymmetric
         reference_loco = request.get("reference_loco", "rear")  # "lead" or "rear"
         virtual_mode = request.get("virtual_mode", True)  # Default: Virtual Mode (safe)
 
@@ -431,7 +432,7 @@ async def create_consist(
             "reference_loco": rear_address if reference_loco == "rear" else lead_address,
             "adjust_loco": lead_address if reference_loco == "rear" else rear_address,
             "gate_ids": gate_ids,
-            "gate_assignment": None,  # Default: symmetric cross-gate mode
+            "gate_assignment": gate_assignment,  # From request: null = symmetric, object = asymmetric
             "virtual_mode": virtual_mode,
             "auto_compensation_enabled": False,
             "notes": ""
@@ -503,6 +504,8 @@ async def update_consist(
             consist["rear_address"] = request["rear_address"]
         if "gate_ids" in request:
             consist["gate_ids"] = request["gate_ids"]
+        if "gate_assignment" in request:
+            consist["gate_assignment"] = request["gate_assignment"]  # null = symmetric, object = asymmetric
 
         # Handle virtual_mode change (if present in request)
         virtual_mode_changed = False

@@ -8,6 +8,7 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
     lead_address: consist?.lead_address || '',
     rear_address: consist?.rear_address || '',
     gate_ids: consist?.gate_ids || [],
+    gate_assignment: consist?.gate_assignment || null,  // null = symmetric (all gates), object = asymmetric
     reference_loco: consist?.reference_loco || 'rear',  // default: rear is reference
     virtual_mode: consist?.virtual_mode !== undefined ? consist.virtual_mode : true  // default: Virtual Mode
   });
@@ -42,7 +43,41 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
       const newGateIds = prev.gate_ids.includes(gateId)
         ? prev.gate_ids.filter(id => id !== gateId)
         : [...prev.gate_ids, gateId];
-      return { ...prev, gate_ids: newGateIds };
+
+      // Reset gate_assignment when gates change
+      return { ...prev, gate_ids: newGateIds, gate_assignment: null };
+    });
+  };
+
+  const handleGateAssignmentChange = (locoType, gateId) => {
+    setFormData(prev => {
+      // If either is "all", set gate_assignment to null (symmetric mode)
+      if (gateId === 'all') {
+        const otherType = locoType === 'reference' ? 'adjust' : 'reference';
+        const otherGate = prev.gate_assignment?.[otherType];
+
+        // If other is also "all" or undefined, set to null
+        if (!otherGate || otherGate === 'all') {
+          return { ...prev, gate_assignment: null };
+        }
+        // Otherwise update only this loco
+        return {
+          ...prev,
+          gate_assignment: { ...prev.gate_assignment, [locoType]: null }
+        };
+      }
+
+      // Specific gate selected - asymmetric mode
+      const currentAssignment = prev.gate_assignment || {};
+      const newAssignment = { ...currentAssignment, [locoType]: gateId };
+
+      // Check if both are set to specific gates
+      if (newAssignment.reference && newAssignment.adjust) {
+        return { ...prev, gate_assignment: newAssignment };
+      }
+
+      // Only one is set, keep building asymmetric config
+      return { ...prev, gate_assignment: newAssignment };
     });
   };
 
@@ -303,6 +338,69 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
           )}
         </div>
       </div>
+
+      {/* Gate Assignment Mode (Advanced) - Show only if gates selected */}
+      {formData.gate_ids.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-white mb-2">
+            Gate Tracking Mode (Advanced)
+          </label>
+          <p className="text-xs text-track-steel mb-3">
+            Assign specific gates to each locomotive for directional tracking (asymmetric), or use all gates for both locomotives (symmetric)
+          </p>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* Reference Loco Dropdown */}
+            <div>
+              <label className="block text-xs text-track-steel mb-1">
+                Reference loco monitored by:
+              </label>
+              <select
+                value={formData.gate_assignment?.reference || 'all'}
+                onChange={(e) => handleGateAssignmentChange('reference', e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                className="w-full px-3 py-2 bg-control-black border border-control-grey rounded text-white focus:border-signal-amber outline-none"
+              >
+                <option value="all">All gates (symmetric)</option>
+                {formData.gate_ids.map(gateId => (
+                  <option key={gateId} value={gateId}>Gate {gateId}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Adjust Loco Dropdown */}
+            <div>
+              <label className="block text-xs text-track-steel mb-1">
+                Adjust loco monitored by:
+              </label>
+              <select
+                value={formData.gate_assignment?.adjust || 'all'}
+                onChange={(e) => handleGateAssignmentChange('adjust', e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                className="w-full px-3 py-2 bg-control-black border border-control-grey rounded text-white focus:border-signal-amber outline-none"
+              >
+                <option value="all">All gates (symmetric)</option>
+                {formData.gate_ids.map(gateId => (
+                  <option key={gateId} value={gateId}>Gate {gateId}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Mode Indicator */}
+          <div className="mt-2 text-xs">
+            {!formData.gate_assignment || (!formData.gate_assignment.reference && !formData.gate_assignment.adjust) ? (
+              <p className="text-signal-green flex items-center gap-1">
+                <i className="fa-solid fa-check-circle"></i>
+                Symmetric mode: Both locomotives tracked by all gates (default)
+              </p>
+            ) : (
+              <p className="text-signal-amber flex items-center gap-1">
+                <i className="fa-solid fa-diagram-project"></i>
+                Asymmetric mode: Specific gate per locomotive (directional tracking)
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div className="flex gap-3 pt-4 border-t border-control-grey">
