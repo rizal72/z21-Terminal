@@ -565,6 +565,60 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     return reportsData.sessions.filter(session => session.consists?.[String(consistFilter)] !== undefined);
   }, [reportsData, consistFilter]);
 
+  // Memoized metrics (calculated once, reused in multiple cards - Overview & Reports tabs)
+  const gateCrossingsCount = useMemo(() => {
+    if (!cumulativeData && !reportsData) return 0;
+
+    // Current view: filter by current session + consist
+    if (viewMode === 'current' && currentSession) {
+      let events = cumulativeData.delta_t_events || [];
+      events = events.filter(e => e.session_id === currentSession.session_id);
+      if (consistFilter !== 'all') {
+        events = events.filter(e => e.consist_id === consistFilter);
+      }
+      return events.length;
+    }
+
+    // Overview/Reports: aggregate data (accurate, not downsampled)
+    if (consistFilter === 'all') {
+      // Use accurate total count (not downsampled)
+      return cumulativeData?.total_delta_t_events || 0;
+    } else {
+      // Calculate consist-specific count by summing total_crossings from sessions
+      return (reportsData?.sessions || []).reduce((sum, session) => {
+        const stats = session.consists?.[String(consistFilter)];
+        return sum + (stats?.total_crossings || 0);
+      }, 0);
+    }
+  }, [viewMode, currentSession, consistFilter, cumulativeData, reportsData]);
+
+  const criticalEventsCount = useMemo(() => {
+    if (!cumulativeData && !reportsData) return 0;
+
+    // Current view: filter by current session + consist + critical threshold
+    if (viewMode === 'current' && currentSession) {
+      let events = cumulativeData.delta_t_events || [];
+      events = events.filter(e => e.session_id === currentSession.session_id);
+      events = events.filter(e => Math.abs(e.delta_t) >= 1.5);
+      if (consistFilter !== 'all') {
+        events = events.filter(e => e.consist_id === consistFilter);
+      }
+      return events.length;
+    }
+
+    // Overview/Reports: sum critical_count from sessions (accurate, not downsampled)
+    return (reportsData?.sessions || []).reduce((sum, session) => {
+      if (consistFilter === 'all') {
+        // Sum critical_count from all consists
+        return sum + Object.values(session.consists || {}).reduce((s, stats) => s + (stats.critical_count || 0), 0);
+      } else {
+        // Sum critical_count for specific consist
+        const stats = session.consists?.[String(consistFilter)];
+        return sum + (stats?.critical_count || 0);
+      }
+    }, 0);
+  }, [viewMode, currentSession, consistFilter, cumulativeData, reportsData]);
+
   if (!isOpen) return null;
 
   return (
@@ -796,28 +850,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     {consistFilter === 'all' ? ' (All)' : ` (C${consistFilter})`}
                   </div>
                   <div className={`text-3xl font-bold mt-1 ${getConsistColorClass(consistFilter, trackingConfig.consists, 'text-white')}`}>
-                    {(() => {
-                      // Use total_delta_t_events (pre-downsampling) for accurate count
-                      // In Overview mode with filtering, we need to filter the actual events
-                      if (viewMode === 'current' || consistFilter !== 'all') {
-                        let events = cumulativeData.delta_t_events || [];
-
-                        // Filter by session if Current view
-                        if (viewMode === 'current' && currentSession) {
-                          events = events.filter(e => e.session_id === currentSession.session_id);
-                        }
-
-                        // Filter by consist
-                        if (consistFilter !== 'all') {
-                          events = events.filter(e => e.consist_id === consistFilter);
-                        }
-
-                        return events.length;
-                      }
-
-                      // Overview mode, no filter: use accurate pre-downsampling count
-                      return cumulativeData.total_delta_t_events || 0;
-                    })()}
+                    {gateCrossingsCount}
                   </div>
                 </div>
 
@@ -828,24 +861,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                     {consistFilter === 'all' ? ' (All)' : ` (C${consistFilter})`}
                   </div>
                   <div className={`text-3xl font-bold mt-1 ${getConsistColorClass(consistFilter, trackingConfig.consists, 'text-red-400')}`}>
-                    {(() => {
-                      let events = cumulativeData.delta_t_events || [];
-
-                      // Filter by session if Current view
-                      if (viewMode === 'current' && currentSession) {
-                        events = events.filter(e => e.session_id === currentSession.session_id);
-                      }
-
-                      // Filter by critical threshold (|Δt| >= 1.5s)
-                      events = events.filter(e => Math.abs(e.delta_t) >= 1.5);
-
-                      // Filter by consist
-                      if (consistFilter !== 'all') {
-                        events = events.filter(e => e.consist_id === consistFilter);
-                      }
-
-                      return events.length;
-                    })()}
+                    {criticalEventsCount}
                   </div>
                 </div>
                   </div>
@@ -952,18 +968,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       {consistFilter === 'all' ? ' (All)' : ` (C${consistFilter})`}
                     </div>
                     <div className={`text-3xl font-bold mt-1 ${getConsistColorClass(consistFilter, trackingConfig.consists, 'text-white')}`}>
-                      {(() => {
-                        if (consistFilter === 'all') {
-                          // Use accurate total count (not downsampled)
-                          return cumulativeData.total_delta_t_events || 0;
-                        } else {
-                          // Calculate consist-specific count by summing total_crossings from sessions
-                          return reportsData.sessions.reduce((sum, session) => {
-                            const stats = session.consists?.[String(consistFilter)];
-                            return sum + (stats?.total_crossings || 0);
-                          }, 0);
-                        }
-                      })()}
+                      {gateCrossingsCount}
                     </div>
                   </div>
 
@@ -974,19 +979,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                       {consistFilter === 'all' ? ' (All)' : ` (C${consistFilter})`}
                     </div>
                     <div className={`text-3xl font-bold mt-1 ${getConsistColorClass(consistFilter, trackingConfig.consists, 'text-red-400')}`}>
-                      {(() => {
-                        // Calculate critical count by summing from sessions (accurate, not downsampled)
-                        return reportsData.sessions.reduce((sum, session) => {
-                          if (consistFilter === 'all') {
-                            // Sum critical_count from all consists
-                            return sum + Object.values(session.consists || {}).reduce((s, stats) => s + (stats.critical_count || 0), 0);
-                          } else {
-                            // Sum critical_count for specific consist
-                            const stats = session.consists?.[String(consistFilter)];
-                            return sum + (stats?.critical_count || 0);
-                          }
-                        }, 0);
-                      })()}
+                      {criticalEventsCount}
                     </div>
                   </div>
                     </div>
