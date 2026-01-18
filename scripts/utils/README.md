@@ -155,7 +155,7 @@ python scripts/utils/import_single_locomotive.py --address 2
 1. Reads locomotive from JMRI roster XML (address, name, decoder, functions F0-F28)
 2. Creates backup of `config.json`
 3. Adds locomotive to `config.json` → `locomotives` section
-4. Writes CV67-94 speed table to `analytics.db`
+4. Writes CV67-94 speed table to `data.db` (locomotive_speed_table table)
 5. **Non-destructive**: Only adds/updates specified locomotive, leaves others untouched
 
 **Requirements**:

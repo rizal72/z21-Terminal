@@ -7,7 +7,7 @@ What it does:
 2. Reads that single locomotive from JMRI roster XML
 3. Creates backup of config.json
 4. Adds locomotive to config.json (or updates if already exists)
-5. Writes CV67-94 to analytics.db
+5. Writes CV67-94 to data.db (locomotive_speed_table)
 6. Does NOT touch other locomotives in config or DB
 
 Usage:
@@ -42,7 +42,7 @@ from read_cv_from_roster import load_all_locomotives
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config.json"
-DB_PATH = PROJECT_ROOT / "backend" / "data" / "analytics.db"
+DB_PATH = PROJECT_ROOT / "backend" / "data" / "data.db"
 
 # Default colors for locomotives (fallback if not in config)
 DEFAULT_COLORS = {
@@ -144,7 +144,7 @@ def create_locomotive_config(loco) -> dict:
 
 def write_speed_table_to_db(loco):
     """
-    Write CV67-94 speed table to analytics.db.
+    Write CV67-94 speed table to data.db (locomotive_speed_table table).
 
     Args:
         loco: Locomotive object from JMRI roster
