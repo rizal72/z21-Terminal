@@ -152,6 +152,10 @@
     "yolo_iou": 0.95,
     "yolo_obb": false
   },
+  "analytics": {
+    "max_chart_events": 500,
+    "notes": "Chart optimization: Current shows last N events, Overview downsamples if > N total events"
+  },
   "locomotives": {
     "1": {
       "name": "Gr.675 017",

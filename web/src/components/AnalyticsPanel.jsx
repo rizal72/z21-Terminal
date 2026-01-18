@@ -37,6 +37,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
     idle_timeout_seconds: 10,
     consists: {} // { 10: { name, lead_address, rear_address, addresses: [...] }, 11: {...} }
   });
+  const [maxChartEvents, setMaxChartEvents] = useState(500); // Default 500, loaded from config
 
   // Reports tab state
   const [reportsData, setReportsData] = useState(null); // Session history data for Reports tab
@@ -103,6 +104,16 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           consists: data.consists || {}
         }))
         .catch(err => console.warn('Failed to load tracking config, using default 10s:', err));
+    }
+  }, [isOpen]);
+
+  // Fetch analytics config on mount (max_chart_events for tail/downsampling)
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/config/analytics')
+        .then(res => res.json())
+        .then(data => setMaxChartEvents(data.max_chart_events || 500))
+        .catch(err => console.warn('Failed to load analytics config, using default 500:', err));
     }
   }, [isOpen]);
 
@@ -219,7 +230,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       // Build API URL with view-specific parameters
       // Current view: tail (last N events, full resolution)
       // Overview view: maxPoints (sampling across entire history)
-      const params = viewMode === 'current' ? 'tail=1000' : 'maxPoints=500';
+      const params = viewMode === 'current' ? `tail=${maxChartEvents}` : `maxPoints=${maxChartEvents}`;
       const cumulativeUrl = `/api/analytics/cumulative?${params}`;
 
       // Fetch cumulative data, current session, AND locomotive stats in parallel

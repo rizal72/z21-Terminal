@@ -657,6 +657,17 @@ async def get_tracking_config():
     }
 
 
+@router.get("/api/config/analytics")
+async def get_analytics_config():
+    """Get analytics configuration (chart optimization parameters)"""
+    config = load_config()
+    max_chart_events = config.get('analytics', {}).get('max_chart_events', 500)
+
+    return {
+        "max_chart_events": max_chart_events
+    }
+
+
 @router.get("/api/gates")
 async def get_gates():
     """Get current gate configuration"""

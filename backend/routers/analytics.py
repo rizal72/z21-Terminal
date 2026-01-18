@@ -16,6 +16,7 @@ from services.data_db import DataDB
 from services.downsampling import smart_downsample_delta_t, lttb_downsample, format_duration_hms
 from dependencies import get_tracking_manager, get_debug_enabled
 from tracking_manager import TrackingManager
+from config_loader import load_config
 from log_colors import log
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
@@ -57,15 +58,20 @@ async def get_cumulative_stats(
     Args:
         tail: Optional tail parameter. If provided, returns last N events (full resolution).
               Used by Current view to keep recent data intact.
-              Example: ?tail=1000 (last 1000 events, no sampling)
+              Example: ?tail=500 (last 500 events, no sampling)
+              Default: config.analytics.max_chart_events
 
         maxPoints: Optional sampling parameter. If provided, applies uniform sampling
                    to ALL event arrays across entire history.
                    Used by Overview view for historical trends.
                    Example: ?maxPoints=500
+              Default: config.analytics.max_chart_events (downsampling threshold)
 
     Note: tail and maxPoints are mutually exclusive (tail takes precedence)
     """
+    # Load max_chart_events from config (default 500)
+    config = load_config()
+    max_chart_events = config.get('analytics', {}).get('max_chart_events', 500)
     # Get validated sessions from DB
     sessions = DataDB.get_validated_sessions()
 
