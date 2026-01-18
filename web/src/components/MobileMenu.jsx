@@ -2,10 +2,9 @@ export default function MobileMenu({
   onClose,
   onConsistManager,
   onAddController,
-  onReloadRoster,
+  onSettings,
   onWakeLock,
-  wakeLockActive,
-  reloadingRoster
+  wakeLockActive
 }) {
   return (
     <>
@@ -32,16 +31,13 @@ export default function MobileMenu({
 
         {/* Menu Items */}
         <div className="p-4 space-y-3">
-          {/* Reload Roster */}
+          {/* Settings */}
           <button
-            onClick={onReloadRoster}
-            disabled={reloadingRoster}
-            className="w-full flex items-center gap-3 p-3 bg-control-black rounded hover:bg-control-grey transition-colors text-left disabled:opacity-50"
+            onClick={onSettings}
+            className="w-full flex items-center gap-3 p-3 bg-control-black rounded hover:bg-control-grey transition-colors text-left"
           >
-            <i className={`fa-solid ${reloadingRoster ? 'fa-spinner fa-spin' : 'fa-rotate-right'} text-track-steel text-xl`}></i>
-            <span className="font-sans text-sm">
-              {reloadingRoster ? 'Reloading...' : 'Reload Roster'}
-            </span>
+            <i className="fa-solid fa-gears text-track-steel text-xl"></i>
+            <span className="font-sans text-sm">Settings</span>
           </button>
 
           {/* Add Controller */}
@@ -58,7 +54,7 @@ export default function MobileMenu({
             onClick={onConsistManager}
             className="w-full flex items-center gap-3 p-3 bg-control-black rounded hover:bg-control-grey transition-colors text-left"
           >
-            <i className="fa-solid fa-gears text-signal-amber text-xl"></i>
+            <i className="fa-solid fa-link text-signal-amber text-xl"></i>
             <span className="font-sans text-sm">Consist Manager</span>
           </button>
 

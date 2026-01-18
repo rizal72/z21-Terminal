@@ -54,10 +54,9 @@ function App() {
   const [locomotives, setLocomotives] = useState({});
   const [trackPower, setTrackPower] = useState(true);
   const [z21Online, setZ21Online] = useState(false); // Z21 connection status
-  const [reloadingRoster, setReloadingRoster] = useState(false);
-  const [reloadSuccess, setReloadSuccess] = useState(false);
   const [wakeLockActive, setWakeLockActive] = useState(false); // Wake Lock status
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // Mobile hamburger menu
+  const [settingsOpen, setSettingsOpen] = useState(false); // Settings modal (Phase 3)
   const [consistManagerOpen, setConsistManagerOpen] = useState(false); // Consist Manager modal (Phase 6B)
   const [analyticsOpen, setAnalyticsOpen] = useState(false); // Analytics dashboard (desktop-only)
   const [videoFeedExpanded, setVideoFeedExpanded] = useState(false); // Video feed panel expand/collapse
@@ -778,43 +777,6 @@ function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [API_URL]);
 
-  // Reload roster from JMRI without restarting backend
-  const handleReloadRoster = async () => {
-    if (reloadingRoster) return; // Prevent double-click
-
-    setReloadingRoster(true);
-    setReloadSuccess(false);
-
-    try {
-      const response = await fetch(`${API_URL}/api/reload-roster`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (data.status === 'success') {
-        console.log('✅ Roster reloaded:', data);
-        setReloadSuccess(true);
-
-        // Hide success indicator after 3 seconds
-        setTimeout(() => {
-          setReloadSuccess(false);
-        }, 3000);
-      } else {
-        console.error('❌ Roster reload failed:', data.message);
-        alert(`Failed to reload roster: ${data.message}`);
-      }
-    } catch (error) {
-      console.error('❌ Error reloading roster:', error);
-      alert(`Error reloading roster: ${error.message}`);
-    } finally {
-      setReloadingRoster(false);
-    }
-  };
-
   // Get selected item (consist or locomotive) for a controller
   const getSelectedItem = (selection) => {
     if (selection.type === 'consist') {
@@ -1032,22 +994,14 @@ function App() {
 
             {/* Desktop only: Inline actions */}
             <div className="hidden md:flex items-center gap-3">
-              {/* Reload Roster Button */}
+              {/* Settings Button */}
               <button
-                onClick={handleReloadRoster}
-                disabled={reloadingRoster || !isConnected}
-                className={`flex items-center gap-2 px-2 py-2 bg-control-dark border rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  reloadSuccess
-                    ? 'border-signal-green text-signal-green'
-                    : 'border-control-grey text-track-steel hover:border-signal-amber hover:text-signal-amber'
-                }`}
-                title="Reload roster from JMRI XML files"
+                onClick={() => setSettingsOpen(true)}
+                disabled={!isConnected}
+                className="flex items-center gap-2 px-2 py-2 bg-control-dark border border-control-grey rounded hover:border-signal-amber hover:text-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Settings"
               >
-                <i className={`fa-solid ${
-                  reloadingRoster ? 'fa-spinner fa-spin' :
-                  reloadSuccess ? 'fa-check' :
-                  'fa-rotate-right'
-                } text-lg md:text-xl`}></i>
+                <i className="fa-solid fa-gears text-lg md:text-xl"></i>
               </button>
 
               {/* Add Controller Button */}
@@ -1067,7 +1021,7 @@ function App() {
                 className="flex items-center gap-2 px-2 py-2 bg-control-dark border border-control-grey rounded hover:border-signal-amber hover:text-signal-amber transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Manage consists"
               >
-                <i className="fa-solid fa-gears text-lg md:text-xl"></i>
+                <i className="fa-solid fa-link text-lg md:text-xl"></i>
               </button>
 
               {/* Analytics Dashboard (📊) - Desktop-only (1024px+) */}
@@ -1255,9 +1209,9 @@ function App() {
             setMobileMenuOpen(false);
             addController();
           }}
-          onReloadRoster={() => {
+          onSettings={() => {
             setMobileMenuOpen(false);
-            handleReloadRoster();
+            setSettingsOpen(true);
           }}
           onWakeLock={() => {
             setMobileMenuOpen(false);
@@ -1267,12 +1221,7 @@ function App() {
               requestWakeLock();
             }
           }}
-          onAnalytics={() => {
-            setMobileMenuOpen(false);
-            setAnalyticsOpen(true);
-          }}
           wakeLockActive={wakeLockActive}
-          reloadingRoster={reloadingRoster}
         />
       )}
 
