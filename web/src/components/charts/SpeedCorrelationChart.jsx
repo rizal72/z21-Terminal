@@ -156,7 +156,6 @@ const SpeedCorrelationChart = ({ data, thresholds, consistColor }) => {
           domain={[0, 126]}
           ticks={dccTicksForPercent}
           tick={CustomTick}
-          label={{ value: 'DCC Speed', position: 'insideBottom', offset: -15, fill: '#9CA3AF' }}
           {...CHART_AXIS_STYLES.axis}
         />
         <YAxis
