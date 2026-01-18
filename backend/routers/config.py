@@ -24,6 +24,103 @@ router = APIRouter(tags=["config"])
 CONFIG_PATH = get_config_path()
 
 
+@router.get("/api/config")
+async def get_config():
+    """Get entire config.json for Settings UI"""
+    return load_config()
+
+
+@router.post("/api/settings/update")
+async def update_settings(request: dict):
+    """
+    Update config.json and determine which services need restart
+
+    Returns:
+        {
+            "status": "success",
+            "message": "Settings saved",
+            "restart_needed": ["backend", "video_feed", "tracker"]
+        }
+    """
+    try:
+        # Load current config
+        config = load_config()
+
+        # Track which services need restart
+        restart_needed = []
+
+        # Z21 Network settings
+        if "z21" in request:
+            old_z21 = config.get("z21", {})
+            new_z21 = request["z21"]
+
+            if (old_z21.get("ip") != new_z21.get("ip") or
+                old_z21.get("port") != new_z21.get("port")):
+                restart_needed.append("backend")
+
+            config["z21"] = new_z21
+
+        # Video Feed settings
+        if "video" in request:
+            old_video = config.get("video", {})
+            new_video = request["video"]
+
+            if (old_video.get("width") != new_video.get("width") or
+                old_video.get("height") != new_video.get("height") or
+                old_video.get("rtsp_url") != new_video.get("rtsp_url")):
+                restart_needed.append("video_feed")
+
+            config["video"] = new_video
+
+        # YOLO Model settings
+        if "yolo" in request:
+            old_yolo = config.get("yolo", {})
+            new_yolo = request["yolo"]
+
+            if (old_yolo.get("confidence") != new_yolo.get("confidence") or
+                old_yolo.get("iou") != new_yolo.get("iou") or
+                old_yolo.get("obb") != new_yolo.get("obb")):
+                restart_needed.append("tracker")
+
+            config["yolo"] = new_yolo
+
+        # Gates settings (no restart needed - hot reload)
+        if "gates" in request:
+            config["gates"] = request["gates"]
+
+        # System settings
+        if "debug" in request:
+            old_debug = config.get("debug", False)
+            new_debug = request["debug"]
+
+            if old_debug != new_debug:
+                restart_needed.append("backend")
+
+            config["debug"] = new_debug
+
+        # Save config
+        save_config(config)
+
+        # Deduplicate restart list
+        restart_needed = list(set(restart_needed))
+
+        log('[SETTINGS]', f"Settings saved, restart needed: {restart_needed if restart_needed else 'none'}")
+
+        return {
+            "status": "success",
+            "message": "Settings saved successfully",
+            "restart_needed": restart_needed
+        }
+
+    except Exception as e:
+        log('[ERROR]', f"Settings update failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "restart_needed": []
+        }
+
+
 @router.get("/api/consists")
 async def get_consists(
     consist_data: Dict = Depends(get_consist_data),
