@@ -90,6 +90,27 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Slider thumb size override */}
+      <style>{`
+        input[type="range"]::-webkit-slider-thumb {
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: currentColor;
+          cursor: pointer;
+          -webkit-appearance: none;
+          appearance: none;
+        }
+        input[type="range"]::-moz-range-thumb {
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: currentColor;
+          cursor: pointer;
+          border: none;
+        }
+      `}</style>
+
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
@@ -771,7 +792,7 @@ function TrackingTab({ settings, setSettings }) {
             max="5.0"
           />
           <p className="mt-1 text-xs text-slate-400">
-            Threshold for WARNING status (|Δt| &gt;= this value triggers WARNING)
+            Threshold for <span className="text-amber-400 font-semibold">WARNING</span> status (|Δt| &gt;= this value triggers <span className="text-amber-400 font-semibold">WARNING</span>)
           </p>
         </div>
 
@@ -796,7 +817,7 @@ function TrackingTab({ settings, setSettings }) {
             max="5.0"
           />
           <p className="mt-1 text-xs text-slate-400">
-            Threshold for CRITICAL status (|Δt| &gt;= this value triggers CRITICAL, red)
+            Threshold for <span className="text-red-400 font-semibold">CRITICAL</span> status (|Δt| &gt;= this value triggers <span className="text-red-400 font-semibold">CRITICAL</span>)
           </p>
         </div>
 
