@@ -118,6 +118,7 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
       lead_address: parseInt(formData.lead_address),
       rear_address: parseInt(formData.rear_address),
       gate_ids: formData.gate_ids,
+      gate_assignment: formData.gate_assignment,
       reference_loco: formData.reference_loco,
       virtual_mode: formData.virtual_mode
     });
