@@ -133,3 +133,38 @@ Per migliorare il modello:
 - Always test new model before updating `best.pt` symlink
 - Document versions with date and metrics (mAP50, training mode, deployment target)
 - Use `config.json` → `tracking.yolo_imgsz` to match model inference size
+
+## 🚂 Adding New Locomotives
+
+### Import Single Locomotive from JMRI
+
+Use `import_single_locomotive.py` to add a new locomotive without touching existing ones:
+
+```bash
+cd ~/Documents/_PROGETTI/z21-Terminal
+source venv/bin/activate
+
+# Dry run (preview what would be imported)
+python scripts/utils/import_single_locomotive.py --address 2 --dry-run
+
+# Import locomotive with address 2
+python scripts/utils/import_single_locomotive.py --address 2
+```
+
+**What it does**:
+1. Reads locomotive from JMRI roster XML (address, name, decoder, functions F0-F28)
+2. Creates backup of `config.json`
+3. Adds locomotive to `config.json` → `locomotives` section
+4. Writes CV67-94 speed table to `analytics.db`
+5. **Non-destructive**: Only adds/updates specified locomotive, leaves others untouched
+
+**Requirements**:
+- Locomotive must exist in JMRI roster (`roster/` directory)
+- JMRI roster must have function labels defined (F0-F28)
+- Speed table CV67-94 must be defined in JMRI
+
+**Next steps** (after import):
+1. Verify `config.json` → `locomotives.<address>` entry
+2. Restart backend (`z21-restart` on PC)
+3. Test locomotive control in web dashboard
+4. Optional: Add locomotive to consist in web UI (Consist Manager)
