@@ -97,7 +97,7 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-4xl max-h-[90vh] bg-slate-800 border border-slate-700 rounded-lg shadow-2xl overflow-hidden flex flex-col">
+      <div className="relative w-full max-w-6xl max-h-[90vh] bg-slate-800 border border-slate-700 rounded-lg shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-700">
           <div className="flex items-center gap-3">
