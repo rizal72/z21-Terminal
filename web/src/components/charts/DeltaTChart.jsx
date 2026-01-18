@@ -204,10 +204,10 @@ const DeltaTChart = ({
                   formatter={(value) => value !== null ? formatDeltaT(value) + 's' : 'N/A'}
                 />
                 <ReferenceLine yAxisId="left" y={0} stroke="#10b981" strokeDasharray="3 3" />
-                <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.normal || 1.0} stroke="#f59e0b" strokeDasharray="3 3" />
-                <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.normal || 1.0)} stroke="#f59e0b" strokeDasharray="3 3" />
-                <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.warning || 1.5} stroke="#ef4444" strokeDasharray="3 3" />
-                <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.warning || 1.5)} stroke="#ef4444" strokeDasharray="3 3" />
+                <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.warning || 1.0} stroke="#f59e0b" strokeDasharray="3 3" />
+                <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.warning || 1.0)} stroke="#f59e0b" strokeDasharray="3 3" />
+                <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.critical || 1.5} stroke="#ef4444" strokeDasharray="3 3" />
+                <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.critical || 1.5)} stroke="#ef4444" strokeDasharray="3 3" />
 
                 {/* Dynamic lines: simple or segmented based on showSessionBreaks */}
                 {Object.keys(trackingConfig.consists || {})

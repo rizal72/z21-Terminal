@@ -150,8 +150,8 @@ async def update_settings(request: dict):
             if "timing_thresholds" in new_tracking:
                 old_thresholds = old_tracking.get("timing_thresholds", {})
                 new_thresholds = new_tracking["timing_thresholds"]
-                if (old_thresholds.get("normal") != new_thresholds.get("normal") or
-                    old_thresholds.get("warning") != new_thresholds.get("warning") or
+                if (old_thresholds.get("warning") != new_thresholds.get("warning") or
+                    old_thresholds.get("critical") != new_thresholds.get("critical") or
                     old_thresholds.get("max_delta_t") != new_thresholds.get("max_delta_t")):
                     tracking_changed = True
 
@@ -633,8 +633,8 @@ async def get_tracking_config():
     config = load_config()
     idle_timeout = config.get('tracking', {}).get('idle_timeout_seconds', 10)
     timing_thresholds = config.get('tracking', {}).get('timing_thresholds', {
-        'normal': 1.0,
-        'warning': 1.5,
+        'warning': 1.0,
+        'critical': 1.5,
         'max_delta_t': 10.0
     })
     consists = config.get('consists', {})

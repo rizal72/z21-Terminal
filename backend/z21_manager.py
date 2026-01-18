@@ -40,7 +40,7 @@ class Z21Manager:
             z21_port (int): Porta UDP della Z21 (default: 21105)
             verbose (bool): Modalità verbose per debug
             reference_locos (dict): Reference loco strategy config from config.json
-            timing_thresholds (dict): Timing thresholds config {'normal': 1.0, 'warning': 1.5}
+            timing_thresholds (dict): Timing thresholds config {'warning': 1.0, 'critical': 1.5}
             debug_enabled (bool): Debug mode for verbose logging
             config_path (Path): Path to config.json for persisting virtual_mode state
         """
@@ -53,7 +53,7 @@ class Z21Manager:
         self.consist_state = {}  # {address: {'speed': 0, 'direction': 'forward', 'power': True, 'functions': {}}}
         self.persisted_state = self._load_persisted_state()  # Load virtual_mode from file
         self.reference_locos = reference_locos or {}  # Reference loco strategy from config
-        self.timing_thresholds = timing_thresholds or {'normal': 1.0, 'warning': 1.5}  # Timing thresholds from config
+        self.timing_thresholds = timing_thresholds or {'warning': 1.0, 'critical': 1.5}  # Timing thresholds from config
         self.overflow_warnings = {}  # Track overflow occurrences for CV adjustment warnings {address: count}
 
     def connect(self):
@@ -207,9 +207,9 @@ class Z21Manager:
                         consist['delta_t_timestamp'] = None
                         if self.debug_enabled:
                             log('[COMP]', f"REVERSE: no compensation (forward direction only)")
-                    # Bang-bang compensation: intervene only if |dT| > warning threshold (CRITICAL)
-                    # Dead band < warning avoids oscillations from YOLO detection noise
-                    elif is_auto_compensation and delta_t is not None and abs(delta_t) > self.timing_thresholds['warning']:
+                    # Bang-bang compensation: intervene only if |dT| > critical threshold (CRITICAL)
+                    # Dead band < critical avoids oscillations from YOLO detection noise
+                    elif is_auto_compensation and delta_t is not None and abs(delta_t) > self.timing_thresholds['critical']:
                         compensation = 2  # Fixed: 2 speed steps per intervention (even number for cleaner decay)
 
                         if delta_t > 0:
@@ -294,7 +294,7 @@ class Z21Manager:
                                 # Save new incremental speed
                                 consist['speed_actual_adjust'] = speed_adjust
                     # SYNCED zone reset: immediate snapback to target speed (unified for all track geometries)
-                    elif is_auto_compensation and delta_t is not None and abs(delta_t) < self.timing_thresholds['normal']:
+                    elif is_auto_compensation and delta_t is not None and abs(delta_t) < self.timing_thresholds['warning']:
                         accumulated = consist.get('compensation_accumulated', 0)
 
                         if accumulated != 0:  # Reset only if there was previous compensation

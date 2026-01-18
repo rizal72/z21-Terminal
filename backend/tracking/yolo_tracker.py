@@ -232,11 +232,12 @@ class YOLOTracker:
 
         # Load timing thresholds
         tracking_config = config.get('tracking', {})
-        thresholds = tracking_config.get('timing_thresholds', {'normal': 1.0, 'warning': 2.0})
-        self.threshold_normal = thresholds.get('normal', 1.0)
-        self.threshold_warning = thresholds.get('warning', 2.0)
+        from services.config_manager import DEFAULT_TIMING_THRESHOLDS
+        thresholds = tracking_config.get('timing_thresholds', DEFAULT_TIMING_THRESHOLDS)
+        self.threshold_warning = thresholds.get('warning', DEFAULT_TIMING_THRESHOLDS['warning'])
+        self.threshold_critical = thresholds.get('critical', DEFAULT_TIMING_THRESHOLDS['critical'])
         if self.debug_enabled:
-            log('[INIT]', f"Timing thresholds: SYNCED < {self.threshold_normal}s, WARNING < {self.threshold_warning}s")
+            log('[INIT]', f"Timing thresholds: WARNING >= {self.threshold_warning}s, CRITICAL >= {self.threshold_critical}s")
 
         # Load dT sanity check threshold (ignore outliers from video lag)
         self.delta_t_max_threshold = thresholds.get('max_delta_t', 15.0)
@@ -734,9 +735,9 @@ class YOLOTracker:
             return None
 
         dt_abs = abs(delta_t)
-        if dt_abs < self.threshold_normal:
+        if dt_abs < self.threshold_warning:
             return 'SYNCED'
-        elif dt_abs < self.threshold_warning:
+        elif dt_abs < self.threshold_critical:
             return 'WARNING'
         else:
             return 'CRITICAL'

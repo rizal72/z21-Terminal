@@ -753,37 +753,12 @@ function TrackingTab({ settings, setSettings }) {
         {/* Normal Threshold */}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">
-            Normal Threshold: {settings.tracking.timing_thresholds?.normal || 1.0}s
+            Warning Threshold: {settings.tracking.timing_thresholds?.warning || 1.0}s
           </label>
           <input
             type="number"
             step="0.1"
-            value={settings.tracking.timing_thresholds?.normal || 1.0}
-            onChange={(e) => setSettings({
-              ...settings,
-              tracking: {
-                ...settings.tracking,
-                timing_thresholds: { ...settings.tracking.timing_thresholds, normal: parseFloat(e.target.value) }
-              }
-            })}
-            className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded text-white focus:border-signal-amber focus:ring-1 focus:ring-signal-amber outline-none"
-            min="0.1"
-            max="5.0"
-          />
-          <p className="mt-1 text-xs text-slate-400">
-            Maximum |Δt| for SYNCED status (green)
-          </p>
-        </div>
-
-        {/* Warning Threshold */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Warning Threshold: {settings.tracking.timing_thresholds?.warning || 1.5}s
-          </label>
-          <input
-            type="number"
-            step="0.1"
-            value={settings.tracking.timing_thresholds?.warning || 1.5}
+            value={settings.tracking.timing_thresholds?.warning || 1.0}
             onChange={(e) => setSettings({
               ...settings,
               tracking: {
@@ -796,7 +771,32 @@ function TrackingTab({ settings, setSettings }) {
             max="5.0"
           />
           <p className="mt-1 text-xs text-slate-400">
-            Maximum |Δt| for WARNING status (amber)
+            Threshold for WARNING status (|Δt| &gt;= this value triggers WARNING)
+          </p>
+        </div>
+
+        {/* Critical Threshold */}
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            Critical Threshold: {settings.tracking.timing_thresholds?.critical || 1.5}s
+          </label>
+          <input
+            type="number"
+            step="0.1"
+            value={settings.tracking.timing_thresholds?.critical || 1.5}
+            onChange={(e) => setSettings({
+              ...settings,
+              tracking: {
+                ...settings.tracking,
+                timing_thresholds: { ...settings.tracking.timing_thresholds, critical: parseFloat(e.target.value) }
+              }
+            })}
+            className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded text-white focus:border-signal-amber focus:ring-1 focus:ring-signal-amber outline-none"
+            min="0.1"
+            max="5.0"
+          />
+          <p className="mt-1 text-xs text-slate-400">
+            Threshold for CRITICAL status (|Δt| &gt;= this value triggers CRITICAL, red)
           </p>
         </div>
 

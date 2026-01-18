@@ -141,12 +141,12 @@ async def handle_delta_t_update(
             # Trigger set_speed() for both CRITICAL and SYNCED zones (not WARNING)
             # Only if Virtual Mode AND auto-compensation enabled
             if is_virtual and auto_comp_enabled and last_speed > 0:
-                is_critical = abs(delta_t) > thresholds['warning']  # > warning threshold
-                is_synced = abs(delta_t) < thresholds['normal']      # < normal threshold
+                is_critical = abs(delta_t) > thresholds['critical']  # > critical threshold
+                is_synced = abs(delta_t) < thresholds['warning']      # < warning threshold
 
                 if is_critical or is_synced:
                     if is_critical:
-                        log('[COMP]', f"Auto-compensation triggered: |dT| = {abs(delta_t):.3f}s > {thresholds['warning']}s")
+                        log('[COMP]', f"Auto-compensation triggered: |dT| = {abs(delta_t):.3f}s > {thresholds['critical']}s (CRITICAL)")
                     # Call set_speed with auto_compensation flag (handles both compensation and decay)
                     z21_manager.set_speed(consist_address, last_speed, last_direction, is_auto_compensation=True)
 

@@ -43,7 +43,7 @@ from websocket_handlers.ws_tracking import handle_ws_tracking
 enable_auto_coloring()
 
 # Default constants (single source of truth)
-DEFAULT_TIMING_THRESHOLDS = {'normal': 1.0, 'warning': 1.5}
+DEFAULT_TIMING_THRESHOLDS = {'warning': 1.0, 'critical': 1.5}
 DEFAULT_CONTROLLER = {'id': None, 'type': None, 'address': None}
 
 # Configuration paths (all in project root)
@@ -190,9 +190,9 @@ async def lifespan(app: FastAPI):
     try:
         timing_thresholds = ConfigManager.get_timing_thresholds()
         if debug_enabled:
-            log('[INIT]', f"Timing thresholds: SYNCED < {timing_thresholds['normal']}s, WARNING < {timing_thresholds['warning']}s")
+            log('[INIT]', f"Timing thresholds: WARNING >= {timing_thresholds['warning']}s, CRITICAL >= {timing_thresholds['critical']}s")
     except FileNotFoundError:
-        log('[WARN]', f"config.json not found, using default thresholds ({DEFAULT_TIMING_THRESHOLDS['normal']}s/{DEFAULT_TIMING_THRESHOLDS['warning']}s)")
+        log('[WARN]', f"config.json not found, using default thresholds (WARNING>={DEFAULT_TIMING_THRESHOLDS['warning']}s, CRITICAL>={DEFAULT_TIMING_THRESHOLDS['critical']}s)")
         timing_thresholds = DEFAULT_TIMING_THRESHOLDS.copy()
     except Exception as e:
         log('[WARN]', f"Error loading config.json: {e}, using defaults")

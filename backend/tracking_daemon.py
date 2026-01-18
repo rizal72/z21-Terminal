@@ -186,8 +186,8 @@ class TrackingDaemon:
                 'timestamp': current_timestamp,
                 'time_str': time_str,  # Pre-calculated elapsed time
                 'thresholds': {
-                    'normal': self.tracker.threshold_normal,
-                    'warning': self.tracker.threshold_warning
+                    'warning': self.tracker.threshold_warning,
+                    'critical': self.tracker.threshold_critical
                 }
             }
 
