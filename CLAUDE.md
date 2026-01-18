@@ -482,6 +482,62 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2025-01-18 - ⏳ **TIMING_THRESHOLDS REFACTORING** (IN PROGRESS)
+
+**Status**: 🚧 **REFACTORING IN PROGRESS** - Major nomenclature change for timing thresholds
+
+**Motivation**: Current naming (`normal`, `warning`) semantically confusing - thresholds are UPPER limits but names suggest status
+
+**Current Implementation** (pre-refactoring):
+```json
+{
+  "timing_thresholds": {
+    "normal": 1.0,    // Semantically confusing: max for SYNCED (not "normal")
+    "warning": 1.5,   // Semantically confusing: max for WARNING (but >= 1.5 is CRITICAL!)
+    "max_delta_t": 10.0  // OK - outlier filter
+  }
+}
+```
+
+**Logic**: `|Δt| < 1.0` → SYNCED, `1.0 ≤ |Δt| < 1.5` → WARNING, `|Δt| ≥ 1.5` → CRITICAL
+
+**New Implementation** (post-refactoring):
+```json
+{
+  "timing_thresholds": {
+    "warning": 1.0,    // Clear: |Δt| >= 1.0 → WARNING
+    "critical": 1.5,   // Clear: |Δt| >= 1.5 → CRITICAL
+    "max_delta_t": 10.0  // Unchanged
+  }
+}
+```
+
+**Logic**: `|Δt| < 1.0` → SYNCED (implicit), `|Δt| ≥ 1.0` → WARNING, `|Δt| ≥ 1.5` → CRITICAL
+
+**Changes**:
+1. **Rename keys**: `normal` → `warning`, `warning` → `critical`
+2. **Cleanup hardcoded values**: Replace `|| 1.0`, `|| 1.5`, `|| 2.0` with `DEFAULT_TIMING_THRESHOLDS` import
+3. **Fail fast strategy**: Remove silent fallbacks, raise error if config corrupted
+   - `DEFAULT_TIMING_THRESHOLDS` only in `main.py` for disaster recovery (config.json missing)
+   - Elsewhere: fail fast if `timing_thresholds` missing or incomplete
+4. **Fix obsolete values**: `2.0` hardcoded → `1.5` (current production value)
+
+**Files to modify** (12 total):
+- **Config**: `config.json` (1)
+- **Backend**: `main.py`, `dependencies.py`, `config_manager.py`, `routers/config.py`, `z21_manager.py`, `ws_tracking.py`, `yolo_tracker.py`, `tracking_daemon.py`, `log_colors.py` (9)
+- **Frontend**: `SettingsModal.jsx`, `DeltaTStatsPanel.jsx`, `DeltaTChart.jsx` (3)
+
+**Testing plan**:
+1. Backend compile check (all .py files)
+2. Frontend build (npm run build)
+3. PC deployment (z21-deploy-dev)
+4. Functional test: tracking daemon + analytics + speed compensation
+5. Verify logs show correct thresholds
+
+**Risk**: High impact refactoring (touches core tracking logic + analytics). Checkpoint commit done before starting.
+
+---
+
 ### 2025-01-17 - 🎉 **JMRI INDEPENDENCE ACHIEVED** (v1.0.0)
 
 **Status**: ✅ **MILESTONE COMPLETE** - z21-Terminal is now fully autonomous for daily operations
