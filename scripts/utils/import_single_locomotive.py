@@ -132,8 +132,8 @@ def create_locomotive_config(loco) -> dict:
         "color": color,
         "cv_profiles": {
             "normal": {
-                "cv3": loco.cv3,
-                "cv4": loco.cv4
+                "cv3": loco.cv.get(3, 0),
+                "cv4": loco.cv.get(4, 0)
             }
         },
         "functions": functions
@@ -175,8 +175,14 @@ def write_speed_table_to_db(loco):
     previous_cv_values = existing_row[0] if existing_row else None
     previous_updated = existing_row[1] if existing_row else None
 
-    # Convert CV67-94 to JSON string
-    cv_values_json = json.dumps(loco.speed_table)
+    # Extract CV67-94 from loco.cv dict
+    cv_values = {}
+    for cv_index in range(67, 95):  # CV67-94 (28 steps)
+        if cv_index in loco.cv:
+            cv_values[cv_index] = loco.cv[cv_index]
+
+    # Convert to JSON string
+    cv_values_json = json.dumps(cv_values)
 
     # Insert or replace (with backup of previous values)
     cursor.execute("""
@@ -220,7 +226,10 @@ def import_locomotive(address: int, dry_run: bool = False) -> bool:
     print(f"   Decoder: {loco.decoder_model}")
     max_func = max([f['number'] for f in loco.functions]) if loco.functions else 0
     print(f"   Functions: {len(loco.functions)} defined (F0-F{max_func})")
-    print(f"   Speed Table: CV67-94 ({len(loco.speed_table)} values)")
+
+    # Count speed table CVs (CV67-94)
+    cv_count = sum(1 for cv_index in range(67, 95) if cv_index in loco.cv)
+    print(f"   Speed Table: CV67-94 ({cv_count}/28 values defined)")
 
     # Check if locomotive already exists in config
     config = load_config()
