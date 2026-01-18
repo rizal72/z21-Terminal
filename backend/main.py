@@ -595,8 +595,8 @@ async def toggle_test_mode():
 @app.get("/api/test-mode")
 async def get_test_mode():
     """Get current test mode ('normal' or 'testing') - controls momentum (CV3/CV4)"""
-    config = load_config()
-    return {"mode": config.get('test_mode', 'normal')}
+    # Load from database (Phase 2 DB refactoring)
+    return {"mode": DataDB.get_test_mode()}
 
 
 @app.get("/api/video_feed")

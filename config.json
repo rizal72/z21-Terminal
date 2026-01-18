@@ -1,7 +1,7 @@
 {
   "debug": {
     "enabled": false,
-    "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (\u2705\ud83d\udeaa\u23f1\ufe0f\ud83c\udfaf\ud83d\ude82\ud83d\udcf9), gate crossing (\ud83d\udea6\ud83d\udeaa), warnings (\u26a0\ufe0f), mode changes (\ud83d\udd04\u23f8\ufe0f). SUPPRESSED when false: YOLO pause/resume verbose (\ud83d\udd07\ud83d\udd0a)"
+    "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (✅🚪⏱️🎯🚂📹), gate crossing (🚦🚪), warnings (⚠️), mode changes (🔄⏸️). SUPPRESSED when false: YOLO pause/resume verbose (🔇🔊)"
   },
   "consists": {
     "10": {
@@ -18,8 +18,6 @@
         "reference": 3,
         "adjust": 4
       },
-      "virtual_mode": true,
-      "auto_compensation_enabled": true,
       "notes": "Asymmetric gate timing: only L5@G3-L1@G4 valid (figure-8 track geometry). Reference=D645 014 (ESU stable), Adjust=Gr.675 017 (ESU LokSound)."
     },
     "11": {
@@ -33,8 +31,6 @@
         2
       ],
       "gate_assignment": null,
-      "virtual_mode": true,
-      "auto_compensation_enabled": true,
       "notes": "Symmetric cross-gate timing: both L7@G1-L8@G2 and L7@G2-L8@G1 valid (oval track). Reference=E444 056 (ESU stable, NEVER touch), Adjust=E656 239 (Hornby)."
     }
   },
@@ -117,7 +113,7 @@
       "normal": 1.0,
       "warning": 1.5,
       "max_delta_t": 10.0,
-      "notes": "Thresholds in seconds: |\u0394t| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
+      "notes": "Thresholds in seconds: |Δt| < normal = SYNCED, normal-warning = WARNING, > warning = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
     },
     "yolo_confidence": 0.3,
     "yolo_iou": 0.6,
@@ -125,7 +121,6 @@
     "yolo_obb": true,
     "notes_yolo": "YOLO confidence threshold (0.0-1.0), IoU threshold for NMS (0.0-1.0, higher = allows more bbox overlap), inference image size (640 for square models, [640, 1152] for rectangular), and yolo_obb (true = Oriented Bounding Boxes for rotated objects, false = standard axis-aligned boxes)"
   },
-  "test_mode": "testing",
   "tracking_OBB": {
     "yolo_confidence": 0.3,
     "yolo_iou": 0.6,

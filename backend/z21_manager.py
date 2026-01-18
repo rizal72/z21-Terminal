@@ -22,6 +22,7 @@ sys.path.insert(0, str(scripts_dir))
 from z21 import Z21
 from config_loader import load_config, save_config, get_config_path
 from services.config_helpers import get_locomotive_cv_profile, get_all_locomotives
+from services.data_db import DataDB
 from log_colors import log, colorize_status
 
 
@@ -620,34 +621,41 @@ class Z21Manager:
             return False
 
     def _load_persisted_state(self):
-        """Load persisted virtual_mode state from config.json consists"""
+        """Load persisted operational state from database (consist_state table)"""
         try:
-            # Try loading from config.json first (new consolidated approach)
-            if self.config_path.exists():
-                config = load_config()
-                consists = config.get('consists', {})
+            # Load from database (Phase 2 DB refactoring - config.json only for configuration)
+            config = load_config()
+            consists = config.get('consists', {})
 
-                # Extract virtual_mode and auto_compensation_enabled from each consist
-                state = {}
-                for consist_id, consist_info in consists.items():
-                    virtual_mode = consist_info.get('virtual_mode', False)
-                    auto_compensation = consist_info.get('auto_compensation_enabled', virtual_mode)
+            # Load operational state from database for each consist
+            state = {}
+            for consist_id_str in consists.keys():
+                consist_id = int(consist_id_str)
 
-                    state[consist_id] = {
-                        'virtual_mode': virtual_mode,
-                        'auto_compensation_enabled': auto_compensation
-                    }
+                # Get operational state from database
+                consist_state_db = DataDB.get_consist_state(consist_id)
+                if consist_state_db:
+                    virtual_mode = consist_state_db['virtual_mode']
+                    auto_compensation = consist_state_db['auto_compensation_enabled']
+                else:
+                    # Fallback to defaults if not in database (first run after migration)
+                    virtual_mode = True  # Safe default: Virtual Mode
+                    auto_compensation = True
 
-                    # Warn if virtual_mode is not configured (locomotives won't respond to speed commands)
-                    if not virtual_mode:
-                        log('[WARN]', f"WARNING: Consist {consist_id} has virtual_mode=False")
-                        log('[WARN]', f"Speed commands will be sent to consist address {consist_id} (DCC mode)")
-                        log('[WARN]', f"Locomotives may not respond unless CV19={consist_id} is programmed")
-                        log('[WARN]', f"Set 'virtual_mode: true' in config.json consists.{consist_id} for proper operation")
+                state[consist_id_str] = {
+                    'virtual_mode': virtual_mode,
+                    'auto_compensation_enabled': auto_compensation
+                }
 
-                if self.debug_enabled and state:
-                    log('[INIT]', f"Loaded persisted state from config.json: {state}")
-                return state
+                # Warn if virtual_mode is not enabled (locomotives won't respond to speed commands)
+                if not virtual_mode:
+                    log('[WARN]', f"WARNING: Consist {consist_id} has virtual_mode=False")
+                    log('[WARN]', f"Speed commands will be sent to consist address {consist_id} (DCC mode)")
+                    log('[WARN]', f"Locomotives may not respond unless CV19={consist_id} is programmed")
+
+            if self.debug_enabled and state:
+                log('[INIT]', f"Loaded persisted state from database: {state}")
+            return state
 
         except Exception as e:
             if self.debug_enabled:
@@ -655,34 +663,23 @@ class Z21Manager:
         return {}
 
     def _save_persisted_state(self):
-        """Save virtual_mode and auto_compensation_enabled state to config.json consists"""
+        """Save virtual_mode and auto_compensation_enabled state to database (consist_state table)"""
         try:
-            # Load current config.json
-            config = load_config()
-
-            consists = config.get('consists', {})
-
-            # Update virtual_mode and auto_compensation_enabled for each consist
+            # Save operational state to database (Phase 2 DB refactoring)
             for address, consist in self.consist_state.items():
                 if 'locomotives' in consist and len(consist.get('locomotives', [])) >= 2:
-                    consist_id = str(address)
+                    consist_id = int(address)
+                    virtual_mode = consist.get('virtual_mode', False)
+                    auto_compensation = consist.get('auto_compensation_enabled', False)
 
-                    # Skip if not in consists (shouldn't happen)
-                    if consist_id not in consists:
-                        continue
-
-                    # Update fields in consists
-                    consists[consist_id]['virtual_mode'] = consist.get('virtual_mode', False)
-                    consists[consist_id]['auto_compensation_enabled'] = consist.get('auto_compensation_enabled', False)
-
-            # Write back to config.json
-            config['consists'] = consists
-            save_config(config)
+                    # Write to database
+                    DataDB.set_virtual_mode(consist_id, virtual_mode)
+                    DataDB.set_auto_compensation(consist_id, auto_compensation)
 
             if self.debug_enabled:
                 saved_state = {k: {'virtual_mode': v.get('virtual_mode'), 'auto_compensation_enabled': v.get('auto_compensation_enabled')}
-                               for k, v in consists.items()}
-                log('[INIT]', f"Saved persisted state to config.json: {saved_state}")
+                               for k, v in self.consist_state.items() if 'locomotives' in v}
+                log('[INIT]', f"Saved persisted state to database: {saved_state}")
 
         except Exception as e:
             if self.debug_enabled:
@@ -692,8 +689,8 @@ class Z21Manager:
     def toggle_test_mode(self):
         """Toggle test mode between 'normal' and 'testing' for ALL locomotives. Returns (success: bool, new_mode: str, message: str)."""
         try:
-            config = load_config()
-            current_mode = config.get('test_mode', 'normal')
+            # Load current mode from database (Phase 2 DB refactoring)
+            current_mode = DataDB.get_test_mode()
             locomotives = get_all_locomotives()
             if not locomotives:
                 return False, current_mode, "No locomotives configured in config.json"
@@ -732,8 +729,8 @@ class Z21Manager:
                         failed_locos.append(addr)
                 total_elapsed = time.time() - start_time
                 log('[CV]', f"Total time: {total_elapsed:.2f}s")
-                config['test_mode'] = 'testing'
-                save_config(config)
+                # Save to database (Phase 2 DB refactoring)
+                DataDB.set_test_mode('testing')
                 if failed_locos:
                     return True, 'testing', f"TEST MODE enabled - {success_count}/{len(addresses)} locomotives updated (failed: {', '.join(map(str, failed_locos))})"
                 return True, 'testing', f"TEST MODE enabled - CV testing values for {len(addresses)} locomotives"
@@ -759,8 +756,8 @@ class Z21Manager:
                         failed_locos.append(addr)
                 total_elapsed = time.time() - start_time
                 log('[CV]', f"Total time: {total_elapsed:.2f}s")
-                config['test_mode'] = 'normal'
-                save_config(config)
+                # Save to database (Phase 2 DB refactoring)
+                DataDB.set_test_mode('normal')
                 if failed_locos:
                     return True, 'normal', f"NORMAL MODE restored - {success_count}/{len(addresses)} locomotives updated (failed: {', '.join(map(str, failed_locos))})"
                 return True, 'normal', f"NORMAL MODE restored - CV3/CV4 restored for {len(addresses)} locomotives"
