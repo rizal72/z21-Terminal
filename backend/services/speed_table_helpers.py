@@ -218,7 +218,7 @@ def read_cv_speed_table_from_db(loco_address: int) -> Optional[Dict[int, int]]:
     Returns:
         Dict {67: value, 68: value, ..., 94: value} or None if not found
     """
-    conn = sqlite3.connect('data/analytics.db')
+    conn = sqlite3.connect('data/data.db')
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -258,7 +258,7 @@ def update_cv_speed_table_in_db(
         True if successful, False if error
     """
     try:
-        conn = sqlite3.connect('data/analytics.db')
+        conn = sqlite3.connect('data/data.db')
         cursor = conn.cursor()
 
         # Get current values (for undo snapshot)
@@ -318,7 +318,7 @@ def undo_cv_speed_table(loco_address: int) -> Optional[Dict[int, int]]:
     Returns:
         Dict {67: value, ..., 94: value} (previous values) or None if no undo available
     """
-    conn = sqlite3.connect('data/analytics.db')
+    conn = sqlite3.connect('data/data.db')
     cursor = conn.cursor()
 
     # Get previous_values

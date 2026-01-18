@@ -21,7 +21,7 @@ from log_colors import log
 class AnalyticsLogger:
     """Async event logger with SQLite backend and session validation"""
 
-    def __init__(self, db_path='data/analytics.db', idle_timeout=10):
+    def __init__(self, db_path='data/data.db', idle_timeout=10):
         """
         Initialize analytics logger
 
