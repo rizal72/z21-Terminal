@@ -27,6 +27,7 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
     { id: 'video', label: 'Video Feed', icon: 'fa-video' },
     { id: 'yolo', label: 'YOLO Model', icon: 'fa-brain' },
     { id: 'tracking', label: 'Tracking', icon: 'fa-crosshairs' },
+    { id: 'analytics', label: 'Analytics', icon: 'fa-chart-line' },
     { id: 'locomotives', label: 'Locomotives', icon: 'fa-train' }
   ];
 
@@ -182,6 +183,7 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
               {activeTab === 'video' && <VideoFeedTab settings={settings} setSettings={setSettings} />}
               {activeTab === 'yolo' && <YoloModelTab settings={settings} setSettings={setSettings} apiUrl={apiUrl} />}
               {activeTab === 'tracking' && <TrackingTab settings={settings} setSettings={setSettings} />}
+              {activeTab === 'analytics' && <AnalyticsTab settings={settings} setSettings={setSettings} />}
               {activeTab === 'locomotives' && <LocomotivesTab settings={settings} setSettings={setSettings} />}
             </>
           )}
@@ -928,6 +930,46 @@ function SystemTab({ settings, setSettings }) {
         <p className="text-sm text-amber-200 flex items-start gap-2">
           <i className="fa-solid fa-exclamation-triangle mt-0.5"></i>
           <span>Changing debug mode requires backend restart</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsTab({ settings, setSettings }) {
+  if (!settings?.analytics) return null;
+
+  return (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-white mb-4">Analytics Configuration</h3>
+
+      {/* Max Chart Events */}
+      <div>
+        <label className="block">
+          <span className="text-sm font-medium text-white">Max Chart Events</span>
+          <div className="text-xs text-slate-400 mb-2">
+            Chart optimization threshold: Current shows last N events, Overview downsamples if &gt; N total events
+          </div>
+          <input
+            type="number"
+            min="100"
+            max="2000"
+            step="50"
+            value={settings.analytics.max_chart_events || 500}
+            onChange={(e) => setSettings({
+              ...settings,
+              analytics: { ...settings.analytics, max_chart_events: parseInt(e.target.value) || 500 }
+            })}
+            className="w-32 px-3 py-2 bg-slate-900 border border-slate-700 rounded text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          <span className="ml-2 text-sm text-slate-400">events</span>
+        </label>
+      </div>
+
+      <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded">
+        <p className="text-sm text-blue-200 flex items-start gap-2">
+          <i className="fa-solid fa-info-circle mt-0.5"></i>
+          <span>Lower values = better performance but less visible history. Higher values = more data but slower rendering. Recommended: 300-1000.</span>
         </p>
       </div>
     </div>

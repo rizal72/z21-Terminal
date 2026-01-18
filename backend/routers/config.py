@@ -42,6 +42,7 @@ async def update_settings(request: dict):
     - Video Feed (video.fps - hot reload)
     - YOLO Model (tracking.yolo_* - restart tracker)
     - Tracking (tracking.fps, tracking.timing_thresholds - restart tracker)
+    - Analytics (analytics.max_chart_events - no restart, frontend only)
 
     Returns:
         {
@@ -168,6 +169,14 @@ async def update_settings(request: dict):
             if "tracking" not in config:
                 config["tracking"] = {}
             config["tracking"].update(new_tracking)
+
+        # Analytics settings (analytics.max_chart_events - no restart, frontend only)
+        if "analytics" in request:
+            new_analytics = request["analytics"]
+            if "analytics" not in config:
+                config["analytics"] = {}
+            config["analytics"]["max_chart_events"] = new_analytics.get("max_chart_events", 500)
+            config["analytics"]["notes"] = "Chart optimization: Current shows last N events, Overview downsamples if > N total events"
 
         # Save config.json
         save_config(config)
