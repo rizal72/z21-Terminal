@@ -1057,7 +1057,7 @@ First attempt (`506c03c`) synced daemon when client connects:
       "7": {"normal": {"cv3": 24, "cv4": 16}, "testing": {"cv3": 1, "cv4": 1}},
       "8": {"normal": {"cv3": 22, "cv4": 15}, "testing": {"cv3": 0, "cv4": 0}}
     },
-    "cv_profile_mode": "normal"
+    "test_mode": "normal"
     ```
   - **Note valori CV**:
     - **Loco 1**: CV3=78, CV4=58 (motore molto reattivo, serve "frenarlo" per matchare altre)
@@ -1095,14 +1095,14 @@ First attempt (`506c03c`) synced daemon when client connects:
     - ✅ Config.json tracked by git → valori CV versionati
     - ✅ Zero cognitive load: premi T, lavori, ripremi T, fatto
   - **Implementazione**:
-    - `config.json`: Sezione `cv_profiles` + `cv_profile_mode` state persistence
-    - Backend: `toggle_cv_profile_mode()` con track power validation + error handling
-    - Backend endpoints: `/api/toggle-cv-profile-mode` (POST), `/api/cv-profile-mode` (GET)
+    - `config.json`: Sezione `cv_profiles` + `test_mode` state persistence
+    - Backend: `toggle_test_mode()` con track power validation + error handling
+    - Backend endpoints: `/api/toggle-test-mode` (POST), `/api/test-mode` (GET)
     - Frontend: Hotkey T + clickable badge (flask/check icon) + rollback su errore
     - Operations mode: CV3/CV4 scritti via `z21.write_cv_ops_mode()` fire-and-forget
   - **Files modificati**:
-    - `config.json`: Added cv_profiles + cv_profile_mode
-    - `backend/z21_manager.py`: toggle_cv_profile_mode() method
+    - `config.json`: Added cv_profiles + test_mode
+    - `backend/z21_manager.py`: toggle_test_mode() method
     - `backend/main.py`: API endpoints
     - `scripts/z21.py`: Optimized write_cv_ops_mode() (fire-and-forget)
     - `web/src/App.jsx`: Hotkey T handler + badge

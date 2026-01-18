@@ -585,18 +585,18 @@ async def toggle_debug():
     }
 
 
-@app.post("/api/toggle-cv-profile-mode")
-async def toggle_cv_profile_mode():
-    """Toggle CV profile mode between 'normal' and 'testing' for ALL locomotives (hotkey T in UI)"""
-    success, new_mode, message = z21_manager.toggle_cv_profile_mode()
+@app.post("/api/toggle-test-mode")
+async def toggle_test_mode():
+    """Toggle test mode between 'normal' and 'testing' for ALL locomotives (hotkey T in UI) - controls momentum (CV3/CV4)"""
+    success, new_mode, message = z21_manager.toggle_test_mode()
     return {"status": "success" if success else "error", "mode": new_mode, "message": message}
 
 
-@app.get("/api/cv-profile-mode")
-async def get_cv_profile_mode():
-    """Get current CV profile mode ('normal' or 'testing')"""
+@app.get("/api/test-mode")
+async def get_test_mode():
+    """Get current test mode ('normal' or 'testing') - controls momentum (CV3/CV4)"""
     config = load_config()
-    return {"mode": config.get('cv_profile_mode', 'normal')}
+    return {"mode": config.get('test_mode', 'normal')}
 
 
 @app.get("/api/video_feed")

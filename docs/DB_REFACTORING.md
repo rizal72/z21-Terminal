@@ -8,7 +8,7 @@
 
 ## 📋 Executive Summary
 
-**Problem**: config.json currently mixes configuration data (Z21 IP, gates geometry) with operational state (virtual_mode, auto_compensation, cv_profile_mode). This creates confusion and makes Settings UI design unclear.
+**Problem**: config.json currently mixes configuration data (Z21 IP, gates geometry) with operational state (virtual_mode, auto_compensation, test_mode). This creates confusion and makes Settings UI design unclear.
 
 **Solution**:
 1. Rename `analytics.db` → `data.db` (more generic, not just analytics)
@@ -37,7 +37,7 @@
 **🗄️ MOVES to data.db** (Operational State - UI toggle managed):
 - `virtual_mode` (per-consist DCC mode toggle)
 - `auto_compensation_enabled` (per-consist speed matching toggle)
-- `cv_profile_mode` (global 'testing' vs 'normal' momentum)
+- `test_mode` (global 'testing' vs 'normal' momentum)
 
 **Rationale**:
 - Virtual Mode and Auto Compensation change during daily operations via UI toggle
@@ -75,7 +75,7 @@ CREATE TABLE system_state (
 );
 
 -- Initial data for system_state
-INSERT INTO system_state (key, value) VALUES ('cv_profile_mode', 'testing');
+INSERT INTO system_state (key, value) VALUES ('test_mode', 'testing');
 
 -- Initial data for consist_state (migrate from config.json)
 INSERT INTO consist_state (consist_id, virtual_mode, auto_compensation_enabled)
@@ -450,7 +450,7 @@ class DataDB:
         conn.close()
 
     @staticmethod
-    def get_cv_profile_mode() -> str:
+    def get_test_mode() -> str:
         """Get CV profile mode (testing or normal)"""
         conn = DataDB.get_connection()
         cursor = conn.cursor()
@@ -458,7 +458,7 @@ class DataDB:
         cursor.execute("""
             SELECT value
             FROM system_state
-            WHERE key = 'cv_profile_mode'
+            WHERE key = 'test_mode'
         """)
 
         row = cursor.fetchone()
@@ -467,14 +467,14 @@ class DataDB:
         return row[0] if row else "normal"
 
     @staticmethod
-    def set_cv_profile_mode(mode: str):
+    def set_test_mode(mode: str):
         """Set CV profile mode (testing or normal)"""
         conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
             INSERT INTO system_state (key, value, last_updated)
-            VALUES ('cv_profile_mode', ?, CURRENT_TIMESTAMP)
+            VALUES ('test_mode', ?, CURRENT_TIMESTAMP)
             ON CONFLICT(key) DO UPDATE SET
                 value = excluded.value,
                 last_updated = CURRENT_TIMESTAMP
@@ -617,18 +617,18 @@ def migrate_operational_state():
         """, (int(consist_id), virtual_mode, auto_comp))
 
     # Migrate system state
-    cv_profile_mode = config.get("cv_profile_mode", "normal")
+    test_mode = config.get("test_mode", "normal")
     cursor.execute("""
         INSERT OR REPLACE INTO system_state (key, value)
-        VALUES ('cv_profile_mode', ?)
-    """, (cv_profile_mode,))
+        VALUES ('test_mode', ?)
+    """, (test_mode,))
 
     conn.commit()
     conn.close()
 
     print("✅ Operational state migrated to database")
     print("   - consist_state: virtual_mode, auto_compensation_enabled")
-    print("   - system_state: cv_profile_mode")
+    print("   - system_state: test_mode")
 
 if __name__ == "__main__":
     migrate_operational_state()
@@ -664,12 +664,12 @@ DataDB.set_virtual_mode(address, enable)
 **Example 3**: `backend/routers/config.py` - CV profile mode
 ```python
 # OLD
-config["cv_profile_mode"] = new_mode
+config["test_mode"] = new_mode
 save_config(config)
 
 # NEW
 from backend.services.data_db import DataDB
-DataDB.set_cv_profile_mode(new_mode)
+DataDB.set_test_mode(new_mode)
 ```
 
 **Files to Update** (7 files - operational state reads):
@@ -698,7 +698,7 @@ After successful migration and testing, manually edit config.json:
     }
   },
   // REMOVE THIS LINE:
-  // "cv_profile_mode": "testing"
+  // "test_mode": "testing"
 }
 ```
 

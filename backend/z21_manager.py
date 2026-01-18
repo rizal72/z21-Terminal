@@ -689,11 +689,11 @@ class Z21Manager:
                 log('[WARN]', f"Failed to save persisted state: {e}")
 
 
-    def toggle_cv_profile_mode(self):
-        """Toggle CV profile mode between 'normal' and 'testing' for ALL locomotives. Returns (success: bool, new_mode: str, message: str)."""
+    def toggle_test_mode(self):
+        """Toggle test mode between 'normal' and 'testing' for ALL locomotives. Returns (success: bool, new_mode: str, message: str)."""
         try:
             config = load_config()
-            current_mode = config.get('cv_profile_mode', 'normal')
+            current_mode = config.get('test_mode', 'normal')
             locomotives = get_all_locomotives()
             if not locomotives:
                 return False, current_mode, "No locomotives configured in config.json"
@@ -703,13 +703,13 @@ class Z21Manager:
             if not status:
                 return False, current_mode, "Cannot read Z21 status"
             if not status['track_power_on']:
-                return False, current_mode, "Track power is OFF - Turn on power before changing CV profiles"
+                return False, current_mode, "Track power is OFF - Turn on power before changing test mode"
             if status['short_circuit']:
                 return False, current_mode, "Short circuit detected - Check track and locomotives"
 
             new_mode = 'testing' if current_mode == 'normal' else 'normal'
             addresses = [int(addr) for addr in locomotives.keys()]
-            log('[CV]', f"CV Profile Toggle: {current_mode} -> {new_mode} (addresses: {addresses})")
+            log('[CV]', f"Test Mode Toggle: {current_mode} -> {new_mode} (addresses: {addresses})")
             if new_mode == 'testing':
                 import time
                 start_time = time.time()
@@ -732,7 +732,7 @@ class Z21Manager:
                         failed_locos.append(addr)
                 total_elapsed = time.time() - start_time
                 log('[CV]', f"Total time: {total_elapsed:.2f}s")
-                config['cv_profile_mode'] = 'testing'
+                config['test_mode'] = 'testing'
                 save_config(config)
                 if failed_locos:
                     return True, 'testing', f"TEST MODE enabled - {success_count}/{len(addresses)} locomotives updated (failed: {', '.join(map(str, failed_locos))})"
@@ -759,13 +759,13 @@ class Z21Manager:
                         failed_locos.append(addr)
                 total_elapsed = time.time() - start_time
                 log('[CV]', f"Total time: {total_elapsed:.2f}s")
-                config['cv_profile_mode'] = 'normal'
+                config['test_mode'] = 'normal'
                 save_config(config)
                 if failed_locos:
                     return True, 'normal', f"NORMAL MODE restored - {success_count}/{len(addresses)} locomotives updated (failed: {', '.join(map(str, failed_locos))})"
                 return True, 'normal', f"NORMAL MODE restored - CV3/CV4 restored for {len(addresses)} locomotives"
         except Exception as e:
-            return False, current_mode, f"Error toggling CV profile mode: {e}"
+            return False, current_mode, f"Error toggling test mode: {e}"
 
 
 if __name__ == '__main__':

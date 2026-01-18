@@ -125,7 +125,7 @@
     "yolo_obb": true,
     "notes_yolo": "YOLO confidence threshold (0.0-1.0), IoU threshold for NMS (0.0-1.0, higher = allows more bbox overlap), inference image size (640 for square models, [640, 1152] for rectangular), and yolo_obb (true = Oriented Bounding Boxes for rotated objects, false = standard axis-aligned boxes)"
   },
-  "cv_profile_mode": "testing",
+  "test_mode": "testing",
   "tracking_OBB": {
     "yolo_confidence": 0.3,
     "yolo_iou": 0.6,

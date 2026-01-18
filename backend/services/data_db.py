@@ -799,15 +799,15 @@ class DataDB:
         conn.close()
 
     @staticmethod
-    def get_cv_profile_mode() -> str:
-        """Get CV profile mode (testing or normal)"""
+    def get_test_mode() -> str:
+        """Get test mode (testing or normal) - controls momentum (CV3/CV4)"""
         conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
             SELECT value
             FROM system_state
-            WHERE key = 'cv_profile_mode'
+            WHERE key = 'test_mode'
         """)
 
         row = cursor.fetchone()
@@ -816,14 +816,14 @@ class DataDB:
         return row[0] if row else "normal"
 
     @staticmethod
-    def set_cv_profile_mode(mode: str):
-        """Set CV profile mode (testing or normal)"""
+    def set_test_mode(mode: str):
+        """Set test mode (testing or normal) - controls momentum (CV3/CV4)"""
         conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
             INSERT INTO system_state (key, value, last_updated)
-            VALUES ('cv_profile_mode', ?, CURRENT_TIMESTAMP)
+            VALUES ('test_mode', ?, CURRENT_TIMESTAMP)
             ON CONFLICT(key) DO UPDATE SET
                 value = excluded.value,
                 last_updated = CURRENT_TIMESTAMP
