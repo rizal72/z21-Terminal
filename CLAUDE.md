@@ -482,9 +482,53 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
-### 2025-01-18 - ⏳ **TIMING_THRESHOLDS REFACTORING** (IN PROGRESS)
+### 2025-01-19 - 📊 **ANALYTICS CONFIGURATION + CONFIG REORGANIZATION**
 
-**Status**: 🚧 **REFACTORING IN PROGRESS** - Major nomenclature change for timing thresholds
+**Status**: ✅ **PRODUCTION READY** - Configurable chart optimization + organized config structure
+
+**Analytics Configuration**:
+- **New section**: `analytics.max_chart_events` (default 500)
+- **Purpose**: Unified threshold for chart optimization
+  - **Current view**: Shows last N events (no downsampling, full resolution)
+  - **Overview view**: Downsamples to N events if total > N (LTTB + critical events)
+- **Settings UI**: New Analytics tab (after Tracking, before Locomotives)
+  - Input: number (100-2000, step 50)
+  - Info: Performance vs history trade-off
+  - Hot reload: No restart required (frontend-only parameter)
+- **Backend**:
+  - GET `/api/config/analytics` - Returns max_chart_events
+  - POST `/api/settings/update` - Handles analytics section save
+  - `routers/analytics.py` - Dynamic config load instead of hardcoded 500/1000
+
+**Config.json Reorganization**:
+- **Sections reordered** (matches Settings UI logical flow):
+  1. debug (system - top)
+  2. z21 (hardware)
+  3. camera (hardware CV)
+  4. video (output CV)
+  5. consists (operations)
+  6. gates (tracking zones)
+  7. tracking + tracking_OBB + tracking_standard (YOLO + timing)
+  8. **analytics** (NEW - chart optimization)
+  9. locomotives (operations - bottom)
+- **Locomotives sorted**: 1,2,4,5,6,7,8 (was random: 7,6,8,1,4,5,2)
+
+**Import Script Fixes**:
+- `import_single_locomotive.py`:
+  - ✅ Fixed `analytics.db` → `data.db` (correct database path)
+  - ✅ Added `testing` profile to `cv_profiles` (Test Mode support)
+  - ✅ Dry-run shows speed table CV67-94 values
+- Deleted obsolete scripts:
+  - `import_speed_tables_from_jmri.py` (one-time migration)
+  - `import_functions_from_jmri.py` (one-time migration)
+
+**Commits**: `3ee3122`, `42d8705`, `3f08cd4`, `87956e1`, `aab532c`, `74dfc0c`, `1709534`
+
+---
+
+### 2025-01-18 - ✅ **TIMING_THRESHOLDS REFACTORING** (COMPLETED)
+
+**Status**: ✅ **PRODUCTION READY** - Major nomenclature change for timing thresholds completed
 
 **Motivation**: Current naming (`normal`, `warning`) semantically confusing - thresholds are UPPER limits but names suggest status
 
