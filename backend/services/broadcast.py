@@ -76,13 +76,15 @@ def build_consist_response(address: int, data: Dict, state: Dict) -> Dict:
     rear_names = [loco['name'] for loco in locomotives[1:]] if len(locomotives) > 1 else []
     rear_name = ' + '.join(rear_names) if rear_names else None
 
-    # Load gate_ids from config consists
+    # Load gate_ids and gate_assignment from config consists
     gate_ids = []
+    gate_assignment = None
     try:
         config = load_config()
         consists = config.get('consists', {})
         consist_info = consists.get(str(address), {})
         gate_ids = consist_info.get('gate_ids', [])
+        gate_assignment = consist_info.get('gate_assignment')  # null = symmetric, object = asymmetric
     except Exception:
         pass  # If config load fails, gate_ids stays empty
 
@@ -95,6 +97,7 @@ def build_consist_response(address: int, data: Dict, state: Dict) -> Dict:
         'rear_name': rear_name,
         'functions': data['functions'],
         'gate_ids': gate_ids,
+        'gate_assignment': gate_assignment,
         # Spread ALL state fields automatically (speed, direction, power, virtual_mode, etc.)
         # CRITICAL: Exclude 'functions' from spread to avoid overwriting function definitions with states
         **{k: v for k, v in state.items() if k not in ['address', 'locomotives', 'functions']},
