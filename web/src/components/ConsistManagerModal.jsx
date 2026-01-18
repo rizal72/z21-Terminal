@@ -81,6 +81,7 @@ export default function ConsistManagerModal({ onClose }) {
         lead_address: assignment.lead_address,
         rear_address: assignment.rear_address,
         gate_ids: assignment.gate_ids || [],
+        gate_assignment: assignment.gate_assignment,  // null = symmetric, object = asymmetric
         reference_loco: referenceLoco,
         virtual_mode: consistData?.virtual_mode !== undefined ? consistData.virtual_mode : true
       });
