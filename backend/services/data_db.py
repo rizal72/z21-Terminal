@@ -18,7 +18,7 @@ from collections import defaultdict
 from datetime import datetime
 
 # Database path (relative to this service file)
-DB_PATH = Path(__file__).parent.parent / "data" / "analytics.db"
+DB_PATH = Path(__file__).parent.parent / "data" / "data.db"
 
 
 class DataDB:
