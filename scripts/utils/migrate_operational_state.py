@@ -161,7 +161,7 @@ def verify_migration(conn):
 def main():
     """Main migration workflow."""
     print("\n" + "="*70)
-    print("MIGRATION: Operational State config.json → data.db")
+    print("MIGRATION: Operational State config.json -> data.db")
     print("="*70 + "\n")
 
     # Step 1: Validate files exist
