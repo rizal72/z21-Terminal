@@ -21,6 +21,41 @@ import {
 } from '../../utils/analyticsHelpers';
 
 /**
+ * Custom X-axis tick component showing both DCC speed and percentage
+ */
+const CustomTick = ({ x, y, payload }) => {
+  const dccSpeed = payload.value;
+  const percent = Math.round((dccSpeed / 126) * 100);
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      {/* DCC Speed (top line) */}
+      <text
+        x={0}
+        y={0}
+        dy={16}
+        textAnchor="middle"
+        fill="#9CA3AF"
+        fontSize={12}
+      >
+        {dccSpeed}
+      </text>
+      {/* Percentage (bottom line) */}
+      <text
+        x={0}
+        y={0}
+        dy={30}
+        textAnchor="middle"
+        fill="#FFFFFF"
+        fontSize={11}
+      >
+        {percent}%
+      </text>
+    </g>
+  );
+};
+
+/**
  * SpeedCorrelationChart Component
  *
  * Displays speed vs delta-t correlation with error bars.
@@ -110,39 +145,6 @@ const SpeedCorrelationChart = ({ data, thresholds, consistColor }) => {
   const percentTicks = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
   const dccTicksForPercent = percentTicks.map(p => Math.round((p / 100) * 126));
 
-  // Custom tick component showing both DCC speed and percentage
-  const CustomTick = ({ x, y, payload }) => {
-    const dccSpeed = payload.value;
-    const percent = Math.round((dccSpeed / 126) * 100);
-
-    return (
-      <g transform={`translate(${x},${y})`}>
-        {/* DCC Speed (top line) */}
-        <text
-          x={0}
-          y={0}
-          dy={16}
-          textAnchor="middle"
-          fill="#9CA3AF"
-          fontSize={12}
-        >
-          {dccSpeed}
-        </text>
-        {/* Percentage (bottom line) */}
-        <text
-          x={0}
-          y={0}
-          dy={30}
-          textAnchor="middle"
-          fill="#FFFFFF"
-          fontSize={11}
-        >
-          {percent}%
-        </text>
-      </g>
-    );
-  };
-
   return (
     <ResponsiveContainer width="100%" height={400}>
       <ScatterChart margin={{ top: 20, right: 30, bottom: 50, left: 20 }}>
@@ -153,7 +155,7 @@ const SpeedCorrelationChart = ({ data, thresholds, consistColor }) => {
           name="Speed"
           domain={[0, 126]}
           ticks={dccTicksForPercent}
-          tick={<CustomTick />}
+          tick={CustomTick}
           label={{ value: 'DCC Speed', position: 'insideBottom', offset: -15, fill: '#9CA3AF' }}
           {...CHART_AXIS_STYLES.axis}
         />
