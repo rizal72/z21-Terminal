@@ -1,7 +1,7 @@
 {
   "debug": {
     "enabled": false,
-    "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (✅🚪⏱️🎯🚂📹), gate crossing (🚦🚪), warnings (⚠️), mode changes (🔄⏸️). SUPPRESSED when false: YOLO pause/resume verbose (🔇🔊)"
+    "notes": "Debug mode: false = only important logs (startup, gate crossing, warnings, mode changes), true = verbose frame processing logs. ALWAYS SHOWN: startup (INIT/OK/TIMING/TARGET/DETECT/VIDEO), gate crossing (GATE), warnings (WARN), mode changes (MODE/PAUSE). SUPPRESSED when false: YOLO pause/resume verbose (MUTE/UNMUTE)"
   },
   "consists": {
     "10": {
