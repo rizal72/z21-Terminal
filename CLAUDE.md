@@ -538,6 +538,93 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2025-01-18 - ⚙️ **Settings UI Complete + Consist Manager Enhancements**
+
+**Status**: ✅ **COMPLETE** - Unified settings management + gate assignment feature
+
+**Major Features**:
+
+**1. Settings UI - Complete Implementation** (Phases 1-3):
+
+**Phase 1 - Backend Migration**:
+- Created `scripts/utils/migrate_config_unified.py` (one-time migration script)
+- Extracted Z21 settings from hardcoded values → `config.z21` section
+- Merged camera_config.json → `config.camera` section
+- Credentials split: `config.json` (versionated) + `config.local.json` (gitignored, auto-merged)
+- Updated backend loaders: `main.py`, `z21_manager.py`, `video_feed.py`, `rtsp_handler.py`
+
+**Phase 2 - Backend API Endpoints**:
+- `POST /api/settings/update` - Rewritten for unified config structure
+- `POST /api/settings/yolo-preset/load` - Load tracking_OBB/tracking_standard profiles
+- `POST /api/settings/z21/test` - Test Z21 connection (host/port validation)
+- `POST /api/settings/camera/test` - Test RTSP stream (IP/port/credentials validation)
+- Restart detection matrix: backend/video_feed/tracker/none (hot reload)
+
+**Phase 3 - Frontend 7 Tabs**:
+- System: debug.enabled toggle
+- Z21 Network: host, port + test button
+- Camera: IP, port, stream, username, password + test button
+- Video Feed: FPS slider (hot reload, no restart)
+- YOLO Model: confidence, IoU, OBB toggle + preset buttons (OBB/Standard)
+- Tracking: active/idle FPS, timing thresholds (normal/warning/max_delta_t)
+- Locomotives: read-only display (name, decoder, functions count)
+
+**Config Structure** (post-migration):
+```json
+{
+  "z21": {"host": "192.168.1.111", "port": 21105},
+  "camera": {"ip": "...", "port": 554, "stream": "stream2", "username": "", "password": ""},
+  "video": {"fps": 30},
+  "tracking": {"fps": {...}, "timing_thresholds": {...}, "yolo_*": ...}
+}
+```
+
+**2. Consist Manager - Gate Assignment Feature**:
+
+**Frontend** (`ConsistForm.jsx`):
+- Added `gate_assignment` to formData state
+- Created `handleGateAssignmentChange()` handler for dropdown logic
+- New UI section: "Gate Tracking Mode (Advanced)" with two dropdowns:
+  - Reference loco monitored by: [All gates / Gate 3 / Gate 4 / ...]
+  - Adjust loco monitored by: [All gates / Gate 3 / Gate 4 / ...]
+- Mode indicator: automatic detection (symmetric green / asymmetric amber)
+- Logic: both="All gates" → `gate_assignment: null`, specific gates → `{reference: X, adjust: Y}`
+
+**Backend** (`routers/config.py`, `services/broadcast.py`):
+- `POST /api/consists`: Read `gate_assignment` from request
+- `PUT /api/consists/{address}`: Update `gate_assignment`
+- `build_consist_response()`: Include `gate_assignment` in consist data
+
+**Examples**:
+- Consist 10 (figure-8): `{"reference": 3, "adjust": 4}` = asymmetric, directional
+- Consist 11 (oval): `null` = symmetric, bidirectional
+
+**3. Bug Fixes**:
+- Locomotive decoder field: Changed from `decoder_model` to `decoder` (correct field name)
+- Settings modal width: `max-w-4xl` → `max-w-6xl` (match Analytics panel, remove scrollbar)
+- Gate assignment not loaded: Added `gate_assignment` to `ConsistManagerModal` handleEdit
+- Gate assignment not saved: Added `gate_assignment` to `ConsistForm` onSubmit payload
+- Emoticons removal: Replaced emoji in `config.json` notes with ASCII text (encoding compliance)
+
+**Commits** (4 total):
+- `1acd7a6` - feat: Consist Manager - gate_assignment UI implementation
+- `734d0b1` - fix: Consist Manager - load gate_assignment from config (broadcast.py)
+- `8fc154a` - fix: ConsistManagerModal - pass gate_assignment to edit form
+- `a61ad55` - fix: ConsistForm - pass gate_assignment on submit
+- `0392b58` - refactor: remove emoticons from config.json notes
+
+**Files Modified** (15 total):
+- **Migration**: `migrate_config_unified.py` (NEW)
+- **Backend**: `main.py`, `z21_manager.py`, `video_feed.py`, `rtsp_handler.py`, `routers/config.py`, `services/broadcast.py` (6)
+- **Frontend**: `SettingsModal.jsx`, `ConsistForm.jsx`, `ConsistManagerModal.jsx` (3)
+- **Config**: `config.json`, `config.local.json` (2)
+
+**Testing**: ✅ Complete deployment and functional testing on PC production environment
+
+**User Feedback**: "stupendo pare funzioni tutto" (Settings UI save), gate_assignment load/save verified working
+
+---
+
 ### 2025-01-17 - 🎉 **JMRI INDEPENDENCE ACHIEVED** (v1.0.0)
 
 **Status**: ✅ **MILESTONE COMPLETE** - z21-Terminal is now fully autonomous for daily operations
