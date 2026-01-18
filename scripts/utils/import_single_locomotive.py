@@ -95,13 +95,10 @@ def get_locomotive_from_jmri(address: int) -> Optional[object]:
     Returns:
         Locomotive object or None if not found
     """
-    all_locos = load_all_locomotives()
+    all_locos = load_all_locomotives()  # Returns Dict[str, Locomotive] where key is str(address)
 
-    for loco in all_locos:
-        if loco.address == address:
-            return loco
-
-    return None
+    # Roster dict uses address as string key
+    return all_locos.get(str(address))
 
 
 def create_locomotive_config(loco) -> dict:
@@ -114,17 +111,9 @@ def create_locomotive_config(loco) -> dict:
     Returns:
         Dict with locomotive configuration
     """
-    # Extract functions F0-F28
-    functions = []
-    for func_num, func_label in loco.functions.items():
-        functions.append({
-            "number": func_num,
-            "label": func_label,
-            "lockable": func_num in [0, 1]  # F0 (light) and F1 (sound) lockable by default
-        })
-
-    # Sort by function number
-    functions.sort(key=lambda x: x['number'])
+    # loco.functions is already a List[Dict] with correct format
+    # No need to iterate - just use it directly
+    functions = loco.functions
 
     # Get existing color from config or use default
     config = load_config()
@@ -223,12 +212,14 @@ def import_locomotive(address: int, dry_run: bool = False) -> bool:
 
     if not loco:
         print(f"[ERROR] Locomotive with address {address} not found in JMRI roster")
-        print(f"   Available addresses: {', '.join(str(l.address) for l in load_all_locomotives())}")
+        all_locos = load_all_locomotives()
+        print(f"   Available addresses: {', '.join(str(addr) for addr in all_locos.keys())}")
         return False
 
     print(f"[OK] Found: {loco.name} (address {loco.address})")
     print(f"   Decoder: {loco.decoder_model}")
-    print(f"   Functions: {len(loco.functions)} defined (F0-F{max(loco.functions.keys())})")
+    max_func = max([f['number'] for f in loco.functions]) if loco.functions else 0
+    print(f"   Functions: {len(loco.functions)} defined (F0-F{max_func})")
     print(f"   Speed Table: CV67-94 ({len(loco.speed_table)} values)")
 
     # Check if locomotive already exists in config
