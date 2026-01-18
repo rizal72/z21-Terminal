@@ -110,38 +110,52 @@ const SpeedCorrelationChart = ({ data, thresholds, consistColor }) => {
   const percentTicks = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
   const dccTicksForPercent = percentTicks.map(p => Math.round((p / 100) * 126));
 
-  // Format tick as percentage label
-  const formatPercentTick = (dccSpeed) => {
+  // Custom tick component showing both DCC speed and percentage
+  const CustomTick = ({ x, y, payload }) => {
+    const dccSpeed = payload.value;
     const percent = Math.round((dccSpeed / 126) * 100);
-    return `${percent}%`;
+
+    return (
+      <g transform={`translate(${x},${y})`}>
+        {/* DCC Speed (top line) */}
+        <text
+          x={0}
+          y={0}
+          dy={16}
+          textAnchor="middle"
+          fill="#9CA3AF"
+          fontSize={12}
+        >
+          {dccSpeed}
+        </text>
+        {/* Percentage (bottom line) */}
+        <text
+          x={0}
+          y={0}
+          dy={30}
+          textAnchor="middle"
+          fill="#FFFFFF"
+          fontSize={11}
+        >
+          {percent}%
+        </text>
+      </g>
+    );
   };
 
   return (
     <ResponsiveContainer width="100%" height={400}>
-      <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 20 }}>
+      <ScatterChart margin={{ top: 20, right: 30, bottom: 50, left: 20 }}>
         <CartesianGrid {...CHART_AXIS_STYLES.grid} />
         <XAxis
-          xAxisId="dcc"
           type="number"
           dataKey="speed"
           name="Speed"
           domain={[0, 126]}
           ticks={dccTicksForPercent}
-          label={{ value: 'DCC Speed', position: 'insideBottom', offset: -10, fill: '#9CA3AF' }}
+          tick={<CustomTick />}
+          label={{ value: 'DCC Speed', position: 'insideBottom', offset: -15, fill: '#9CA3AF' }}
           {...CHART_AXIS_STYLES.axis}
-        />
-        <XAxis
-          xAxisId="percent"
-          type="number"
-          dataKey="speed"
-          domain={[0, 126]}
-          ticks={dccTicksForPercent}
-          tickFormatter={formatPercentTick}
-          orientation="bottom"
-          axisLine={false}
-          tickLine={false}
-          dy={20}
-          tick={{ fill: '#FFFFFF', fontSize: 11 }}
         />
         <YAxis
           type="number"
@@ -166,7 +180,6 @@ const SpeedCorrelationChart = ({ data, thresholds, consistColor }) => {
 
         {/* Scatter plot with error bars */}
         <Scatter
-          xAxisId="dcc"
           name="Speed Buckets"
           data={chartData}
           fill={consistColor || '#8884d8'}
