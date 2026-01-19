@@ -335,7 +335,9 @@ async def update_settings(request: dict):
 
             # Log only if there were actual changes
             if loco_changes_count > 0:
-                log('[SETTINGS]', f"Locomotive configuration changed for {loco_changes_count} locomotive(s) (roster reload required)")
+                log('[SETTINGS]', f"Locomotive configuration changed for {loco_changes_count} locomotive(s) (page reload required)")
+                # Locomotive changes require page reload (frontend needs to reload function labels)
+                restart_needed.append("frontend")
 
         # Save config.json (always save, even if no changes - user might have clicked Save)
         save_config(config)
