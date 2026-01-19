@@ -30,6 +30,7 @@ backend/data/*.sqlite
 *.tmp
 *.old
 *.backup*
+*backup*
 
 # YOLO Training
 scripts/utils/data/
