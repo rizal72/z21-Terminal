@@ -272,10 +272,9 @@ z21-frontend  # Frontend Vite (porta 5173)
 **Per dettagli completi**: vedi [docs/COMPUTER_VISION.md](docs/COMPUTER_VISION.md)
 - YOLO training workflow completo (dataset, annotazione, training Colab)
 - Gate timing detection strategy (timing-based vs distance-based)
-- Reference Loco Strategy (CRITICO per Auto CV Adjust)
+- Reference Loco Strategy (CRITICO per speed compensation)
 - Phase 4 implementation details (daemon, video feed, frontend)
 - Virtual Consist Mode (Phase 4B) - CV19 management automatico
-- Roadmap fasi successive (Auto CV Adjust, Software Sync)
 
 ### Production Testing Results (2025-01-10 → 2025-01-11)
 
@@ -490,7 +489,6 @@ Test YOLO con Tapo camera in modalità notturna
   - **DECODER COMPATIBILITY**:
     - **ESU, Hornby, tutti i decoder in uso**: ✅ **FUNZIONA** (conferma utente - uso quotidiano)
   - **Implementazione**: `write_cv_ops_mode()` in z21.py
-  - **Critical per CV Tracking**: Mode 2 (Auto CV Adjust) è **CONFERMATO FATTIBILE** ✅
 - **Programming track**: ⏳ Da implementare (opzionale, per decoder non-ESU)
   - Richiede sconnettere plastico e mettere solo loco su binario
   - Comando XpressNet diverso da POM
@@ -521,8 +519,6 @@ Test YOLO con Tapo camera in modalità notturna
 - Comando XpressNet: `E6 30 [addr] [E4|cv_msb] [cv_lsb] [0x00] [xor]`
 - Funziona SOLO su decoder ESU, NON su Hornby TXS
 - Z21 White: no CV read standard (solo verify trick)
-
-**Mode 2 Auto CV Adjust**: ✅ CONFERMATO FATTIBILE
 
 Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
