@@ -294,7 +294,7 @@ export default function ConsistController({
                     onSelectionChange({ type, address: parseInt(address) });
                   }
                 }}
-                className="flex-1 min-w-0 max-w-full bg-control-dark border border-control-grey rounded px-3 py-2 text-white font-mono text-sm focus:border-signal-amber focus:outline-none overflow-hidden text-ellipsis"
+                className="flex-1 min-w-0 max-w-full bg-control-dark border border-control-grey rounded pl-3 py-2 text-white font-mono text-sm focus:border-signal-amber focus:outline-none overflow-hidden text-ellipsis"
               >
                 <option value="">-- Select Locomotive or Consist --</option>
                 {rosterOptions.map((option) => (
