@@ -139,6 +139,9 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
 
       alert(`Settings saved successfully!${restartMsg}`);
 
+      // Update initialSettings to reflect saved state (prevent warning on close)
+      setInitialSettings(JSON.parse(JSON.stringify(settings)));
+
       onClose();
     } catch (err) {
       console.error('Settings save error:', err);
@@ -146,6 +149,19 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleClose = () => {
+    // Check for unsaved changes (deep comparison)
+    const hasUnsavedChanges = JSON.stringify(settings) !== JSON.stringify(initialSettings);
+
+    if (hasUnsavedChanges) {
+      if (!window.confirm('You have unsaved changes. Close without saving?')) {
+        return; // User cancelled, don't close
+      }
+    }
+
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -176,7 +192,7 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={handleClose}
       />
 
       {/* Modal */}
@@ -188,7 +204,7 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
             <h2 className="text-2xl font-display font-bold text-white">Settings</h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-slate-400 hover:text-white transition-colors"
           >
             <i className="fa-solid fa-times text-2xl"></i>
@@ -253,7 +269,7 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
         {/* Footer */}
         <div className="flex items-center justify-between p-6 border-t border-slate-700 bg-slate-900/50">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             disabled={saving}
             className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded transition-colors disabled:opacity-50"
           >
