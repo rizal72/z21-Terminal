@@ -107,6 +107,9 @@ def save_config(config: Dict[str, Any], config_path: Path = None) -> None:
     """
     Save configuration to config.json (does NOT save to config.local.json).
 
+    Camera credentials (username/password) are automatically removed before saving
+    (they belong in config.local.json only).
+
     Args:
         config: Configuration dict to save
         config_path: Path to config.json (defaults to project root)
@@ -117,8 +120,17 @@ def save_config(config: Dict[str, Any], config_path: Path = None) -> None:
     if config_path is None:
         config_path = get_config_path()
 
+    # Deep copy to avoid modifying the original config
+    import copy
+    filtered_config = copy.deepcopy(config)
+
     # Filter out keys starting with _ (comments, metadata)
-    filtered_config = {k: v for k, v in config.items() if not k.startswith('_')}
+    filtered_config = {k: v for k, v in filtered_config.items() if not k.startswith('_')}
+
+    # Remove camera credentials (they belong in config.local.json only)
+    if 'camera' in filtered_config:
+        filtered_config['camera'].pop('username', None)
+        filtered_config['camera'].pop('password', None)
 
     # Generate JSON with standard formatting
     json_str = json.dumps(filtered_config, indent=2, ensure_ascii=False)
