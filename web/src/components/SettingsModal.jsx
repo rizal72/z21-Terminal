@@ -1009,7 +1009,7 @@ function LocomotivesTab({ settings, setSettings }) {
                               }
                             });
                           }}
-                          className="flex-1 max-w-xs px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-sm text-white focus:border-signal-amber focus:ring-1 focus:ring-signal-amber outline-none"
+                          className="flex-1 max-w-[170px] md:max-w-none px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-sm text-white focus:border-signal-amber focus:ring-1 focus:ring-signal-amber outline-none"
                           placeholder="Function label (max 20)"
                           maxLength={20}
                         />
