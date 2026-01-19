@@ -1,8 +1,0 @@
-{
-  "camera_ip": "192.168.1.4",
-  "camera_port": 554,
-  "stream": "stream2",
-  "username": "your_camera_username",
-  "password": "your_camera_password",
-  "note": "stream2 = 1280x720 SD (used by both YOLO tracking and video feed)"
-}

@@ -5,8 +5,8 @@ Step 1: Record video from camera for YOLO training dataset.
 Usage:
     python3 1_record_video.py
 
-    Camera credentials loaded from camera_config.json
-    (see camera_config.json.example for setup)
+    Camera credentials loaded from config.json + config.local.json
+    (see README_CAMERA.md for setup)
 
 Controls:
     - Q: Quit

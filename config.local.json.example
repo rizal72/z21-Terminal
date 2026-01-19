@@ -1,5 +1,10 @@
 {
-  "note": "Copy this file to config.local.json to override settings locally (gitignored, won't be committed)",
+  "_comment": "Copy this file to config.local.json and add your camera credentials (gitignored, won't be committed)",
+
+  "camera": {
+    "username": "your_camera_username",
+    "password": "your_camera_password"
+  },
 
   "debug": {
     "enabled": true

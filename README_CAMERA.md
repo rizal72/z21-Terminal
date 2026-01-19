@@ -7,33 +7,42 @@ The tracking daemon and video feed require camera credentials to access the RTSP
 1. **Copy the example config:**
    ```bash
    cd ~/Documents/_PROGETTI/z21-Terminal
-   cp camera_config.json.example camera_config.json
+   cp config.local.json.example config.local.json
    ```
 
 2. **Edit with your credentials:**
    ```bash
-   micro camera_config.json  # or nano, vim, etc.
+   micro config.local.json  # or nano, vim, etc.
    ```
 
-3. **Set your camera credentials:**
+3. **Add your camera credentials:**
    ```json
    {
-     "camera_ip": "192.168.1.4",
-     "camera_port": 554,
-     "stream": "stream2",
-     "username": "your_tapo_username",
-     "password": "your_tapo_password"
+     "camera": {
+       "username": "your_tapo_username",
+       "password": "your_tapo_password"
+     }
    }
    ```
 
 4. **Done!** The config is gitignored and won't be committed.
 
+## How It Works
+
+Camera configuration is split between two files:
+
+- **`config.json`** (tracked in git): IP, port, stream name, resolution
+- **`config.local.json`** (gitignored): Username and password only
+
+The system automatically merges `config.local.json` over `config.json` at runtime.
+
 ## Troubleshooting
 
 If you see this error:
 ```
-❌ ERROR: Camera config not found at camera_config.json
-   Create it from template: cp camera_config.json.example camera_config.json
+❌ ERROR: Camera credentials missing
+   Add credentials to config.local.json (gitignored):
+   { "camera": { "username": "...", "password": "..." } }
 ```
 
 Just run the setup steps above.
@@ -45,3 +54,5 @@ Just run the setup steps above.
 - **stream3** - 480P (low quality, fastest)
 
 We use **stream2** (720P) for best balance between quality and performance.
+
+Stream selection is configured in `config.json` under `camera.stream`.
