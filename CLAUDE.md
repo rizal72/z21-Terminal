@@ -49,6 +49,7 @@ Per dettagli tecnici completi, vedi:
 - **[docs/CONSIST_MAPPING.md](docs/CONSIST_MAPPING.md)** - Logica Lead/Rear → Reference/Adjust (YOLO + Virtual Mode)
 - **[docs/CONFIG_REFACTOR.md](docs/CONFIG_REFACTOR.md)** - Refactoring config.json structure (2025-01-03)
 - **[docs/SPEED_TABLE_DB_MIGRATION.md](docs/SPEED_TABLE_DB_MIGRATION.md)** - Speed Table CV67-94 DB migration + config refactoring (2025-01-17)
+- **[docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)** - Complete data.db schema reference (tables, queries, event types)
 - **[docs/CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md)** - Changelog 2025-12-16 → 2025-12-24
 
 ---
