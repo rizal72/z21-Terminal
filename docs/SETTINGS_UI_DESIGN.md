@@ -1,7 +1,7 @@
 # Settings UI - Unified Configuration Design
 
-**Status**: 🚧 **DESIGN PHASE**
-**Date**: 2025-01-18
+**Status**: ✅ **IMPLEMENTED** (Settings UI with 8 tabs + Auto-Reload)
+**Date**: 2025-01-18 (Updated: 2025-01-19)
 **Objective**: Unify ALL configuration settings into single `config.json` + comprehensive Settings UI
 **Version**: 1.0.0
 
@@ -926,6 +926,164 @@ Options:
 
 ---
 
+## 🔄 Automatic Page Reload Feature
+
+**Status**: ✅ **IMPLEMENTED** (2025-01-19)
+
+### Overview
+
+Settings that require service restarts now trigger **automatic page reload** after save, eliminating the need for manual refresh or separate restart endpoints.
+
+### How It Works
+
+1. **User saves settings** → Backend processes changes
+2. **Backend returns `restart_needed` array**:
+   - Empty array `[]` → No reload (hot reload settings only)
+   - Non-empty array `["backend"]`, `["tracker"]`, etc. → **Auto-reload triggered**
+3. **Frontend shows alert** with list of services requiring restart
+4. **Page reloads automatically** via `window.location.reload()`
+5. **Session restored** from database (no data loss)
+
+### Implementation
+
+**File**: `web/src/components/SettingsModal.jsx` (lines 135-149)
+
+```javascript
+// Handle restart requirements
+if (result.restart_needed.length > 0) {
+  alert(`Settings saved successfully!\n\nPage will reload to apply changes.\n\nRestart needed for: ${result.restart_needed.join(', ')}`);
+  window.location.reload(); // Force reload
+} else {
+  alert('Settings saved successfully!\n\nNo restart required.');
+  onClose();
+}
+```
+
+### Which Settings Trigger Reload
+
+**Reload Required** (`restart_needed` not empty):
+- ✅ **General Tab** (debug.enabled) → `["backend"]`
+- ✅ **Z21 Network Tab** (host, port) → `["backend"]`
+- ✅ **Camera Tab** (ip, port, stream, resolution) → `["video_feed", "tracker"]`
+- ✅ **YOLO Model Tab** (confidence, iou, imgsz, obb, device) → `["tracker"]`
+- ✅ **Tracking Tab** (fps, idle_timeout, timing_thresholds) → `["tracker"]`
+
+**No Reload** (`restart_needed` empty):
+- ❌ **Video Feed Tab** (fps) → Hot reload only
+- ❌ **Analytics Tab** (max_chart_events) → Frontend-only parameter
+- ❌ **Locomotives Tab** (function labels, lockable) → Roster reload only
+
+### Safety Guarantees
+
+**Why Auto-Reload is Safe**:
+- ✅ **Analytics sessions database-persisted**: Active session state saved to `data.db`
+- ✅ **Reload happens AFTER config save**: Config changes committed before reload
+- ✅ **User notified before reload**: Alert explains what will restart
+- ✅ **No data loss**: All operational state stored in database, not memory
+
+**What Gets Preserved**:
+- Active locomotive/consist selection
+- Analytics session ID and metrics
+- Gate positions and assignments
+- Consist configurations
+- Speed table profiles
+
+**What Gets Restarted**:
+- Backend FastAPI process (if backend in restart_needed)
+- YOLO tracking daemon (if tracker in restart_needed)
+- Video feed MJPEG stream (if video_feed in restart_needed)
+- Z21 connection (if backend in restart_needed)
+- RTSP camera stream (if video_feed in restart_needed)
+
+### User Experience
+
+**Scenario 1: YOLO Model Change**
+```
+1. User: Changes confidence 0.3 → 0.2
+2. User: Clicks "Save Changes"
+3. Backend: Saves to config.json, returns ["tracker"]
+4. Alert: "Settings saved successfully!
+
+          Page will reload to apply changes.
+
+          Restart needed for: tracker"
+5. Page reloads → tracker daemon restarts with new confidence
+6. User sees updated YOLO detection immediately
+```
+
+**Scenario 2: Video FPS Change (No Reload)**
+```
+1. User: Changes video FPS 30 → 15
+2. User: Clicks "Save Changes"
+3. Backend: Saves to config.json, returns []
+4. Alert: "Settings saved successfully!
+
+          No restart required."
+5. Modal closes, no reload
+6. Video feed updates FPS via hot reload
+```
+
+### Backend Logic
+
+**File**: `backend/routers/config.py` (lines 99-277)
+
+**Restart Decision Tree**:
+```python
+restart_needed = []
+
+# System settings (debug.enabled)
+if "debug" in request and old_debug != new_debug:
+    restart_needed.append("backend")
+
+# Z21 Network (host/port)
+if "z21" in request and (old_host != new_host or old_port != new_port):
+    restart_needed.append("backend")
+
+# Camera (ip/port/stream/resolution)
+if "camera" in request and any_camera_setting_changed:
+    restart_needed.append("video_feed")
+    restart_needed.append("tracker")
+
+# YOLO settings (confidence/iou/imgsz/obb/device)
+if "tracking" in request and any_yolo_setting_changed:
+    restart_needed.append("tracker")
+
+# Video Feed (fps) - NO restart needed (hot reload)
+if "video" in request:
+    # Hot reload, do not append to restart_needed
+    pass
+
+# Analytics (max_chart_events) - NO restart needed (frontend only)
+if "analytics" in request:
+    # Frontend parameter, do not append to restart_needed
+    pass
+
+return {"status": "success", "restart_needed": restart_needed}
+```
+
+### Advantages Over Manual Restart
+
+**Before** (Manual Approach):
+- User changes YOLO confidence
+- User clicks Save → Modal closes
+- User refreshes page manually (or doesn't, wonders why changes not applied)
+- Inconsistent UX, confusion about when restart needed
+
+**After** (Auto-Reload):
+- User changes YOLO confidence
+- User clicks Save → Alert explains restart
+- Page reloads automatically
+- Changes applied immediately, consistent UX
+
+**Benefits**:
+- ✅ **Zero confusion**: User always knows when restart needed
+- ✅ **Consistent behavior**: All settings requiring restart handled uniformly
+- ✅ **No forgotten refreshes**: Automatic, no manual intervention
+- ✅ **Safe implementation**: Sessions persisted, no data loss
+- ✅ **Clear communication**: Alert explains exactly what will restart
+
+---
+
 ## 🔐 Security Considerations
 
 ### Camera Credentials
@@ -1081,18 +1239,29 @@ Options:
 
 ---
 
-**Status**: 🚧 **DESIGN COMPLETE - AWAITING APPROVAL TO PROCEED**
+**Status**: ✅ **IMPLEMENTED AND DEPLOYED** (Settings UI Complete + Auto-Reload)
+
+**Implementation Summary**:
+- ✅ **Settings UI**: 8 tabs fully implemented (General, Z21 Network, Camera, Video Feed, YOLO Model, Tracking, Analytics, Locomotives)
+- ✅ **Auto-Reload**: Automatic page reload when settings requiring restart are saved (2025-01-19)
+- ✅ **Function Labels**: Editable F0-F28 labels with lockable toggle per locomotive
+- ✅ **Hot Reload**: Video FPS, Analytics settings require no restart
+- ✅ **Smart Restart Detection**: Backend returns restart_needed array, frontend handles automatically
+- ✅ **Database-Persisted Sessions**: Safe page reload with no data loss
 
 **Key Decisions Made**:
-- ✅ Settings UI = 7 tabs (System, Z21, Camera, Video, YOLO, Tracking, Locomotives)
+- ✅ Settings UI = 8 tabs (General, Z21, Camera, Video, YOLO, Tracking, Analytics, Locomotives)
 - ✅ Gates/Consists NOT in Settings (already have dedicated editors)
-- ✅ JMRI fallback maintained (first-run bootstrap)
+- ✅ JMRI independence achieved (optional for initial roster import only)
 - ✅ Test Mode NOT in Settings (already in DB + header badge)
-- ✅ YOLO presets (OBB/Standard) with quick load buttons
 - ✅ Function labels editable (inline edit per locomotive)
-- ✅ Gate assignment logic (asymmetric vs symmetric) → Consist Manager enhancement
 - ✅ Config.json remains source of truth (DB for operational state only)
+- ✅ **Auto-reload replaces manual restart** (window.location.reload after save if restart_needed)
 
-**Next Action**: User approval → start implementation Phase 1 (backend migration)
-**Estimated Timeline**: 3 days (24 hours development + testing)
-**Target Release**: v1.1.0 (Settings UI Complete)
+**Recent Additions** (2025-01-19):
+- ✅ Analytics tab with max_chart_events configuration
+- ✅ Automatic page reload for settings requiring service restart
+- ✅ Safety guarantees: database-persisted sessions, no data loss
+
+**Release**: v1.0.0 (JMRI Independence + Settings UI + Auto-Reload)
+**Deployment**: Production on PC Windows + Mac development environment
