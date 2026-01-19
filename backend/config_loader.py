@@ -105,17 +105,7 @@ def get_config_path() -> Path:
 
 def save_config(config: Dict[str, Any], config_path: Path = None) -> None:
     """
-    Save configuration to config.json with inline arrays (does NOT save to config.local.json).
-
-    Arrays of primitives (numbers, strings, booleans) are formatted inline:
-        "gate_ids": [3, 4]
-        "center": [1227, 213]
-
-    Arrays of objects remain multi-line:
-        "gates": [
-          { ... },
-          { ... }
-        ]
+    Save configuration to config.json (does NOT save to config.local.json).
 
     Args:
         config: Configuration dict to save
@@ -132,53 +122,6 @@ def save_config(config: Dict[str, Any], config_path: Path = None) -> None:
 
     # Generate JSON with standard formatting
     json_str = json.dumps(filtered_config, indent=2, ensure_ascii=False)
-
-    # Compact arrays of primitives - iterative regex approach (innermost arrays first)
-    import re
-
-    def compact_innermost_arrays(text):
-        """
-        Find and compact ONE innermost array (no nested [ or { inside).
-        Returns (new_text, changed).
-        """
-        # Pattern: Find arrays that span multiple lines and contain NO nested [ or {
-        # Match:  "key": [\n   content_without_brackets\n  ]
-        pattern = re.compile(
-            r'(.*?\[)\s*\n'           # Capture opening: "key": [
-            r'((?:[^[\]{}]*\n)*?)'    # Capture content: lines without [], {}
-            r'\s*(\](?:,?))',          # Capture closing: ] or ],
-            re.MULTILINE
-        )
-
-        def replacer(match):
-            """Replace multi-line array with inline if it contains only primitives."""
-            opening = match.group(1)  # "key": [
-            content = match.group(2)   # array content
-            closing = match.group(3)   # ] or ],
-
-            # Double-check: ensure no brackets inside (regex might be greedy)
-            if '[' in content or ']' in content or '{' in content or '}' in content:
-                return match.group(0)  # Keep as-is
-
-            # Extract primitive values
-            values = re.findall(r'(-?\d+\.?\d*|"[^"]*"|true|false|null)', content)
-
-            if not values:
-                return match.group(0)  # Empty array or no primitives, keep as-is
-
-            # Reconstruct as inline
-            return opening + ', '.join(values) + closing
-
-        new_text = pattern.sub(replacer, text)
-        changed = (new_text != text)
-        return new_text, changed
-
-    # Run iteratively until no more changes (handles nested arrays layer by layer)
-    max_iterations = 20
-    for iteration in range(max_iterations):
-        json_str, changed = compact_innermost_arrays(json_str)
-        if not changed:
-            break
 
     with open(config_path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(json_str)
