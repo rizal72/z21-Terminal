@@ -1,4 +1,4 @@
-# Changelog Archive (2025-12-16 → 2025-01-12)
+# Changelog Archive (2025-12-16 → 2025-01-18)
 
 Archived changelog entries and failed experiments documentation.
 
@@ -6,7 +6,468 @@ For recent changes, see main CLAUDE.md file.
 
 ---
 
-## Changelog 2025-01-12
+## Changelog 2025-01-16 to 2025-01-18
+
+### 2025-01-18 - ⚙️ **Settings UI Complete + Consist Manager Enhancements**
+
+**Status**: ✅ **COMPLETE** - Unified settings management + gate assignment feature
+
+**Major Features**:
+
+**1. Settings UI - Complete Implementation** (Phases 1-3):
+
+**Phase 1 - Backend Migration**:
+- Created `scripts/utils/migrate_config_unified.py` (one-time migration script)
+- Extracted Z21 settings from hardcoded values → `config.z21` section
+- Merged camera_config.json → `config.camera` section
+- Credentials split: `config.json` (versionated) + `config.local.json` (gitignored, auto-merged)
+- Updated backend loaders: `main.py`, `z21_manager.py`, `video_feed.py`, `rtsp_handler.py`
+
+**Phase 2 - Backend API Endpoints**:
+- `POST /api/settings/update` - Rewritten for unified config structure
+- `POST /api/settings/yolo-preset/load` - Load tracking_OBB/tracking_standard profiles
+- `POST /api/settings/z21/test` - Test Z21 connection (host/port validation)
+- `POST /api/settings/camera/test` - Test RTSP stream (IP/port/credentials validation)
+- Restart detection matrix: backend/video_feed/tracker/none (hot reload)
+
+**Phase 3 - Frontend 7 Tabs**:
+- System: debug.enabled toggle
+- Z21 Network: host, port + test button
+- Camera: IP, port, stream, username, password + test button
+- Video Feed: FPS slider (hot reload, no restart)
+- YOLO Model: confidence, IoU, OBB toggle + preset buttons (OBB/Standard)
+- Tracking: active/idle FPS, timing thresholds (normal/warning/max_delta_t)
+- Locomotives: read-only display (name, decoder, functions count)
+
+**Config Structure** (post-migration):
+```json
+{
+  "z21": {"host": "192.168.1.111", "port": 21105},
+  "camera": {"ip": "...", "port": 554, "stream": "stream2", "username": "", "password": ""},
+  "video": {"fps": 30},
+  "tracking": {"fps": {...}, "timing_thresholds": {...}, "yolo_*": ...}
+}
+```
+
+**2. Consist Manager - Gate Assignment Feature**:
+
+**Frontend** (`ConsistForm.jsx`):
+- Added `gate_assignment` to formData state
+- Created `handleGateAssignmentChange()` handler for dropdown logic
+- New UI section: "Gate Tracking Mode (Advanced)" with two dropdowns:
+  - Reference loco monitored by: [All gates / Gate 3 / Gate 4 / ...]
+  - Adjust loco monitored by: [All gates / Gate 3 / Gate 4 / ...]
+- Mode indicator: automatic detection (symmetric green / asymmetric amber)
+- Logic: both="All gates" → `gate_assignment: null`, specific gates → `{reference: X, adjust: Y}`
+
+**Backend** (`routers/config.py`, `services/broadcast.py`):
+- `POST /api/consists`: Read `gate_assignment` from request
+- `PUT /api/consists/{address}`: Update `gate_assignment`
+- `build_consist_response()`: Include `gate_assignment` in consist data
+
+**Examples**:
+- Consist 10 (figure-8): `{"reference": 3, "adjust": 4}` = asymmetric, directional
+- Consist 11 (oval): `null` = symmetric, bidirectional
+
+**3. Bug Fixes**:
+- Locomotive decoder field: Changed from `decoder_model` to `decoder` (correct field name)
+- Settings modal width: `max-w-4xl` → `max-w-6xl` (match Analytics panel, remove scrollbar)
+- Gate assignment not loaded: Added `gate_assignment` to `ConsistManagerModal` handleEdit
+- Gate assignment not saved: Added `gate_assignment` to `ConsistForm` onSubmit payload
+- Emoticons removal: Replaced emoji in `config.json` notes with ASCII text (encoding compliance)
+
+**Commits** (30 total today):
+
+**Database Refactoring** (Phase 0-2):
+- `22b24c8` - refactor: centralize DB access - analytics_db → data_db (Phase 0)
+- `d404c50` - refactor: rename database file analytics.db → data.db (Phase 1)
+- `0923003` - refactor: rename cv_profile_mode → test_mode (systematic rename)
+- `710a5c1` - feat(db): migrate operational state to database (Phase 2)
+- `24a40e3` - fix: replace all Unicode emojis with ASCII in migration script
+- `46156d8` - fix: add missing DataDB import in main.py
+- `e8ea15a` - fix: migration script Unicode error on Windows
+- `7d71995` - fix: update all remaining analytics.db → data.db references
+- `473b864` - feat: add merge script for analytics.db → data.db
+- `dd0eb91` - fix: correct merge script schema (event_type + data JSON)
+- `735787c` - docs: update DB_REFACTORING.md with Phase 0-2 completion log
+
+**Speed Correlation Chart Fixes**:
+- `4ba4169` - fix: restore speed percentage labels on X-axis
+- `285dd31` - fix: move CustomTick outside component and pass as reference
+- `734c075` - fix: remove overlapping 'DCC Speed' label from X-axis
+
+**Settings UI** (Phase 1-3):
+- `0620ef7` - docs: add comprehensive Settings UI design document
+- `19402d2` - refactor: remove Reload Roster button, add Settings button
+- `e4395dc` - feat: add Settings modal component (Phase 3 - Part 1)
+- `e131a9f` - feat: add config API endpoints (Phase 3 - Part 2)
+- `2c4b022` - feat: Phase 1 - Backend migration to unified config structure
+- `2c74aae` - feat: Phase 2 - Backend API expansion
+- `0c880d2` - feat: Phase 3 - Frontend Settings UI (7 tabs)
+- `1d64ed7` - fix: use correct decoder field name (decoder not decoder_model)
+- `9afd825` - fix: increase Settings modal width to max-w-6xl
+
+**Consist Manager - Gate Assignment**:
+- `1acd7a6` - feat: gate_assignment UI implementation
+- `734d0b1` - fix: load gate_assignment from config (broadcast.py)
+- `8fc154a` - fix: pass gate_assignment to edit form
+- `a61ad55` - fix: pass gate_assignment on submit
+
+**Cleanup**:
+- `0392b58` - refactor: remove emoticons from config.json notes
+
+**Documentation**:
+- `bfa1957` - docs: document timing_thresholds refactoring plan
+- `f9f0764` - docs: complete changelog for 2025-01-18
+
+**Files Modified** (15 total):
+- **Migration**: `migrate_config_unified.py` (NEW)
+- **Backend**: `main.py`, `z21_manager.py`, `video_feed.py`, `rtsp_handler.py`, `routers/config.py`, `services/broadcast.py` (6)
+- **Frontend**: `SettingsModal.jsx`, `ConsistForm.jsx`, `ConsistManagerModal.jsx` (3)
+- **Config**: `config.json`, `config.local.json` (2)
+
+**Testing**: ✅ Complete deployment and functional testing on PC production environment
+
+**User Feedback**: "stupendo pare funzioni tutto" (Settings UI save), gate_assignment load/save verified working
+
+---
+
+### 2025-01-17 - 🎉 **JMRI INDEPENDENCE ACHIEVED** (v1.0.0)
+
+**Status**: ✅ **MILESTONE COMPLETE** - z21-Terminal is now fully autonomous for daily operations
+
+**Implementation**: 17+ commits spanning function labels migration, broadcast fixes, and config-based locomotive loading
+
+**Achievement**: **JMRI now optional** - only needed for import script when adding new locomotives to the roster
+
+**Liberation Day**: Complete self-sufficiency for daily railway operations without external dependencies
+
+**What Changed**:
+
+1. **Function Labels F0-F28** → `config.json` (was: JMRI roster XML only):
+   ```json
+   {
+     "locomotives": {
+       "1": {
+         "functions": [
+           {"number": 0, "label": "light", "lockable": true},
+           {"number": 1, "label": "sound", "lockable": true},
+           ...
+         ]
+       }
+     }
+   }
+   ```
+   - New script: `import_functions_from_jmri.py` (one-time migration)
+   - Backend reads config first, JMRI roster fallback
+   - Web dashboard displays function labels from config
+
+2. **Locomotive Roster** → `config.json` (was: JMRI roster XML required):
+   - `load_all_locomotives_from_config()` in roster_loader.py
+   - Backend loads all 7 locomotives from config (address, name, decoder, color, cv_profiles, functions)
+   - Dropdown list shows consists + individual locomotives ✅
+   - **Tested**: Renamed `roster/` → `roster.backup/` on PC → backend still works! 🎉
+
+3. **Speed Tables CV67-94** → `analytics.db` (was: JMRI roster XML):
+   - Editable via web UI (Speed Table Viewer)
+   - Undo/Re-import functionality
+   - See detailed changelog sections below for implementation
+
+4. **CV19 Consist Management** → Automatic (was: JMRI required):
+   - Virtual Mode / DCC Mode toggle in web UI
+   - Operations mode CV write (no programming track needed)
+   - State persisted in config.json
+
+5. **Consist CRUD** → Web UI (was: JMRI required):
+   - Create, edit, delete consists via web dashboard
+   - Consist configuration in config.json
+
+**The Ultimate Test** 🎯:
+
+```bash
+# PC Windows - Rename JMRI roster directory
+Rename-Item 'roster' -NewName 'roster.backup'
+
+# Restart backend
+z21-restart
+
+# Result:
+[INIT] Loading all locomotives from config.json...
+[INIT] Loaded 7 locomotives
+[INIT] Initialized locomotive 1 (in consist 10)
+[INIT] Initialized locomotive 2
+[INIT] Initialized locomotive 4
+[INIT] Initialized locomotive 5 (in consist 10)
+[INIT] Initialized locomotive 6
+[INIT] Initialized locomotive 7 (in consist 11)
+[INIT] Initialized locomotive 8 (in consist 11)
+```
+
+✅ **Backend runs perfectly without JMRI roster!**
+✅ **Web dashboard shows all 9 entries** (2 consists + 7 locomotives)
+✅ **Function clicks work** (no more `[WARN] Address X not found`)
+✅ **JMRI now optional** - only needed for import scripts when adding new locomotives
+
+**Key Commits**:
+- `f64da28` - Function labels migration to config.json
+- `5192495` - Fix broadcast.py typo (_locomotive_dict → _locomotive_data)
+- `5d77537` - Load locomotives from config.json (JMRI fallback)
+- Plus all Speed Table DB Migration commits (see detailed section below)
+
+**Import Scripts**:
+- `scripts/utils/import_speed_tables_from_jmri.py` - Speed tables + config refactoring
+- `scripts/utils/import_functions_from_jmri.py` - Function labels F0-F28 migration
+
+**Documentation Updated**:
+- ✅ `docs/LOCOMOTIVE_SYNC_MAC_PC.md` (Mac/PC workflow for adding new locos)
+- ✅ `docs/JMRI_INTEGRATION.md` (updated independence status)
+- ✅ `docs/Z21_PROTOCOL.md`, `docs/CONSIST_ROSTER.md` (comprehensive specs)
+
+**User Quote**: "Questa è la vera release 1.0.0" 🎉
+
+**For detailed implementation notes** (Speed Table DB Migration, Interactive Editing, etc.), see sections below.
+
+---
+
+**Detailed Implementation Sections** (Speed Table Feature Development):
+
+**Backend Implementation**:
+
+1. **`backend/services/config_helpers.py`** (NEW - 127 lines):
+   - Backward compatible loaders for gradual migration
+   - `get_locomotive_color(address)` - unified format with fallback
+   - `get_locomotive_cv_profile(address, mode)` - cv3/cv4 retrieval
+   - `get_locomotive_name(address)` - name from config
+   - `get_all_locomotives()` - complete roster with fallback
+
+2. **`backend/services/speed_table_helpers.py`** (MODIFIED - added 160 lines):
+   - `read_cv_speed_table_from_db(loco_address)` - DB read (source of truth)
+   - `update_cv_speed_table_in_db(loco_address, cv_values, source)` - DB write with undo snapshot
+   - `undo_cv_speed_table(loco_address)` - Swap current ↔ previous values
+   - All functions use `data/analytics.db` (PC production only)
+
+3. **`backend/routers/speed_table.py`** (MODIFIED - added 164 lines):
+   - **Modified GET** `/api/speed-table/{consist_id}` - Read DB first, JMRI fallback
+   - **Modified POST** `/api/speed-table/write/{consist_id}` - Write POM + update DB
+   - **NEW POST** `/api/speed-table/undo/{consist_id}` - Restore previous + write to decoder
+   - **NEW POST** `/api/speed-table/reimport/{consist_id}` - Force sync from JMRI roster
+
+4. **`backend/z21_manager.py`** + **`backend/video_feed.py`** (MODIFIED):
+   - Updated to use `config_helpers` for locomotive data
+   - Backward compatible with old config format
+
+**Import Script**:
+
+**`scripts/utils/import_speed_tables_from_jmri.py`** (NEW - 330 lines):
+- Standalone script (no backend needed, works without GPU)
+- Workflow:
+  1. Load JMRI roster (reuses existing `Locomotive` class)
+  2. Backup config.json (timestamped)
+  3. Refactor config.json (merge scattered data → unified `locomotives`)
+  4. Populate database (CV67-94 for all roster)
+- Tested standalone on Mac (with DB copied from PC)
+- Result: 7 locomotives imported successfully
+
+**Frontend Implementation**:
+
+**`web/src/components/charts/SpeedTableViewer.jsx`** (MAJOR CHANGES):
+
+1. **Component-Level fetchSpeedTableData** (fixed scope bug):
+   ```jsx
+   const fetchSpeedTableData = async () => {
+     // Moved from useEffect to component level
+     // Now accessible from writeToDecoder, handleUndo, handleReimport
+   };
+   ```
+
+2. **Undo Handler**:
+   ```jsx
+   const handleUndo = async () => {
+     // POST /api/speed-table/undo/{consistId}
+     // Restores previous_values from DB
+     // Writes CVs to decoder via POM
+     // Reloads UI (removes asterisks)
+   };
+   ```
+
+3. **Re-import Handler**:
+   ```jsx
+   const handleReimport = async () => {
+     // POST /api/speed-table/reimport/{consistId}
+     // Reads CV67-94 from JMRI roster
+     // Updates DB with JMRI values
+     // Reloads UI (syncs with JMRI)
+   };
+   ```
+
+4. **UI Redesign** (after user feedback):
+   - **Primary buttons** (left-aligned, prominent): Write, Export CSV
+   - **Secondary buttons** (right-aligned, icon-only, semitransparent):
+     - Undo: `fa-undo` icon, amber color, tooltip "Undo last change"
+     - Re-import: `fa-sync` icon, slate color, tooltip "Re-import from JMRI"
+   - Visual hierarchy clear: write/export = main actions, undo/reimport = utilities
+
+5. **UI Refresh After Operations**:
+   - Write → `fetchSpeedTableData()` (removes asterisks, syncs CV values)
+   - Undo → `fetchSpeedTableData()` (shows restored values)
+   - Re-import → `fetchSpeedTableData()` (shows JMRI synced values)
+
+**Critical Bugs Fixed During Testing**:
+
+1. **Gate Crossings Count Bug** (`backend/routers/analytics.py`):
+   - **Problem**: Overview tab showed 500 events (downsampled) instead of real count (2000+)
+   - **Fix**: Save `original_delta_t_count` before downsampling, return as `total_delta_t_events`
+   - **Frontend**: Use `cumulativeData.total_delta_t_events` for accurate stats card
+
+2. **Button Design Rejected** (`web/src/components/charts/SpeedTableViewer.jsx`):
+   - **User Feedback**: "i due nuovi bottoni fanno cacare. Solo icona, meglio se rimpicciliti"
+   - **Fix**: Changed to icon-only, smaller (`px-2 py-2`), right-aligned with `ml-auto`
+
+3. **UI Not Refreshing After Write/Undo**:
+   - **Problem**: CV values updated in DB but asterisks remained in UI
+   - **Fix**: Added `await fetchSpeedTableData()` after successful operations
+
+4. **fetchSpeedTableData Scope Error**:
+   - **Problem**: Function defined inside `useEffect`, not accessible from handlers
+   - **Error**: `Can't find variable: fetchSpeedTableData`
+   - **Fix**: Moved function definition to component level (after state declarations)
+
+5. **Import Script Attribute Error**:
+   - **Problem**: `AttributeError: 'Locomotive' object has no attribute 'decoder'`
+   - **Fix**: Changed `loco.decoder` → `loco.decoder_model` (correct attribute name)
+
+**Testing Results**:
+
+**Mac (Development)**:
+- ✅ Import script executed successfully (standalone, no backend)
+- ✅ 7 locomotives imported to config.json + DB
+- ✅ Config.json refactored (unified locomotives section)
+- ✅ DB populated with CV67-94 values from JMRI roster
+- ✅ Syntax check: All backend files compiled without errors
+
+**PC (Production)**:
+- ✅ Full deployment via `z21-deploy-dev` (frontend build + backend restart)
+- ✅ Speed Table GET: DB values displayed correctly
+- ✅ CV Write: 28 CVs written + DB updated (asterisks removed after reload)
+- ✅ Undo: Previous values restored to decoder + DB swapped
+- ✅ Re-import: JMRI roster synced to DB (manual override)
+- ✅ Gate Crossings: Accurate count displayed (not downsampled)
+- ✅ Button layout: Primary prominent, secondary icon-only
+
+**Deployment Strategy**:
+
+1. **DB Location**: `backend/data/analytics.db` (PC only, not Mac)
+2. **Config Migration**: Backward compatible loaders (old format fallback)
+3. **Testing Workflow**:
+   - Copy DB from PC to Mac (temporary for import script test)
+   - Run import script on Mac (no GPU needed)
+   - Copy modified DB back to PC
+   - Deploy to PC production (full backend + frontend)
+
+**Backward Compatibility**:
+
+- Old config format (`locomotive_colors`, `cv_profiles`) still supported
+- `config_helpers.py` checks new format first, falls back to old
+- Gradual migration: can run with mixed old/new config
+- No breaking changes for existing code
+
+**Key Benefits Achieved**:
+
+1. ✅ **JMRI Independence**: Speed table operations work without JMRI running
+2. ✅ **Instant Visibility**: CV changes reflected immediately (no JMRI export/import)
+3. ✅ **Undo Support**: 1-click restore of previous CV values
+4. ✅ **Centralized Metadata**: All locomotive data in unified config section
+5. ✅ **Audit Trail**: Source tracking + timestamps for all DB changes
+6. ✅ **Manual Override**: Re-import button syncs from JMRI when needed
+7. ✅ **Zero Breaking Changes**: Backward compatible with existing code
+
+**Documentation**:
+
+- ✅ **Design Doc**: `docs/SPEED_TABLE_DB_MIGRATION.md` (634 lines)
+  - Complete architecture, schema, workflow, testing plan
+- ✅ **Usage Instructions**: Import script, undo, re-import workflows
+
+**Commits** (14 total):
+- `08353ce` - Speed table DB migration implementation (core feature)
+- `6b8116a` - Show non-validated sessions with badge (UI improvement)
+- `7b89eab` - Remove session_validated blocking (frontend fix)
+- `9729422` - Fix cumulative scaling bug (critical backend fix)
+- `fc7b313` - Change adjustment ±2 to ±1 (conservative iterative)
+- `7e3f6a0` - Summary cards redesign (removed Problematic, added Fixed)
+- `880ab5a` - Step prominence in speed recommendations (UI tweak)
+- `0dd9b98` - Revert horizontal format (user preference)
+- `3602259` - Auto-select consist (UX improvement)
+- `37a8966` - Fix auto-select logic (use reportsData)
+- `77c5822` - Debug console logging (temporary)
+- `0190c1a` - Use ONLY last session for auto-select (critical fix)
+- `5118e21` - Remove debug console.log (cleanup)
+- `[final]` - UI refresh + function scope fix (production ready)
+
+**Files Modified** (11 total):
+- `backend/services/config_helpers.py` (NEW)
+- `backend/services/speed_table_helpers.py` (MODIFIED)
+- `backend/routers/speed_table.py` (MODIFIED)
+- `backend/routers/analytics.py` (MODIFIED - Gate Crossings fix)
+- `backend/z21_manager.py` (MODIFIED - use config_helpers)
+- `backend/video_feed.py` (MODIFIED - use config_helpers)
+- `web/src/components/charts/SpeedTableViewer.jsx` (MAJOR CHANGES)
+- `web/src/components/AnalyticsPanel.jsx` (MODIFIED - accurate count)
+- `scripts/utils/import_speed_tables_from_jmri.py` (NEW)
+- `config.json` (TRANSFORMED - unified structure)
+- `docs/SPEED_TABLE_DB_MIGRATION.md` (NEW - design doc)
+
+**User Feedback**: "stupendo pare funzioni tutto" 🎯
+
+**Versioning**: Tagged as **v1.0.0** (JMRI independence milestone achieved)
+
+---
+
+### 2025-01-17 - 🎯 **Speed Table Viewer Phase 2: Direct CV Write** (v1.0.0 FINAL)
+
+**Status**: ✅ **PRODUCTION READY** - Complete interactive CV editor with direct decoder programming
+
+**Objective**: Transform read-only Speed Table Viewer into full interactive editor with direct CV write via POM.
+
+**Major Features**:
+- Centralized CV write delay (z21.py refactoring - DRY principle)
+- Direct CV write endpoint `POST /api/speed-table/write/{consist_id}` - 28 CVs in ~2.8s
+- Dual-button workflow: "Apply & Write to Decoder" vs "Export CSV Only"
+- Visual feedback: blue border + asterisk on modified CVs
+- Button disable logic when no modifications present
+- onBlur fix: prevent unwanted interpolation on click without change
+- ESC key priority for emergency stop (safety first)
+- CSV export backup suffix clarifies original vs modified
+- Analytics downsampling bug fixed (parameter name mismatch)
+
+**Production Testing**: ✅ All 28 CVs written successfully in ~2.8s, verified via Hornby Bluetooth app
+
+**User Feedback**: "perfetto, valori scritti correttamente!" ✅
+
+---
+
+### 2025-01-16 - 📊 **SPEED TABLE VIEWER: Phase 1 Complete** (Read-Only CV Analysis)
+
+**Status**: ✅ **PRODUCTION READY** - Visual JMRI-style speed table with CV recommendations
+
+**Features**:
+- 28 vertical bars displaying CV67-94 values from JMRI roster XML
+- Color-coded highlighting (gray/amber/red) based on CRITICAL event counts
+- Speed percentage labels (10%-100%) aligned to JMRI steps
+- CV adjustment recommendations with direction based on mean Δt sign
+- CSV export for manual JMRI DecoderPro import
+- Real-time session tracking + running session highlight
+
+**Algorithm**: `step = floor(dcc_speed / 4.5) + 1` | Direction: `delta_t < 0` → decrease CV, `delta_t > 0` → increase CV
+
+**User Feedback**: "Stupendo, un lavoro fantastico" 🎯
+
+**Documentation**: `docs/SPEED_TABLE_VIEWER.md` (complete technical spec)
+
+---
+
+
+---
+
 
 ### 2025-01-12 - 🔌 **Z21 OFFLINE HANDLING FIX**
 
