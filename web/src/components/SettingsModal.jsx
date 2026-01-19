@@ -132,17 +132,21 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
         }
       }
 
-      // Show success message (updated to handle empty restart_needed)
-      const restartMsg = result.restart_needed.length > 0
-        ? `\n\nRestart required for: ${result.restart_needed.join(', ')}`
-        : '\n\nNo restart required.';
-
-      alert(`Settings saved successfully!${restartMsg}`);
-
       // Update initialSettings to reflect saved state (prevent warning on close)
       setInitialSettings(JSON.parse(JSON.stringify(settings)));
 
-      onClose();
+      // Handle restart requirements
+      if (result.restart_needed.length > 0) {
+        // Show message with restart info and auto-reload
+        alert(`Settings saved successfully!\n\nPage will reload to apply changes.\n\nRestart needed for: ${result.restart_needed.join(', ')}`);
+
+        // Force page reload to restart services
+        window.location.reload();
+      } else {
+        // No restart needed - just close modal
+        alert('Settings saved successfully!\n\nNo restart required.');
+        onClose();
+      }
     } catch (err) {
       console.error('Settings save error:', err);
       setError(err.message);
