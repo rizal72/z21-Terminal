@@ -8,6 +8,12 @@ Web-based DCC locomotive controller con tracking YOLO e compensazione automatica
 
 ---
 
+## ⚠️⚠️⚠️ ALWAYS READ z21-deployment SKILL BEFORE DOING ANYTHING ⚠️⚠️⚠️
+
+**Location**: `~/.claude/skills/z21-deployment/SKILL.md`
+
+---
+
 ## 📋 Project Overview
 
 Web-based locomotive controller featuring real-time computer vision tracking and automatic speed compensation via Z21 LAN protocol.
