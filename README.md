@@ -73,27 +73,41 @@ backend/
 
 ## Relationship with JMRI
 
-**z21-Terminal is fully autonomous - JMRI is completely optional.**
+**z21-Terminal is autonomous for daily operations, but JMRI remains essential for initial decoder setup.**
 
-- **Standalone Operation**: z21-Terminal manages everything independently
-  - **Locomotive Roster**: Configure all locomotives directly in Settings UI (name, decoder, functions F0-F28)
-  - **Function Labels**: Edit F0-F28 labels and lockable flags via web UI (hot reload, no restart)
-  - **Speed Tables**: View and edit CV67-94 directly via web UI (operations mode CV write)
-  - **Consist Management**: Create/edit/delete consists via web dashboard (CRUD operations)
-  - **CV19 Management**: Automatic DCC/Virtual mode toggle (no programming track needed)
-  - JMRI does not need to be installed or running
+### What JMRI Does (Essential for Setup)
+- **Initial Decoder Configuration**: Decoder library with manufacturer-specific CV mappings
+- **Adding New Locomotives**: Initial setup, decoder detection, CV programming
+- **Function Mapping Setup**: Decoder-specific function configurations (F0-F28 initial assignment)
+- **Advanced CV Programming**: Decoder-specific UI screens (change based on decoder model)
+- **Programming Track**: Read/write all CVs via programming track (required for initial setup)
 
-- **Optional JMRI Import**: Initial roster can be imported from JMRI XML files (one-time only)
-  - Script: `scripts/import_single_locomotive.py` (copies decoder + functions from JMRI XML)
-  - After import, all management happens in z21-Terminal
+### What z21-Terminal Does (Daily Operations)
+- **Function Labels Edit**: Change F0-F28 labels and lockable flags via web UI (after initial JMRI setup)
+- **Speed Tables**: View and edit CV67-94 directly (operations mode, no programming track)
+- **Consist Management**: Create/edit/delete consists via web dashboard (CRUD operations)
+- **CV19 Management**: Automatic DCC/Virtual mode toggle (operations mode)
+- **Operational Control**: Track consists, speed compensation, multi-device sync
+- JMRI does not need to be running for daily operations
 
-- **Coexistence**: If both installed, they can control locomotives simultaneously (last command wins)
+### Typical Workflow
+1. **Initial Setup** (JMRI - one time per locomotive):
+   - Use DecoderPro to configure decoder (CV1 address, function mapping, decoder settings)
+   - Import locomotive to z21-Terminal: `scripts/import_single_locomotive.py`
 
-**Typical workflow**:
-1. Configure locomotives in Settings UI (or import from JMRI XML once)
-2. Edit function labels F0-F28 in Settings → Locomotives tab
-3. Manage consists directly in z21-Terminal web dashboard
-4. Use z21-Terminal for all operational control (tracking, compensation, multi-device sync)
+2. **Daily Operations** (z21-Terminal - no JMRI needed):
+   - Edit function labels in Settings → Locomotives tab (F0-F28)
+   - Tune speed tables in Analytics → Speed Tuning (CV67-94)
+   - Manage consists in web dashboard
+   - Control locomotives with real-time tracking and compensation
+
+3. **Maintenance** (JMRI - when needed):
+   - Add new locomotives or change decoders
+   - Modify advanced decoder CVs (motor control, sound, lighting effects)
+   - Re-program function mapping if decoder reset
+
+### Coexistence
+Both systems can control locomotives simultaneously (last command wins). z21-Terminal does not conflict with JMRI.
 
 ## Setup
 
