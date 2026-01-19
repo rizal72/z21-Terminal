@@ -91,8 +91,6 @@ async def update_settings(request: dict):
         }
     """
     try:
-        log('[SETTINGS]', 'Settings update request received')
-
         # Load current config
         config = load_config()
         config_local = {}  # Credentials to save separately
@@ -172,13 +170,14 @@ async def update_settings(request: dict):
                 "notes": config.get("camera", {}).get("notes", "Camera credentials MUST be in config.local.json (gitignored)")
             }
 
-            # Save credentials to config.local.json (gitignored)
+            # Save credentials to config.local.json (gitignored) - only log if changed
             if new_camera.get("username") or new_camera.get("password"):
                 config_local["camera"] = {
                     "username": new_camera.get("username", ""),
                     "password": new_camera.get("password", "")
                 }
-                log('[SETTINGS]', f"Camera credentials will be saved to config.local.json (username: {new_camera.get('username', '(empty)')})")
+                # Note: We always save credentials to config.local.json but don't log unless they changed
+                # (can't compare passwords since old ones are in config.local.json, not in memory)
 
         # Video Feed settings (video.fps - hot reload, no restart)
         if "video" in request:
@@ -284,8 +283,6 @@ async def update_settings(request: dict):
         if "locomotives" in request:
             new_locomotives = request["locomotives"]
 
-            log('[SETTINGS]', f"Locomotive update request for {len(new_locomotives)} locomotive(s)")
-
             # Validate each locomotive's functions
             for address, loco_data in new_locomotives.items():
                 if 'functions' in loco_data:
@@ -302,34 +299,46 @@ async def update_settings(request: dict):
             if "locomotives" not in config:
                 config["locomotives"] = {}
 
+            loco_changes_count = 0
             for address, loco_data in new_locomotives.items():
                 loco_name = config.get("locomotives", {}).get(address, {}).get("name", f"Loco {address}")
 
                 if address not in config["locomotives"]:
                     config["locomotives"][address] = {}
                     log('[SETTINGS]', f"Locomotive {address} ({loco_name}): New configuration")
+                    loco_changes_count += 1
+                    changes_summary.append(f"loco_{address}: new configuration")
                 else:
-                    # Log changes
+                    # Check if functions actually changed (deep comparison)
                     if 'functions' in loco_data:
-                        old_func_count = len(config["locomotives"][address].get("functions", []))
-                        new_func_count = len(loco_data["functions"])
+                        old_functions = config["locomotives"][address].get("functions", [])
+                        new_functions = loco_data["functions"]
 
-                        if old_func_count != new_func_count:
-                            log('[SETTINGS]', f"Locomotive {address} ({loco_name}): Function count {old_func_count} -> {new_func_count}")
-                        else:
-                            log('[SETTINGS]', f"Locomotive {address} ({loco_name}): {new_func_count} function(s) updated")
+                        # Compare function lists (serialize to JSON for deep comparison)
+                        old_json = json.dumps(old_functions, sort_keys=True)
+                        new_json = json.dumps(new_functions, sort_keys=True)
 
-                        changes_summary.append(f"loco_{address}.functions: {new_func_count} configured")
+                        if old_json != new_json:
+                            old_func_count = len(old_functions)
+                            new_func_count = len(new_functions)
+
+                            if old_func_count != new_func_count:
+                                log('[SETTINGS]', f"Locomotive {address} ({loco_name}): Function count {old_func_count} -> {new_func_count}")
+                            else:
+                                log('[SETTINGS]', f"Locomotive {address} ({loco_name}): {new_func_count} function(s) modified")
+
+                            loco_changes_count += 1
+                            changes_summary.append(f"loco_{address}.functions: modified")
 
                 # Update only provided fields (functions, or other future editable fields)
                 config["locomotives"][address].update(loco_data)
 
-            # Locomotive changes require roster reload (but NOT backend restart)
-            log('[SETTINGS]', f"Locomotive configuration saved for {len(new_locomotives)} locomotive(s) (roster reload required)")
+            # Log only if there were actual changes
+            if loco_changes_count > 0:
+                log('[SETTINGS]', f"Locomotive configuration changed for {loco_changes_count} locomotive(s) (roster reload required)")
 
-        # Save config.json
+        # Save config.json (always save, even if no changes - user might have clicked Save)
         save_config(config)
-        log('[SETTINGS]', 'Config saved to config.json')
 
         # Save config.local.json (credentials only)
         if config_local:
@@ -350,23 +359,19 @@ async def update_settings(request: dict):
             with open(config_local_path, 'w') as f:
                 json.dump(existing_local, f, indent=2)
 
-            log('[SETTINGS]', 'Camera credentials saved to config.local.json')
-
         # Deduplicate restart list
         restart_needed = list(set(restart_needed))
 
-        # Final summary log
+        # Final summary log - ONLY if there were changes
         if changes_summary:
-            log('[SETTINGS]', f"Settings update complete - {len(changes_summary)} change(s):")
+            log('[SETTINGS]', f"Settings saved - {len(changes_summary)} change(s):")
             for change in changes_summary:
                 log('[SETTINGS]', f"  - {change}")
-        else:
-            log('[SETTINGS]', 'Settings update complete - no changes detected')
 
-        if restart_needed:
-            log('[SETTINGS]', f"Services requiring restart: {', '.join(restart_needed)}")
-        else:
-            log('[SETTINGS]', 'No service restart required (hot reload)')
+            if restart_needed:
+                log('[SETTINGS]', f"Services requiring restart: {', '.join(restart_needed)}")
+            else:
+                log('[SETTINGS]', 'No service restart required (hot reload)')
 
         return {
             "status": "success",
