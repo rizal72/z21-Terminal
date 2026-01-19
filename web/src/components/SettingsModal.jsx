@@ -1015,7 +1015,7 @@ function LocomotivesTab({ settings, setSettings }) {
                         />
 
                         {/* Lockable Checkbox */}
-                        <label className="flex items-center cursor-pointer flex-shrink-0 ml-4" title="Lockable">
+                        <label className="flex items-center cursor-pointer flex-shrink-0 ml-4 mr-3" title="Lockable">
                           <input
                             type="checkbox"
                             checked={func.lockable}
