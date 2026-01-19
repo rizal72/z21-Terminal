@@ -24,6 +24,7 @@ PREFIXES = {
     '[WS]': '\033[34m',      # Blue normale - websocket connections
     '[OVFL]': '\033[95m',    # Magenta bright - overflow
     '[SPEED]': '\033[38;5;208m',  # Orange - speed setting events
+    '[ANALYTICS]': '\033[38;5;213m',  # Pink - analytics/metrics
 }
 
 RESET = '\033[0m'
