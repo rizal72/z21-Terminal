@@ -1150,7 +1150,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
               {/* Speed Table Viewer (28-step CV visualization + recommendations) */}
               <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
                 <h3 className="text-lg font-semibold text-white mb-4">
-                  JMRI Speed Table (CV67-94) - Consist {consistFilter}
+                  Speed Table (CV67-94) - Consist {consistFilter}
                 </h3>
                 <SpeedTableViewer
                   consistId={parseInt(consistFilter, 10)}
