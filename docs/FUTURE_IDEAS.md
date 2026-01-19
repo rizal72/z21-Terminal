@@ -2,68 +2,44 @@
 
 **Status**: Brainstorming - Ideas not prioritized or scheduled
 
-Questa è una lista di possibili enhancements per z21-Terminal. Nessuna di queste è pianificata o in roadmap, sono solo spunti per future considerazioni.
+This document lists potential enhancements for z21-Terminal. None of these are planned or in the roadmap—just ideas for future consideration.
 
 ---
 
-## 📊 Analytics & Monitoring
+## ✅ Already Implemented (Moved from Future)
 
-### Session Statistics Dashboard
-**Obiettivo**: Visualizzare metriche operative per analisi post-session
+The following features were in this document but have since been implemented:
 
-**Features**:
-- Tempo totale operazione per consist
-- Distanza percorsa (stima da gate crossings × lunghezza tracciato)
-- Gate crossing counts per consist (quante volte hanno passato ogni gate)
-- Speed profile heatmaps (velocità media per zone tracciato)
-- Lap times (se tracciato chiuso, tempo per giro completo)
+### Session Statistics Dashboard ✅
+**Status**: Implemented as **Analytics Dashboard** (2026-01-14)
+- Hotkey `A` toggles Analytics panel
+- Session tracking with lifecycle management
+- Real-time statistics: Δt events, YOLO performance, locomotive operating time
+- See [docs/ANALYTICS.md](ANALYTICS.md) for details
 
-**UI**:
-- Tab separato "Analytics" in dashboard
-- Grafici real-time (Chart.js o similar)
-- Session summary al termine operazioni
+### Δt Trends Visualization ✅
+**Status**: Implemented in **Analytics Tab** (2026-01-14)
+- Time-series chart with color-coded zones (SYNCED/WARNING/CRITICAL)
+- Current vs Overview views (last N events vs full session)
+- Intelligent downsampling (LTTB + critical event preservation)
+- Configurable `max_chart_events` via Settings UI
 
-**Backend**:
-- In-memory aggregation durante sessione
-- Export JSON/CSV per analisi offline
+### YOLO Performance Monitoring ✅
+**Status**: Implemented in **Analytics Tab** (2026-01-14)
+- Real-time FPS chart with average FPS badge
+- Per-locomotive confidence display
+- Detection stats tracked in `data.db` (events table, event_type='yolo_performance')
 
----
-
-### Δt Trends Visualization
-**Obiettivo**: Monitorare efficacia speed compensation nel tempo
-
-**Features**:
-- Time-series graph di Δt per consist (ultimi 30 min, 1h, session completa)
-- Color zones: Verde (SYNCED), Giallo (WARNING), Rosso (CRITICAL)
-- Annotazioni automatiche: user speed changes, compensation events, mode toggles
-- Statistics: tempo % in ogni zona, compensation count, average |Δt|
-
-**Utilità**:
-- Identificare se speed matching degrada nel tempo
-- Decidere se serve Auto CV Adjust (Phase 8)
-- Debugging compensation algorithm
+### Historical Session Database ✅
+**Status**: Implemented as **data.db** (2026-01-17)
+- SQLite database with tables: sessions, events, locomotive_stats, locomotive_speed_table, consist_state
+- Event types: delta_t, speed_setting, loco_operating_time, yolo_performance
+- Auto-pruning not yet implemented (manual VACUUM for now)
+- See [docs/DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) for complete schema
 
 ---
 
-### YOLO Performance Monitoring
-**Obiettivo**: Verificare che detection quality rimanga alta nel tempo
-
-**Features**:
-- Real-time FPS monitoring (inference speed)
-- Average confidence per loco (sliding window 1 min)
-- Detection miss rate (frame con expected locos ma non detectati)
-- Alert se confidence < 50% per più di 10s (possibile model degradation)
-
-**Cause possibili degradazione**:
-- Illuminazione cambiata (sole, ombre)
-- Nuovi oggetti sul tracciato non nel training set
-- Camera spostata/sfocata
-
-**UI**:
-- Small badge su video feed: "FPS: 28 | Conf: 0.87"
-- Alert toast se detection quality drop
-
----
+## 📊 Analytics & Monitoring (Future)
 
 ## 🔔 Notifications & Alerts
 
@@ -101,26 +77,7 @@ Questa è una lista di possibili enhancements per z21-Terminal. Nessuna di quest
 
 ---
 
-## 💾 Data Logging & Export
-
-### Historical Session Database
-**Obiettivo**: Persistere dati session per analisi long-term
-
-**Stack**:
-- SQLite database (`sessions.db`)
-- Tables: `sessions`, `delta_t_events`, `gate_crossings`, `speed_changes`
-- Automatic pruning (keep last 30 days, or configurable)
-
-**Features**:
-- Session list view (date, duration, consists used)
-- Drill-down: click session → vedi tutti eventi
-- Compare sessions (quale aveva Δt migliore?)
-
-**Export**:
-- CSV export per session (importabile in Excel, Python pandas)
-- JSON export per backup completo
-
----
+## 💾 Data Logging & Export (Future)
 
 ### Session Replay Mode
 **Obiettivo**: Visualizzare session passate come se fosse live
@@ -355,22 +312,23 @@ Questa è una lista di possibili enhancements per z21-Terminal. Nessuna di quest
 
 ## Prioritization Notes
 
-Queste idee NON sono in roadmap. Se in futuro servirà implementarne qualcuna, considerare:
+These ideas are NOT in the roadmap. If any are needed in the future, consider:
 
-1. **Quick wins** (1-2 giorni):
-   - Session statistics dashboard (backend data già disponibile)
-   - Δt trends visualization (Chart.js integration)
+1. **Quick wins** (1-2 days):
+   - Telegram/Email notifications (backend already has session/tracking events)
    - Autopilot gradual ramping (modify existing speed command logic)
+   - Function Test Mode (cycle F0-F28 with existing commands)
 
-2. **Medium effort** (3-5 giorni):
-   - SQLite session history
+2. **Medium effort** (3-5 days):
+   - Session Replay Mode (requires playback engine for stored events)
    - Consist lock mechanism (WebSocket + backend state)
    - Decoder health monitoring (periodic CV read)
+   - CSV/JSON export for sessions (data.db already structured)
 
-3. **Large projects** (1-2 settimane):
-   - Session replay mode (requires full event logging + playback engine)
+3. **Large projects** (1-2 weeks):
    - Virtual stations & routes (complex route planner UI)
-   - Track Map integration (se Phase 7 postponed)
+   - Track Map integration (if Phase 7 resumed)
+   - Spectator mode with authentication
 
 4. **External dependencies**:
    - Motor load monitoring (requires RailCom support)
@@ -378,4 +336,4 @@ Queste idee NON sono in roadmap. Se in futuro servirà implementarne qualcuna, c
 
 ---
 
-**Ultimo aggiornamento**: 2025-01-08
+**Last Updated**: 2026-01-20
