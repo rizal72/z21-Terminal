@@ -1,0 +1,5 @@
+# Git attributes for z21-Terminal
+
+# Normalize line endings for config.json (always LF in repo)
+# Prevents false "modified" status from Windows CRLF vs Mac/Linux LF
+config.json text eol=lf
