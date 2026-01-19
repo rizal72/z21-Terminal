@@ -1,6 +1,13 @@
 # z21-Terminal
 
-Web-based DCC locomotive controller with real-time YOLO tracking, automatic speed compensation, and multi-device sync via Z21 LAN protocol.
+**Autonomous web-based DCC locomotive controller** with real-time YOLO tracking, automatic speed compensation, and multi-device sync via Z21 LAN protocol.
+
+**Key Highlights**:
+- 🚂 **JMRI-Independent**: Fully autonomous operations (roster, functions, speed tables managed in web UI)
+- 🎯 **YOLO Tracking**: Custom-trained AI detection with TensorRT GPU acceleration
+- 📱 **Modern Web UI**: Mobile-first PWA with real-time WebSocket sync (iPad, phone, desktop)
+- ⚙️ **Complete Settings**: Edit locomotive functions F0-F28, speed tables CV67-94, consists - all in web UI
+- 🔄 **Virtual Mode**: Automatic speed compensation based on real-time Δt feedback
 
 **Project**: DCC Model Railway - BiancAlice
 
@@ -66,22 +73,27 @@ backend/
 
 ## Relationship with JMRI
 
-**z21-Terminal started as a JMRI extension, now increasingly independent.**
+**z21-Terminal is fully autonomous - JMRI is completely optional.**
 
-- **JMRI is optional**: z21-Terminal can manage consists directly via web UI
-  - Initial roster configuration can be imported from JMRI XML files
-  - **Consist management**: Create/edit/delete consists via web dashboard (no JMRI needed)
-  - **CV19 management**: Automatic DCC/Virtual mode toggle (no programming track needed)
-  - JMRI does not need to be running
-- **Coexistence**: Both systems can control locomotives simultaneously (if both installed)
-- **Complementarity** (if using JMRI):
-  - **JMRI**: Decoder configuration (DecoderPro), initial roster setup, programming track operations
-  - **z21-Terminal**: Operational control, modern web UI, consist CRUD, YOLO tracking, automated compensation
+- **Standalone Operation**: z21-Terminal manages everything independently
+  - **Locomotive Roster**: Configure all locomotives directly in Settings UI (name, decoder, functions F0-F28)
+  - **Function Labels**: Edit F0-F28 labels and lockable flags via web UI (hot reload, no restart)
+  - **Speed Tables**: View and edit CV67-94 directly via web UI (operations mode CV write)
+  - **Consist Management**: Create/edit/delete consists via web dashboard (CRUD operations)
+  - **CV19 Management**: Automatic DCC/Virtual mode toggle (no programming track needed)
+  - JMRI does not need to be installed or running
+
+- **Optional JMRI Import**: Initial roster can be imported from JMRI XML files (one-time only)
+  - Script: `scripts/import_single_locomotive.py` (copies decoder + functions from JMRI XML)
+  - After import, all management happens in z21-Terminal
+
+- **Coexistence**: If both installed, they can control locomotives simultaneously (last command wins)
 
 **Typical workflow**:
-1. (Optional) Import initial roster from JMRI, OR configure locomotives manually
-2. Manage consists directly in z21-Terminal web dashboard
-3. Use z21-Terminal for all operational control (tracking, compensation, multi-device sync)
+1. Configure locomotives in Settings UI (or import from JMRI XML once)
+2. Edit function labels F0-F28 in Settings → Locomotives tab
+3. Manage consists directly in z21-Terminal web dashboard
+4. Use z21-Terminal for all operational control (tracking, compensation, multi-device sync)
 
 ## Setup
 
@@ -151,6 +163,15 @@ z21-frontend     # Start frontend dev server
 - Tailscale: **https://gaming-pc.tail9350d7.ts.net** (remote access via VPN)
 
 **Core Features:**
+- **Function Editor**: Edit F0-F28 labels and lockable flags directly in Settings UI
+  - Add/delete functions with filtered dropdown (F0-F28, only available numbers shown)
+  - Max 20 characters per label (optimized for UI button display)
+  - Smart change detection (warns only on real changes, deep comparison)
+  - Hot reload (no backend restart required)
+- **Speed Table Editor**: View and edit CV67-94 speed curves directly via web UI
+  - Direct CV write (operations mode, no programming track needed)
+  - Visual 28-step curve with color-coded recommendations
+  - Real-time validation and feedback
 - **Consist Manager**: Create/edit/delete consists via web UI (CRUD operations, no JMRI needed)
 - **Scalable UI**: Dynamic controller panels with [+] button (add/remove controllers on-the-fly)
 - **Virtual Consist Mode**: Automatic CV19 management + real-time speed compensation based on Δt
@@ -227,7 +248,10 @@ python3 z21_controller.py 10            # Control consist 10
 ### Web Dashboard ✅
 - [x] Modern web UI (Vite + React + Tailwind CSS + Font Awesome 6)
 - [x] FastAPI backend with WebSocket real-time sync
+- [x] **Function Editor**: Edit F0-F28 labels and lockable flags (accordion UI, add/delete, 20 char max, hot reload)
+- [x] **Speed Table Editor**: View/edit CV67-94 speed curves (direct CV write, visual 28-step chart, recommendations)
 - [x] **Consist Manager**: CRUD operations via web UI (create/edit/delete consists, gate assignment)
+- [x] **Settings UI**: Fully configurable (locomotives, consists, gates, tracking, analytics)
 - [x] **Scalable UI**: Dynamic controller panels with [+] button
 - [x] **Mobile Header**: Responsive hamburger menu (<768px)
 - [x] Flexible roster selection (consists + standalone locomotives)
