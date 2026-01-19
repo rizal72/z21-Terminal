@@ -180,7 +180,7 @@ def save_config(config: Dict[str, Any], config_path: Path = None) -> None:
         if not changed:
             break
 
-    with open(config_path, 'w', encoding='utf-8') as f:
+    with open(config_path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(json_str)
         f.write('\n')  # Add trailing newline
 
@@ -191,7 +191,7 @@ def save_config_backup(config: Dict[str, Any], config_path: Path = None) -> None
         config_path = get_config_path()
     backup_path = config_path.parent / f"{config_path.name}.backup"
     json_str = json.dumps(config, indent=2, ensure_ascii=False)
-    with open(backup_path, 'w', encoding='utf-8') as f:
+    with open(backup_path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(json_str)
         f.write('\n')
 
