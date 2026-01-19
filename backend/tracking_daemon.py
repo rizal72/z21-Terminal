@@ -31,7 +31,7 @@ import dependencies
 
 # === CONFIGURATION ===
 project_root = Path(__file__).parent.parent  # z21-Terminal/ root
-RTSP_URL = load_camera_config()  # Load RTSP URL from camera_config.json
+RTSP_URL = load_camera_config()  # Load RTSP URL from config.json (credentials from config.local.json)
 BACKEND_WS_URL = "ws://localhost:8000/ws/tracking"  # WebSocket to FastAPI backend
 # MODEL_PATH auto-selected by YOLOTracker based on yolo_obb flag in config.json
 
