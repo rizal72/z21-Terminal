@@ -390,12 +390,12 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
           <div className="mt-2 text-xs">
             {!formData.gate_assignment || (!formData.gate_assignment.reference && !formData.gate_assignment.adjust) ? (
               <p className="text-signal-green flex items-center gap-1">
-                <i className="fa-solid fa-check-circle"></i>
+                <i className="fa-solid fa-exchange-alt"></i>
                 Symmetric mode: Both locomotives tracked by all gates (default)
               </p>
             ) : (
               <p className="text-signal-amber flex items-center gap-1">
-                <i className="fa-solid fa-diagram-project"></i>
+                <i className="fa-solid fa-exchange-alt"></i>
                 Asymmetric mode: Specific gate per locomotive (directional tracking)
               </p>
             )}

@@ -30,7 +30,7 @@ export default function ConsistCard({
   // Determine gate assignment type (symmetric vs asymmetric)
   const isSymmetric = !assignment.gate_assignment || assignment.gate_assignment === null;
   const gateAssignmentLabel = isSymmetric ? 'Symmetric' : 'Asymmetric';
-  const gateAssignmentIcon = isSymmetric ? 'fa-arrows-left-right' : 'fa-arrows-split-up-and-left';
+  const gateAssignmentColor = isSymmetric ? 'text-signal-green' : 'text-signal-amber';
 
   // Track name
   const trackName = consistAddress === '10' ? 'INTERNAL TRACK' : 'EXTERNAL TRACK';
@@ -117,7 +117,7 @@ export default function ConsistCard({
             className="px-2 py-0.5 bg-control-grey/50 border border-control-grey rounded text-xs flex items-center gap-1.5"
             title={isSymmetric ? 'Both locomotives tracked by all gates' : 'Each locomotive tracked by specific gates'}
           >
-            <i className={`fa-solid ${gateAssignmentIcon}`}></i>
+            <i className={`fa-solid fa-exchange-alt ${gateAssignmentColor}`}></i>
             <span className="text-track-steel">{gateAssignmentLabel}</span>
           </span>
         </div>
