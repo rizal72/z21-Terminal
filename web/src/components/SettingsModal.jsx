@@ -988,7 +988,7 @@ function LocomotivesTab({ settings, setSettings }) {
                 <div className="p-4 bg-slate-800/50 space-y-2 max-h-96 overflow-y-auto">
                   {loco.functions && loco.functions.length > 0 ? (
                     loco.functions.map((func, idx) => (
-                      <div key={idx} className="flex items-center gap-2 p-2 pr-4 bg-slate-900/50 rounded">
+                      <div key={idx} className="flex items-center gap-1 p-2 pr-4 bg-slate-900/50 rounded">
                         {/* Function Number */}
                         <div className="text-xs font-mono text-slate-400 w-8 flex-shrink-0">
                           F{func.number}
@@ -1015,7 +1015,7 @@ function LocomotivesTab({ settings, setSettings }) {
                         />
 
                         {/* Lockable Checkbox */}
-                        <label className="flex items-center cursor-pointer flex-shrink-0" title="Lockable">
+                        <label className="flex items-center cursor-pointer flex-shrink-0 ml-4" title="Lockable">
                           <input
                             type="checkbox"
                             checked={func.lockable}
