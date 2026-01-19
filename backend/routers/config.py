@@ -24,6 +24,43 @@ router = APIRouter(tags=["config"])
 CONFIG_PATH = get_config_path()
 
 
+def validate_locomotive_functions(address: str, functions: list) -> tuple[bool, str]:
+    """
+    Validate locomotive function array.
+
+    Returns:
+        (success: bool, error_message: str)
+    """
+    if not isinstance(functions, list):
+        return False, f"Locomotive {address}: functions must be a list"
+
+    for func in functions:
+        if not isinstance(func, dict):
+            return False, f"Locomotive {address}: function must be a dict"
+
+        # Check required keys
+        if 'number' not in func or 'label' not in func or 'lockable' not in func:
+            return False, f"Locomotive {address}: missing required keys (number, label, lockable)"
+
+        # Validate number (0-28)
+        if not isinstance(func['number'], int) or not (0 <= func['number'] <= 28):
+            return False, f"Locomotive {address}: function number must be 0-28"
+
+        # Validate label
+        if not isinstance(func['label'], str):
+            return False, f"Locomotive {address}: function label must be string"
+        if not func['label'].strip():
+            return False, f"Locomotive {address}: F{func['number']} label cannot be empty"
+        if len(func['label']) > 50:
+            return False, f"Locomotive {address}: F{func['number']} label too long (max 50 chars)"
+
+        # Validate lockable
+        if not isinstance(func['lockable'], bool):
+            return False, f"Locomotive {address}: lockable must be boolean"
+
+    return True, ""
+
+
 @router.get("/api/config")
 async def get_config():
     """Get entire config.json for Settings UI"""
@@ -43,6 +80,7 @@ async def update_settings(request: dict):
     - YOLO Model (tracking.yolo_* - restart tracker)
     - Tracking (tracking.fps, tracking.timing_thresholds - restart tracker)
     - Analytics (analytics.max_chart_events - no restart, frontend only)
+    - Locomotives (locomotives.*.functions - hot reload via roster reload)
 
     Returns:
         {
@@ -177,6 +215,36 @@ async def update_settings(request: dict):
                 config["analytics"] = {}
             config["analytics"]["max_chart_events"] = new_analytics.get("max_chart_events", 500)
             config["analytics"]["notes"] = "Chart optimization: Current shows last N events, Overview downsamples if > N total events"
+
+        # Locomotive settings (locomotives.*.functions - hot reload via roster reload)
+        if "locomotives" in request:
+            new_locomotives = request["locomotives"]
+
+            # Validate each locomotive's functions
+            for address, loco_data in new_locomotives.items():
+                if 'functions' in loco_data:
+                    valid, error_msg = validate_locomotive_functions(address, loco_data['functions'])
+                    if not valid:
+                        log('[ERROR]', f"Locomotive validation failed: {error_msg}")
+                        return {
+                            "status": "error",
+                            "message": error_msg,
+                            "restart_needed": []
+                        }
+
+            # Merge with existing config (preserve other locomotive fields)
+            if "locomotives" not in config:
+                config["locomotives"] = {}
+
+            for address, loco_data in new_locomotives.items():
+                if address not in config["locomotives"]:
+                    config["locomotives"][address] = {}
+
+                # Update only provided fields (functions, or other future editable fields)
+                config["locomotives"][address].update(loco_data)
+
+            # Locomotive changes require roster reload (but NOT backend restart)
+            log('[SETTINGS]', f"Locomotive functions updated for {len(new_locomotives)} locomotives")
 
         # Save config.json
         save_config(config)

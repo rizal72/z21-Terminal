@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 export default function SettingsModal({ isOpen, onClose, apiUrl }) {
   const [activeTab, setActiveTab] = useState('system');
   const [settings, setSettings] = useState(null);
+  const [initialSettings, setInitialSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -64,6 +65,7 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
 
       const data = await response.json();
       setSettings(data);
+      setInitialSettings(JSON.parse(JSON.stringify(data))); // Deep clone for comparison
     } catch (err) {
       console.error('Settings load error:', err);
       setError(err.message);
@@ -75,6 +77,26 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
   const handleSave = async () => {
     setSaving(true);
     setError(null);
+
+    // Validate locomotive functions before saving
+    if (settings?.locomotives) {
+      for (const [address, loco] of Object.entries(settings.locomotives)) {
+        if (loco.functions) {
+          for (const func of loco.functions) {
+            if (!func.label || func.label.trim() === '') {
+              setError(`Locomotive ${address}: Function F${func.number} label cannot be empty`);
+              setSaving(false);
+              return;
+            }
+            if (func.label.length > 50) {
+              setError(`Locomotive ${address}: Function F${func.number} label too long (max 50 characters)`);
+              setSaving(false);
+              return;
+            }
+          }
+        }
+      }
+    }
 
     try {
       const response = await fetch(`${apiUrl}/api/settings/update`, {
@@ -89,8 +111,33 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
 
       const result = await response.json();
 
-      // Show success message
-      alert(`Settings saved successfully!\n\nRestart required for: ${result.restart_needed.join(', ')}`);
+      // Check if locomotives were updated
+      const locomotivesChanged = settings.locomotives &&
+        JSON.stringify(settings.locomotives) !== JSON.stringify(initialSettings?.locomotives);
+
+      // Trigger roster reload if locomotives changed
+      if (locomotivesChanged) {
+        try {
+          const reloadResponse = await fetch(`${apiUrl}/api/reload-roster`, {
+            method: 'POST'
+          });
+
+          if (reloadResponse.ok) {
+            const reloadResult = await reloadResponse.json();
+            console.log('[SETTINGS]', `Roster reloaded: ${reloadResult.locomotives_loaded} locomotives`);
+          }
+        } catch (reloadErr) {
+          console.warn('Roster reload failed (non-critical):', reloadErr);
+          // Don't fail the save if reload fails
+        }
+      }
+
+      // Show success message (updated to handle empty restart_needed)
+      const restartMsg = result.restart_needed.length > 0
+        ? `\n\nRestart required for: ${result.restart_needed.join(', ')}`
+        : '\n\nNo restart required.';
+
+      alert(`Settings saved successfully!${restartMsg}`);
 
       onClose();
     } catch (err) {
@@ -874,6 +921,8 @@ function TrackingTab({ settings, setSettings }) {
 }
 
 function LocomotivesTab({ settings, setSettings }) {
+  const [expandedLoco, setExpandedLoco] = useState(null);
+
   if (!settings?.locomotives) return null;
 
   return (
@@ -883,30 +932,102 @@ function LocomotivesTab({ settings, setSettings }) {
       <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded">
         <p className="text-sm text-blue-200 flex items-start gap-2">
           <i className="fa-solid fa-info-circle mt-0.5"></i>
-          <span>Function label editing coming soon. For now, edit locomotive details (name, decoder, color, functions) directly in config.json.</span>
+          <span>Edit function labels and lockable status below. Changes take effect immediately after saving (no restart required).</span>
         </p>
       </div>
 
-      {/* Show locomotive list read-only */}
+      {/* Locomotive accordion list */}
       <div className="space-y-2">
-        {Object.entries(settings.locomotives).map(([address, loco]) => (
-          <div key={address} className="p-3 bg-slate-900 border border-slate-700 rounded">
-            <div className="flex items-center gap-3">
-              <div
-                className="w-4 h-4 rounded-full"
-                style={{ backgroundColor: loco.color || '#808080' }}
-              ></div>
-              <div className="flex-1">
-                <div className="text-sm font-medium text-white">
-                  Address {address}: {loco.name}
+        {Object.entries(settings.locomotives).map(([address, loco]) => {
+          const isExpanded = expandedLoco === address;
+
+          return (
+            <div key={address} className="border border-slate-700 rounded overflow-hidden">
+              {/* Header - Collapsible Button */}
+              <button
+                onClick={() => setExpandedLoco(isExpanded ? null : address)}
+                className="w-full p-3 bg-slate-900 hover:bg-slate-800 transition-colors flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-4 h-4 rounded-full"
+                    style={{ backgroundColor: loco.color || '#808080' }}
+                  ></div>
+                  <div className="text-left">
+                    <div className="text-sm font-medium text-white">
+                      Address {address}: {loco.name}
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      {loco.decoder || 'Unknown decoder'} • {loco.functions?.length || 0} functions
+                    </div>
+                  </div>
                 </div>
-                <div className="text-xs text-slate-400">
-                  {loco.decoder || 'Unknown decoder'} • {loco.functions?.length || 0} functions
+                <i className={`fa-solid fa-chevron-${isExpanded ? 'up' : 'down'} text-slate-400`}></i>
+              </button>
+
+              {/* Expanded - Function Editor */}
+              {isExpanded && (
+                <div className="p-4 bg-slate-800/50 space-y-2 max-h-96 overflow-y-auto">
+                  {loco.functions && loco.functions.length > 0 ? (
+                    loco.functions.map((func, idx) => (
+                      <div key={idx} className="flex items-center gap-3 p-2 bg-slate-900/50 rounded">
+                        {/* Function Number */}
+                        <div className="text-xs font-mono text-slate-400 w-8 flex-shrink-0">
+                          F{func.number}
+                        </div>
+
+                        {/* Label Input */}
+                        <input
+                          type="text"
+                          value={func.label}
+                          onChange={(e) => {
+                            const newFunctions = [...loco.functions];
+                            newFunctions[idx] = { ...func, label: e.target.value };
+                            setSettings({
+                              ...settings,
+                              locomotives: {
+                                ...settings.locomotives,
+                                [address]: { ...loco, functions: newFunctions }
+                              }
+                            });
+                          }}
+                          className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-sm text-white focus:border-signal-amber focus:ring-1 focus:ring-signal-amber outline-none"
+                          placeholder="Function label"
+                          maxLength={50}
+                        />
+
+                        {/* Lockable Checkbox */}
+                        <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={func.lockable}
+                            onChange={(e) => {
+                              const newFunctions = [...loco.functions];
+                              newFunctions[idx] = { ...func, lockable: e.target.checked };
+                              setSettings({
+                                ...settings,
+                                locomotives: {
+                                  ...settings.locomotives,
+                                  [address]: { ...loco, functions: newFunctions }
+                                }
+                              });
+                            }}
+                            className="w-4 h-4 rounded bg-slate-900 border-slate-700 text-signal-amber focus:ring-signal-amber"
+                          />
+                          <span className="text-xs text-slate-300">Lock</span>
+                        </label>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-sm text-slate-400 text-center py-4">
+                      No functions configured
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
