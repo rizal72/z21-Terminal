@@ -601,6 +601,90 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 
 ---
 
+### 2025-01-19 - 🔧 **CONFIG.JSON LINE ENDINGS + SETTINGS LOGGING**
+
+**Status**: ✅ **PRODUCTION READY** - Cross-platform config consistency + comprehensive logging
+
+**Problem**: Settings UI changes on PC caused false git modifications
+- Windows saves config.json with CRLF line endings
+- Mac/git repository uses LF line endings
+- Every Settings save on PC → git sees file as "modified" (even with no real changes)
+- Camera credentials leaked into config.json (should be config.local.json only)
+
+**Solution Implemented**:
+
+1. **`.gitattributes` (Cross-Platform Normalization)**:
+   - Force LF line endings for config.json: `config.json text eol=lf`
+   - Git normalizes automatically (CRLF on Windows disk, LF in repo)
+   - Prevents false "modified" status from line ending differences
+
+2. **`save_config()` Simplification**:
+   - **Removed**: 70 lines of complex array compaction regex logic
+   - **Kept**: Simple `json.dumps(indent=2, ensure_ascii=False)`
+   - **Added**: `newline='\n'` to force LF on all platforms
+   - **Added**: Auto-remove camera credentials before save (deep copy first)
+   - Result: Function reduced from 80 to 33 lines
+
+3. **Credentials Auto-Removal**:
+   - `load_config()` merges config.local.json (adds username/password)
+   - `save_config()` now removes credentials before writing
+   - Prevents credential leak to version-controlled config.json
+   - Credentials stay in config.local.json only (gitignored)
+
+4. **Settings Logging ([SETTINGS] Tag)**:
+   - **Color**: Gold/yellow (220) - distinctive but not invasive
+   - **Strategy**: Log only real changes (no "unchanged" spam)
+   - **Per-section logging**:
+     - Debug: `False -> True (backend restart required)`
+     - Z21: `host: 192.168.1.111 -> 192.168.1.112`
+     - Camera: `IP: 192.168.1.4 -> 192.168.1.5 (video_feed + tracker restart)`
+     - Video: `FPS: 30 -> 15 (hot reload, no restart)`
+     - Tracking: `FPS (active): 30 -> 20`
+     - YOLO: `confidence: 0.3 -> 0.2`
+     - Analytics: `max_chart_events: 500 -> 1000 (hot reload)`
+     - Locomotives: `Loco 8 (E444 056): 5 function(s) modified`
+   - **Summary**: Lists all changes with service restart requirements
+   - **Deep comparison**: JSON serialize for locomotive functions (avoid false positives)
+
+5. **Locomotive Changes Require Page Reload**:
+   - Frontend loads function labels at startup (no hot reload)
+   - Added `"frontend"` to `restart_needed` when locomotives modified
+   - Triggers automatic `window.location.reload()` via existing mechanism
+
+**Technical Details**:
+- **Files modified**:
+  - `.gitattributes` - Force LF for config.json
+  - `backend/config_loader.py` - Simplified save_config(), auto-remove credentials
+  - `backend/log_colors.py` - Added [SETTINGS] gold color
+  - `backend/routers/config.py` - Comprehensive logging per section
+- **Line endings**: `encoding='utf-8', newline='\n'` forces LF on Windows
+- **Deep copy**: `copy.deepcopy()` before filtering (avoid modifying original config)
+- **Credentials**: `pop('username')` + `pop('password')` before save
+
+**Result**:
+- ✅ Settings save on PC → git status **clean** (no false modifications)
+- ✅ Config.json byte-identical on Mac and PC
+- ✅ Credentials isolated in config.local.json (gitignored, never leaked)
+- ✅ Logs show only real changes with detailed old→new values
+- ✅ Simplified codebase (70 lines removed from save_config)
+
+**Example Logs** (YOLO confidence change):
+```
+[SETTINGS] YOLO confidence: 0.2 -> 0.3
+[SETTINGS] YOLO iou: 0.95 -> 0.6
+[SETTINGS] YOLO obb: False -> True
+[SETTINGS] Tracking settings changed, tracker restart required
+[SETTINGS] Settings saved - 3 change(s):
+[SETTINGS]   - yolo_confidence: 0.2 -> 0.3
+[SETTINGS]   - yolo_iou: 0.95 -> 0.6
+[SETTINGS]   - yolo_obb: False -> True
+[SETTINGS] Services requiring restart: tracker
+```
+
+**Commits**: `29557a9`, `955350e`, `7091923`, `9cbdecb`, `5b752c1`, `ce5e433`, `5303aed`, `615c850`, `e4cb174`
+
+---
+
 ### 2025-01-18 - ✅ **TIMING_THRESHOLDS REFACTORING**
 
 **Status**: ✅ **COMPLETED** - Renamed `normal` → `warning`, `warning` → `critical`
