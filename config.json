@@ -129,9 +129,9 @@
     "idle_timeout_seconds": 10,
     "notes_idle_timeout": "Seconds of inactivity (all locomotives stopped) before switching to idle mode (1 FPS) and ending analytics session",
     "timing_thresholds": {
-      "warning": 1.0,
+      "warning": 1,
       "critical": 1.5,
-      "max_delta_t": 10.0,
+      "max_delta_t": 10,
       "notes": "Thresholds in seconds: |Δt| < warning = SYNCED (implicit), >= warning = WARNING, >= critical = CRITICAL, > max_delta_t = ignored (outlier from video lag)"
     },
     "yolo_confidence": 0.4,
@@ -633,16 +633,6 @@
           "number": 0,
           "label": "Light",
           "lockable": true
-        },
-        {
-          "number": 1,
-          "label": "Bell",
-          "lockable": true
-        },
-        {
-          "number": 2,
-          "label": "Horn",
-          "lockable": false
         },
         {
           "number": 3,
