@@ -10,6 +10,7 @@ Handles all configuration-related endpoints:
 from fastapi import APIRouter, Depends
 from typing import List, Dict, Any
 from pathlib import Path
+import json
 from config_loader import load_config, save_config, get_config_path
 from roster_loader import load_consists_from_config
 from services.broadcast import build_consist_response, broadcast_initial_state
