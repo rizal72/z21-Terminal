@@ -91,12 +91,15 @@ async def update_settings(request: dict):
         }
     """
     try:
+        log('[SETTINGS]', 'Settings update request received')
+
         # Load current config
         config = load_config()
         config_local = {}  # Credentials to save separately
 
         # Track which services need restart
         restart_needed = []
+        changes_summary = []  # Log all changes made
 
         # System settings (debug.enabled)
         if "debug" in request:
@@ -105,6 +108,8 @@ async def update_settings(request: dict):
 
             if old_debug != new_debug:
                 restart_needed.append("backend")
+                log('[SETTINGS]', f"Debug mode: {old_debug} -> {new_debug} (backend restart required)")
+                changes_summary.append(f"debug.enabled: {old_debug} -> {new_debug}")
 
             if "debug" not in config:
                 config["debug"] = {}
@@ -115,9 +120,17 @@ async def update_settings(request: dict):
             old_z21 = config.get("z21", {})
             new_z21 = request["z21"]
 
-            if (old_z21.get("host") != new_z21.get("host") or
-                old_z21.get("port") != new_z21.get("port")):
+            host_changed = old_z21.get("host") != new_z21.get("host")
+            port_changed = old_z21.get("port") != new_z21.get("port")
+
+            if host_changed or port_changed:
                 restart_needed.append("backend")
+                if host_changed:
+                    log('[SETTINGS]', f"Z21 host: {old_z21.get('host')} -> {new_z21.get('host')} (backend restart required)")
+                    changes_summary.append(f"z21.host: {old_z21.get('host')} -> {new_z21.get('host')}")
+                if port_changed:
+                    log('[SETTINGS]', f"Z21 port: {old_z21.get('port')} -> {new_z21.get('port')} (backend restart required)")
+                    changes_summary.append(f"z21.port: {old_z21.get('port')} -> {new_z21.get('port')}")
 
             config["z21"] = {
                 "host": new_z21.get("host", "192.168.1.111"),
@@ -131,11 +144,22 @@ async def update_settings(request: dict):
             new_camera = request["camera"]
 
             # Check if RTSP-related settings changed (requires restart)
-            if (old_camera.get("ip") != new_camera.get("ip") or
-                old_camera.get("port") != new_camera.get("port") or
-                old_camera.get("stream") != new_camera.get("stream")):
+            ip_changed = old_camera.get("ip") != new_camera.get("ip")
+            port_changed = old_camera.get("port") != new_camera.get("port")
+            stream_changed = old_camera.get("stream") != new_camera.get("stream")
+
+            if ip_changed or port_changed or stream_changed:
                 restart_needed.append("video_feed")
                 restart_needed.append("tracker")
+                if ip_changed:
+                    log('[SETTINGS]', f"Camera IP: {old_camera.get('ip')} -> {new_camera.get('ip')} (video_feed + tracker restart required)")
+                    changes_summary.append(f"camera.ip: {old_camera.get('ip')} -> {new_camera.get('ip')}")
+                if port_changed:
+                    log('[SETTINGS]', f"Camera port: {old_camera.get('port')} -> {new_camera.get('port')} (video_feed + tracker restart required)")
+                    changes_summary.append(f"camera.port: {old_camera.get('port')} -> {new_camera.get('port')}")
+                if stream_changed:
+                    log('[SETTINGS]', f"Camera stream: {old_camera.get('stream')} -> {new_camera.get('stream')} (video_feed + tracker restart required)")
+                    changes_summary.append(f"camera.stream: {old_camera.get('stream')} -> {new_camera.get('stream')}")
 
             # Split: public settings → config.json, credentials → config.local.json
             config["camera"] = {
@@ -154,15 +178,24 @@ async def update_settings(request: dict):
                     "username": new_camera.get("username", ""),
                     "password": new_camera.get("password", "")
                 }
+                log('[SETTINGS]', f"Camera credentials will be saved to config.local.json (username: {new_camera.get('username', '(empty)')})")
 
         # Video Feed settings (video.fps - hot reload, no restart)
         if "video" in request:
+            old_video = config.get("video", {})
             new_video = request["video"]
+
+            old_fps = old_video.get("fps", 30)
+            new_fps = new_video.get("fps", 30)
+
+            if old_fps != new_fps:
+                log('[SETTINGS]', f"Video FPS: {old_fps} -> {new_fps} (hot reload, no restart)")
+                changes_summary.append(f"video.fps: {old_fps} -> {new_fps}")
+
             config["video"] = {
-                "fps": new_video.get("fps", 30),
+                "fps": new_fps,
                 "notes": config.get("video", {}).get("notes", "MJPEG video stream frame rate (hot reload, no restart needed)")
             }
-            # Note: video FPS is hot reload, no restart needed
 
         # Tracking settings (tracking.* - restart tracker)
         if "tracking" in request:
@@ -176,33 +209,54 @@ async def update_settings(request: dict):
             if "fps" in new_tracking:
                 old_fps = old_tracking.get("fps", {})
                 new_fps = new_tracking["fps"]
-                if (old_fps.get("active") != new_fps.get("active") or
-                    old_fps.get("idle") != new_fps.get("idle") or
-                    old_fps.get("video_feed") != new_fps.get("video_feed")):
+                if old_fps.get("active") != new_fps.get("active"):
                     tracking_changed = True
+                    log('[SETTINGS]', f"Tracking FPS (active): {old_fps.get('active')} -> {new_fps.get('active')}")
+                    changes_summary.append(f"tracking.fps.active: {old_fps.get('active')} -> {new_fps.get('active')}")
+                if old_fps.get("idle") != new_fps.get("idle"):
+                    tracking_changed = True
+                    log('[SETTINGS]', f"Tracking FPS (idle): {old_fps.get('idle')} -> {new_fps.get('idle')}")
+                    changes_summary.append(f"tracking.fps.idle: {old_fps.get('idle')} -> {new_fps.get('idle')}")
 
             # Idle timeout
             if "idle_timeout_seconds" in new_tracking:
-                if old_tracking.get("idle_timeout_seconds") != new_tracking["idle_timeout_seconds"]:
+                old_timeout = old_tracking.get("idle_timeout_seconds")
+                new_timeout = new_tracking["idle_timeout_seconds"]
+                if old_timeout != new_timeout:
                     tracking_changed = True
+                    log('[SETTINGS]', f"Tracking idle timeout: {old_timeout}s -> {new_timeout}s")
+                    changes_summary.append(f"tracking.idle_timeout: {old_timeout}s -> {new_timeout}s")
 
             # Timing thresholds
             if "timing_thresholds" in new_tracking:
                 old_thresholds = old_tracking.get("timing_thresholds", {})
                 new_thresholds = new_tracking["timing_thresholds"]
-                if (old_thresholds.get("warning") != new_thresholds.get("warning") or
-                    old_thresholds.get("critical") != new_thresholds.get("critical") or
-                    old_thresholds.get("max_delta_t") != new_thresholds.get("max_delta_t")):
+                if old_thresholds.get("warning") != new_thresholds.get("warning"):
                     tracking_changed = True
+                    log('[SETTINGS]', f"Timing threshold (warning): {old_thresholds.get('warning')}s -> {new_thresholds.get('warning')}s")
+                    changes_summary.append(f"timing.warning: {old_thresholds.get('warning')}s -> {new_thresholds.get('warning')}s")
+                if old_thresholds.get("critical") != new_thresholds.get("critical"):
+                    tracking_changed = True
+                    log('[SETTINGS]', f"Timing threshold (critical): {old_thresholds.get('critical')}s -> {new_thresholds.get('critical')}s")
+                    changes_summary.append(f"timing.critical: {old_thresholds.get('critical')}s -> {new_thresholds.get('critical')}s")
+                if old_thresholds.get("max_delta_t") != new_thresholds.get("max_delta_t"):
+                    tracking_changed = True
+                    log('[SETTINGS]', f"Timing max_delta_t: {old_thresholds.get('max_delta_t')}s -> {new_thresholds.get('max_delta_t')}s")
+                    changes_summary.append(f"timing.max_delta_t: {old_thresholds.get('max_delta_t')}s -> {new_thresholds.get('max_delta_t')}s")
 
             # YOLO settings (confidence, iou, imgsz, obb)
             yolo_keys = ["yolo_confidence", "yolo_iou", "yolo_imgsz", "yolo_obb"]
             for key in yolo_keys:
                 if key in new_tracking and old_tracking.get(key) != new_tracking[key]:
                     tracking_changed = True
+                    old_val = old_tracking.get(key)
+                    new_val = new_tracking[key]
+                    log('[SETTINGS]', f"YOLO {key.replace('yolo_', '')}: {old_val} -> {new_val}")
+                    changes_summary.append(f"{key}: {old_val} -> {new_val}")
 
             if tracking_changed:
                 restart_needed.append("tracker")
+                log('[SETTINGS]', 'Tracking settings changed, tracker restart required')
 
             # Update tracking section
             if "tracking" not in config:
@@ -211,15 +265,26 @@ async def update_settings(request: dict):
 
         # Analytics settings (analytics.max_chart_events - no restart, frontend only)
         if "analytics" in request:
+            old_analytics = config.get("analytics", {})
             new_analytics = request["analytics"]
+
+            old_max = old_analytics.get("max_chart_events", 500)
+            new_max = new_analytics.get("max_chart_events", 500)
+
+            if old_max != new_max:
+                log('[SETTINGS]', f"Analytics max_chart_events: {old_max} -> {new_max} (hot reload, no restart)")
+                changes_summary.append(f"analytics.max_chart_events: {old_max} -> {new_max}")
+
             if "analytics" not in config:
                 config["analytics"] = {}
-            config["analytics"]["max_chart_events"] = new_analytics.get("max_chart_events", 500)
+            config["analytics"]["max_chart_events"] = new_max
             config["analytics"]["notes"] = "Chart optimization: Current shows last N events, Overview downsamples if > N total events"
 
         # Locomotive settings (locomotives.*.functions - hot reload via roster reload)
         if "locomotives" in request:
             new_locomotives = request["locomotives"]
+
+            log('[SETTINGS]', f"Locomotive update request for {len(new_locomotives)} locomotive(s)")
 
             # Validate each locomotive's functions
             for address, loco_data in new_locomotives.items():
@@ -238,17 +303,33 @@ async def update_settings(request: dict):
                 config["locomotives"] = {}
 
             for address, loco_data in new_locomotives.items():
+                loco_name = config.get("locomotives", {}).get(address, {}).get("name", f"Loco {address}")
+
                 if address not in config["locomotives"]:
                     config["locomotives"][address] = {}
+                    log('[SETTINGS]', f"Locomotive {address} ({loco_name}): New configuration")
+                else:
+                    # Log changes
+                    if 'functions' in loco_data:
+                        old_func_count = len(config["locomotives"][address].get("functions", []))
+                        new_func_count = len(loco_data["functions"])
+
+                        if old_func_count != new_func_count:
+                            log('[SETTINGS]', f"Locomotive {address} ({loco_name}): Function count {old_func_count} -> {new_func_count}")
+                        else:
+                            log('[SETTINGS]', f"Locomotive {address} ({loco_name}): {new_func_count} function(s) updated")
+
+                        changes_summary.append(f"loco_{address}.functions: {new_func_count} configured")
 
                 # Update only provided fields (functions, or other future editable fields)
                 config["locomotives"][address].update(loco_data)
 
             # Locomotive changes require roster reload (but NOT backend restart)
-            log('[SETTINGS]', f"Locomotive functions updated for {len(new_locomotives)} locomotives")
+            log('[SETTINGS]', f"Locomotive configuration saved for {len(new_locomotives)} locomotive(s) (roster reload required)")
 
         # Save config.json
         save_config(config)
+        log('[SETTINGS]', 'Config saved to config.json')
 
         # Save config.local.json (credentials only)
         if config_local:
@@ -274,7 +355,18 @@ async def update_settings(request: dict):
         # Deduplicate restart list
         restart_needed = list(set(restart_needed))
 
-        log('[SETTINGS]', f"Settings saved, restart needed: {restart_needed if restart_needed else 'none'}")
+        # Final summary log
+        if changes_summary:
+            log('[SETTINGS]', f"Settings update complete - {len(changes_summary)} change(s):")
+            for change in changes_summary:
+                log('[SETTINGS]', f"  - {change}")
+        else:
+            log('[SETTINGS]', 'Settings update complete - no changes detected')
+
+        if restart_needed:
+            log('[SETTINGS]', f"Services requiring restart: {', '.join(restart_needed)}")
+        else:
+            log('[SETTINGS]', 'No service restart required (hot reload)')
 
         return {
             "status": "success",
@@ -283,7 +375,9 @@ async def update_settings(request: dict):
         }
 
     except Exception as e:
-        log('[ERROR]', f"Settings update failed: {e}")
+        log('[ERROR]', f"[SETTINGS] Settings update failed: {e}")
+        import traceback
+        log('[ERROR]', f"[SETTINGS] Traceback: {traceback.format_exc()}")
         return {
             "status": "error",
             "message": str(e),

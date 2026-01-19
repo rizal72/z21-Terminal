@@ -25,6 +25,7 @@ PREFIXES = {
     '[OVFL]': '\033[95m',    # Magenta bright - overflow
     '[SPEED]': '\033[38;5;208m',  # Orange - speed setting events
     '[ANALYTICS]': '\033[38;5;213m',  # Pink - analytics/metrics
+    '[SETTINGS]': '\033[38;5;220m',  # Gold/yellow - configuration changes
 }
 
 RESET = '\033[0m'
