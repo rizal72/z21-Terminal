@@ -212,12 +212,12 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-700 bg-slate-900/50 overflow-x-auto">
+        <div className="flex border-b border-slate-700 bg-slate-900/50 overflow-x-auto flex-shrink-0">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'text-signal-amber border-b-2 border-signal-amber bg-slate-800/50'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/30'
@@ -1015,7 +1015,7 @@ function LocomotivesTab({ settings, setSettings }) {
                         />
 
                         {/* Lockable Checkbox */}
-                        <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">
+                        <label className="flex items-center cursor-pointer flex-shrink-0" title="Lockable">
                           <input
                             type="checkbox"
                             checked={func.lockable}
@@ -1030,9 +1030,8 @@ function LocomotivesTab({ settings, setSettings }) {
                                 }
                               });
                             }}
-                            className="w-4 h-4 rounded bg-slate-900 border-slate-700 text-signal-amber focus:ring-signal-amber"
+                            className="w-4 h-4 cursor-pointer"
                           />
-                          <span className="text-xs text-slate-300">Lock</span>
                         </label>
 
                         {/* Delete Button */}
@@ -1093,14 +1092,13 @@ function LocomotivesTab({ settings, setSettings }) {
                           />
 
                           {/* Lockable Checkbox */}
-                          <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">
+                          <label className="flex items-center cursor-pointer flex-shrink-0" title="Lockable">
                             <input
                               type="checkbox"
                               checked={newFunction.lockable}
                               onChange={(e) => setNewFunction({ ...newFunction, lockable: e.target.checked })}
-                              className="w-4 h-4 rounded bg-slate-900 border-slate-700 text-signal-amber focus:ring-signal-amber"
+                              className="w-4 h-4 cursor-pointer"
                             />
-                            <span className="text-xs text-slate-300">Lock</span>
                           </label>
                         </div>
 

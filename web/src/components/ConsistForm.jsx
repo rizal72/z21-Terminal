@@ -354,7 +354,7 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
             {/* Reference Loco Dropdown */}
             <div>
               <label className="block text-xs text-track-steel mb-1">
-                Reference loco monitored by:
+                Reference loco Gate:
               </label>
               <select
                 value={formData.gate_assignment?.reference || 'all'}
@@ -371,7 +371,7 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
             {/* Adjust Loco Dropdown */}
             <div>
               <label className="block text-xs text-track-steel mb-1">
-                Adjust loco monitored by:
+                Adjust loco Gate:
               </label>
               <select
                 value={formData.gate_assignment?.adjust || 'all'}
@@ -416,7 +416,7 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
           type="submit"
           className="flex-1 px-4 py-2 bg-signal-amber text-control-black rounded hover:bg-signal-amber/90 transition-all font-medium"
         >
-          {isEdit ? 'Update Consist' : 'Create Consist'}
+          {isEdit ? 'Update' : 'Create Consist'}
         </button>
       </div>
     </form>
