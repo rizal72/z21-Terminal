@@ -1,731 +1,858 @@
 # z21-Terminal
 
-Web-based DCC locomotive controller con tracking YOLO e compensazione automatica velocità.
+**Web-based DCC locomotive controller** with real-time YOLO tracking, automatic speed compensation, and multi-device sync via Z21 LAN protocol.
 
-**Progetto**: Plastico DCC - BiancAlice
-**Data creazione**: 2025-12-16
-**Repository**: https://github.com/rizal72/z21-Terminal (🔒 privato)
+**Version**: v1.0.0 (Production Ready - JMRI Independence Achieved)
+**Repository**: https://github.com/rizal72/z21-Terminal (Private, SSH)
+**Project**: BiancAlice Railway Layout
+**Last Updated**: 2026-01-20
 
 ---
 
-## ⚠️⚠️⚠️ ALWAYS READ z21-deployment SKILL BEFORE DOING ANYTHING ⚠️⚠️⚠️
+## ⚠️ CRITICAL: Read Deployment Skill First
 
 **Location**: `~/.claude/skills/z21-deployment/SKILL.md`
 
----
+Contains ALL critical rules for:
+- Git workflow (develop/main branches, fast-forward merge)
+- Deployment decision tree (docs/backend/frontend)
+- PowerShell aliases (z21-deploy-dev, z21-restart, z21-log)
+- 7 NON-NEGOTIABLE rules (venv, frontend rebuild, secrets, SSH, encoding, etc.)
 
-## 📋 Project Overview
-
-Web-based locomotive controller featuring real-time computer vision tracking and automatic speed compensation via Z21 LAN protocol.
-
-**Core Capabilities:**
-- **Modern Web Dashboard**: Mobile-first PWA with multi-device sync, installable on tablets and smartphones for trackside operation
-- **YOLO-Based Tracking**: Custom YOLOv8 model (93.1% mAP50) detects locomotives via IP camera, measures speed drift through configurable gate zones
-- **Automatic Compensation**: Real-time Δt-based speed matching in Virtual Consist Mode, eliminating manual CV tuning
-- **Consist Management**: Full CRUD operations via web UI - create, edit, delete consists without JMRI dependency
-- **Adaptive Timing**: Supports both symmetric (oval) and asymmetric (figure-8) track geometries with single-direction gate timing
-
-**Technical Highlights:**
-- FastAPI backend with WebSocket streaming
-- React + Vite frontend with Tailwind CSS
-- Operations mode CV19 management (no programming track needed)
-- Dynamic FPS tracking (30fps active, 1fps idle)
-- Wake Lock API for uninterrupted mobile operation
-
-**Architecture**: Originally built as JMRI extension, now increasingly independent with optional JMRI integration for initial roster import.
-
-**Result**: Professional railway operations with smartphone convenience, combining traditional DCC control with modern web technologies and AI-powered automation.
+**MUST read before any git/deployment operation!**
 
 ---
 
-## 📚 Documentazione Estesa
+## 🎯 Quick Start
 
-Per dettagli tecnici completi, vedi:
-- **[docs/Z21_PROTOCOL.md](docs/Z21_PROTOCOL.md)** - Protocollo Z21 LAN (UDP) dettagliato
-- **[docs/JMRI_INTEGRATION.md](docs/JMRI_INTEGRATION.md)** - Relazione con JMRI
-- **[docs/CONSIST_ROSTER.md](docs/CONSIST_ROSTER.md)** - Consist 10/11 + Roster completo 7 locomotive
-- **[docs/WEB_DASHBOARD.md](docs/WEB_DASHBOARD.md)** - Stack tecnologico, features, workflow development
-- **[docs/COMPUTER_VISION.md](docs/COMPUTER_VISION.md)** - Sistema YOLO tracking, gate detection, Virtual Mode
-- **[docs/CONSIST_MAPPING.md](docs/CONSIST_MAPPING.md)** - Logica Lead/Rear → Reference/Adjust (YOLO + Virtual Mode)
-- **[docs/CONFIG_REFACTOR.md](docs/CONFIG_REFACTOR.md)** - Refactoring config.json structure (2025-01-03)
-- **[docs/SPEED_TABLE_DB_MIGRATION.md](docs/SPEED_TABLE_DB_MIGRATION.md)** - Speed Table CV67-94 DB migration + config refactoring (2025-01-17)
-- **[docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)** - Complete data.db schema reference (tables, queries, event types)
-- **[docs/CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md)** - Changelog 2025-12-16 → 2025-12-24
+### What is z21-Terminal?
 
----
+A professional DCC locomotive control system combining:
+- **Modern Web Dashboard**: Mobile-first PWA with multi-device sync
+- **YOLO Tracking**: Custom AI model for real-time locomotive detection (YOLOv8 OBB, mAP50 91.7%)
+- **Automatic Compensation**: Real-time speed matching via gate timing (Δt-based)
+- **JMRI Independence**: Autonomous for daily operations (v1.0.0 milestone)
 
-## Repository Git
+### Quick Commands
 
-**GitHub**: https://github.com/rizal72/z21-Terminal (🔒 privato)  
-**Branch**: `develop` (lavoro), `main` (stabile)  
-**Remote**: `git@github.com:rizal72/z21-Terminal.git` (SSH)
+**Mac (Development)**:
+```bash
+z21              # Start backend + frontend (iTerm tabs)
+z21-backend      # Backend only (port 8000)
+z21-frontend     # Frontend only (port 5173)
+z21-terminal     # CLI controller
+```
 
-**Git Workflow**:
-1. Lavoro quotidiano su `develop`
-2. Merge `develop` → `main` quando pronto per release
-3. **CRITICO**: Tornare sempre su `develop` dopo merge
+**PC Windows (Production)**:
+```powershell
+z21-deploy-dev   # Full deployment from develop branch
+z21-restart      # Restart backend only
+z21-stop         # Stop backend
+z21-log          # View backend logs
+```
 
-**Git add policy**: Sempre usare `git add .`
+### Access URLs
 
----
-
-## Python Virtual Environment & Deployment
-
-**CRITICAL**: Always use venv for Python commands (Mac and PC).
-
-- **Mac**: `source venv/bin/activate` before running Python
-- **PC**: Managed automatically by Task Scheduler (`z21-restart`)
-
-**For complete deployment workflow, rules, and troubleshooting**: See `~/.claude/skills/z21-deployment/SKILL.md`
+- **Mac Dev**: http://localhost:5173 or http://192.168.1.xxx:5173
+- **Mac Dev (Tailscale)**: https://mbp16diriccardo.tail9350d7.ts.net
+- **PC Prod Local**: http://localhost:8000
+- **PC Prod (Tailscale)**: https://gaming-pc.tail9350d7.ts.net
 
 ---
 
-## Setup Hardware
+## 📚 Complete Documentation Index
+
+### Core Architecture
+- **[DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)** - SQLite `data.db` complete reference (sessions, events, speed tables, consist state)
+- **[WEB_DASHBOARD.md](docs/WEB_DASHBOARD.md)** - Frontend stack (React + Vite + Tailwind), features, development workflow
+- **[Z21_PROTOCOL.md](docs/Z21_PROTOCOL.md)** - Z21 LAN protocol (UDP), XpressNet commands, POM operations (CV read/write)
+- **[JMRI_INTEGRATION.md](docs/JMRI_INTEGRATION.md)** - JMRI relationship, coexistence, independence roadmap
+
+### Locomotive Management
+- **[CONSIST_ROSTER.md](docs/CONSIST_ROSTER.md)** - 7 locomotives, 2 consists, decoder specs (ESU/Hornby), CV profiles
+- **[CONSIST_MAPPING.md](docs/CONSIST_MAPPING.md)** - Lead/Rear vs Reference/Adjust logic, decoder stability strategy
+- **[SPEED_TABLE_DB_MIGRATION.md](docs/SPEED_TABLE_DB_MIGRATION.md)** - v1.0.0 milestone: CV67-94 in database, config refactoring
+- **[SPEED_TABLE_VIEWER.md](docs/SPEED_TABLE_VIEWER.md)** - Phase 1+2: Read-only analysis + direct CV write (operations mode)
+
+### Computer Vision & Tracking
+- **[COMPUTER_VISION.md](docs/COMPUTER_VISION.md)** - YOLO training workflow (4 classes), gate timing detection, Virtual Mode
+- **[CONSIST_TRACKING.md](docs/CONSIST_TRACKING.md)** - Timing-based vs distance-based strategies, symmetric/asymmetric gates
+- **[TENSORRT_OPTIMIZATION.md](docs/TENSORRT_OPTIMIZATION.md)** - GPU acceleration (2-5x faster), OBB model export workflow
+- **[VIRTUAL_CONSIST_MODE.md](docs/VIRTUAL_CONSIST_MODE.md)** - CV19 management, speed compensation (bang-bang + decay), real-time feedback
+
+### Analytics & Monitoring
+- **[ANALYTICS.md](docs/ANALYTICS.md)** - Session tracking, Δt trends, YOLO performance, locomotive operating time
+- **[DB_REFACTORING.md](docs/DB_REFACTORING.md)** - Database consolidation: analytics.db → data.db migration (2026-01-17)
+- **[LOCOMOTIVE_SYNC_MAC_PC.md](docs/LOCOMOTIVE_SYNC_MAC_PC.md)** - Multi-environment config sync
+
+### UI & Configuration
+- **[SETTINGS_UI_DESIGN.md](docs/SETTINGS_UI_DESIGN.md)** - Settings modal (8 tabs), locomotive function editor, gate editor
+- **[CONSIST_MANAGER_UI.md](docs/CONSIST_MANAGER_UI.md)** - Consist CRUD operations via web UI (Phase 6)
+- **[CONFIG_REFACTOR.md](docs/CONFIG_REFACTOR.md)** - Config.json structure evolution (2025-01-03)
+
+### Planning & Archive
+- **[CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md)** - Historical changes (2025-12-16 → 2026-01-16)
+- **[FUTURE_IDEAS.md](docs/FUTURE_IDEAS.md)** - Enhancement ideas (Session Replay, Autopilot, Notifications, Multi-User, etc.)
+- **[REFACTOR_PLAN.md](docs/REFACTOR_PLAN.md)** - Backend modular architecture design (2340 lines → 742 main + 2648 modular)
+- **[FRONTEND_REFACTOR_PLAN.md](docs/FRONTEND_REFACTOR_PLAN.md)** - Frontend component refactoring
+- **[LOG_REFACTORING.md](docs/LOG_REFACTORING.md)** - Debug mode strategy (config.json flag)
+- **[MOTOR_LOAD_MONITORING.md](docs/MOTOR_LOAD_MONITORING.md)** - Phase 9: Z21 telemetry monitoring (future quick win)
+- **[TRACK_MAP_IMPLEMENTATION.md](docs/TRACK_MAP_IMPLEMENTATION.md)** - Phase 7: SVG track visualization (postponed)
+- **[GPU_DEPLOYMENT.md](docs/GPU_DEPLOYMENT.md)** - PC Windows deployment notes
+- **[REPORTS_TAB.md](docs/REPORTS_TAB.md)** - Analytics reports design
+- **[SPEED_TABLE_TUNING.md](docs/SPEED_TABLE_TUNING.md)** - Speed table tuning strategies
+
+---
+
+## 🏗️ Architecture Overview
+
+### System Components
+
+```
+┌─────────────┐     ┌──────────────┐     ┌────────────┐
+│   Frontend  │────▶│   Backend    │────▶│    Z21     │
+│  React PWA  │◀────│  FastAPI WS  │◀────│ Controller │
+│ (port 5173) │     │ (port 8000)  │     │  (UDP)     │
+└─────────────┘     └───────┬──────┘     └────────────┘
+                            │
+                    ┌───────┴────────┐
+                    │                │
+               ┌────▼─────┐   ┌─────▼──────┐
+               │ data.db  │   │ YOLO Daemon│
+               │ (SQLite) │   │ (Tracking) │
+               └──────────┘   └────────────┘
+```
+
+### Directory Structure
+
+```
+z21-Terminal/
+├── backend/                    # FastAPI backend (modular architecture v1.0.0)
+│   ├── main.py                 # FastAPI app (742 lines, minimal delegation)
+│   ├── dependencies.py         # Global state DI (Z21, WebSocket manager)
+│   ├── routers/                # API endpoints (analytics, config, roster, status, video_feed)
+│   ├── services/               # Business logic (analytics_db, broadcast, config_manager)
+│   ├── websocket_handlers/     # Real-time handlers (ws_control, ws_tracking)
+│   ├── tracking/               # YOLO tracking components (yolo_tracker, rtsp_handler)
+│   ├── tracking_daemon.py      # Headless YOLO tracking daemon
+│   └── data/                   # SQLite database (data.db, gitignored)
+├── web/                        # React frontend
+│   ├── src/
+│   │   ├── App.jsx             # Main component
+│   │   └── components/         # React components (ConsistController, Analytics, Settings, etc.)
+│   ├── dist/                   # Production build (gitignored)
+│   └── package.json
+├── scripts/                    # Python utilities
+│   ├── z21.py                  # Z21 LAN protocol library (UDP commands)
+│   ├── z21_controller.py       # CLI controller
+│   └── utils/                  # Import scripts, YOLO training helpers
+├── docs/                       # Documentation (24 markdown files)
+├── config.json                 # Central configuration (committed to git)
+├── config.local.json           # Local overrides (gitignored, credentials)
+├── data.db                     # Analytics database (auto-created, gitignored)
+└── best_obb.engine             # TensorRT YOLO model (13.7 MB, committed)
+```
+
+### Backend Modular Architecture (v1.0.0)
+
+**Refactored**: 2340 lines monolithic → 742 lines main + 2648 lines modular
+
+- **main.py** (742): FastAPI app with minimal delegation
+- **routers/** (839): API endpoints organized by domain (analytics, config, roster, status, video_feed)
+- **services/** (993): Business logic (DB queries, broadcasting, config management)
+- **websocket_handlers/** (586): Real-time locomotive control + tracking
+
+**Benefits**: Single responsibility, testability, scalability, zero main.py changes for new features
+
+See [docs/REFACTOR_PLAN.md](docs/REFACTOR_PLAN.md) for complete design
+
+---
+
+## 🚂 Locomotive Roster & Consists
+
+### Hardware Configuration
 
 **Control Station**:
-- Roco Z21 Bianca (IP 192.168.1.111, porta UDP 21105)
-- Serial 111466, Hardware 0x0203, Firmware 1.67
+- Roco Z21 Bianca (IP 192.168.1.111, port UDP 21105, firmware 1.67)
 
 **Computer Vision**:
-- Tapo IP camera (rtsp://192.168.1.4:554/stream2 - 720P)
+- Tapo IP camera (rtsp://192.168.1.4:554/stream2 - 720P, H.264)
 
-**Production Deployment (PC Windows)**:
-- Username: `riccardo@gaming-pc` (SSH access from Mac)
-- **Path**: `C:\z21-Terminal` (⚠️ CRITICAL - root C:, NOT Documents!)
-- OS: Windows 11
-- Python: venv isolato con PyTorch GPU + CUDA 11.8
-- **Shell**: PowerShell 7.5.4 (SSH), PowerShell 5.1 (Task Scheduler)
-- **Deployment**: See `~/.claude/skills/z21-deployment/SKILL.md` for:
-  - Deployment decision tree (docs/backend/frontend)
-  - PowerShell aliases (z21-deploy-dev, z21-restart, z21-log, etc.)
-  - 7 CRITICAL rules (venv, git workflow, frontend rebuild, secrets, SSH, encoding, README)
-  - Pre-deploy checklist (6 items)
-- **Task Scheduler Backend**:
-  - Script: `start-backend.ps1` (root directory, versionated)
-  - Task name: "z21-backend" (registered automatically by PowerShell profile)
-  - Features: Log rotation, PS7 encoding compatibility, detached execution
-  - Called by: `z21-start`, `z21-restart` aliases via Task Scheduler
-  - Log file: `C:\z21-Terminal\backend.log` (rotated to .old on each start)
+**Locomotives** (7 total):
+| Address | Name | Decoder | Color | Consist | Role |
+|---------|------|---------|-------|---------|------|
+| 1 | Gr.675 017 | ESU LokSound V4.0 | Yellow | C10 | Lead (adjust) |
+| 5 | D645 014 | ESU LokPilot 5 | Orange | C10 | Rear (reference) |
+| 7 | E656 239 | Hornby TXS | Green | C11 | Lead (adjust) |
+| 8 | E444 056 | ESU LokPilot 5 | Red | C11 | Rear (reference) |
+| 2 | E656 182 | ESU LokPilot 5 | White | - | Single |
+| 4 | 2048 | Zimo MX630 | Cyan | - | Single |
+| 6 | D445 1140 | ESU LokPilot 5 | Magenta | - | Single |
 
-**Software**:
-- JMRI (roster/consist management)
-- Python 3 (backend z21.py library)
+**Consists** (2 active):
+- **Consist 10** (Internal Track - Figure-8): Loco 1 + 5, Asymmetric gates (G3/G4)
+- **Consist 11** (External Track - Oval): Loco 7 + 8, Symmetric gates (G1/G2)
 
-Per dettagli protocollo Z21: vedi `docs/Z21_PROTOCOL.md`
+**Reference Loco Strategy**: Always rear loco (stable ESU decoders), adjust loco = lead (potentially unstable)
+
+**Complete specs**: See [docs/CONSIST_ROSTER.md](docs/CONSIST_ROSTER.md)
 
 ---
 
-## Relazione con JMRI
+## ⚙️ Configuration Files
 
-**z21-Terminal è un'estensione di JMRI, non un sostituto.**
+### config.json (Central Configuration)
 
-- Legge roster e consist da file XML JMRI
-- NON richiede JMRI in esecuzione (solo i file XML)
-- Coesistenza possibile: entrambi comunicano con Z21 via UDP
+**Location**: `/Users/riccardosallusti/Documents/_PROGETTI/z21-Terminal/config.json`
 
-**Workflow**:
-1. **Setup** (JMRI DecoderPro): configura decoder, roster, consist
-2. **Operations** (z21-Terminal): controllo quotidiano, automazioni Python 3
-3. **Maintenance** (JMRI): modifiche CV, aggiornamenti
-
-Per dettagli completi: vedi `docs/JMRI_INTEGRATION.md`
-
----
-
-## Consist Configuration & Locomotive Roster
-
-**2 Consist configurati** (DAC software-based):
-- **Consist 10** (Tracciato Interno): Gr.675 017 (1) + D645 014 (5)
-- **Consist 11** (Tracciato Esterno): E656 239 (7) + E444 056 (8)
-
-**6 Locomotive operative** (ESU LokPilot/LokSound, Hornby TXS)
-
-**Per dettagli completi**: vedi [docs/CONSIST_ROSTER.md](docs/CONSIST_ROSTER.md)
-- Specifiche tecniche complete (decoder, CV, speed control)
-- Tabella riepilogo roster
-- Note decoder compatibility (CV read/write operations mode)
-
----
-
-## Tool e Script
-
-### Script Implementati
-
-1. **read_cv_from_roster.py** - Legge CV da roster XML JMRI
-2. **read_consists.py** - Visualizza configurazione consist
-3. **z21.py** - Libreria completa protocollo Z21 LAN (UDP)
-4. **z21_controller.py** - Controller interattivo CLI
-
-**Metodi z21.py**:
-- `get_status()`, `get_loco_info()`
-- `set_loco_speed()`, `set_loco_function()`
-- `write_cv_ops_mode()`, `read_cv_on_main()`
-- `track_power_on/off()`, `emergency_stop_all()`
-
-**Features Controller CLI**:
-- Velocità (w/s, 0-9, \), direzione (d), emergency stop (TAB)
-- Funzioni F0-F28 con Shift+A-Z hotkeys
-- Polling periodico Z21 (500ms) per sync power/funzioni
-
-Per dettagli Z21 protocol: vedi `docs/Z21_PROTOCOL.md`
-
----
-## Web Dashboard
-
-**Status**: ✅ **MVP COMPLETATO** (2025-12-24)
-**URL locale**: http://localhost:5173
-**URL Tailscale**:
-- **Mac (development)**: https://mbp16diriccardo.tail9350d7.ts.net
-- **PC (production)**: https://gaming-pc.tail9350d7.ts.net
-
-### Quick Start (macOS)
-```bash
-z21           # Avvia backend + frontend in tab iTerm2 separate
-z21-backend   # Backend FastAPI (porta 8000)
-z21-frontend  # Frontend Vite (porta 5173)
-```
-
-**Venv Auto-Activation**: Gli alias in `~/.bash_aliases` attivano automaticamente `venv/` se esiste, altrimenti usano system Python. Zero cognitive load, protezione da `brew upgrade python`.
-
-**⚠️ IMPORTANT - Frontend Changes**: Modifiche a `web/src/*` richiedono **SEMPRE rebuild** o restart dev server:
-- **Development** (Mac): Restart Vite dev server (Ctrl+C + `z21-frontend`)
-- **Production** (PC): `z21-deploy-dev` (pull + build + restart)
-- **Backend** ha hot-reload automatico, **frontend NO** (Vite HMR non sempre affidabile per useEffect/hooks)
-
-**Stack**: React 18.3 + Vite 6.0 + Tailwind CSS + FastAPI + WebSocket
-**Features**: Dual consist control, real-time sync, Gate Editor (drag/drop/rotate/resize), mobile-first responsive design
-
-**Per dettagli completi**: vedi [docs/WEB_DASHBOARD.md](docs/WEB_DASHBOARD.md)
-- Stack tecnologico completo (frontend + backend)
-- Development workflow (Vite HMR, quando riavviare)
-- Features implementate (controllo locomotive, UI/UX, real-time sync)
-- Fix importanti risolti (Tailwind v4, function state sync, Safari bugs)
-- Mobile optimizations (Wake Lock, responsive layout)
-- Alias bash con venv auto-activation
-
-### Function Editor (Settings UI)
-
-**Status**: ✅ **FULLY IMPLEMENTED** (2025-01-19)
-
-**Features**:
-- **Edit labels F0-F28**: Inline editing with 20 char max length
-- **Toggle lockable flag**: Direct checkbox manipulation
-- **Add functions**: Filtered dropdown (F0-F28, showing only available numbers)
-- **Delete functions**: Trash icon with confirmation dialog
-- **Smart change detection**: Deep comparison for unsaved changes warning
-- **Hot reload**: No backend restart required (roster reload only)
-
-**UI Pattern**: Accordion-based progressive disclosure
-- Collapsible locomotive cards (7 locomotives)
-- Expand to show function list with inline editor
-- Click-to-edit label + checkbox for lockable
-- Add function: inline form with filtered dropdown + input field
-- Delete function: trash icon → confirmation → automatic array sort
-
-**Validation**:
-- **Frontend**: Empty label check, max 20 chars, immediate feedback
-- **Backend**: Full validation (empty, length, function number 0-28, lockable boolean)
-- **Function numbers**: F0-F28 allowed, gaps permitted (F0,F1,F3,F4 valid)
-- **Automatic sort**: Array always sorted by function number after add/delete
-
-**Technical Details**:
-- **Files modified**:
-  - `web/src/components/SettingsModal.jsx` - Accordion UI, inline editor, add/delete logic
-  - `backend/routers/config.py` - `validate_locomotive_functions()` helper, max 20 chars
-- **State management**: `settings` vs `initialSettings` for deep comparison (JSON.stringify)
-- **Unsaved changes**: Warning only on real changes, not just modal open/close
-- **Hot reload**: POST /api/settings/update → POST /api/reload-roster → immediate effect
-
-**User Experience**:
-- Zero cognitive load: edit directly where you see the values
-- No modal complexity: accordion keeps context visible
-- Smart warnings: only when truly necessary (deep comparison)
-- Immediate feedback: validation errors shown inline
-- No restart: changes live immediately after save
-
----
----
-## Computer Vision Tracking System
-
-**Status**: ✅ **PHASE 4 COMPLETATA** - Gate Timing Detection integrato in Web Dashboard  
-**Approccio**: YOLO custom training + timing-based gate crossing detection
-
-### Obiettivo
-- **Monitoraggio posizioni real-time** delle locomotive sul tracciato
-- **Speed matching automatico** tramite co-presence timing Δt tra lead/rear
-- **Auto-calibrazione consist** via CV adjustment (Mode 2) o Virtual Mode (Mode 3)
-
-### Stack Implementato
-- **YOLO v8 nano** - Object detection custom trained (4 locomotive, mAP50 = 80.7%)
-- **Gate timing detection** - 2 gate rettangolari condivisi per Consist 11 (cross-validation)
-- **Tracking daemon** - Headless YOLO inference + WebSocket broadcast
-- **Video feed MJPEG** - RTSP stream con overlay gate + Δt stats panel
-- **Frontend integration** - React component con Δt panel real-time
-
-### Features Live
-- ✅ YOLO detection tutte e 4 locomotive (confidence 0.60-0.92)
-- ✅ Dual-gate co-presence timing (Gate 1: 100x100px, Gate 2: 60x60px)
-- ✅ Cross-gate Δt calculation con fresh timestamp logic
-- ✅ WebSocket sync multi-device (daemon → backend → frontend)
-- ✅ Soglie timing: |Δt| < 1.0s SYNCED, 1.0-2.0s WARNING, >2.0s CRITICAL
-- ✅ Debug mode flag in config.json per console logging intelligente
-
-**Per dettagli completi**: vedi [docs/COMPUTER_VISION.md](docs/COMPUTER_VISION.md)
-- YOLO training workflow completo (dataset, annotazione, training Colab)
-- Gate timing detection strategy (timing-based vs distance-based)
-- Reference Loco Strategy (CRITICO per speed compensation)
-- Phase 4 implementation details (daemon, video feed, frontend)
-- Virtual Consist Mode (Phase 4B) - CV19 management automatico
-
-### Production Testing Results (2025-01-10 → 2025-01-11)
-
-**✅ TESTING COMPLETATO** - 3 configurazioni testate approfonditamente su PC Windows + GPU
-
-**Test 1: OBB Model** (`yolo_obb: true`, `yolo_iou: 0.85`)
-- ✅ **Overlap handling**: Perfetto - entrambe le loco visibili quando si passano vicino
-- ✅ **Bbox orientation**: Poligoni ruotati seguono angolo locomotiva
-- ❌ **Distant detection**: Loco 7 confidence <0.4 quando lontana da camera
-  - Richiesto `yolo_confidence: 0.1` per detectare loco 7 distante
-  - Side effect: False positives (carrozze misclassificate, doppio bbox stessa loco)
-
-**Test 2: Standard Model** (`yolo_obb: false`, `yolo_iou: 0.85`)
-- ✅ **Distant detection**: Loco 7 confidence 0.4+ anche quando lontana
-- ✅ **Detection consistente**: Tutte le loco detectate su tutto il tracciato
-- ⚠️ **Overlap handling**: NMS sopprime ancora una loco quando si passano vicino (IoU 0.85 insufficiente)
-
-**Test 3: Standard Model + High IoU** (temporaneamente scelto 2025-01-10)
+**Key Sections**:
 ```json
 {
-  "yolo_confidence": 0.2,
-  "yolo_iou": 0.95,
-  "yolo_obb": false
+  "debug": { "enabled": false },              // Production: false, Dev: true
+  "z21": { "host": "192.168.1.111", "port": 21105 },
+  "camera": {
+    "ip": "192.168.1.4",
+    "port": 554,
+    "stream": "stream2",
+    "resolution": { "width": 1280, "height": 720 },
+    "notes": "Credentials in config.local.json"
+  },
+  "video": { "fps": 30 },                     // MJPEG stream FPS
+  "consists": {
+    "10": {
+      "name": "C10 Interno",
+      "lead_address": 1, "rear_address": 5,
+      "reference_loco": 5, "adjust_loco": 1,
+      "gate_ids": [3, 4],
+      "gate_assignment": { "reference": 3, "adjust": 4 },  // Asymmetric
+      "virtual_mode": false,
+      "auto_compensation_enabled": false
+    },
+    "11": {
+      "name": "C11 Esterno",
+      "lead_address": 7, "rear_address": 8,
+      "reference_loco": 8, "adjust_loco": 7,
+      "gate_ids": [1, 2],
+      "gate_assignment": null,                 // Symmetric (all gates)
+      "virtual_mode": true,
+      "auto_compensation_enabled": true
+    }
+  },
+  "gates": [
+    { "id": 1, "name": "Gate 1", "center": [995, 27], "width": 65, "height": 43, "angle": 0, "color": [255, 165, 0] },
+    { "id": 2, "name": "Gate 2", "center": [10, 269], "width": 44, "height": 47, "angle": -30, "color": [255, 165, 0] },
+    { "id": 3, "name": "Gate 3", "center": [1086, 326], "width": 80, "height": 80, "angle": 300, "color": [0, 255, 255] },
+    { "id": 4, "name": "Gate 4", "center": [479, 29], "width": 50, "height": 50, "angle": 0, "color": [0, 255, 255] }
+  ],
+  "tracking": {
+    "fps": { "active": 30, "idle": 1, "video_feed": 30 },
+    "idle_timeout_seconds": 10,
+    "timing_thresholds": {
+      "warning": 1.0,                          // |Δt| >= 1.0s → WARNING
+      "critical": 1.5,                         // |Δt| >= 1.5s → CRITICAL
+      "max_delta_t": 10.0                      // Outlier filter
+    },
+    "yolo_confidence": 0.4,                    // OBB model optimized value
+    "yolo_iou": 0.6,                           // Lower for OBB (reduced overlap)
+    "yolo_imgsz": 640,
+    "yolo_obb": true                           // Oriented Bounding Boxes
+  },
+  "tracking_OBB": {                            // Quick-load preset
+    "yolo_confidence": 0.4,
+    "yolo_iou": 0.6,
+    "yolo_obb": true
+  },
+  "tracking_standard": {                       // Quick-load preset
+    "yolo_confidence": 0.2,
+    "yolo_iou": 0.95,
+    "yolo_obb": false
+  },
+  "analytics": {
+    "max_chart_events": 500                    // Chart optimization (100-2000)
+  },
+  "locomotives": {
+    "1": {
+      "name": "Gr.675 017",
+      "decoder": "LokSound V4.0",
+      "color": "#FFFF00",
+      "cv_profiles": {
+        "normal": { "cv3": 78, "cv4": 58 },
+        "testing": { "cv3": 0, "cv4": 0 }
+      },
+      "notes": "",
+      "functions": [                           // F0-F28 labels and lockable flags
+        { "number": 0, "label": "light", "lockable": true },
+        { "number": 1, "label": "sound", "lockable": true },
+        ...
+      ]
+    },
+    ...
+  }
 }
 ```
-- ✅ **Distant detection**: Perfetto (tutte le loco, tutte le distanze)
-- ✅ **Overlap handling**: Entrambe le loco visibili quando si passano vicino (NMS solo se overlap >95%)
-- ✅ **False positives**: Minimali (confidence 0.2 sufficiente)
-- ⚠️ **Trade-off**: Doppio bbox occasionale su overlap estremo
 
-**Test 4: OBB Model + Tuned Params** ✅ **VINCITORE FINALE** (2025-01-11)
+**Migration History** (v1.0.0):
+- Unified `locomotives` section (was split across `locomotive_colors`, `cv_profiles`)
+- Removed dependency on JMRI roster XML for locomotive metadata
+- CV67-94 speed tables moved to database
+- Function labels F0-F28 in config.json (editable via Settings UI)
+
+**Complete reference**: See [docs/CONFIG_REFACTOR.md](docs/CONFIG_REFACTOR.md)
+
+---
+
+### config.local.json (Local Overrides)
+
+**Location**: Root directory (gitignored)
+
+**Purpose**: Machine-specific overrides (credentials, test mode, local IP changes)
+
+**Example**:
 ```json
 {
-  "yolo_confidence": 0.3,  // Più alto per ridurre false positives
-  "yolo_iou": 0.6,         // Più basso OK perché bbox ruotati = meno overlap
-  "yolo_obb": true         // OBB model attivo
+  "camera": {
+    "username": "your_username",
+    "password": "your_password"
+  },
+  "debug": {
+    "enabled": true
+  }
 }
 ```
-- ✅ **Overlap handling**: Perfetto (bbox ruotati non sovrapposti)
-- ✅ **Distant detection**: Confidence 0.3 bilancia detection vs false positives
-- ✅ **Bbox precision**: Poligoni ruotati seguono orientamento reale locomotive
-- ✅ **IoU ottimizzato**: 0.6 sufficiente (OBB riduce overlap geometricamente)
 
-**Decisione Finale: OBB Model Wins** (dopo ulteriori test)
-- **Perché OBB vince**: Tuning parametri risolve problema distant detection
-  - Confidence 0.3 (vs 0.1 test iniziale): elimina false positives mantenendo detection
-  - IoU 0.6: ottimale per bbox ruotati (overlap geometrico ridotto)
-  - Bbox orientation: rappresentazione più accurata della geometria reale
-- **Perché Standard non basta**: Overlap handling imperfetto anche con IoU 0.95
-  - Doppi bbox su overlap estremo (raro ma fastidioso)
+**Merging**: `load_config()` from `config_loader.py` deep-merges config.local.json over config.json at runtime
 
-#### TensorRT Optimization & Critical Fix (2025-01-11)
+**Setup**: Copy `config.local.json.example` and add credentials
 
-**Motivazione**: Ridurre bbox lag da 2-3s a <0.5s tramite GPU acceleration
-
-**Implementation**: Export modello a TensorRT .engine format (FP16 half-precision)
-- Script: `scripts/utils/export_tensorrt.py` (auto-detect standard vs OBB)
-- Priority fallback: `.engine` → `.onnx` → `.pt`
-- Auto-detection in `yolo_tracker.py` (zero config changes needed)
-
-**Critical Bug Found & Fixed**:
-- **Problem**: ONNX/TensorRT zero detection (bbox invisibili, no console output)
-- **Root cause**: ONNX/TensorRT export NON preserva task metadata
-  - YOLO assumeva `task='detect'` invece di `task='obb'`
-  - OBB model trattato come standard detection → output format incompatibile
-- **Solution**: Explicitly specify `task='obb'` when loading OBB models
-  ```python
-  if yolo_obb:
-      self.model = YOLO(model_path, task='obb')  # Fix per ONNX/TensorRT OBB
-  else:
-      self.model = YOLO(model_path)              # Standard detection
-  ```
-- **Commits**: `1012ccb` (ONNX fallback), `2d17969` (task='obb' fix)
-
-**Test Results**:
-- ✅ **ONNX fallback**: 1.5-2x faster than PyTorch (intermediate speed)
-- ✅ **TensorRT OBB**: 2-5x faster (6-15ms/frame vs 30ms PyTorch)
-- ✅ **Detection perfect**: All 4 locos detected with rotated bboxes
-- ✅ **Bbox lag eliminated**: <0.5s (was 2-3s)
-- ✅ **Gate timing accurate**: Real-time Δt calculation
-- ✅ **Fallback compatible**: Works with both standard and OBB models
-
-**Model Files**:
-- `best_obb.pt`: 6.6 MB (PyTorch OBB - backup)
-- `best_obb.onnx`: 11.9 MB (ONNX OBB - intermediate speed)
-- `best_obb.engine`: 13.7 MB (TensorRT OBB - maximum speed)
-
-**Key Insight**: ONNX/TensorRT export strips model metadata → explicit task specification REQUIRED for OBB models
-
-**Documentation**: See `docs/TENSORRT_OPTIMIZATION.md` for complete export workflow
+See `README_CAMERA.md` for camera setup instructions
 
 ---
 
-**Key Insights** (Test 4 OBB):
-- OBB richiede tuning diverso da Standard: confidence più alto, IoU più basso
-- Geometry matters: bbox ruotati riducono overlap → IoU threshold più basso funziona meglio
-- False positives risolvibili: confidence 0.3 sweet spot per OBB (0.2 troppo basso)
-- Production testing iterativo essenziale: primi test OBB avevano parametri subottimali
-
-**✅ Production Verification** (2025-01-11):
-- ✅ YOLO OBB detection: Bbox ruotati funzionanti in video feed
-- ✅ Gate passes: Detection affidabile su entrambi i gate
-- ✅ Distant detection: Confidence 0.3 ottimale (nessun false positive)
-- ✅ Overlap handling: Perfetto (zero doppi bbox)
-- ✅ WebSocket stats: Badge interattivo funzionante (uptime, messages, reconnects)
-- ✅ Test badge: UI migliorata ("Test" fisso con colori verde/amber)
-
-### Future Tasks
-
-#### ⏳ **Expand YOLO Tracking: 4 → 6 Locomotive Classes**
-
-**Obiettivo**: Aggiungere loco 2 (E656 182) e loco 6 (D445 1140) al tracking YOLO
-
-**Workflow Incrementale** (non serve rifare annotation esistenti):
-
-1. **Setup Plastico** (solo nuove loco):
-   - Rimuovere fisicamente: Loco 1, 5, 7, 8 (già nel dataset v6)
-   - Tenere solo: Loco 2 + Loco 6 (nuove classi)
-
-2. **Cattura Video** (~10 min):
-   - Camera Tapo RTSP 720P
-   - Far girare entrambe (consist temporaneo o separate)
-   - Variare: distanze, angoli, velocità, illuminazione
-   - Durata: 5-10 minuti → ~100-150 frame/loco
-
-3. **Frame Extraction** (script esistente):
-   - `scripts/utils/1_extract_frames.py`
-   - Output: 200-300 frame totali
-
-4. **Upload Roboflow** (versioning automatico):
-   - Progetto "BiancAlice" esistente → upload nuovi frame
-   - Roboflow crea VERSION 7 automaticamente
-   - Dataset finale = v6 (4 classi) + v7 (2 classi) = 6 classi
-
-5. **Annotation** (~1-2 ore):
-   - Smart Select solo per 2 nuove classi:
-     - `2_E656_182` (nuovo)
-     - `6_D445_1140` (nuovo)
-   - Classi esistenti NON toccate (già annotate)
-
-6. **Training Google Colab** (~5-10 min):
-   - `scripts/utils/3_train_yolo_colab.py` (auto-fetch v7)
-   - Output: `best.pt` con 6 classi
-
-7. **Code Update** (class mapping):
-   ```python
-   # yolo_tracker.py - DCC_TO_YOLO_CLASS
-   # PRIMA (4 classi):
-   {1: 0, 5: 1, 7: 2, 8: 3}
-
-   # DOPO (6 classi - ordine alfabetico Roboflow):
-   {1: 0, 2: 1, 5: 2, 6: 3, 7: 4, 8: 5}
-   ```
-
-8. **Export TensorRT** (su PC, ~2 min):
-   - `python scripts\utils\export_tensorrt.py`
-   - Output: `best_obb.engine` aggiornato (6 classi)
-
-**Stima Tempo Totale**: ~2-3 ore (quasi tutto annotation manuale)
-
-**Vantaggi**:
-- ✅ Non rifare annotation esistenti (Roboflow merge automatico)
-- ✅ Meno lavoro (~200 nuovi frame vs 600+ totali)
-- ✅ Transfer learning (YOLO mantiene detection esistenti)
-- ✅ Versioning (rollback a v6 se serve)
-
----
-
-#### ⏳ **IR Night Vision Detection Test**
-
-Test YOLO con Tapo camera in modalità notturna
-
-**Contesto**: Test precedente (vecchio modello YOLO standard, su Mac) fallito
-
-**Da verificare con setup attuale**:
-- Modello YOLOv8n OBB (mAP50 91.7%, confidence 0.3, TensorRT GPU)
-- PC Windows con GPU (inference più veloce)
-- Stream RTSP stability con IR attivo + locomotive in movimento
-
-**Expected issue**: OpenCV stream decode instability in IR mode
-
-**Possibili soluzioni se fallisce**:
-- Provare stream1 (1080p) invece di stream2 (720p)
-- Forzare codec H.264 (Tapo potrebbe switchare ad H.265 in IR)
-- Disabilitare IR automatico se LED sempre disponibili
-
-**Test quando**: Plastico acceso, locomotive in movimento, luci spente
-
----
-## Note Operative
-
-### Speed Matching
-- Gestito manualmente dall'utente tramite JMRI e speed tables CV
-- Le coppie nei consist sono sincronizzate per viaggiare insieme
-- Il controller non gestisce calibrazione, solo controllo
-
-### CV Operations
-- **Lettura CV da roster JMRI**: ✅ Implementata (via file XML)
-- **Lettura CV diretta (POM Read - Operations Mode)**: ✅ **IMPLEMENTATA E FUNZIONANTE**
-  - **Comando XpressNet**: `E6 30 [addr] [E4|cv_msb] [cv_lsb] [0x00] [xor]` (verify con value=0)
-  - **Risposta**: `64 14 [addr_msb] [addr_lsb] [VALUE] [xor]` - valore reale nel byte 5
-  - **⚠️ DECODER COMPATIBILITY**:
-    - **ESU LokPilot/LokSound** (loco 1, 2, 5, 6, 8): ✅ **FUNZIONA** (primo tentativo, stabile)
-    - **Hornby TXS** (loco 7): ❌ **NON SUPPORTA** CV read in ops mode
-      - Alternativa: App Hornby Bluetooth
-  - **Implementazione**: `read_cv_on_main()` in z21.py con retry automatico (3 tentativi, 2s delay)
-- **Scrittura CV diretta (POM Write - Operations Mode)**: ✅ **IMPLEMENTATA E FUNZIONANTE**
-  - **Comando XpressNet**: `E6 30 [addr] [EC|cv_msb] [cv_lsb] [value] [xor]`
-  - **Z21 comportamento**: NON invia ACK per successo, solo errori `0x61`
-  - **Timeout**: 500ms per rilevare errori, silenzio = successo
-  - **Testato**: CV4 cambiato da 14→20→14 con successo (loco 2 - ESU)
-  - **DECODER COMPATIBILITY**:
-    - **ESU, Hornby, tutti i decoder in uso**: ✅ **FUNZIONA** (conferma utente - uso quotidiano)
-  - **Implementazione**: `write_cv_ops_mode()` in z21.py
-- **Programming track**: ⏳ Da implementare (opzionale, per decoder non-ESU)
-  - Richiede sconnettere plastico e mettere solo loco su binario
-  - Comando XpressNet diverso da POM
-- **Nota decoder utilizzati nel roster**:
-  - **Loco 1, 2, 5, 6, 8**: ESU LokPilot 5 / LokSound V4.0 ✅ (read + write OK)
-  - **Loco 7**: Hornby TXS ⚠️ (read NO, write OK, read via BT app)
-
-### DecoderPro Usage
-- **Tool principale**: DecoderPro (parte di JMRI)
-- Usato per configurazione decoder e CV programming
-- Programming track per lettura/scrittura CV
-- Operations mode per scrittura CV on-the-fly (dove supportato)
-
----
-
----
-
-## Note Operative
-
-### CV Operations
-
-**CV WRITE (Operations Mode)** - ✅ IMPLEMENTATO:
-- Comando XpressNet: `E6 30 [addr] [EC|cv_msb] [cv_lsb] [value] [xor]`
-- Z21 NON invia ACK per successo (silenzio = OK)
-- Funziona su decoder: ESU ✅, Hornby ✅
-
-**CV READ (Operations Mode)** - ✅ IMPLEMENTATO:
-- Comando XpressNet: `E6 30 [addr] [E4|cv_msb] [cv_lsb] [0x00] [xor]`
-- Funziona SOLO su decoder ESU, NON su Hornby TXS
-- Z21 White: no CV read standard (solo verify trick)
-
-Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
-
----
-
-## Changelog
-
-**Note**: Per changelog storico (2025-12-16 → 2025-01-16), vedi `docs/CHANGELOG_ARCHIVE.md`
-
----
-
-### 2025-01-19 - 🎨 **LOCOMOTIVE FUNCTION EDITOR (Settings UI)**
-
-**Status**: ✅ **FULLY IMPLEMENTED** - Full CRUD operations for locomotive functions F0-F28
-
-**Implementation Phases**:
-
-**Phase 1: Edit Labels & Lockable** (commit `0261156`)
-- Accordion-based UI with progressive disclosure (7 locomotives)
-- Inline editing: function labels (max 20 chars) + lockable checkboxes
-- Frontend + backend validation (empty check, max length)
-- Hot reload via roster reload (no backend restart)
-- Settings UI info banner updated
-
-**Phase 2: Add & Delete Functions** (commit `1a88ec0`)
-- **Add function**: Filtered dropdown (F0-F28, only available numbers) + inline form
-- **Delete function**: Trash icon + confirmation dialog
-- **Max length**: Reduced from 50 to 20 chars (better UI fit)
-- **Function gaps**: Allowed (F0,F1,F3,F4 valid - skip F2 OK)
-- **Automatic sort**: Array sorted by function number after add/delete
-
-**Phase 3: Smart Change Detection** (commit `5de4baf`)
-- Deep comparison (`JSON.stringify`) for unsaved changes warning
-- Warning only on real changes (not just modal open/close)
-- Prevents accidental data loss from premature close
-
-**Technical Details**:
-- **Files modified**:
-  - `web/src/components/SettingsModal.jsx` - Accordion UI, inline editor, state management
-  - `backend/routers/config.py` - `validate_locomotive_functions()` helper
-- **Validation**: Frontend (immediate feedback) + Backend (security)
-- **Hot reload**: POST /api/settings/update → POST /api/reload-roster
-- **State management**: `settings` vs `initialSettings` for change detection
-
-**User Experience**:
-- Zero cognitive load: edit where you see values
-- No modal complexity: accordion keeps context visible
-- Smart warnings: only when necessary
-- Immediate feedback: inline validation errors
-- No restart: changes live immediately
-
-**Commits**: `0261156`, `1a88ec0`, `5de4baf`
-
----
-
-### 2025-01-19 - 📊 **ANALYTICS CONFIGURATION + CONFIG REORGANIZATION**
-
-**Status**: ✅ **PRODUCTION READY** - Configurable chart optimization + organized config structure
-
-**Analytics Configuration**:
-- **New section**: `analytics.max_chart_events` (default 500)
-- **Purpose**: Unified threshold for chart optimization
-  - **Current view**: Shows last N events (no downsampling, full resolution)
-  - **Overview view**: Downsamples to N events if total > N (LTTB + critical events)
-- **Settings UI**: New Analytics tab (after Tracking, before Locomotives)
-  - Input: number (100-2000, step 50)
-  - Info: Performance vs history trade-off
-  - Hot reload: No restart required (frontend-only parameter)
-
-**Config.json Reorganization**:
-- Sections reordered (matches Settings UI logical flow)
-- Locomotives sorted by ID (1,2,4,5,6,7,8)
-- Analytics section added after tracking
-
-**Import Script Fixes**:
-- `import_single_locomotive.py`: Fixed analytics.db → data.db, added testing profile
-- Deleted obsolete migration scripts
-
-**Commits**: `3ee3122`, `42d8705`, `3f08cd4`, `87956e1`, `aab532c`, `74dfc0c`, `1709534`
-
----
-
-### 2025-01-19 - 🔧 **CONFIG.JSON LINE ENDINGS + SETTINGS LOGGING**
-
-**Status**: ✅ **PRODUCTION READY** - Cross-platform config consistency + comprehensive logging
-
-**Problem**: Settings UI changes on PC caused false git modifications
-- Windows saves config.json with CRLF line endings
-- Mac/git repository uses LF line endings
-- Every Settings save on PC → git sees file as "modified" (even with no real changes)
-- Camera credentials leaked into config.json (should be config.local.json only)
-
-**Solution Implemented**:
-
-1. **`.gitattributes` (Cross-Platform Normalization)**:
-   - Force LF line endings for config.json: `config.json text eol=lf`
-   - Git normalizes automatically (CRLF on Windows disk, LF in repo)
-   - Prevents false "modified" status from line ending differences
-
-2. **`save_config()` Simplification**:
-   - **Removed**: 70 lines of complex array compaction regex logic
-   - **Kept**: Simple `json.dumps(indent=2, ensure_ascii=False)`
-   - **Added**: `newline='\n'` to force LF on all platforms
-   - **Added**: Auto-remove camera credentials before save (deep copy first)
-   - Result: Function reduced from 80 to 33 lines
-
-3. **Credentials Auto-Removal**:
-   - `load_config()` merges config.local.json (adds username/password)
-   - `save_config()` now removes credentials before writing
-   - Prevents credential leak to version-controlled config.json
-   - Credentials stay in config.local.json only (gitignored)
-
-4. **Settings Logging ([SETTINGS] Tag)**:
-   - **Color**: Gold/yellow (220) - distinctive but not invasive
-   - **Strategy**: Log only real changes (no "unchanged" spam)
-   - **Per-section logging**:
-     - Debug: `False -> True (backend restart required)`
-     - Z21: `host: 192.168.1.111 -> 192.168.1.112`
-     - Camera: `IP: 192.168.1.4 -> 192.168.1.5 (video_feed + tracker restart)`
-     - Video: `FPS: 30 -> 15 (hot reload, no restart)`
-     - Tracking: `FPS (active): 30 -> 20`
-     - YOLO: `confidence: 0.3 -> 0.2`
-     - Analytics: `max_chart_events: 500 -> 1000 (hot reload)`
-     - Locomotives: `Loco 8 (E444 056): 5 function(s) modified`
-   - **Summary**: Lists all changes with service restart requirements
-   - **Deep comparison**: JSON serialize for locomotive functions (avoid false positives)
-
-5. **Locomotive Changes Require Page Reload**:
-   - Frontend loads function labels at startup (no hot reload)
-   - Added `"frontend"` to `restart_needed` when locomotives modified
-   - Triggers automatic `window.location.reload()` via existing mechanism
-
-**Technical Details**:
-- **Files modified**:
-  - `.gitattributes` - Force LF for config.json
-  - `backend/config_loader.py` - Simplified save_config(), auto-remove credentials
-  - `backend/log_colors.py` - Added [SETTINGS] gold color
-  - `backend/routers/config.py` - Comprehensive logging per section
-- **Line endings**: `encoding='utf-8', newline='\n'` forces LF on Windows
-- **Deep copy**: `copy.deepcopy()` before filtering (avoid modifying original config)
-- **Credentials**: `pop('username')` + `pop('password')` before save
-
-**Result**:
-- ✅ Settings save on PC → git status **clean** (no false modifications)
-- ✅ Config.json byte-identical on Mac and PC
-- ✅ Credentials isolated in config.local.json (gitignored, never leaked)
-- ✅ Logs show only real changes with detailed old→new values
-- ✅ Simplified codebase (70 lines removed from save_config)
-
-**Example Logs** (YOLO confidence change):
-```
-[SETTINGS] YOLO confidence: 0.2 -> 0.3
-[SETTINGS] YOLO iou: 0.95 -> 0.6
-[SETTINGS] YOLO obb: False -> True
-[SETTINGS] Tracking settings changed, tracker restart required
-[SETTINGS] Settings saved - 3 change(s):
-[SETTINGS]   - yolo_confidence: 0.2 -> 0.3
-[SETTINGS]   - yolo_iou: 0.95 -> 0.6
-[SETTINGS]   - yolo_obb: False -> True
-[SETTINGS] Services requiring restart: tracker
+### data.db (SQLite Database)
+
+**Location**: `backend/data/data.db` (auto-created, gitignored)
+
+**Tables**:
+- **sessions** - Analytics session tracking (id, start_time, end_time, event_count)
+- **events** - Time-series events (delta_t, speed_setting, yolo_performance, loco_operating_time)
+- **locomotive_stats** - Aggregate statistics per locomotive (operating time, session count)
+- **locomotive_speed_table** - CV67-94 speed tables (28 steps per locomotive)
+- **consist_state** - Virtual Mode + Auto Compensation state per consist
+- **system_state** - System-wide key-value state
+
+**Event Types** (JSON in `events.data`):
+- `delta_t` - Gate crossing timing delta (consist_id, delta_t, status, gate_type, speed)
+- `speed_setting` - DCC speed changes (address, speed_old, speed_new, forward, source)
+- `loco_operating_time` - Locomotive operating duration (address, start_time, end_time, duration_seconds)
+- `yolo_performance` - YOLO tracking metrics (avg_fps, avg_confidence per loco, miss_rate)
+
+**Complete schema**: See [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)
+
+**Common Queries**:
+```sql
+-- Find all CRITICAL delta_t events for consist 11
+SELECT datetime(timestamp, 'unixepoch', 'localtime') as time,
+       json_extract(data, '$.delta_t') as delta_t,
+       json_extract(data, '$.status') as status
+FROM events
+WHERE event_type='delta_t'
+  AND json_extract(data, '$.consist_id')=11
+  AND json_extract(data, '$.status')='CRITICAL'
+ORDER BY timestamp DESC;
+
+-- Get locomotive operating time summary
+SELECT address, name,
+       total_operating_seconds / 3600.0 as hours,
+       total_sessions
+FROM locomotive_stats
+ORDER BY total_operating_seconds DESC;
 ```
 
-**Commits**: `29557a9`, `955350e`, `7091923`, `9cbdecb`, `5b752c1`, `ce5e433`, `5303aed`, `615c850`, `e4cb174`
-
 ---
 
-### 2025-01-18 - ✅ **TIMING_THRESHOLDS REFACTORING**
+## 🎮 Key Features & Workflows
 
-**Status**: ✅ **COMPLETED** - Renamed `normal` → `warning`, `warning` → `critical`
+### 1. JMRI Independence (v1.0.0 Milestone - 2026-01-17)
 
-**Changes**:
-- Config keys: `timing_thresholds.warning = 1.0`, `timing_thresholds.critical = 1.5`
-- Logic: `|Δt| < 1.0` → SYNCED, `≥ 1.0` → WARNING, `≥ 1.5` → CRITICAL
-- Backend: Removed hardcoded fallbacks, fail-fast strategy
-- Frontend: Settings UI updated (yellow WARNING, red CRITICAL), slider thumbs reduced
-- Analytics: DRY metrics (memoized gate crossings count)
+**What's Autonomous**:
+- ✅ CV67-94 speed tables (database + web UI editor)
+- ✅ CV19 consist management (Virtual/DCC Mode toggle)
+- ✅ Locomotive metadata (config.json unified: name, decoder, color, notes)
+- ✅ Consist CRUD (create/edit/delete via web UI)
+- ✅ Function labels F0-F28 (config.json, editable via Settings UI)
 
-**Files modified**: 15 (config, 9 backend, 3 frontend, 2 scripts)
+**What Still Needs JMRI** (Initial Setup Only):
+- Initial decoder configuration (CV1 address, decoder detection)
+- Programming track operations (read/write all CVs for new decoder)
+- Advanced CV programming (decoder-specific UI screens)
 
----
-
-### 2025-01-17 - 🎉 **JMRI INDEPENDENCE ACHIEVED** (v1.0.0)
-
-**Status**: ✅ **MILESTONE COMPLETE** - z21-Terminal fully autonomous for daily operations
-
-**Achievement**: JMRI now **optional** - only needed for `import_single_locomotive.py` script when adding new locomotives
-
-**What Changed**:
-1. **Function Labels F0-F28** → `config.json` (was: JMRI roster XML)
-2. **Locomotive Roster** → `config.json` (backend loads all 7 locomotives)
-3. **Speed Tables CV67-94** → `data.db` (editable via web UI)
-4. **CV19 Consist Management** → Automatic (Virtual/DCC Mode toggle)
-5. **Consist CRUD** → Web UI (create, edit, delete)
+**Typical Workflow**:
+1. **Initial Setup** (JMRI - one time): Configure decoder via DecoderPro
+2. **Import** (One-time script): `python scripts/import_single_locomotive.py`
+3. **Daily Operations** (z21-Terminal - no JMRI needed): Edit functions, tune speed tables, manage consists
 
 **The Ultimate Test**: Renamed `roster/` → `roster.backup/` on PC → backend still works! 🎉
 
-**Documentation**: See `docs/SPEED_TABLE_DB_MIGRATION.md`, `docs/JMRI_INTEGRATION.md` for complete implementation details
-
-**Commits**: 17+ commits, key: `f64da28`, `5192495`, `5d77537`
+**Complete guide**: See [docs/JMRI_INTEGRATION.md](docs/JMRI_INTEGRATION.md)
 
 ---
 
-### 2025-01-16 and Earlier
+### 2. YOLO Tracking & Speed Compensation
 
-**Entries moved to archive**: See `docs/CHANGELOG_ARCHIVE.md` for:
-- 2025-01-16: Speed Table Viewer Phase 1 (Read-Only CV Analysis)
-- 2025-01-15: Speed Table Direct CV Write Phase 2
-- 2025-01-13 to 2025-12-16: Complete development history
+**System Overview**:
+- **YOLO Model**: YOLOv8 nano OBB (mAP50 = 91.7%, 4 classes: loco 1, 5, 7, 8)
+- **TensorRT Acceleration**: GPU-optimized (2-5x faster, <0.5s bbox lag)
+- **Gate Timing Detection**: Symmetric (oval) and asymmetric (figure-8) modes
+- **Dynamic FPS**: 30 FPS active tracking, 1 FPS idle (10s timeout)
 
+**Virtual Consist Mode**:
+- **Automatic CV19 Management**: Toggle DCC/Virtual mode via UI (writes CV19=0 or CV19=consist_id)
+- **Speed Compensation**: Real-time Δt-based adjustment (bang-bang + decay algorithm)
+- **Reference Loco Strategy**: Config-driven (never touch reference, adjust only unstable loco)
+
+**Example**: Consist 11 (External Track - Symmetric Gates)
+```
+Gate 1 (995,27) ────▶ Loco 7 crosses ────▶ Timestamp T1
+Gate 2 (10,269)  ────▶ Loco 8 crosses ────▶ Timestamp T2
+
+Δt calculation (cross-gate):
+  Option A: Δt = T1(L7@G1) - T2(L8@G2)  (valid)
+  Option B: Δt = T1(L7@G2) - T2(L8@G1)  (valid)
+
+If Δt > 0: Loco 7 too fast → slow down Loco 7
+If Δt < 0: Loco 7 too slow → speed up Loco 7
+```
+
+**Status Thresholds** (from config.json):
+- `SYNCED`: |Δt| < 1.0s (green)
+- `WARNING`: 1.0s ≤ |Δt| < 1.5s (amber)
+- `CRITICAL`: |Δt| ≥ 1.5s (red)
+
+**Complete workflow**: See [docs/COMPUTER_VISION.md](docs/COMPUTER_VISION.md), [docs/VIRTUAL_CONSIST_MODE.md](docs/VIRTUAL_CONSIST_MODE.md)
+
+**TensorRT Export**: See [docs/TENSORRT_OPTIMIZATION.md](docs/TENSORRT_OPTIMIZATION.md)
+
+---
+
+### 3. Analytics Dashboard
+
+**Features**:
+- **Session Tracking**: Automatic lifecycle (first Δt validates, idle timeout or page close ends)
+- **Δt Trends Chart**: Speed matching quality over time (color-coded zones)
+- **YOLO Performance**: FPS trends + per-locomotive confidence
+- **Locomotive Operating Time**: Cumulative hours per locomotive (maintenance planning)
+- **Current vs Overview Views**: Session-specific vs cumulative historical data
+- **Intelligent Downsampling**: LTTB algorithm + critical event preservation (|Δt| ≥ 1.5s always visible)
+
+**Keyboard Shortcut**: Press `A` to toggle Analytics panel
+
+**Configuration**: `config.json` → `analytics.max_chart_events` (100-2000, default 500)
+- **Current view**: Shows last N events (no downsampling, full resolution)
+- **Overview view**: Downsamples to N events if total > N (LTTB + critical events)
+
+**Complete implementation**: See [docs/ANALYTICS.md](docs/ANALYTICS.md)
+
+---
+
+### 4. Speed Table Tuning
+
+**Phase 1** (Read-Only Analysis - v1.0.0):
+- 28-bar visualization of CV67-94 (step 1-28, values 0-255)
+- Color-coded highlighting based on CRITICAL event counts
+- CV adjustment recommendations
+- Interactive bars (click to edit in Phase 2)
+
+**Phase 2** (Direct CV Write - v1.0.0):
+- Interactive editing (click bar to adjust, drag vertical slider)
+- Direct write to decoder (operations mode, no programming track needed)
+- Undo support (1-level snapshot via `previous_values` JSON column)
+- Re-import from JMRI when needed
+
+**CV Operations Mode Support**:
+- **ESU LokPilot/LokSound** (loco 1, 2, 5, 6, 8): ✅ CV read + write supported
+- **Hornby TXS** (loco 7): ⚠️ CV write supported, CV read NOT supported (use Hornby BT app)
+- **Zimo MX630** (loco 4): ✅ CV read + write supported
+
+**Complete guide**: See [docs/SPEED_TABLE_VIEWER.md](docs/SPEED_TABLE_VIEWER.md)
+
+---
+
+### 5. CV Profiles (TEST/NORMAL Mode)
+
+**Quick Toggle** (Hotkey `T`):
+- **TEST mode**: CV3=0, CV4=0 (instant response for testing/tuning)
+- **NORMAL mode**: CV3/CV4 restored (realistic acceleration/deceleration from cv_profiles.normal)
+- Writes CV3/CV4 to all locomotives in consists (~1.2s total via POM)
+- Badge indicator in UI (Flask icon = TEST, Check icon = NORMAL)
+
+**IMPORTANT**: Press `T` to return to NORMAL before closing app or deploying to PC
+
+**Configuration**: `config.json` → `locomotives.X.cv_profiles.normal` and `locomotives.X.cv_profiles.testing`
+
+---
+
+### 6. Consist Manager
+
+**Features** (Phase 6 - Completed 2026-01-03):
+- **Create Consist**: Add new consist via modal form
+- **Edit Consist**: Modify addresses, gates, mode, reference loco
+- **Delete Consist**: Remove consist with confirmation
+- **Gate Assignment**: Symmetric (all gates) or Asymmetric (specific gate per loco)
+- **Virtual Mode Toggle**: Enable/disable Virtual Consist Mode per consist
+- **Auto Compensation Toggle**: Enable/disable real-time speed compensation
+
+**Access**:
+- Desktop: [⚙️ Consists] button in header (inline)
+- Mobile: Hamburger menu → ⚙️ Consist Manager
+
+**Complete guide**: See [docs/CONSIST_MANAGER_UI.md](docs/CONSIST_MANAGER_UI.md)
+
+---
+
+### 7. Settings UI
+
+**8 Tabs** (Phase 3 - Completed 2025-12-28):
+1. **System**: Debug mode toggle
+2. **Z21 Network**: IP, port, test connection
+3. **Camera**: IP, port, stream, credentials, test stream
+4. **Video Feed**: FPS slider (hot reload)
+5. **YOLO Model**: Confidence, IoU, OBB toggle, preset load buttons
+6. **Tracking**: FPS active/idle, idle timeout, timing thresholds (warning/critical/max_delta_t)
+7. **Analytics**: Max chart events (100-2000, performance tuning)
+8. **Locomotives**: Function labels F0-F28 editor (accordion, inline edit)
+
+**Hot Reload** (No Restart Required):
+- ✅ Video Feed FPS
+- ✅ Locomotive functions
+- ✅ Analytics max_chart_events
+
+**Restart Required**:
+- Backend: Debug mode, Z21 network, camera settings, YOLO model, tracking FPS/thresholds
+- Frontend: Locomotive function changes (page reload)
+
+**Complete guide**: See [docs/SETTINGS_UI_DESIGN.md](docs/SETTINGS_UI_DESIGN.md)
+
+---
+
+## 🛠️ Critical Workflows
+
+### Deployment Workflow (Mac → PC)
+
+**IMPORTANT**: Read `~/.claude/skills/z21-deployment/SKILL.md` for complete rules
+
+**Mac Development**:
+```bash
+# Make changes, test locally
+z21              # Test backend + frontend
+git add .
+git commit -m "feat: description"
+git push origin develop
+```
+
+**PC Production Deployment**:
+```powershell
+# Full deployment (recommended)
+ssh riccardo@gaming-pc "cd C:\z21-Terminal && z21-deploy-dev"
+
+# Backend-only changes (skip frontend rebuild)
+ssh riccardo@gaming-pc "cd C:\z21-Terminal && git pull && z21-restart"
+```
+
+**Deployment Decision Tree**:
+- **Docs only** (`CLAUDE.md`, `docs/*`): Just `git push` (no deployment needed)
+- **Backend only** (`backend/*`): `git pull && z21-restart`
+- **Frontend only** (`web/src/*`): `z21-deploy-dev` (must rebuild dist/)
+- **Both**: `z21-deploy-dev`
+
+**CRITICAL Rules**:
+1. ✅ Frontend changes require `z21-deploy-dev` (rebuild dist/)
+2. ✅ Always use PowerShell aliases (NOT manual git/npm)
+3. ✅ Always include username: `riccardo@gaming-pc` (NOT just `gaming-pc`)
+
+**Complete guide**: See `~/.claude/skills/z21-deployment/SKILL.md`
+
+---
+
+### Git Workflow
+
+**Branch Strategy**:
+- `main` - Production stable releases
+- `develop` - Daily development work
+
+**Daily Workflow**:
+```bash
+git checkout develop           # Work on develop branch
+# ... make changes ...
+git add .
+git commit -m "feat: description"
+git push origin develop
+
+# When ready for release
+git checkout main
+git merge develop --ff-only   # Fast-forward only (no merge commits)
+git push origin main
+git checkout develop           # ⚠️ CRITICAL: Always return to develop
+```
+
+**IMPORTANT**: Always return to `develop` after merging to `main`
+
+**Git Remote**: Always use SSH (NOT HTTPS)
+```bash
+git remote -v
+# Should show: git@github.com:rizal72/z21-Terminal.git ✅
+```
+
+---
+
+### Database Queries (Common Operations)
+
+**Find all gate crossings for consist 11 (last 24h)**:
+```sql
+SELECT
+    datetime(timestamp, 'unixepoch', 'localtime') as time,
+    json_extract(data, '$.delta_t') as delta_t,
+    json_extract(data, '$.status') as status,
+    json_extract(data, '$.speed') as speed
+FROM events
+WHERE event_type='delta_t'
+  AND json_extract(data, '$.consist_id')=11
+  AND timestamp > (strftime('%s', 'now') - 86400)
+ORDER BY timestamp DESC;
+```
+
+**Get locomotive operating time summary**:
+```sql
+SELECT
+    address,
+    name,
+    total_operating_seconds / 3600.0 as hours,
+    total_sessions,
+    datetime(last_active_time, 'unixepoch', 'localtime') as last_active
+FROM locomotive_stats
+ORDER BY total_operating_seconds DESC;
+```
+
+**Delete outlier delta_t events** (|Δt| > 3s without speed):
+```sql
+DELETE FROM events
+WHERE id IN (
+  SELECT id FROM events
+  WHERE event_type='delta_t'
+    AND (json_extract(data, '$.delta_t') > 3.0 OR json_extract(data, '$.delta_t') < -3.0)
+    AND json_extract(data, '$.speed') IS NULL
+);
+```
+
+**Database maintenance**:
+```bash
+# Vacuum (reclaim space after deletions)
+sqlite3 backend/data/data.db "VACUUM;"
+
+# Backup
+cp backend/data/data.db backend/data/data.db.backup
+
+# Copy between Mac and PC
+scp backend/data/data.db riccardo@gaming-pc:C:/z21-Terminal/backend/data/data.db
+```
+
+**Complete queries**: See [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)
+
+---
+
+## 🐛 Troubleshooting
+
+### Backend Won't Start
+
+**Check venv activation**:
+```bash
+# Mac
+source venv/bin/activate
+python backend/main.py
+
+# PC (automatic in aliases)
+z21-backend  # Auto-activates venv
+```
+
+**Check Z21 connectivity**:
+```bash
+ping 192.168.1.111
+```
+
+**Check logs**:
+```bash
+# Mac
+tail -f backend/z21-terminal.log
+
+# PC
+ssh riccardo@gaming-pc "cd C:\z21-Terminal && z21-log"
+```
+
+---
+
+### Frontend Changes Not Visible
+
+**Vite HMR limitations**:
+- Frontend changes: Auto-reload (no action needed)
+- Backend changes: Must restart backend (`z21-restart`)
+- useEffect/hooks: May require manual refresh (Ctrl+R or Cmd+R)
+
+**Production (PC)**: Always run `z21-deploy-dev` for frontend changes (must rebuild dist/)
+
+---
+
+### YOLO Not Detecting Locomotives
+
+**Check TensorRT model**:
+```bash
+# PC
+dir C:\z21-Terminal\best_obb.engine  # Should be ~13.7 MB
+
+# Mac
+ls -lh ~/Documents/_PROGETTI/z21-Terminal/best_obb.engine
+```
+
+**Fallback order**: `.engine` → `.onnx` → `.pt`
+
+**Check config.json**:
+```json
+"tracking": {
+  "yolo_confidence": 0.4,
+  "yolo_iou": 0.6,
+  "yolo_obb": true
+}
+```
+
+**Complete guide**: See [docs/TENSORRT_OPTIMIZATION.md](docs/TENSORRT_OPTIMIZATION.md)
+
+---
+
+### Database Locked Error
+
+**Close connections**:
+```bash
+sqlite3 backend/data/data.db "PRAGMA busy_timeout = 5000;"
+```
+
+**Check if backend is running**:
+```bash
+# Mac
+ps aux | grep "python.*main.py"
+
+# PC
+ssh riccardo@gaming-pc "cd C:\z21-Terminal && z21-status"
+```
+
+---
+
+### Git Shows Modified config.json (Line Endings)
+
+**Fix** (already configured via .gitattributes):
+```bash
+# .gitattributes forces LF for config.json
+git add .gitattributes
+git add config.json
+git commit -m "fix: normalize line endings"
+```
+
+**Verify**:
+```bash
+git diff config.json  # Should show no changes if normalized
+```
+
+---
+
+## 📊 Recent Changes (Last 30 Days)
+
+**v1.0.0** (2026-01-17) - JMRI Independence Achieved:
+- ✅ Speed tables CV67-94 migrated to database (`locomotive_speed_table` table)
+- ✅ Function labels F0-F28 moved to config.json (editable via Settings UI)
+- ✅ Locomotive metadata unified in config.json (name, decoder, color, notes)
+- ✅ Complete consist CRUD via web UI (Consist Manager)
+- ✅ JMRI now optional (only for initial setup)
+
+**2026-01-20** - Database Schema Documentation:
+- ✅ Complete DATABASE_SCHEMA.md reference (tables, queries, event types)
+- ✅ Camera config cleanup (camera_config.json → config.local.json)
+- ✅ Database outlier cleanup (removed 3 false positive Δt events)
+
+**2026-01-19** - Analytics Configuration:
+- ✅ Configurable `max_chart_events` (100-2000, default 500)
+- ✅ Settings UI: Analytics tab for performance tuning
+- ✅ Config reorganization (sections reordered to match UI flow)
+- ✅ Locomotives sorted by ID (1,2,4,5,6,7,8)
+
+**2026-01-18** - Timing Thresholds Refactoring:
+- ✅ Renamed `normal` → `warning` (1.0s), `warning` → `critical` (1.5s)
+- ✅ Consistent 3-level system: SYNCED (<1.0s), WARNING (≥1.0s), CRITICAL (≥1.5s)
+
+**2026-01-14** - Analytics Dashboard:
+- ✅ Session tracking with lifecycle management
+- ✅ Δt trends chart (Current vs Overview views)
+- ✅ YOLO performance monitoring (FPS + confidence)
+- ✅ Locomotive operating time tracking
+
+**Complete history**: See [docs/CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md)
+
+---
+
+## 🔮 Future Enhancements
+
+### Quick Wins (1-2 Days)
+- **Motor Load Monitoring** (Phase 9): Z21 track-level telemetry (current, voltage, temperature)
+- **Telegram/Email Notifications**: Critical event alerts (derailment, Δt > 2.0s, backend crash)
+- **Function Test Mode**: Cycle F0-F28 automatically to verify decoder responses
+
+### Medium Effort (3-5 Days)
+- **Session Replay Mode**: Playback stored events with timeline scrubber
+- **Consist Lock Mechanism**: Prevent control conflicts with multiple devices
+- **Decoder Health Monitoring**: Periodic CV read (CV2, CV5, CV19, CV29) to detect drift
+
+### Large Projects (1-2 Weeks)
+- **Track Occupancy Map** (Phase 7 - postponed): Real-time locomotive positions on SVG track layout
+- **Virtual Stations & Routes**: Gate-based triggers for automatic stops and scheduled operations
+- **Spectator Mode**: View-only access for visitors (no controls, read-only dashboard)
+
+### External Dependencies
+- **Motor Load Monitoring**: Requires RailCom support (Z21 Pro or compatible decoder)
+- **Track Power Telemetry**: Requires Z21 Pro or similar (voltage/current monitoring)
+
+**Complete list**: See [docs/FUTURE_IDEAS.md](docs/FUTURE_IDEAS.md)
+
+---
+
+## 📁 Critical Files Reference
+
+### Backend Core
+- `backend/main.py` - FastAPI app entry point (742 lines, minimal delegation)
+- `backend/dependencies.py` - Global state DI (Z21, WebSocket manager, config)
+- `backend/routers/config.py` - Settings API (/api/settings/update, /api/config)
+- `backend/routers/analytics.py` - Analytics API (/api/analytics/*)
+- `backend/tracking_daemon.py` - Headless YOLO tracking daemon
+- `backend/tracking/yolo_tracker.py` - YOLOTracker class (model loading, inference, gate detection)
+- `backend/tracking/rtsp_handler.py` - RTSP stream utilities (load_camera_config, setup_rtsp_stream)
+- `scripts/z21.py` - Z21 LAN protocol library (UDP commands, XpressNet encoding)
+- `backend/config_loader.py` - Config loading (load_config, save_config, deep_merge)
+
+### Frontend Core
+- `web/src/App.jsx` - Main React component
+- `web/src/components/ConsistController.jsx` - Locomotive controller UI
+- `web/src/components/Analytics.jsx` - Analytics dashboard
+- `web/src/components/SettingsModal.jsx` - Settings UI (8 tabs)
+- `web/src/components/ConsistManagerModal.jsx` - Consist CRUD UI
+
+### Configuration
+- `config.json` - Central configuration (committed to git)
+- `config.local.json` - Local overrides (gitignored, credentials)
+
+### Database
+- `backend/data/data.db` - SQLite database (auto-created, gitignored)
+
+### Documentation
+- `docs/DATABASE_SCHEMA.md` - Complete database schema reference
+- `docs/COMPUTER_VISION.md` - YOLO training + gate timing detection
+- `docs/JMRI_INTEGRATION.md` - JMRI relationship + independence roadmap
+- `~/.claude/skills/z21-deployment/SKILL.md` - Deployment workflow + critical rules
+
+---
+
+**End of CLAUDE.md**
