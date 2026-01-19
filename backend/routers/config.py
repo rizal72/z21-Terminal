@@ -51,8 +51,8 @@ def validate_locomotive_functions(address: str, functions: list) -> tuple[bool, 
             return False, f"Locomotive {address}: function label must be string"
         if not func['label'].strip():
             return False, f"Locomotive {address}: F{func['number']} label cannot be empty"
-        if len(func['label']) > 50:
-            return False, f"Locomotive {address}: F{func['number']} label too long (max 50 chars)"
+        if len(func['label']) > 20:
+            return False, f"Locomotive {address}: F{func['number']} label too long (max 20 chars)"
 
         # Validate lockable
         if not isinstance(func['lockable'], bool):

@@ -88,8 +88,8 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
               setSaving(false);
               return;
             }
-            if (func.label.length > 50) {
-              setError(`Locomotive ${address}: Function F${func.number} label too long (max 50 characters)`);
+            if (func.label.length > 20) {
+              setError(`Locomotive ${address}: Function F${func.number} label too long (max 20 characters)`);
               setSaving(false);
               return;
             }
@@ -922,6 +922,8 @@ function TrackingTab({ settings, setSettings }) {
 
 function LocomotivesTab({ settings, setSettings }) {
   const [expandedLoco, setExpandedLoco] = useState(null);
+  const [addingFunctionFor, setAddingFunctionFor] = useState(null);
+  const [newFunction, setNewFunction] = useState({ number: '', label: '', lockable: true });
 
   if (!settings?.locomotives) return null;
 
@@ -992,8 +994,8 @@ function LocomotivesTab({ settings, setSettings }) {
                             });
                           }}
                           className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-sm text-white focus:border-signal-amber focus:ring-1 focus:ring-signal-amber outline-none"
-                          placeholder="Function label"
-                          maxLength={50}
+                          placeholder="Function label (max 20)"
+                          maxLength={20}
                         />
 
                         {/* Lockable Checkbox */}
@@ -1016,12 +1018,140 @@ function LocomotivesTab({ settings, setSettings }) {
                           />
                           <span className="text-xs text-slate-300">Lock</span>
                         </label>
+
+                        {/* Delete Button */}
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Delete function F${func.number} (${func.label})?`)) {
+                              const newFunctions = loco.functions.filter((_, i) => i !== idx);
+                              setSettings({
+                                ...settings,
+                                locomotives: {
+                                  ...settings.locomotives,
+                                  [address]: { ...loco, functions: newFunctions }
+                                }
+                              });
+                            }
+                          }}
+                          className="flex-shrink-0 p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                          title="Delete function"
+                        >
+                          <i className="fa-solid fa-trash text-sm"></i>
+                        </button>
                       </div>
                     ))
                   ) : (
                     <div className="text-sm text-slate-400 text-center py-4">
                       No functions configured
                     </div>
+                  )}
+
+                  {/* Add Function Section */}
+                  {addingFunctionFor === address ? (
+                    /* Add Function Form */
+                    <div className="mt-3 p-3 bg-slate-900/50 rounded border border-signal-amber/30">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center gap-3">
+                          {/* Function Number Dropdown */}
+                          <select
+                            value={newFunction.number}
+                            onChange={(e) => setNewFunction({ ...newFunction, number: parseInt(e.target.value) })}
+                            className="w-20 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-sm text-white focus:border-signal-amber focus:ring-1 focus:ring-signal-amber outline-none"
+                          >
+                            <option value="">F#</option>
+                            {Array.from({ length: 29 }, (_, i) => i)
+                              .filter(num => !loco.functions?.some(f => f.number === num))
+                              .map(num => (
+                                <option key={num} value={num}>F{num}</option>
+                              ))}
+                          </select>
+
+                          {/* Label Input */}
+                          <input
+                            type="text"
+                            value={newFunction.label}
+                            onChange={(e) => setNewFunction({ ...newFunction, label: e.target.value })}
+                            placeholder="Function label (max 20)"
+                            maxLength={20}
+                            className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-sm text-white focus:border-signal-amber focus:ring-1 focus:ring-signal-amber outline-none"
+                          />
+
+                          {/* Lockable Checkbox */}
+                          <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={newFunction.lockable}
+                              onChange={(e) => setNewFunction({ ...newFunction, lockable: e.target.checked })}
+                              className="w-4 h-4 rounded bg-slate-900 border-slate-700 text-signal-amber focus:ring-signal-amber"
+                            />
+                            <span className="text-xs text-slate-300">Lock</span>
+                          </label>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              // Validation
+                              if (newFunction.number === '') {
+                                alert('Please select a function number');
+                                return;
+                              }
+                              if (!newFunction.label.trim()) {
+                                alert('Function label cannot be empty');
+                                return;
+                              }
+
+                              // Add function
+                              const newFunctions = [
+                                ...loco.functions,
+                                {
+                                  number: newFunction.number,
+                                  label: newFunction.label.trim(),
+                                  lockable: newFunction.lockable
+                                }
+                              ].sort((a, b) => a.number - b.number);
+
+                              setSettings({
+                                ...settings,
+                                locomotives: {
+                                  ...settings.locomotives,
+                                  [address]: { ...loco, functions: newFunctions }
+                                }
+                              });
+
+                              // Reset form and close
+                              setNewFunction({ number: '', label: '', lockable: true });
+                              setAddingFunctionFor(null);
+                            }}
+                            className="px-3 py-1.5 bg-signal-green text-white text-sm rounded hover:bg-signal-green/80 transition-colors"
+                          >
+                            Add Function
+                          </button>
+                          <button
+                            onClick={() => {
+                              setNewFunction({ number: '', label: '', lockable: true });
+                              setAddingFunctionFor(null);
+                            }}
+                            className="px-3 py-1.5 bg-slate-700 text-white text-sm rounded hover:bg-slate-600 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Add Function Button */
+                    <button
+                      onClick={() => {
+                        setAddingFunctionFor(address);
+                        setNewFunction({ number: '', label: '', lockable: true });
+                      }}
+                      className="mt-3 w-full px-3 py-2 bg-slate-700 text-white text-sm rounded hover:bg-slate-600 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <i className="fa-solid fa-plus"></i>
+                      <span>Add Function</span>
+                    </button>
                   )}
                 </div>
               )}
