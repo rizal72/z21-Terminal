@@ -99,6 +99,12 @@ Per dettagli tecnici completi, vedi:
   - PowerShell aliases (z21-deploy-dev, z21-restart, z21-log, etc.)
   - 7 CRITICAL rules (venv, git workflow, frontend rebuild, secrets, SSH, encoding, README)
   - Pre-deploy checklist (6 items)
+- **Task Scheduler Backend**:
+  - Script: `start-backend.ps1` (root directory, versionated)
+  - Task name: "z21-backend" (registered automatically by PowerShell profile)
+  - Features: Log rotation, PS7 encoding compatibility, detached execution
+  - Called by: `z21-start`, `z21-restart` aliases via Task Scheduler
+  - Log file: `C:\z21-Terminal\backend.log` (rotated to .old on each start)
 
 **Software**:
 - JMRI (roster/consist management)

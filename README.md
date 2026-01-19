@@ -455,6 +455,29 @@ Camera credentials (gitignored):
 | Process | Foreground (Ctrl+C stops) | Background (persists after SSH close) |
 | Log visibility | Console output | C:\z21-Terminal\backend.log |
 
+### Task Scheduler Backend (Windows PC)
+The Windows production backend uses Task Scheduler for detached execution (survives SSH close).
+
+**Key File: `start-backend.ps1`** (versionated, PC-specific)
+- **Purpose**: Startup script called by Task Scheduler task "z21-backend"
+- **Location**: `C:\z21-Terminal\start-backend.ps1` (hardcoded path)
+- **Features**:
+  - Log rotation (backend.log → backend.log.old before each start)
+  - PS7 encoding compatibility (codepage 850 for Task Scheduler console)
+  - ANSI colors disabled (PlainText mode for DOS console compatibility)
+  - Uvicorn launch with venv activation
+- **Task Registration**: Automatic via PowerShell profile (`$PROFILE`) on first `z21-start` call
+- **Task Properties**:
+  - Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\z21-Terminal\start-backend.ps1`
+  - User: Current user (Interactive logon, Highest privilege)
+  - Persistence: Survives SSH disconnect, system reboot (manual start required)
+
+**Why Task Scheduler?**
+- Background execution (no visible window)
+- Survives SSH session close (critical for remote deployment)
+- System-level process management
+- Log file persistence (`backend.log` rotated automatically)
+
 ## Notes
 
 - **Consist Management**:
