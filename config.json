@@ -16,8 +16,6 @@
       "width": 1280,
       "height": 720
     },
-    "username": "",
-    "password": "",
     "notes": "Camera credentials MUST be in config.local.json (gitignored)"
   },
   "video": {
