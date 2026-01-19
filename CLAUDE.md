@@ -97,8 +97,8 @@ Per dettagli tecnici completi, vedi:
 - **Deployment**: See `~/.claude/skills/z21-deployment/SKILL.md` for:
   - Deployment decision tree (docs/backend/frontend)
   - PowerShell aliases (z21-deploy-dev, z21-restart, z21-log, etc.)
-  - 8 CRITICAL rules (venv, CV test mode, git workflow, etc.)
-  - Pre-deploy checklist
+  - 7 CRITICAL rules (venv, git workflow, frontend rebuild, secrets, SSH, encoding, README)
+  - Pre-deploy checklist (6 items)
 
 **Software**:
 - JMRI (roster/consist management)
@@ -195,6 +195,46 @@ z21-frontend  # Frontend Vite (porta 5173)
 - Fix importanti risolti (Tailwind v4, function state sync, Safari bugs)
 - Mobile optimizations (Wake Lock, responsive layout)
 - Alias bash con venv auto-activation
+
+### Function Editor (Settings UI)
+
+**Status**: ✅ **FULLY IMPLEMENTED** (2025-01-19)
+
+**Features**:
+- **Edit labels F0-F28**: Inline editing with 20 char max length
+- **Toggle lockable flag**: Direct checkbox manipulation
+- **Add functions**: Filtered dropdown (F0-F28, showing only available numbers)
+- **Delete functions**: Trash icon with confirmation dialog
+- **Smart change detection**: Deep comparison for unsaved changes warning
+- **Hot reload**: No backend restart required (roster reload only)
+
+**UI Pattern**: Accordion-based progressive disclosure
+- Collapsible locomotive cards (7 locomotives)
+- Expand to show function list with inline editor
+- Click-to-edit label + checkbox for lockable
+- Add function: inline form with filtered dropdown + input field
+- Delete function: trash icon → confirmation → automatic array sort
+
+**Validation**:
+- **Frontend**: Empty label check, max 20 chars, immediate feedback
+- **Backend**: Full validation (empty, length, function number 0-28, lockable boolean)
+- **Function numbers**: F0-F28 allowed, gaps permitted (F0,F1,F3,F4 valid)
+- **Automatic sort**: Array always sorted by function number after add/delete
+
+**Technical Details**:
+- **Files modified**:
+  - `web/src/components/SettingsModal.jsx` - Accordion UI, inline editor, add/delete logic
+  - `backend/routers/config.py` - `validate_locomotive_functions()` helper, max 20 chars
+- **State management**: `settings` vs `initialSettings` for deep comparison (JSON.stringify)
+- **Unsaved changes**: Warning only on real changes, not just modal open/close
+- **Hot reload**: POST /api/settings/update → POST /api/reload-roster → immediate effect
+
+**User Experience**:
+- Zero cognitive load: edit directly where you see the values
+- No modal complexity: accordion keeps context visible
+- Smart warnings: only when truly necessary (deep comparison)
+- Immediate feedback: validation errors shown inline
+- No restart: changes live immediately after save
 
 ---
 ---
@@ -485,6 +525,50 @@ Per dettagli completi: vedi `docs/Z21_PROTOCOL.md`
 ## Changelog
 
 **Note**: Per changelog storico (2025-12-16 → 2025-01-16), vedi `docs/CHANGELOG_ARCHIVE.md`
+
+---
+
+### 2025-01-19 - 🎨 **LOCOMOTIVE FUNCTION EDITOR (Settings UI)**
+
+**Status**: ✅ **FULLY IMPLEMENTED** - Full CRUD operations for locomotive functions F0-F28
+
+**Implementation Phases**:
+
+**Phase 1: Edit Labels & Lockable** (commit `0261156`)
+- Accordion-based UI with progressive disclosure (7 locomotives)
+- Inline editing: function labels (max 20 chars) + lockable checkboxes
+- Frontend + backend validation (empty check, max length)
+- Hot reload via roster reload (no backend restart)
+- Settings UI info banner updated
+
+**Phase 2: Add & Delete Functions** (commit `1a88ec0`)
+- **Add function**: Filtered dropdown (F0-F28, only available numbers) + inline form
+- **Delete function**: Trash icon + confirmation dialog
+- **Max length**: Reduced from 50 to 20 chars (better UI fit)
+- **Function gaps**: Allowed (F0,F1,F3,F4 valid - skip F2 OK)
+- **Automatic sort**: Array sorted by function number after add/delete
+
+**Phase 3: Smart Change Detection** (commit `5de4baf`)
+- Deep comparison (`JSON.stringify`) for unsaved changes warning
+- Warning only on real changes (not just modal open/close)
+- Prevents accidental data loss from premature close
+
+**Technical Details**:
+- **Files modified**:
+  - `web/src/components/SettingsModal.jsx` - Accordion UI, inline editor, state management
+  - `backend/routers/config.py` - `validate_locomotive_functions()` helper
+- **Validation**: Frontend (immediate feedback) + Backend (security)
+- **Hot reload**: POST /api/settings/update → POST /api/reload-roster
+- **State management**: `settings` vs `initialSettings` for change detection
+
+**User Experience**:
+- Zero cognitive load: edit where you see values
+- No modal complexity: accordion keeps context visible
+- Smart warnings: only when necessary
+- Immediate feedback: inline validation errors
+- No restart: changes live immediately
+
+**Commits**: `0261156`, `1a88ec0`, `5de4baf`
 
 ---
 
