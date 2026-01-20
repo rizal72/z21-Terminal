@@ -221,12 +221,12 @@ The following features were in this document but have since been implemented:
 ## 🔧 Maintenance & Diagnostics
 
 ### CV3/CV4 Acceleration/Deceleration Editor ⚡ Quick Win
-**Obiettivo**: UI editing per CV3 (Acceleration) e CV4 (Deceleration) senza JMRI
+**Obiettivo**: UI editing per CV3 (Acceleration) e CV4 (Deceleration) in config.json senza JMRI
 
 **Situazione attuale**:
 - CV3/CV4 hardcoded in `config.json` → `locomotives.X.cv_profiles.normal` e `locomotives.X.cv_profiles.testing`
-- Toggle TEST/NORMAL (hotkey `T`) scrive al decoder ma NON permette di modificare i valori
-- Modifica richiede: JMRI + edit manuale config.json
+- Toggle TEST/NORMAL (hotkey `T`) scrive i valori da config al decoder
+- Modifica dei valori richiede: JMRI + edit manuale config.json
 
 **Why now**:
 - Durante speed table tuning lavoriamo con momentum off (CV3=CV4=0)
@@ -236,26 +236,31 @@ The following features were in this document but have since been implemented:
 **UI Proposta**: Settings > Locomotives tab
 - Sotto ogni accordion loco, aggiungi:
   ```
-  [Acceleration/Deceleration]
+  [Acceleration/Deceleration - Normal Mode]
   CV3 (Accel):  [12] ✏️  (inline edit, 0-255)
   CV4 (Decel):  [8]  ✏️  (inline edit, 0-255)
 
-  Profile: [Normal ▼] (dropdown: Normal / Testing)
+  Note: Values applied to decoder when you press T (TEST/NORMAL toggle)
+  Test mode always uses CV3=CV4=0
   ```
-- Modifica → Scrive a `config.json` + decoder via POM
-- Opzionale: "Apply to Decoder" button (scrive CV3/CV4 immediatamente)
+- Modifica → **Salva solo in config.json** (NON scrive al decoder)
+- I valori vengono applicati al decoder **solo quando si fa toggle TEST/NORMAL** (hotkey `T`)
+
+**Workflow**:
+1. User edita CV3/CV4 in Settings → Salva in config.json (normal profile)
+2. User preme hotkey `T` → Toggle TEST/NORMAL → **A quel punto** scrive CV3/CV4 al decoder
+3. I valori editati sono attivi **solo in NORMAL mode** (test mode sempre CV3=CV4=0)
 
 **Infrastruttura già pronta**:
-- ✅ POM write già implementato (`z21.write_cv_ops_mode()`)
-- ✅ Toggle TEST/NORMAL già scrive CV3/CV4
-- ✅ Config save/reload già funziona
-- ❌ Manca solo: UI input fields + save handler
+- ✅ Toggle TEST/NORMAL già legge da config e scrive CV3/CV4 al decoder
+- ✅ Config save/reload già funziona (`/api/settings/update`)
+- ✅ Settings UI già supporta inline editing (vedi Functions tab)
+- ❌ Manca solo: UI input fields per CV3/CV4 (puro frontend)
 
-**Complessità**: ~2-3 ore (UI + backend endpoint + test)
+**Complessità**: ~1-2 ore (solo frontend, nessun backend nuovo)
 
 **Alternative location**: Speed Table Viewer (insieme a Vstart/Vhigh ESU)
-- **Pro**: CV3/CV4 influenzano comportamento speed table
-- **Contro**: Speed Table Viewer è focus su CV67-94, mischia concetti
+- **Scartato**: Settings > Locomotives è più logico (CV3/CV4 sono proprietà della loco, non specifici del speed table)
 
 ---
 
