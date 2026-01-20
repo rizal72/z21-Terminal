@@ -10,7 +10,8 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
     gate_ids: consist?.gate_ids || [],
     gate_assignment: consist?.gate_assignment || null,  // null = symmetric (all gates), object = asymmetric
     reference_loco: consist?.reference_loco || 'rear',  // default: rear is reference
-    virtual_mode: consist?.virtual_mode !== undefined ? consist.virtual_mode : true  // default: Virtual Mode
+    virtual_mode: consist?.virtual_mode !== undefined ? consist.virtual_mode : true,  // default: Virtual Mode
+    recommendation_threshold: consist?.recommendation_threshold || 10  // default: 10 (symmetric)
   });
 
   const [errors, setErrors] = useState({});
@@ -120,7 +121,8 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
       gate_ids: formData.gate_ids,
       gate_assignment: formData.gate_assignment,
       reference_loco: formData.reference_loco,
-      virtual_mode: formData.virtual_mode
+      virtual_mode: formData.virtual_mode,
+      recommendation_threshold: parseInt(formData.recommendation_threshold)
     });
   };
 
@@ -402,6 +404,30 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
           </div>
         </div>
       )}
+
+      {/* Recommendation Threshold (Advanced) */}
+      <div>
+        <label className="block text-sm font-medium text-white mb-2">
+          Recommendation Threshold (Advanced)
+        </label>
+        <div className="space-y-2">
+          <input
+            type="number"
+            min="1"
+            max="50"
+            value={formData.recommendation_threshold}
+            onChange={(e) => handleChange('recommendation_threshold', parseInt(e.target.value))}
+            className="w-full px-3 py-2 bg-control-black border border-control-grey rounded text-white focus:border-signal-amber outline-none"
+          />
+          <p className="text-xs text-track-steel">
+            Minimum current session events to prioritize recent data.
+            <br />
+            <span className="text-signal-green">Symmetric gates (2 crossings/lap): 10-15 recommended</span>
+            <br />
+            <span className="text-signal-amber">Asymmetric gates (1 crossing/lap): 5 recommended</span>
+          </p>
+        </div>
+      </div>
 
       {/* Action Buttons */}
       <div className="flex gap-3 pt-4 border-t border-control-grey">

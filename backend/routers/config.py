@@ -589,6 +589,7 @@ async def create_consist(
         gate_assignment = request.get("gate_assignment")  # None = symmetric, object = asymmetric
         reference_loco = request.get("reference_loco", "rear")  # "lead" or "rear"
         virtual_mode = request.get("virtual_mode", True)  # Default: Virtual Mode (safe)
+        recommendation_threshold = request.get("recommendation_threshold", 10)  # Default: 10 (symmetric)
 
         if not consist_address or not lead_address or not rear_address:
             return {"success": False, "error": "Missing required fields"}
@@ -612,6 +613,7 @@ async def create_consist(
             "adjust_loco": lead_address if reference_loco == "rear" else rear_address,
             "gate_ids": gate_ids,
             "gate_assignment": gate_assignment,  # From request: null = symmetric, object = asymmetric
+            "recommendation_threshold": recommendation_threshold,
             "virtual_mode": virtual_mode,
             "auto_compensation_enabled": False,
             "notes": ""
@@ -685,6 +687,8 @@ async def update_consist(
             consist["gate_ids"] = request["gate_ids"]
         if "gate_assignment" in request:
             consist["gate_assignment"] = request["gate_assignment"]  # null = symmetric, object = asymmetric
+        if "recommendation_threshold" in request:
+            consist["recommendation_threshold"] = request["recommendation_threshold"]
 
         # Handle virtual_mode change (if present in request)
         virtual_mode_changed = False

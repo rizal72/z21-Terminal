@@ -83,7 +83,8 @@ export default function ConsistManagerModal({ onClose }) {
         gate_ids: assignment.gate_ids || [],
         gate_assignment: assignment.gate_assignment,  // null = symmetric, object = asymmetric
         reference_loco: referenceLoco,
-        virtual_mode: consistData?.virtual_mode !== undefined ? consistData.virtual_mode : true
+        virtual_mode: consistData?.virtual_mode !== undefined ? consistData.virtual_mode : true,
+        recommendation_threshold: consistData?.recommendation_threshold || 10  // default: 10
       });
       setShowForm(true);
     }
