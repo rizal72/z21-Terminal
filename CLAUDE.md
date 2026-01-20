@@ -83,6 +83,7 @@ z21-frontend     # Run frontend dev server (port 5173)
 - **[CONSIST_MAPPING.md](docs/CONSIST_MAPPING.md)** - Lead/Rear vs Reference/Adjust logic, decoder stability strategy
 - **[SPEED_TABLE_DB_MIGRATION.md](docs/SPEED_TABLE_DB_MIGRATION.md)** - v1.0.0 milestone: CV67-94 in database, config refactoring
 - **[SPEED_TABLE_VIEWER.md](docs/SPEED_TABLE_VIEWER.md)** - Phase 1+2: Read-only analysis + direct CV write (operations mode)
+- **[SPEED_TABLE_DECODER_BEHAVIOR.md](docs/SPEED_TABLE_DECODER_BEHAVIOR.md)** - ESU mfx vs NMRA speed table differences, implementation plan
 
 ### Computer Vision & Tracking
 - **[COMPUTER_VISION.md](docs/COMPUTER_VISION.md)** - YOLO training workflow (4 classes), gate timing detection, Virtual Mode
@@ -785,6 +786,14 @@ git diff config.json  # Should show no changes if normalized
 ---
 
 ## 📊 Recent Changes (Last 30 Days)
+
+**2026-01-20** - ESU mfx Decoder Support:
+- ✅ Database: Added vstart/vhigh/decoder_type columns to locomotive_speed_table
+- ✅ Backend: ESU decoder detection, CV67/CV94 write validation (read-only for ESU)
+- ✅ API: New endpoint POST /api/speed-table/write-vstart-vhigh (CV2/CV5 for ESU)
+- ✅ Frontend: Grey out step 1/28 for ESU, Vstart/Vhigh panel (ESU only)
+- ✅ Migration: ONE-SHOT script migrated 7 locomotives (5 ESU, 2 NMRA)
+- 📄 Docs: SPEED_TABLE_DECODER_BEHAVIOR.md
 
 **v1.0.0** (2026-01-17) - JMRI Independence Achieved:
 - ✅ Speed tables CV67-94 migrated to database (`locomotive_speed_table` table)
