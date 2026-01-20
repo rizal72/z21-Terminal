@@ -148,36 +148,18 @@ def create_locomotive_config(loco) -> dict:
 
 def write_speed_table_to_db(loco):
     """
-    Write CV67-94 speed table to data.db (locomotive_speed_table table).
+    Write CV67-94 speed table + CV2/CV5 + decoder_type to data.db.
 
     Args:
         loco: Locomotive object from JMRI roster
     """
-    # Create table if not exists
+    # Add backend to path for decoder helpers
+    BACKEND_DIR = PROJECT_ROOT / "backend"
+    sys.path.insert(0, str(BACKEND_DIR))
+    from services.decoder_helpers import DECODER_TYPE_MAP, enforce_esu_fixed_values
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS locomotive_speed_table (
-            loco_address INTEGER PRIMARY KEY,
-            cv_values TEXT NOT NULL,
-            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            source TEXT DEFAULT 'jmri_import',
-            previous_cv_values TEXT,
-            previous_updated TIMESTAMP
-        )
-    """)
-
-    # Get current values if exist (for backup)
-    cursor.execute("""
-        SELECT cv_values, last_updated
-        FROM locomotive_speed_table
-        WHERE loco_address = ?
-    """, (loco.address,))
-
-    existing_row = cursor.fetchone()
-    previous_cv_values = existing_row[0] if existing_row else None
-    previous_updated = existing_row[1] if existing_row else None
 
     # Extract CV67-94 from loco.cv dict
     cv_values = {}
@@ -185,20 +167,68 @@ def write_speed_table_to_db(loco):
         if cv_index in loco.cv:
             cv_values[cv_index] = loco.cv[cv_index]
 
-    # Convert to JSON string
-    cv_values_json = json.dumps(cv_values)
+    # Extract CV2 (Vstart) and CV5 (Vhigh)
+    vstart = loco.cv.get(2)
+    vhigh = loco.cv.get(5)
 
-    # Insert or replace (with backup of previous values)
+    # Detect decoder type from JMRI decoder model
+    decoder_model = loco.decoder_model or ""
+    decoder_type = "nmra_standard"  # Default
+    for key, value in DECODER_TYPE_MAP.items():
+        if key in decoder_model:
+            decoder_type = value
+            break
+
+    print(f"   Decoder type: {decoder_type}")
+    print(f"   CV2 (Vstart): {vstart}")
+    print(f"   CV5 (Vhigh): {vhigh}")
+
+    # Enforce ESU fixed values if needed
+    if decoder_type == "esu_mfx":
+        cv_values = enforce_esu_fixed_values(cv_values, decoder_type)
+        print(f"   ESU decoder: enforced CV67=1, CV94=255")
+
+    # Get previous values for undo snapshot
     cursor.execute("""
-        INSERT OR REPLACE INTO locomotive_speed_table
-        (loco_address, cv_values, last_updated, source, previous_cv_values, previous_updated)
-        VALUES (?, ?, CURRENT_TIMESTAMP, 'jmri_import', ?, ?)
-    """, (loco.address, cv_values_json, previous_cv_values, previous_updated))
+        SELECT cv67, cv68, cv69, cv70, cv71, cv72, cv73, cv74, cv75, cv76,
+               cv77, cv78, cv79, cv80, cv81, cv82, cv83, cv84, cv85, cv86,
+               cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94
+        FROM locomotive_speed_table
+        WHERE loco_address = ?
+    """, (loco.address,))
+
+    existing_row = cursor.fetchone()
+    previous_values = None
+    if existing_row:
+        # Save current as previous (undo snapshot)
+        previous_values = json.dumps({67 + i: existing_row[i] for i in range(28) if existing_row[i] is not None})
+
+    # Prepare CV67-94 values list (in order)
+    cv_values_list = [cv_values.get(67 + i) for i in range(28)]
+
+    # Insert or replace with decoder metadata
+    cursor.execute("""
+        INSERT OR REPLACE INTO locomotive_speed_table (
+            loco_address,
+            cv67, cv68, cv69, cv70, cv71, cv72, cv73, cv74, cv75, cv76,
+            cv77, cv78, cv79, cv80, cv81, cv82, cv83, cv84, cv85, cv86,
+            cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94,
+            vstart, vhigh, decoder_type,
+            previous_values, last_modified, source
+        ) VALUES (
+            ?,
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?,
+            ?, CURRENT_TIMESTAMP, 'jmri_import'
+        )
+    """, (loco.address, *cv_values_list, vstart, vhigh, decoder_type, previous_values))
 
     conn.commit()
     conn.close()
 
-    print(f"[OK] Speed table CV67-94 written to database for loco {loco.address}")
+    print(f"[OK] Speed table CV67-94 + decoder metadata written to database for loco {loco.address}")
 
 
 def import_locomotive(address: int, dry_run: bool = False) -> bool:

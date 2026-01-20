@@ -73,11 +73,11 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
             detail=f"Consist {consist_id} has no adjust_loco configured"
         )
 
-    # Read CV67-94 from DB (primary), fallback to JMRI roster
-    cv_values = read_cv_speed_table_from_db(adjust_loco_address)
+    # Read CV67-94 + decoder metadata from DB (primary), fallback to JMRI roster
+    speed_table_data = read_cv_speed_table_from_db(adjust_loco_address)
 
-    if cv_values is None:
-        # Fallback to JMRI roster XML
+    if speed_table_data is None:
+        # Fallback to JMRI roster XML (legacy format, no decoder metadata)
         log('[SPEED-TABLE]', f"Loco {adjust_loco_address}: not in DB, reading from JMRI roster (fallback)")
         cv_values = read_cv_speed_table(adjust_loco_address)
 
@@ -86,6 +86,20 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
                 status_code=404,
                 detail=f"Speed table not found in DB or JMRI roster for locomotive {adjust_loco_address}"
             )
+
+        # Legacy format (no decoder metadata)
+        speed_table_data = {
+            'cv_values': cv_values,
+            'vstart': None,
+            'vhigh': None,
+            'decoder_type': 'nmra_standard'  # Safe default for legacy data
+        }
+
+    # Extract fields from speed_table_data
+    cv_values = speed_table_data['cv_values']
+    vstart = speed_table_data.get('vstart')
+    vhigh = speed_table_data.get('vhigh')
+    decoder_type = speed_table_data.get('decoder_type', 'nmra_standard')
 
     # Get locomotive name from config
     adjust_loco_name = get_locomotive_name(adjust_loco_address)
@@ -122,6 +136,9 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
         'session_id': session_id,
         'session_validated': session_validated,
         'cv_values': cv_values,
+        'vstart': vstart,  # CV2 for ESU (None for NMRA)
+        'vhigh': vhigh,    # CV5 for ESU (None for NMRA)
+        'decoder_type': decoder_type,  # 'esu_mfx' or 'nmra_standard'
         'critical_events': critical_events,
         'warning_events': warning_events,
         'recommendations': recommendations,
@@ -182,8 +199,13 @@ async def write_speed_table_to_decoder(
     if not z21_manager or not z21_manager.z21:
         raise HTTPException(status_code=400, detail="Z21 not connected")
 
+    # Detect decoder type for ESU validation
+    from services.decoder_helpers import get_decoder_type_from_config, validate_cv_write_allowed
+
+    decoder_type = get_decoder_type_from_config(adjust_loco_address)
+
     # Write CV67-94 (28 speed table values)
-    log('[CV]', f"Writing speed table CV67-94 to loco {adjust_loco_address} (consist {consist_id})...")
+    log('[CV]', f"Writing speed table CV67-94 to loco {adjust_loco_address} (consist {consist_id}, decoder={decoder_type})...")
     failed_cvs = []
 
     for cv_index in range(67, 95):  # CV67-94 (28 values)
@@ -191,6 +213,14 @@ async def write_speed_table_to_decoder(
 
         if cv_value is None:
             log('[CV]', f"CV{cv_index} missing in request, skipping")
+            failed_cvs.append(cv_index)
+            continue
+
+        # Validate if CV write is allowed (blocks ESU step 1/28)
+        try:
+            validate_cv_write_allowed(adjust_loco_address, cv_index, decoder_type)
+        except ValueError as e:
+            log('[CV]', f"Write blocked: {e}")
             failed_cvs.append(cv_index)
             continue
 
@@ -273,17 +303,54 @@ async def reimport_speed_table_from_jmri(consist_id: int) -> Dict[str, Any]:
             detail=f"Consist {consist_id} has no adjust_loco configured"
         )
 
-    # Read CV67-94 from JMRI roster (force re-read)
+    # Read CV67-94 + CV2/CV5 + decoder type from JMRI roster (force re-read)
     log('[SPEED-TABLE]', f"Re-importing speed table from JMRI roster for loco {adjust_loco_address}...")
-    cv_values = read_cv_speed_table(adjust_loco_address)
 
-    if cv_values is None:
+    # Load full locomotive from JMRI to get all CVs and decoder metadata
+    from read_cv_from_roster import load_all_locomotives
+    from services.decoder_helpers import enforce_esu_fixed_values, DECODER_TYPE_MAP
+
+    locos = load_all_locomotives()
+    loco = locos.get(str(adjust_loco_address))
+
+    if loco is None:
         raise HTTPException(
             status_code=404,
             detail=f"JMRI roster not found for locomotive {adjust_loco_address}"
         )
 
-    # Update database with JMRI values
+    # Extract CV67-94 (speed table)
+    cv_values = {}
+    for cv_index in range(67, 95):
+        if cv_index in loco.cv:
+            cv_values[cv_index] = loco.cv[cv_index]
+
+    if not cv_values:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Speed table CV67-94 not found in JMRI roster for loco {adjust_loco_address}"
+        )
+
+    # Extract CV2 (Vstart) and CV5 (Vhigh)
+    vstart = loco.cv.get(2)
+    vhigh = loco.cv.get(5)
+
+    # Detect decoder type from JMRI decoder model
+    decoder_model = loco.decoder_model or ""
+    decoder_type = "nmra_standard"  # Default
+    for key, value in DECODER_TYPE_MAP.items():
+        if key in decoder_model:
+            decoder_type = value
+            break
+
+    log('[SPEED-TABLE]', f"Loco {adjust_loco_address}: CV2={vstart}, CV5={vhigh}, decoder={decoder_type}")
+
+    # Enforce ESU fixed values if needed
+    if decoder_type == "esu_mfx":
+        cv_values = enforce_esu_fixed_values(cv_values, decoder_type)
+        log('[SPEED-TABLE]', f"Loco {adjust_loco_address}: ESU decoder, enforced CV67=1, CV94=255")
+
+    # Update database with JMRI values (CV67-94 + decoder metadata)
     db_success = update_cv_speed_table_in_db(
         loco_address=adjust_loco_address,
         cv_values=cv_values,
@@ -296,12 +363,19 @@ async def reimport_speed_table_from_jmri(consist_id: int) -> Dict[str, Any]:
             detail=f"Failed to update database for loco {adjust_loco_address}"
         )
 
-    log('[SPEED-TABLE]', f"Re-import complete: loco {adjust_loco_address} synced from JMRI roster")
+    # Update decoder metadata (vstart, vhigh, decoder_type)
+    from services.speed_table_helpers import update_decoder_metadata_in_db
+    update_decoder_metadata_in_db(adjust_loco_address, vstart, vhigh, decoder_type)
+
+    log('[SPEED-TABLE]', f"Re-import complete: loco {adjust_loco_address} synced from JMRI roster (CV67-94 + decoder metadata)")
 
     return {
         'success': True,
         'adjust_loco_address': adjust_loco_address,
         'cv_values': cv_values,
+        'vstart': vstart,
+        'vhigh': vhigh,
+        'decoder_type': decoder_type,
         'source': 'jmri_reimport'
     }
 
@@ -399,4 +473,137 @@ async def undo_speed_table_change(
         'failed_cvs': failed_cvs,
         'total_time': round(total_time, 2),
         'cvs_written': 28 - len(failed_cvs)
+    }
+
+
+@router.post("/api/speed-table/write-vstart-vhigh/{consist_id}")
+async def write_vstart_vhigh_to_decoder(
+    consist_id: int,
+    request: Dict[str, Any],
+    z21_manager: Z21Manager = Depends(get_z21_manager)
+) -> Dict[str, Any]:
+    """
+    Write CV2 (Vstart) and CV5 (Vhigh) to ESU decoder (operations mode).
+
+    **ESU decoders only**: CV2/CV5 are the min/max endpoints of the speed table curve.
+    Changing these values scales the entire CV68-93 range.
+
+    Args:
+        consist_id: Consist ID (10, 11, etc.)
+        request: JSON body with optional 'vstart' (CV2) and 'vhigh' (CV5) integer values (0-255)
+        z21_manager: Z21Manager instance (injected dependency)
+
+    Returns:
+        - success: True if at least one CV written successfully
+        - vstart_written: Boolean, CV2 write success
+        - vhigh_written: Boolean, CV5 write success
+        - adjust_loco_address: Address of locomotive
+        - decoder_type: Should be 'esu_mfx'
+
+    Raises:
+        404: Consist not found
+        400: Not an ESU decoder, Z21 not connected, or invalid values
+    """
+    start_time = time.time()
+
+    # Validate request body
+    vstart = request.get('vstart')
+    vhigh = request.get('vhigh')
+
+    if vstart is None and vhigh is None:
+        raise HTTPException(status_code=400, detail="Must provide at least one of 'vstart' or 'vhigh'")
+
+    # Get config to identify adjust loco
+    config = load_config()
+    consists = config.get('consists', {})
+    consist_config = consists.get(str(consist_id))
+
+    if not consist_config:
+        raise HTTPException(status_code=404, detail=f"Consist {consist_id} not found in config")
+
+    adjust_loco_address = consist_config.get('adjust_loco')
+    if not adjust_loco_address:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Consist {consist_id} has no adjust_loco configured"
+        )
+
+    # Check decoder type (ESU only)
+    from services.decoder_helpers import get_decoder_type_from_config
+
+    decoder_type = get_decoder_type_from_config(adjust_loco_address)
+    if decoder_type != "esu_mfx":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Vstart/Vhigh only for ESU decoders. Loco {adjust_loco_address} is {decoder_type}."
+        )
+
+    # Check Z21 connection
+    if not z21_manager or not z21_manager.z21:
+        raise HTTPException(status_code=400, detail="Z21 not connected")
+
+    # Write CV2 (Vstart) if provided
+    vstart_written = False
+    vhigh_written = False
+
+    if vstart is not None:
+        vstart_int = max(0, min(255, round(vstart)))
+        log('[CV]', f"Writing CV2 (Vstart) = {vstart_int} to loco {adjust_loco_address}...")
+
+        try:
+            success = z21_manager.z21.write_cv_ops_mode(adjust_loco_address, 2, vstart_int)
+            if success:
+                vstart_written = True
+                log('[CV]', f"CV2 (Vstart) written successfully")
+            else:
+                log('[CV]', f"CV2 (Vstart) write failed")
+        except Exception as e:
+            log('[CV]', f"CV2 (Vstart) write error: {e}")
+
+    # Write CV5 (Vhigh) if provided
+    if vhigh is not None:
+        vhigh_int = max(0, min(255, round(vhigh)))
+        log('[CV]', f"Writing CV5 (Vhigh) = {vhigh_int} to loco {adjust_loco_address}...")
+
+        try:
+            success = z21_manager.z21.write_cv_ops_mode(adjust_loco_address, 5, vhigh_int)
+            if success:
+                vhigh_written = True
+                log('[CV]', f"CV5 (Vhigh) written successfully")
+            else:
+                log('[CV]', f"CV5 (Vhigh) write failed")
+        except Exception as e:
+            log('[CV]', f"CV5 (Vhigh) write error: {e}")
+
+    total_time = time.time() - start_time
+    overall_success = vstart_written or vhigh_written
+
+    # Update database if any write succeeded
+    if overall_success:
+        from services.speed_table_helpers import update_decoder_metadata_in_db
+
+        # Read current values from DB to preserve unchanged ones
+        speed_table_data = read_cv_speed_table_from_db(adjust_loco_address)
+        current_vstart = speed_table_data.get('vstart') if speed_table_data else None
+        current_vhigh = speed_table_data.get('vhigh') if speed_table_data else None
+
+        # Use new values if written, otherwise keep current
+        final_vstart = vstart_int if vstart_written else current_vstart
+        final_vhigh = vhigh_int if vhigh_written else current_vhigh
+
+        update_decoder_metadata_in_db(adjust_loco_address, final_vstart, final_vhigh, decoder_type)
+        log('[SPEED-TABLE]', f"Database updated for loco {adjust_loco_address}: CV2={final_vstart}, CV5={final_vhigh}")
+
+    if overall_success:
+        log('[SPEED-TABLE]', f"Vstart/Vhigh write complete [{total_time:.2f}s]")
+    else:
+        log('[SPEED-TABLE]', f"Vstart/Vhigh write failed [{total_time:.2f}s]")
+
+    return {
+        'success': overall_success,
+        'vstart_written': vstart_written,
+        'vhigh_written': vhigh_written,
+        'adjust_loco_address': adjust_loco_address,
+        'decoder_type': decoder_type,
+        'total_time': round(total_time, 2)
     }

@@ -208,15 +208,23 @@ def calculate_cv_recommendations(
 # Database Functions (Speed Table Migration)
 # ============================================================================
 
-def read_cv_speed_table_from_db(loco_address: int) -> Optional[Dict[int, int]]:
+def read_cv_speed_table_from_db(loco_address: int) -> Optional[dict]:
     """
-    Read CV67-94 from database (source of truth after migration).
+    Read CV67-94 + vstart/vhigh/decoder_type from database (source of truth after migration).
 
     Args:
         loco_address: Locomotive DCC address (1-8)
 
     Returns:
-        Dict {67: value, 68: value, ..., 94: value} or None if not found
+        Dict with keys: 'cv_values', 'vstart', 'vhigh', 'decoder_type' or None if not found
+
+        Example:
+        {
+            'cv_values': {67: 1, 68: 10, ..., 94: 255},
+            'vstart': 10,         # CV2 for ESU (None for NMRA)
+            'vhigh': 255,         # CV5 for ESU (None for NMRA)
+            'decoder_type': 'esu_mfx'
+        }
     """
     conn = sqlite3.connect('data/data.db')
     cursor = conn.cursor()
@@ -224,7 +232,8 @@ def read_cv_speed_table_from_db(loco_address: int) -> Optional[Dict[int, int]]:
     cursor.execute("""
         SELECT cv67, cv68, cv69, cv70, cv71, cv72, cv73, cv74, cv75, cv76,
                cv77, cv78, cv79, cv80, cv81, cv82, cv83, cv84, cv85, cv86,
-               cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94
+               cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94,
+               vstart, vhigh, decoder_type
         FROM locomotive_speed_table
         WHERE loco_address = ?
     """, (loco_address,))
@@ -235,8 +244,20 @@ def read_cv_speed_table_from_db(loco_address: int) -> Optional[Dict[int, int]]:
     if not row:
         return None
 
-    # Convert tuple to dict {67: value, 68: value, ..., 94: value}
-    return {67 + i: row[i] for i in range(28)}
+    # Parse CV67-94 (first 28 columns)
+    cv_values = {67 + i: row[i] for i in range(28) if row[i] is not None}
+
+    # Parse vstart/vhigh/decoder_type (columns 28, 29, 30)
+    vstart = row[28]
+    vhigh = row[29]
+    decoder_type = row[30]
+
+    return {
+        'cv_values': cv_values,
+        'vstart': vstart,
+        'vhigh': vhigh,
+        'decoder_type': decoder_type
+    }
 
 
 def update_cv_speed_table_in_db(
@@ -365,3 +386,28 @@ def undo_cv_speed_table(loco_address: int) -> Optional[Dict[int, int]]:
     conn.close()
 
     return previous_values
+
+
+def update_decoder_metadata_in_db(loco_address: int, vstart: Optional[int], vhigh: Optional[int], decoder_type: str):
+    """
+    Update vstart/vhigh/decoder_type columns in database.
+
+    Used by ONE-SHOT migration script and reimport endpoint.
+
+    Args:
+        loco_address: Locomotive DCC address
+        vstart: CV2 value (ESU endpoint, or min speed for NMRA)
+        vhigh: CV5 value (ESU endpoint, or max speed for NMRA)
+        decoder_type: 'esu_mfx' or 'nmra_standard'
+    """
+    conn = sqlite3.connect('data/data.db')
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE locomotive_speed_table
+        SET vstart = ?, vhigh = ?, decoder_type = ?
+        WHERE loco_address = ?
+    """, (vstart, vhigh, decoder_type, loco_address))
+
+    conn.commit()
+    conn.close()

@@ -831,3 +831,41 @@ class DataDB:
 
         conn.commit()
         conn.close()
+
+    # === Database Migration Methods ===
+
+    @staticmethod
+    def migrate_speed_table_decoder_support():
+        """
+        Add vstart, vhigh, decoder_type columns to locomotive_speed_table (idempotent).
+
+        This migration enables ESU mfx decoder support where:
+        - CV67 (step 1) = FIXED at 1 (not editable)
+        - CV94 (step 28) = FIXED at 255 (not editable)
+        - CV68-93 (step 2-27) = SCALED between CV2 (Vstart) and CV5 (Vhigh)
+
+        Migration is idempotent - safe to run multiple times.
+        """
+        conn = DataDB.get_connection()
+        cursor = conn.cursor()
+
+        # Check existing columns
+        cursor.execute("PRAGMA table_info(locomotive_speed_table)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        # Add missing columns (nullable for graceful degradation)
+        if 'vstart' not in columns:
+            cursor.execute("ALTER TABLE locomotive_speed_table ADD COLUMN vstart INTEGER")
+            print("[DB Migration] Added 'vstart' column to locomotive_speed_table")
+
+        if 'vhigh' not in columns:
+            cursor.execute("ALTER TABLE locomotive_speed_table ADD COLUMN vhigh INTEGER")
+            print("[DB Migration] Added 'vhigh' column to locomotive_speed_table")
+
+        if 'decoder_type' not in columns:
+            cursor.execute("ALTER TABLE locomotive_speed_table ADD COLUMN decoder_type TEXT")
+            print("[DB Migration] Added 'decoder_type' column to locomotive_speed_table")
+
+        conn.commit()
+        conn.close()
+        print("[DB Migration] Speed table decoder support migration completed")
