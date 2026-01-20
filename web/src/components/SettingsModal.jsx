@@ -989,8 +989,80 @@ function LocomotivesTab({ settings, setSettings }) {
 
               {/* Expanded - Function Editor */}
               {isExpanded && (
-                <div className="p-4 bg-slate-800/50 space-y-2 max-h-96 overflow-y-auto">
-                  {loco.functions && loco.functions.length > 0 ? (
+                <div className="p-4 bg-slate-800/50 space-y-3 max-h-96 overflow-y-auto">
+                  {/* CV3/CV4 Editor (Accel/Decel) */}
+                  <div className="p-3 bg-slate-900/50 rounded border border-slate-700/50">
+                    <div className="flex flex-wrap items-center gap-3 mb-2">
+                      <span className="text-xs font-medium text-slate-300">Accel/Decel (Normal Mode):</span>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-slate-400">CV3</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="255"
+                          value={loco.cv_profiles?.normal?.cv3 ?? 0}
+                          onChange={(e) => {
+                            const value = Math.min(255, Math.max(0, parseInt(e.target.value) || 0));
+                            setSettings({
+                              ...settings,
+                              locomotives: {
+                                ...settings.locomotives,
+                                [address]: {
+                                  ...loco,
+                                  cv_profiles: {
+                                    ...loco.cv_profiles,
+                                    normal: {
+                                      ...loco.cv_profiles?.normal,
+                                      cv3: value
+                                    }
+                                  }
+                                }
+                              }
+                            });
+                          }}
+                          className="w-16 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white focus:border-signal-amber focus:ring-1 focus:ring-signal-amber outline-none"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-slate-400">CV4</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="255"
+                          value={loco.cv_profiles?.normal?.cv4 ?? 0}
+                          onChange={(e) => {
+                            const value = Math.min(255, Math.max(0, parseInt(e.target.value) || 0));
+                            setSettings({
+                              ...settings,
+                              locomotives: {
+                                ...settings.locomotives,
+                                [address]: {
+                                  ...loco,
+                                  cv_profiles: {
+                                    ...loco.cv_profiles,
+                                    normal: {
+                                      ...loco.cv_profiles?.normal,
+                                      cv4: value
+                                    }
+                                  }
+                                }
+                              }
+                            });
+                          }}
+                          className="w-16 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white focus:border-signal-amber focus:ring-1 focus:ring-signal-amber outline-none"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-400 flex items-start gap-1.5">
+                      <i className="fa-solid fa-info-circle mt-0.5 flex-shrink-0"></i>
+                      <span>Values applied when pressing <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-xs font-mono">T</kbd> (toggle TEST/NORMAL mode). Test mode always uses CV3=CV4=0.</span>
+                    </p>
+                  </div>
+
+                  {/* Functions List */}
+                  <div className="pt-2 border-t border-slate-700/50 space-y-2">
+                    <div className="text-xs font-medium text-slate-300 mb-2">Functions</div>
+                    {loco.functions && loco.functions.length > 0 ? (
                     loco.functions.map((func, idx) => (
                       <div key={idx} className="flex items-center gap-1 p-2 pr-4 bg-slate-900/50 rounded">
                         {/* Function Number */}
@@ -1064,6 +1136,7 @@ function LocomotivesTab({ settings, setSettings }) {
                       No functions configured
                     </div>
                   )}
+                  </div>
 
                   {/* Add Function Section */}
                   {addingFunctionFor === address ? (
