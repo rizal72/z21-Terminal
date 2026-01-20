@@ -106,23 +106,25 @@ def calculate_cv_recommendations(
     decoder_type: str = 'nmra_standard',
     vstart: Optional[int] = None,
     vhigh: Optional[int] = None,
-    critical_threshold: int = 5
+    critical_threshold: int = 5,
+    debug_info: Dict[int, Dict] = None
 ) -> List[Dict]:
     """
-    Calculate CV adjustment recommendations based on historical CRITICAL counts and delta_t sign.
+    Calculate CV adjustment recommendations based on weighted CRITICAL counts and delta_t sign.
 
     Excludes speeds that are "fixed" in their last tested session (proven OK with >= 3 events, < 20% CRITICAL rate).
 
     Args:
         cv_values: Current CV67-94 values (CV index -> value)
-        critical_events: Historical CRITICAL event counts per speed (speed -> count)
-        warning_events: Historical WARNING event counts per speed (speed -> count)
-        mean_delta_t_by_speed: Historical mean delta_t per speed (speed -> avg_delta_t)
+        critical_events: Weighted CRITICAL event counts per speed (speed -> count)
+        warning_events: Weighted WARNING event counts per speed (speed -> count)
+        mean_delta_t_by_speed: Weighted mean delta_t per speed (speed -> avg_delta_t)
         fixed_speeds: Set of speeds proven OK in last session (no recommendation needed)
         decoder_type: Decoder type ('esu_mfx' or 'nmra_standard')
         vstart: CV2 value for ESU decoders (None for NMRA)
         vhigh: CV5 value for ESU decoders (None for NMRA)
         critical_threshold: Minimum CRITICAL count to trigger recommendation (default: 5)
+        debug_info: Debug breakdown per speed (current/historical/weighted stats)
 
     Returns:
         List of recommendation dicts:
@@ -151,6 +153,9 @@ def calculate_cv_recommendations(
         - ESU special case: CV67 (step 1) → recommend CV2 (Vstart), CV94 (step 28) → recommend CV5 (Vhigh)
         - Adjustment magnitude based on critical count severity
     """
+    if debug_info is None:
+        debug_info = {}
+
     recommendations = []
 
     # Iterate over speeds with CRITICAL events
@@ -215,7 +220,8 @@ def calculate_cv_recommendations(
         # Get warning count for this speed (if any)
         warning_count = warning_events.get(speed, 0)
 
-        recommendations.append({
+        # Build recommendation dict
+        recommendation = {
             'speed': speed,
             'jmri_step': jmri_step,
             'cv_index': cv_index,
@@ -226,7 +232,13 @@ def calculate_cv_recommendations(
             'warning_count': warning_count,
             'mean_delta_t': round(mean_delta_t, 3),
             'esu_endpoint': esu_endpoint
-        })
+        }
+
+        # Attach debug_info if available for this speed (for UI breakdown)
+        if speed in debug_info:
+            recommendation['debug_info'] = debug_info[speed]
+
+        recommendations.append(recommendation)
 
     # Sort by CV index (ascending)
     recommendations.sort(key=lambda x: x['cv_index'])

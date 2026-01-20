@@ -111,15 +111,23 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
     session_id = current_session['id'] if current_session else None
     session_validated = current_session['validated'] if current_session else False
 
-    # ALWAYS get CRITICAL/WARNING events (historical cumulative with "fixed" detection)
-    # This is independent from current session state
-    events_by_status = DataDB.get_critical_events_by_speed(consist_id)
+    # Load consist config for recommendation_threshold
+    consist_config = config.get('consists', {}).get(str(consist_id), {})
+    recommendation_threshold = consist_config.get('recommendation_threshold', 10)  # Default 10
+
+    # Get CRITICAL/WARNING events with weighted algorithm (current session prioritized)
+    events_by_status = DataDB.get_critical_events_by_speed(
+        consist_id=consist_id,
+        current_session_id=session_id,
+        recommendation_threshold=recommendation_threshold
+    )
     critical_events = events_by_status.get('critical', {})
     warning_events = events_by_status.get('warning', {})
     mean_delta_t_by_speed = events_by_status.get('mean_delta_t', {})
     fixed_speeds = events_by_status.get('fixed_speeds', set())
+    debug_info = events_by_status.get('debug_info', {})
 
-    # ALWAYS calculate CV recommendations (cumulative historical data)
+    # Calculate CV recommendations (with debug_info for UI breakdown)
     recommendations = calculate_cv_recommendations(
         cv_values=cv_values,
         critical_events=critical_events,
@@ -129,7 +137,8 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
         decoder_type=decoder_type,
         vstart=vstart,
         vhigh=vhigh,
-        critical_threshold=5  # Configurable threshold
+        critical_threshold=5,  # Configurable threshold
+        debug_info=debug_info
     )
 
     return {
