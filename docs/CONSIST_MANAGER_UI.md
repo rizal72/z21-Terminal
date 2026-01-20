@@ -1,6 +1,6 @@
 # Phase 6: Consist Manager UI + Mobile Header
 
-**Status**: ✅ **COMPLETED** (2025-01-03)
+**Status**: ✅ **COMPLETED** (2025-01-03 / Updated 2026-01-20)
 
 **Goal**: Complete web UI for consist management with mobile-optimized header
 
@@ -10,6 +10,7 @@
 - ✅ Backend API: `/api/consists` (GET/POST/PUT/DELETE), `/api/restart-daemon`
 - ✅ Integration: Desktop inline button + Mobile menu item
 - ✅ Production: Deployed and tested on Mac (dev) and PC (production)
+- ✅ **2026-01-20**: Added `recommendation_threshold` field (Advanced section) - editable via UI, saved to config.json
 
 ---
 
@@ -750,3 +751,30 @@ export default function ConsistManagerModal({ isOpen, onClose, apiUrl }) {
 **Estimated Effort**: 1-2 days (6A: 4-6 hours, 6B: 6-8 hours)
 
 **Dependencies**: Phase 4B (Virtual Mode already complete ✅), Phase 5 (Config-driven tracking ✅)
+
+---
+
+## Changelog
+
+### 2026-01-20 - Recommendation Threshold Field
+
+**Feature**: Added `recommendation_threshold` field to Consist Manager (Advanced section)
+
+**Location**: ConsistForm.jsx, after Gate Tracking Mode section
+
+**UI Design**:
+- Number input field (range: 1-50, default: 10)
+- Label: "Recommendation Threshold (Advanced)"
+- Helper text:
+  - "Minimum current session events to prioritize recent data"
+  - "Symmetric gates (2 crossings/lap): 10-15 recommended"
+  - "Asymmetric gates (1 crossing/lap): 5 recommended"
+
+**Backend Integration**:
+- Saved to config.json via POST/PUT `/api/consists`
+- Used by weighted recommendations algorithm (see SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md)
+- Default: 10 if not provided (symmetric mode)
+
+**Purpose**: Controls when current session data gets prioritized (70% weight) vs historical data (30% weight) in speed table CV recommendations. Higher values require more events before trusting current session trends.
+
+**Related Docs**: [SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md](SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md)

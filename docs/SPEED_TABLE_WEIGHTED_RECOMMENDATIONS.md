@@ -119,6 +119,8 @@ weighted_critical_count = (count_current * weight_current) + (count_historical *
 - **Asymmetric gates** (Consist 10): 1 crossing per lap (only one direction valid) → fewer events → lower threshold (5)
 - **Track length**: Longer track = longer lap time = fewer events per session → lower threshold
 
+**UI Editor**: Can be edited via **Consist Manager** (⚙️ button) → Edit Consist → "Recommendation Threshold (Advanced)" field (no need to manually edit config.json)
+
 ---
 
 ## Implementation Details
