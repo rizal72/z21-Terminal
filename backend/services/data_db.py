@@ -661,7 +661,10 @@ class DataDB:
         cursor = conn.cursor()
 
         # Load consist config to get adjust_loco address (for CV modification filtering)
-        from backend.config_loader import load_config
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from config_loader import load_config
         config = load_config()
         consist_config = config.get('consists', {}).get(str(consist_id), {})
         adjust_loco_address = consist_config.get('adjust_loco')
