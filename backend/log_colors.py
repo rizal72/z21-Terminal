@@ -25,6 +25,7 @@ PREFIXES = {
     '[OVFL]': '\033[95m',    # Magenta bright - overflow
     '[SPEED]': '\033[38;5;208m',  # Orange - speed setting events
     '[ANALYTICS]': '\033[38;5;213m',  # Pink - analytics/metrics
+    '[SESSION]': '\033[38;5;213m',  # Pink - session lifecycle (same as ANALYTICS)
     '[SETTINGS]': '\033[38;5;220m',  # Gold/yellow - configuration changes
 }
 
