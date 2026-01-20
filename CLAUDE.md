@@ -83,6 +83,7 @@ z21-frontend     # Run frontend dev server (port 5173)
 - **[CONSIST_MAPPING.md](docs/CONSIST_MAPPING.md)** - Lead/Rear vs Reference/Adjust logic, decoder stability strategy
 - **[SPEED_TABLE_DB_MIGRATION.md](docs/SPEED_TABLE_DB_MIGRATION.md)** - v1.0.0 milestone: CV67-94 in database, config refactoring
 - **[SPEED_TABLE_VIEWER.md](docs/SPEED_TABLE_VIEWER.md)** - Phase 1+2: Read-only analysis + direct CV write (operations mode)
+- **[SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md](docs/SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md)** - Weighted algorithm: current session priority, CV filtering, inline UI breakdown
 - **[SPEED_TABLE_DECODER_BEHAVIOR.md](docs/SPEED_TABLE_DECODER_BEHAVIOR.md)** - ESU mfx vs NMRA speed table differences, implementation plan
 
 ### Computer Vision & Tracking
@@ -787,6 +788,16 @@ git diff config.json  # Should show no changes if normalized
 ---
 
 ## 📊 Recent Changes (Last 30 Days)
+
+**2026-01-20** - Weighted Speed Table Recommendations:
+- ✅ Algorithm: 3-stage weighted averaging (CV filter + session split + weighted mean)
+- ✅ Config: recommendation_threshold per consist (C10: 5 asymmetric, C11: 10 symmetric)
+- ✅ Backend: Complete refactor of get_critical_events_by_speed() (230 lines)
+- ✅ Weight logic: Current session >= threshold → 70%, else 30% (historical complementary)
+- ✅ CV modification filtering: Ignore events before last CV write
+- ✅ UI: Inline breakdown under each recommendation (always visible)
+- ✅ Example: "┗━ Current: 12 events, Δt +1.5s (70%) | Historical: 45 events, Δt -0.3s (30%)"
+- 📄 Docs: SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md
 
 **2026-01-20** - CV3/CV4 Editor:
 - ✅ Settings UI: Inline editor for CV3 (Acceleration) and CV4 (Deceleration)
