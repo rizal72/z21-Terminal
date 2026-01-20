@@ -80,6 +80,106 @@
 
 ---
 
+## 🆕 2026-01-20 Updates - ESU mfx Decoder Support
+
+**Status**: ✅ IMPLEMENTED (v1.0.0)
+
+### Overview
+
+Added full support for **ESU mfx® decoders** (LokSound, LokPilot) with distinct UI behavior from NMRA standard decoders (Hornby TXS, Zimo).
+
+**Key Differences**:
+- **ESU mfx**: CV67 (step 1) and CV94 (step 28) are **read-only** (fixed at 1 and 255), CV68-93 are scaled between CV2 (Vstart) and CV5 (Vhigh)
+- **NMRA standard**: All CV67-94 are editable (0-255)
+
+### Database Schema Changes
+
+Added 3 columns to `locomotive_speed_table`:
+- `vstart` (INTEGER) - CV2 (Vstart) for ESU, NULL for NMRA
+- `vhigh` (INTEGER) - CV5 (Vhigh) for ESU, NULL for NMRA
+- `decoder_type` (TEXT) - 'esu_mfx' or 'nmra_standard'
+
+**Migration**: ONE-SHOT script `scripts/migrate_decoder_metadata.py` reads from JMRI roster (Mac only), then database copied to PC.
+
+### Frontend Changes (SpeedTableViewer.jsx)
+
+**ESU Decoder UI** (loco 1, 2, 5, 6, 8):
+1. **Vstart/Vhigh Panel** (blue border, top of component)
+   - Inline editing for CV2 (Vstart) and CV5 (Vhigh)
+   - Writes directly to decoder via `/api/speed-table/write-vstart-vhigh` endpoint
+   - Badge: "ESU mfx®"
+   - Help text: "Edit CV2/CV5 FIRST to set min/max speed. Then adjust CV68-93 to shape the curve."
+
+2. **Grey Out Step 1/28**
+   - Non-clickable, grey fill, grey border
+   - Tooltip: "Step X is read-only for ESU decoders (fixed at Y)"
+   - Shows value but cannot be edited
+
+3. **ESU Endpoint Recommendations**
+   - If CRITICAL events at speed 0-4 (step 1) → recommend **CV2 (Vstart)** instead of CV67
+   - If CRITICAL events at speed 126 (step 28) → recommend **CV5 (Vhigh)** instead of CV94
+   - Blue border + "ESU" badge + hint: "⚠️ Edit Vstart/Vhigh in panel above"
+
+**NMRA Decoder UI** (loco 7, 4):
+- No Vstart/Vhigh panel (not shown)
+- All steps 1-28 editable (no grey out)
+- Recommendations target CV67-94 directly (no CV2/CV5 redirects)
+
+### Backend Changes
+
+**New Endpoint**: `POST /api/speed-table/write-vstart-vhigh/{consist_id}`
+- Writes CV2 and/or CV5 to decoder via POM
+- ESU decoders only (validation check)
+- Updates database after successful write
+
+**Decoder Detection**: `services/decoder_helpers.py`
+- `get_decoder_type_from_config()` - Detects decoder type from config.json
+- `validate_cv_write_allowed()` - Blocks CV67/CV94 writes for ESU
+- `enforce_esu_fixed_values()` - Forces CV67=1, CV94=255 for ESU
+
+**Recommendation Logic**: `services/speed_table_helpers.py`
+- `calculate_cv_recommendations()` now accepts `decoder_type`, `vstart`, `vhigh`
+- ESU decoders: redirects CV67 → CV2, CV94 → CV5 in recommendations
+- Added `esu_endpoint` flag to recommendation objects
+
+### Decoder Compatibility
+
+| Decoder | Type | CV67 | CV94 | CV68-93 | CV2/CV5 |
+|---------|------|------|------|---------|---------|
+| LokSound V4.0 (loco 1) | ESU mfx | Fixed (1) | Fixed (255) | Scaled | Endpoints |
+| LokPilot 5 (loco 2,5,6,8) | ESU mfx | Fixed (1) | Fixed (255) | Scaled | Endpoints |
+| Hornby TXS (loco 7) | NMRA | Editable | Editable | Editable | Not used |
+| Zimo MX630 (loco 4) | NMRA | Editable | Editable | Editable | Not used |
+
+### API Changes
+
+**GET `/api/speed-table/{consist_id}`** - Returns additional fields:
+```json
+{
+  "vstart": 2,                    // CV2 for ESU (null for NMRA)
+  "vhigh": 133,                   // CV5 for ESU (null for NMRA)
+  "decoder_type": "esu_mfx",      // or "nmra_standard"
+  "recommendations": [
+    {
+      "cv_index": 2,              // CV2 instead of CV67 for ESU
+      "esu_endpoint": true,       // Flag for frontend highlighting
+      ...
+    }
+  ]
+}
+```
+
+**POST `/api/speed-table/write/{consist_id}`** - Blocks CV67/CV94 for ESU:
+- Validation via `validate_cv_write_allowed()`
+- Logs error and skips if blocked
+- Returns `failed_cvs` list
+
+### See Also
+- `docs/SPEED_TABLE_DECODER_BEHAVIOR.md` - Complete ESU mfx implementation plan
+- `docs/DATABASE_SCHEMA.md` - Database schema with vstart/vhigh/decoder_type columns
+
+---
+
 ## 🆕 2025-01-17 Updates - Cumulative Intelligent Recommendations
 
 **Status**: ✅ IMPLEMENTED

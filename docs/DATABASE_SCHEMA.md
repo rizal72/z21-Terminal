@@ -184,7 +184,7 @@ last_active_time: 1768774968.73
 
 ## Table: locomotive_speed_table
 
-**Purpose**: Store CV67-94 speed tables (28 steps) for each locomotive
+**Purpose**: Store CV67-94 speed tables (28 steps) + decoder metadata for each locomotive
 
 ```sql
 CREATE TABLE locomotive_speed_table (
@@ -193,28 +193,55 @@ CREATE TABLE locomotive_speed_table (
     cv68 INTEGER NOT NULL CHECK(cv68 BETWEEN 0 AND 255),
     -- ... cv69-cv93 (same structure)
     cv94 INTEGER NOT NULL CHECK(cv94 BETWEEN 0 AND 255),
+    vstart INTEGER,                   -- CV2 (Vstart) for ESU decoders, NULL for NMRA
+    vhigh INTEGER,                    -- CV5 (Vhigh) for ESU decoders, NULL for NMRA
+    decoder_type TEXT,                -- 'esu_mfx' or 'nmra_standard'
     previous_values TEXT,             -- JSON backup of previous values
     last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    source TEXT DEFAULT 'jmri_import' -- jmri_import | web_ui | auto_adjust
+    source TEXT DEFAULT 'jmri_import' -- jmri_import | web_ui | auto_adjust | undo
 );
 
 CREATE INDEX idx_loco_speed_table_modified
     ON locomotive_speed_table(last_modified DESC);
 ```
 
-**Example**:
+**Example (ESU decoder)**:
+```
+loco_address: 1
+cv67: 1, cv68: 12, cv69: 15, ..., cv94: 255
+vstart: 2                           -- CV2 (min speed endpoint)
+vhigh: 133                          -- CV5 (max speed endpoint)
+decoder_type: "esu_mfx"
+previous_values: {"cv67": 1, "cv68": 10, ...}
+last_modified: 2026-01-20 14:32:18
+source: "web_ui"
+```
+
+**Example (NMRA decoder)**:
 ```
 loco_address: 7
 cv67: 12, cv68: 15, cv69: 18, ..., cv94: 255
+vstart: NULL                        -- NMRA decoders don't use CV2/CV5 as endpoints
+vhigh: NULL
+decoder_type: "nmra_standard"
 previous_values: {"cv67": 10, "cv68": 13, ...}
 last_modified: 2026-01-18 23:45:12
 source: "web_ui"
 ```
 
 **Notes**:
-- CV67-94 = 28 speed steps (NMRA standard)
-- Values: 0-255 (motor PWM duty cycle)
-- `previous_values`: JSON backup for undo/comparison
+- **CV67-94** = 28 speed steps (JMRI standard mapping)
+- **Values**: 0-255 (motor PWM duty cycle)
+- **ESU mfx decoders** (LokSound, LokPilot):
+  - CV67 (step 1) = FIXED at 1 (read-only)
+  - CV94 (step 28) = FIXED at 255 (read-only)
+  - CV68-93 (steps 2-27) = Scaled between CV2 (Vstart) and CV5 (Vhigh)
+  - Edit CV2/CV5 to adjust min/max speed endpoints
+- **NMRA standard decoders** (Hornby TXS, Zimo MX630):
+  - CV67-94 all editable (0-255)
+  - CV2/CV5 not used as speed table endpoints
+- **previous_values**: JSON backup for 1-level undo
+- **source** values: `jmri_import`, `jmri_reimport`, `web_ui`, `test_mode`, `undo`
 
 ---
 
@@ -354,9 +381,11 @@ SELECT 'system_state', COUNT(*) FROM system_state;
 
 ## Migration History
 
+- **2026-01-20**: Added decoder metadata to locomotive_speed_table (vstart, vhigh, decoder_type)
+- **2026-01-20**: ESU mfx decoder support (CV67/CV94 read-only, CV2/CV5 endpoints)
 - **2025-01-17**: Migrated from analytics.db → data.db (unified database)
 - **2025-01-17**: Added locomotive_speed_table (CV67-94 storage)
 - **2025-01-17**: Added consist_state (Virtual Mode tracking)
 - **2025-01-17**: Migrated JMRI roster to config.json (locomotive functions)
 
-See `docs/SPEED_TABLE_DB_MIGRATION.md` for complete migration details.
+See `docs/SPEED_TABLE_DB_MIGRATION.md` and `docs/SPEED_TABLE_DECODER_BEHAVIOR.md` for complete migration details.
