@@ -162,7 +162,7 @@ WHERE consist_id = ?
   AND session_id IN (
     SELECT DISTINCT session_id FROM events
     WHERE consist_id = ? AND session_id != ?
-    ORDER BY timestamp DESC LIMIT 5
+    ORDER BY session_id DESC LIMIT 5  -- session_id format YYYYMMDD_HHMMSS is sortable
   )
   AND timestamp >= cv_last_modified
 GROUP BY speed
