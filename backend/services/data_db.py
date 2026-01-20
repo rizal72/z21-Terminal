@@ -760,12 +760,15 @@ class DataDB:
                 'session_ids': []
             }
 
-            # Get last 5 session IDs (excluding current)
+            # Get last 5 session IDs (excluding current) - ordered by most recent timestamp
+            # Use subquery to get distinct sessions with their max timestamp
             query_sessions = '''
-                SELECT DISTINCT session_id
-                FROM events
-                WHERE event_type = 'delta_t'
-                  AND json_extract(data, '$.consist_id') = ?
+                SELECT session_id
+                FROM (
+                    SELECT DISTINCT session_id, MAX(timestamp) as max_ts
+                    FROM events
+                    WHERE event_type = 'delta_t'
+                      AND json_extract(data, '$.consist_id') = ?
             '''
             params_sessions = [consist_id]
 
@@ -773,7 +776,12 @@ class DataDB:
                 query_sessions += ' AND session_id != ?'
                 params_sessions.append(current_session_id)
 
-            query_sessions += ' ORDER BY session_id DESC LIMIT 5'
+            query_sessions += '''
+                    GROUP BY session_id
+                    ORDER BY max_ts DESC
+                    LIMIT 5
+                )
+            '''
             cursor.execute(query_sessions, params_sessions)
             historical_sessions = [row[0] for row in cursor.fetchall()]
             historical_stats['session_ids'] = historical_sessions
