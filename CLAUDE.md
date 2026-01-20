@@ -45,10 +45,20 @@ z21-terminal     # CLI controller
 
 **PC Windows (Production)**:
 ```powershell
-z21-deploy-dev   # Full deployment from develop branch
-z21-restart      # Restart backend only
+# Deployment
+z21-deploy       # Full deployment from main branch (PRODUCTION)
+z21-deploy-dev   # Full deployment from develop branch (DEVELOPMENT)
+
+# Backend Management
+z21-start        # Start backend (Task Scheduler background)
+z21-restart      # Restart backend
 z21-stop         # Stop backend
-z21-log          # View backend logs
+z21-status       # Check backend status
+
+# Monitoring & Dev
+z21-log          # View backend logs (tail -200)
+z21-backend      # Run backend foreground (port 8000)
+z21-frontend     # Run frontend dev server (port 5173)
 ```
 
 ### Access URLs
@@ -133,24 +143,34 @@ z21-Terminal/
 │   ├── routers/                # API endpoints (analytics, config, roster, status, video_feed)
 │   ├── services/               # Business logic (analytics_db, broadcast, config_manager)
 │   ├── websocket_handlers/     # Real-time handlers (ws_control, ws_tracking)
-│   ├── tracking/               # YOLO tracking components (yolo_tracker, rtsp_handler)
+│   ├── tracking/               # YOLO tracking runtime components
+│   │   ├── yolo_tracker.py     # YOLOTracker class (34k - inference, gate detection)
+│   │   └── rtsp_handler.py     # RTSP stream utilities
 │   ├── tracking_daemon.py      # Headless YOLO tracking daemon
-│   └── data/                   # SQLite database (data.db, gitignored)
+│   └── data/
+│       └── data.db             # SQLite database (auto-created, gitignored)
 ├── web/                        # React frontend
 │   ├── src/
 │   │   ├── App.jsx             # Main component
 │   │   └── components/         # React components (ConsistController, Analytics, Settings, etc.)
 │   ├── dist/                   # Production build (gitignored)
 │   └── package.json
-├── scripts/                    # Python utilities
-│   ├── z21.py                  # Z21 LAN protocol library (UDP commands)
-│   ├── z21_controller.py       # CLI controller
-│   └── utils/                  # Import scripts, YOLO training helpers
+├── scripts/                    # Python utilities & YOLO training workspace
+│   ├── z21.py                  # Z21 LAN protocol library (UDP commands, XpressNet)
+│   ├── z21_controller.py       # CLI locomotive controller (46k)
+│   ├── track_consist_yolo.py   # Standalone YOLO tracking script (43k)
+│   ├── camera_utils.py         # RTSP camera utilities
+│   ├── utils/                  # YOLO training pipeline (see docs/COMPUTER_VISION.md)
+│   └── models/                 # YOLO model files (PC Windows only, gitignored)
+│       ├── best_obb.pt         # OBB PyTorch (6.6 MB) - Active model
+│       ├── best_obb.onnx       # OBB ONNX export (12.5 MB)
+│       ├── best_obb.engine     # OBB TensorRT (8.1 MB) - GPU optimized
+│       ├── best.pt             # Standard PyTorch (6.3 MB)
+│       ├── best.onnx           # Standard ONNX (12.3 MB)
+│       └── best.engine         # Standard TensorRT (7.7 MB)
 ├── docs/                       # Documentation (24 markdown files)
 ├── config.json                 # Central configuration (committed to git)
-├── config.local.json           # Local overrides (gitignored, credentials)
-├── data.db                     # Analytics database (auto-created, gitignored)
-└── best_obb.engine             # TensorRT YOLO model (13.7 MB, committed)
+└── config.local.json           # Local overrides (gitignored, credentials)
 ```
 
 ### Backend Modular Architecture (v1.0.0)
@@ -551,7 +571,10 @@ git push origin develop
 
 **PC Production Deployment**:
 ```powershell
-# Full deployment (recommended)
+# Full deployment - PRODUCTION (main branch)
+ssh riccardo@gaming-pc "cd C:\z21-Terminal && z21-deploy"
+
+# Full deployment - DEVELOPMENT (develop branch)
 ssh riccardo@gaming-pc "cd C:\z21-Terminal && z21-deploy-dev"
 
 # Backend-only changes (skip frontend rebuild)
