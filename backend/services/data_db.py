@@ -624,10 +624,18 @@ class DataDB:
         }
 
     @staticmethod
-    def get_critical_events_by_speed(consist_id: int) -> Dict[str, Any]:
+    def get_critical_events_by_speed(
+        consist_id: int,
+        current_session_id: Optional[int] = None,
+        recommendation_threshold: int = 10
+    ) -> Dict[str, Any]:
         """
-        Get cumulative CRITICAL/WARNING events per speed (all historical sessions),
-        with intelligent "fixed" detection.
+        Get CRITICAL/WARNING events per speed with weighted averaging (current session prioritized).
+
+        Implements 3-stage weighted algorithm:
+        1. Filter events after CV modification (ignore old data if CV changed)
+        2. Split current session vs historical (last 5 sessions)
+        3. Weight: IF current >= threshold: 70% current + 30% historical, ELSE: 30% current + 70% historical
 
         A speed is considered "fixed" if in its last tested session:
         - At least 3 delta_t events occurred at that speed
@@ -637,62 +645,207 @@ class DataDB:
 
         Args:
             consist_id: Consist ID (10, 11, etc.)
+            current_session_id: Current session ID (None if no active session)
+            recommendation_threshold: Minimum current session events to prioritize (config-driven: 5-10)
 
         Returns:
             {
-                'critical': {speed: count},      # Historical total CRITICAL count
-                'warning': {speed: count},       # Historical total WARNING count
-                'mean_delta_t': {speed: float},  # Historical average delta_t
-                'fixed_speeds': {speed, ...}     # Speeds proven OK in last session
+                'critical': {speed: weighted_count},      # Weighted CRITICAL count
+                'warning': {speed: weighted_count},       # Weighted WARNING count
+                'mean_delta_t': {speed: weighted_mean},   # Weighted average delta_t
+                'fixed_speeds': {speed, ...},             # Speeds proven OK in last session
+                'debug_info': {speed: {...}}              # Current/historical breakdown (always present)
             }
         """
         conn = DataDB.get_connection()
         cursor = conn.cursor()
 
-        # Query 1a: Count CRITICAL/WARNING per speed (all historical sessions)
+        # Load consist config to get adjust_loco address (for CV modification filtering)
+        from backend.config_loader import load_config
+        config = load_config()
+        consist_config = config.get('consists', {}).get(str(consist_id), {})
+        adjust_loco_address = consist_config.get('adjust_loco')
+
+        # Initialize results
+        results = {
+            'critical': {},
+            'warning': {},
+            'mean_delta_t': {},
+            'fixed_speeds': set(),
+            'debug_info': {}
+        }
+
+        # Get all unique speeds with CRITICAL/WARNING events (to know what to analyze)
         cursor.execute('''
-            SELECT
-                json_extract(data, '$.speed') as speed,
-                json_extract(data, '$.status') as status,
-                COUNT(*) as count
+            SELECT DISTINCT json_extract(data, '$.speed') as speed
             FROM events
             WHERE event_type = 'delta_t'
               AND json_extract(data, '$.consist_id') = ?
               AND json_extract(data, '$.status') IN ('CRITICAL', 'WARNING')
-            GROUP BY speed, status
+              AND json_extract(data, '$.speed') IS NOT NULL
         ''', (consist_id,))
 
-        results = {'critical': {}, 'warning': {}, 'mean_delta_t': {}, 'fixed_speeds': set()}
+        all_speeds = [int(row[0]) for row in cursor.fetchall()]
 
-        for row in cursor.fetchall():
-            speed, status, count = row
-            if speed is not None:
-                speed = int(speed)
-                if status == 'CRITICAL':
-                    results['critical'][speed] = count
-                elif status == 'WARNING':
-                    results['warning'][speed] = count
+        # For each speed, calculate weighted stats
+        for speed in all_speeds:
+            # Get CV modification timestamp for this speed (if any)
+            jmri_step = (speed // 4) + 1  # speed_to_jmri_step logic
+            cv_last_modified = None
 
-        # Query 1b: Calculate mean delta_t per speed (ALL events, all status)
-        cursor.execute('''
-            SELECT
-                json_extract(data, '$.speed') as speed,
-                AVG(json_extract(data, '$.delta_t')) as mean_delta_t
-            FROM events
-            WHERE event_type = 'delta_t'
-              AND json_extract(data, '$.consist_id') = ?
-            GROUP BY speed
-        ''', (consist_id,))
+            if adjust_loco_address:
+                cursor.execute('''
+                    SELECT last_modified
+                    FROM locomotive_speed_table
+                    WHERE address = ? AND step = ?
+                ''', (adjust_loco_address, jmri_step))
+                cv_row = cursor.fetchone()
+                if cv_row and cv_row[0]:
+                    cv_last_modified = cv_row[0]
 
-        for row in cursor.fetchall():
-            speed, mean_dt = row
-            if speed is not None and mean_dt is not None:
-                speed = int(speed)
-                results['mean_delta_t'][speed] = float(mean_dt)
+            # Query current session events (if session active)
+            current_stats = {
+                'count': 0,
+                'mean_delta_t': 0.0,
+                'critical_count': 0,
+                'warning_count': 0,
+                'weight': 0.3  # Default low weight
+            }
 
-        # Query 2: For each speed with CRITICAL events, check if "fixed" in last session
+            if current_session_id:
+                query = '''
+                    SELECT
+                        COUNT(*) as count,
+                        AVG(json_extract(data, '$.delta_t')) as mean_delta_t,
+                        SUM(CASE WHEN json_extract(data, '$.status') = 'CRITICAL' THEN 1 ELSE 0 END) as critical_count,
+                        SUM(CASE WHEN json_extract(data, '$.status') = 'WARNING' THEN 1 ELSE 0 END) as warning_count
+                    FROM events
+                    WHERE event_type = 'delta_t'
+                      AND json_extract(data, '$.consist_id') = ?
+                      AND session_id = ?
+                      AND json_extract(data, '$.speed') = ?
+                '''
+                params = [consist_id, current_session_id, speed]
+
+                # Filter by CV modification if exists
+                if cv_last_modified:
+                    query += ' AND timestamp >= ?'
+                    params.append(cv_last_modified)
+
+                cursor.execute(query, params)
+                row = cursor.fetchone()
+
+                if row and row[0] > 0:
+                    current_stats['count'] = row[0]
+                    current_stats['mean_delta_t'] = float(row[1]) if row[1] else 0.0
+                    current_stats['critical_count'] = row[2] or 0
+                    current_stats['warning_count'] = row[3] or 0
+
+                    # Determine weight: >= threshold → 70%, else 30%
+                    if current_stats['count'] >= recommendation_threshold:
+                        current_stats['weight'] = 0.7
+                    else:
+                        current_stats['weight'] = 0.3
+
+            # Query historical events (last 5 sessions, excluding current)
+            historical_stats = {
+                'count': 0,
+                'mean_delta_t': 0.0,
+                'critical_count': 0,
+                'warning_count': 0,
+                'weight': 1.0 - current_stats['weight'],  # Complementary weight
+                'session_ids': []
+            }
+
+            # Get last 5 session IDs (excluding current)
+            query_sessions = '''
+                SELECT DISTINCT session_id
+                FROM events
+                WHERE event_type = 'delta_t'
+                  AND json_extract(data, '$.consist_id') = ?
+            '''
+            params_sessions = [consist_id]
+
+            if current_session_id:
+                query_sessions += ' AND session_id != ?'
+                params_sessions.append(current_session_id)
+
+            query_sessions += ' ORDER BY session_id DESC LIMIT 5'
+            cursor.execute(query_sessions, params_sessions)
+            historical_sessions = [row[0] for row in cursor.fetchall()]
+            historical_stats['session_ids'] = historical_sessions
+
+            if historical_sessions:
+                placeholders = ','.join(['?'] * len(historical_sessions))
+                query_hist = f'''
+                    SELECT
+                        COUNT(*) as count,
+                        AVG(json_extract(data, '$.delta_t')) as mean_delta_t,
+                        SUM(CASE WHEN json_extract(data, '$.status') = 'CRITICAL' THEN 1 ELSE 0 END) as critical_count,
+                        SUM(CASE WHEN json_extract(data, '$.status') = 'WARNING' THEN 1 ELSE 0 END) as warning_count
+                    FROM events
+                    WHERE event_type = 'delta_t'
+                      AND json_extract(data, '$.consist_id') = ?
+                      AND session_id IN ({placeholders})
+                      AND json_extract(data, '$.speed') = ?
+                '''
+                params_hist = [consist_id] + historical_sessions + [speed]
+
+                # Filter by CV modification if exists
+                if cv_last_modified:
+                    query_hist += ' AND timestamp >= ?'
+                    params_hist.append(cv_last_modified)
+
+                cursor.execute(query_hist, params_hist)
+                row = cursor.fetchone()
+
+                if row and row[0] > 0:
+                    historical_stats['count'] = row[0]
+                    historical_stats['mean_delta_t'] = float(row[1]) if row[1] else 0.0
+                    historical_stats['critical_count'] = row[2] or 0
+                    historical_stats['warning_count'] = row[3] or 0
+
+            # Calculate weighted results
+            total_count = current_stats['count'] + historical_stats['count']
+
+            if total_count > 0:
+                # Weighted mean delta_t
+                weighted_mean_dt = (
+                    current_stats['mean_delta_t'] * current_stats['weight'] +
+                    historical_stats['mean_delta_t'] * historical_stats['weight']
+                )
+
+                # Weighted CRITICAL count
+                weighted_critical = (
+                    current_stats['critical_count'] * current_stats['weight'] +
+                    historical_stats['critical_count'] * historical_stats['weight']
+                )
+
+                # Weighted WARNING count
+                weighted_warning = (
+                    current_stats['warning_count'] * current_stats['weight'] +
+                    historical_stats['warning_count'] * historical_stats['weight']
+                )
+
+                # Store in results
+                results['mean_delta_t'][speed] = weighted_mean_dt
+                results['critical'][speed] = int(round(weighted_critical))
+                results['warning'][speed] = int(round(weighted_warning))
+
+                # Store debug info (always calculated, used for UI breakdown)
+                results['debug_info'][speed] = {
+                    'current_session': current_stats,
+                    'historical': historical_stats,
+                    'weighted_result': {
+                        'mean_delta_t': weighted_mean_dt,
+                        'critical_count': weighted_critical,
+                        'meets_threshold': current_stats['count'] >= recommendation_threshold,
+                        'cv_last_modified': cv_last_modified
+                    }
+                }
+
+        # Fixed speeds detection (use original logic, but check most recent session)
         for speed in results['critical'].keys():
-            # Find last session that tested this speed
             cursor.execute('''
                 SELECT session_id
                 FROM events
@@ -709,7 +862,6 @@ class DataDB:
 
             last_session_id = last_session_row[0]
 
-            # Count events in last session for this speed
             cursor.execute('''
                 SELECT
                     COUNT(*) as total_events,

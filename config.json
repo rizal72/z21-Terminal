@@ -37,7 +37,8 @@
         "reference": 3,
         "adjust": 4
       },
-      "notes": "Asymmetric gate timing: only L5@G3-L1@G4 valid (figure-8 track geometry). Reference=D645 014 (ESU stable), Adjust=Gr.675 017 (ESU LokSound)."
+      "recommendation_threshold": 5,
+      "notes": "Asymmetric gate timing: only L5@G3-L1@G4 valid (figure-8 track geometry). Reference=D645 014 (ESU stable), Adjust=Gr.675 017 (ESU LokSound). Threshold 5 (asymmetric gates, longer track, fewer crossings per lap)."
     },
     "11": {
       "name": "C11 Esterno",
@@ -50,7 +51,8 @@
         2
       ],
       "gate_assignment": null,
-      "notes": "Symmetric cross-gate timing: both L7@G1-L8@G2 and L7@G2-L8@G1 valid (oval track). Reference=E444 056 (ESU stable, NEVER touch), Adjust=E656 239 (Hornby)."
+      "recommendation_threshold": 10,
+      "notes": "Symmetric cross-gate timing: both L7@G1-L8@G2 and L7@G2-L8@G1 valid (oval track). Reference=E444 056 (ESU stable, NEVER touch), Adjust=E656 239 (Hornby). Threshold 10 (symmetric gates, 2 crossings per lap)."
     }
   },
   "gates": [
