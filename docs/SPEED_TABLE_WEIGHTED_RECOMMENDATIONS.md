@@ -134,8 +134,7 @@ weighted_critical_count = (count_current * weight_current) + (count_historical *
 def get_critical_events_by_speed(
     consist_id: int,
     current_session_id: Optional[int] = None,  # NEW
-    recommendation_threshold: int = 10,        # NEW (from config)
-    debug: bool = False                        # NEW (from config.debug.enabled)
+    recommendation_threshold: int = 10         # NEW (from config)
 ) -> Dict[str, Any]:
 ```
 
@@ -176,7 +175,7 @@ GROUP BY speed
     'warning': {speed: weighted_count},
     'mean_delta_t': {speed: weighted_mean},
     'fixed_speeds': {speed, ...},
-    'debug_info': {  # Only if debug=True
+    'debug_info': {  # Always present (used for UI breakdown)
         speed: {
             'current_session': {
                 'count': 12,
@@ -211,7 +210,6 @@ GROUP BY speed
 # Load consist config for recommendation_threshold
 consist_config = config.get('consists', {}).get(str(consist_id), {})
 recommendation_threshold = consist_config.get('recommendation_threshold', 10)  # Default 10
-debug_enabled = config.get('debug', {}).get('enabled', False)
 
 # Get current session ID
 current_session = DataDB.get_current_session(consist_id)
@@ -221,8 +219,7 @@ session_id = current_session['id'] if current_session else None
 events_by_status = DataDB.get_critical_events_by_speed(
     consist_id=consist_id,
     current_session_id=session_id,
-    recommendation_threshold=recommendation_threshold,
-    debug=debug_enabled
+    recommendation_threshold=recommendation_threshold
 )
 ```
 
@@ -248,63 +245,57 @@ return {
 
 ### Frontend Changes
 
-#### Debug Panel in SpeedTableViewer
+#### Weighted Breakdown in Recommendations
 
-**File**: `web/src/components/SpeedTableViewer.jsx`
+**File**: `web/src/components/charts/SpeedTableViewer.jsx`
 
-**Location**: Below recommendations panel, only visible if `config.debug.enabled = true`
+**Location**: Inline under each recommendation (always visible, compact format)
 
-**Design**:
+**Design** (expand existing recommendation display):
 ```jsx
-{debugInfo && Object.keys(debugInfo).length > 0 && (
-  <div className="mt-4 p-4 bg-pink-500/10 border border-pink-500/30 rounded">
-    <h4 className="text-sm font-semibold text-pink-200 mb-3 flex items-center gap-2">
-      <i className="fa-solid fa-bug"></i>
-      Debug: Weighted Recommendations
-    </h4>
+{/* Existing recommendation display (lines 920-944) */}
+<div className="flex items-center gap-4 text-xs">
+  <span className={`font-mono ${rec.mean_delta_t < 0 ? 'text-blue-400' : 'text-amber-400'}`}>
+    Δt {rec.mean_delta_t >= 0 ? '+' : ''}{rec.mean_delta_t.toFixed(2)}s
+  </span>
+  <span className="text-red-400">
+    {rec.critical_count} critical
+  </span>
+  {rec.warning_count > 0 && (
+    <span className="text-amber-400">
+      {rec.warning_count} warning
+    </span>
+  )}
+  <span className="text-slate-500">
+    Speed {rec.speed}
+  </span>
+</div>
 
-    {Object.entries(debugInfo).map(([speed, info]) => (
-      <div key={speed} className="mb-3 p-3 bg-slate-900/50 rounded text-xs">
-        <div className="font-medium text-white mb-2">Speed {speed}%</div>
-
-        {/* Current Session */}
-        <div className="mb-2">
-          <span className="text-green-400">Current Session:</span>
-          <span className="ml-2">{info.current_session.count} events</span>
-          <span className="ml-2">Δt: {info.current_session.mean_delta_t.toFixed(3)}s</span>
-          <span className="ml-2">CRITICAL: {info.current_session.critical_count}</span>
-          <span className="ml-2 text-slate-400">(weight: {info.current_session.weight})</span>
-        </div>
-
-        {/* Historical */}
-        <div className="mb-2">
-          <span className="text-blue-400">Historical (5 sessions):</span>
-          <span className="ml-2">{info.historical.count} events</span>
-          <span className="ml-2">Δt: {info.historical.mean_delta_t.toFixed(3)}s</span>
-          <span className="ml-2">CRITICAL: {info.historical.critical_count}</span>
-          <span className="ml-2 text-slate-400">(weight: {info.historical.weight})</span>
-        </div>
-
-        {/* Weighted Result */}
-        <div className="pt-2 border-t border-slate-700">
-          <span className="text-signal-amber">Weighted Result:</span>
-          <span className="ml-2 font-medium">Δt: {info.weighted_result.mean_delta_t.toFixed(3)}s</span>
-          <span className="ml-2">CRITICAL: {info.weighted_result.critical_count.toFixed(1)}</span>
-          {info.weighted_result.meets_threshold && (
-            <span className="ml-2 text-green-400">✓ Threshold met</span>
-          )}
-        </div>
-
-        {info.weighted_result.cv_last_modified && (
-          <div className="mt-1 text-slate-400">
-            Last CV write: {new Date(info.weighted_result.cv_last_modified).toLocaleString()}
-          </div>
-        )}
-      </div>
-    ))}
+{/* NEW: Weighted breakdown (always visible, compact) */}
+{rec.debug_info && (
+  <div className="mt-1 pl-4 text-xs text-slate-400 flex items-center gap-4">
+    <span>
+      ┗━ Current: {rec.debug_info.current_session.count} events,
+      Δt {rec.debug_info.current_session.mean_delta_t >= 0 ? '+' : ''}{rec.debug_info.current_session.mean_delta_t.toFixed(2)}s
+      ({Math.round(rec.debug_info.current_session.weight * 100)}%)
+    </span>
+    <span>
+      | Historical: {rec.debug_info.historical.count} events,
+      Δt {rec.debug_info.historical.mean_delta_t >= 0 ? '+' : ''}{rec.debug_info.historical.mean_delta_t.toFixed(2)}s
+      ({Math.round(rec.debug_info.historical.weight * 100)}%)
+    </span>
   </div>
 )}
 ```
+
+**Example output**:
+```
+CV86 = 128 → 130 (+2)
+Δt +0.96s   12 critical   5 warning   Speed 88
+┗━ Current: 12 events, Δt +1.5s (70%) | Historical: 45 events, Δt -0.3s (30%)
+```
+
+**Always visible**: No `config.debug.enabled` check needed (compact enough to show always)
 
 ---
 
@@ -332,15 +323,15 @@ return {
    - Consist 11 (threshold 10): Test with 12+ events
    - Consist 10 (threshold 5): Test with 6+ events
 
-### Debug Verification
+### Weighted Breakdown Verification
 
-With `config.debug.enabled = true`:
 - Open Speed Table Viewer
 - Run session with 10+ events at specific speed
-- Verify debug panel shows:
-  - Current session: high weight (0.7)
-  - Historical: low weight (0.3)
-  - Weighted result matches expectation
+- Verify breakdown shows below each recommendation:
+  - Current session: count, mean delta_t, weight percentage
+  - Historical: count, mean delta_t, weight percentage
+  - Verify weighted result matches expectation
+- Compare recommendation with old algorithm (sanity check)
 
 ---
 
@@ -393,21 +384,22 @@ WHERE event_type='delta_t'
 - [ ] Implement CV modification timestamp filtering
 - [ ] Implement current/historical session splitting (last 5 sessions)
 - [ ] Implement weighted averaging logic
-- [ ] Add debug_info to return structure
-- [ ] Pass `recommendation_threshold` and `debug` from router
+- [ ] Add debug_info to return structure (always calculated)
+- [ ] Pass `recommendation_threshold` from router
 - [ ] Update API response to include `debug_info`
+- [ ] Update `calculate_cv_recommendations()` to attach debug_info to each recommendation
 
 ### Frontend
-- [ ] Parse `debug_info` from API response
-- [ ] Implement debug panel UI (collapsible, pink theme)
-- [ ] Conditional rendering based on `config.debug.enabled`
-- [ ] Display current/historical/weighted breakdown per speed
+- [ ] Parse `debug_info` from recommendations array
+- [ ] Add weighted breakdown inline under each recommendation (always visible)
+- [ ] Display current/historical/weighted breakdown per recommendation
+- [ ] Format: compact single line with ┗━ prefix
 
 ### Testing
 - [ ] Test consist 11 with 10+ events (symmetric, threshold 10)
 - [ ] Test consist 10 with 5+ events (asymmetric, threshold 5)
 - [ ] Test CV write invalidation (write CV, verify old events ignored)
-- [ ] Test debug panel visibility (debug on/off)
+- [ ] Verify breakdown line appears below each recommendation
 - [ ] Compare recommendations old vs new algorithm (sanity check)
 
 ### Documentation
