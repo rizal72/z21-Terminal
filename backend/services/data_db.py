@@ -692,16 +692,16 @@ class DataDB:
 
         # For each speed, calculate weighted stats
         for speed in all_speeds:
-            # Get CV modification timestamp for this speed (if any)
-            jmri_step = (speed // 4) + 1  # speed_to_jmri_step logic
+            # Get CV modification timestamp for adjust loco (if any)
+            # Note: last_modified applies to entire speed table row (all CVs)
             cv_last_modified = None
 
             if adjust_loco_address:
                 cursor.execute('''
                     SELECT last_modified
                     FROM locomotive_speed_table
-                    WHERE address = ? AND step = ?
-                ''', (adjust_loco_address, jmri_step))
+                    WHERE loco_address = ?
+                ''', (adjust_loco_address,))
                 cv_row = cursor.fetchone()
                 if cv_row and cv_row[0]:
                     cv_last_modified = cv_row[0]
