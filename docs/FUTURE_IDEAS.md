@@ -254,6 +254,11 @@ The following features were in this document but have since been implemented:
   └──────────────────────────────────────────────────────┘
   ```
 - **Ordine UI**: CV3/CV4 section → Separator → Functions list
+- **Separazione visiva**: Due box distinti con border (`bg-slate-800/50 border-slate-700`)
+  - Box 1: CV3/CV4 (titolo "Acceleration/Deceleration - Normal Mode")
+  - Spacing verticale (mb-4)
+  - Box 2: Functions (titolo "Functions")
+  - Stile coerente con Vstart/Vhigh ESU panel (SpeedTableViewer)
 - Modifica CV3/CV4 → **Salva solo in config.json** (NON scrive al decoder)
 - I valori vengono applicati al decoder **solo quando si fa toggle TEST/NORMAL** (hotkey `T`)
 
