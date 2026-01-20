@@ -98,6 +98,7 @@ z21-frontend     # Run frontend dev server (port 5173)
 
 ### UI & Configuration
 - **[SETTINGS_UI_DESIGN.md](docs/SETTINGS_UI_DESIGN.md)** - Settings modal (8 tabs), locomotive function editor, gate editor
+- **[CV3_CV4_EDITOR.md](docs/CV3_CV4_EDITOR.md)** - Acceleration/Deceleration editor (Settings > Locomotives)
 - **[CONSIST_MANAGER_UI.md](docs/CONSIST_MANAGER_UI.md)** - Consist CRUD operations via web UI (Phase 6)
 - **[CONFIG_REFACTOR.md](docs/CONFIG_REFACTOR.md)** - Config.json structure evolution (2025-01-03)
 
@@ -786,6 +787,12 @@ git diff config.json  # Should show no changes if normalized
 ---
 
 ## 📊 Recent Changes (Last 30 Days)
+
+**2026-01-20** - CV3/CV4 Editor:
+- ✅ Settings UI: Inline editor for CV3 (Acceleration) and CV4 (Deceleration)
+- ✅ Compact design in Locomotives tab, before Functions list
+- ✅ Values saved to config.json, applied on hotkey T toggle
+- 📄 Docs: CV3_CV4_EDITOR.md
 
 **2026-01-20** - ESU mfx Decoder Support:
 - ✅ Database: Added vstart/vhigh/decoder_type columns to locomotive_speed_table

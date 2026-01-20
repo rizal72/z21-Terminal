@@ -37,6 +37,13 @@ The following features were in this document but have since been implemented:
 - Auto-pruning not yet implemented (manual VACUUM for now)
 - See [docs/DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) for complete schema
 
+### CV3/CV4 Acceleration/Deceleration Editor ✅
+**Status**: Implemented (2026-01-20)
+- Settings > Locomotives tab, inline editor for CV3 (Accel) and CV4 (Decel)
+- Values saved to config.json (normal profile), applied on hotkey T toggle
+- Compact 2-row design with bordered box before Functions list
+- See [docs/CV3_CV4_EDITOR.md](CV3_CV4_EDITOR.md) for complete guide
+
 ---
 
 ## 📊 Analytics & Monitoring (Future)
@@ -219,66 +226,6 @@ The following features were in this document but have since been implemented:
 ---
 
 ## 🔧 Maintenance & Diagnostics
-
-### CV3/CV4 Acceleration/Deceleration Editor ⚡ Quick Win
-**Obiettivo**: UI editing per CV3 (Acceleration) e CV4 (Deceleration) in config.json senza JMRI
-
-**Situazione attuale**:
-- CV3/CV4 hardcoded in `config.json` → `locomotives.X.cv_profiles.normal` e `locomotives.X.cv_profiles.testing`
-- Toggle TEST/NORMAL (hotkey `T`) scrive i valori da config al decoder
-- Modifica dei valori richiede: JMRI + edit manuale config.json
-
-**Why now**:
-- Durante speed table tuning lavoriamo con momentum off (CV3=CV4=0)
-- Quando attiveremo accel/decel, il tuning speed table potrebbe essere influenzato
-- Serve poter testare diversi valori CV3/CV4 rapidamente
-
-**UI Proposta**: Settings > Locomotives tab
-- Sotto ogni accordion loco, **PRIMA della lista functions**, aggiungi:
-  ```
-  ┌─ Locomotive: Gr.675 017 (Address 1) ────────────────┐
-  │                                                      │
-  │ [Acceleration/Deceleration - Normal Mode]           │
-  │ CV3 (Accel):  [12] ✏️  (inline edit, 0-255)        │
-  │ CV4 (Decel):  [8]  ✏️  (inline edit, 0-255)         │
-  │                                                      │
-  │ Note: Values applied when you press T (toggle mode) │
-  │ Test mode always uses CV3=CV4=0                     │
-  │                                                      │
-  │ ─────────────────────────────────────────────────── │
-  │                                                      │
-  │ [Functions]                                          │
-  │ F0: Light     [Lockable ☐]                          │
-  │ F1: Sound     [Lockable ☑]                          │
-  │ ...                                                  │
-  └──────────────────────────────────────────────────────┘
-  ```
-- **Ordine UI**: CV3/CV4 section → Separator → Functions list
-- **Separazione visiva**: Due box distinti con border (`bg-slate-800/50 border-slate-700`)
-  - Box 1: CV3/CV4 (titolo "Acceleration/Deceleration - Normal Mode")
-  - Spacing verticale (mb-4)
-  - Box 2: Functions (titolo "Functions")
-  - Stile coerente con Vstart/Vhigh ESU panel (SpeedTableViewer)
-- Modifica CV3/CV4 → **Salva solo in config.json** (NON scrive al decoder)
-- I valori vengono applicati al decoder **solo quando si fa toggle TEST/NORMAL** (hotkey `T`)
-
-**Workflow**:
-1. User edita CV3/CV4 in Settings → Salva in config.json (normal profile)
-2. User preme hotkey `T` → Toggle TEST/NORMAL → **A quel punto** scrive CV3/CV4 al decoder
-3. I valori editati sono attivi **solo in NORMAL mode** (test mode sempre CV3=CV4=0)
-
-**Infrastruttura già pronta**:
-- ✅ Toggle TEST/NORMAL già legge da config e scrive CV3/CV4 al decoder
-- ✅ Config save/reload già funziona (`/api/settings/update`)
-- ✅ Settings UI già supporta inline editing (vedi Functions tab)
-- ❌ Manca solo: UI input fields per CV3/CV4 (puro frontend)
-
-**Complessità**: ~1-2 ore (solo frontend, nessun backend nuovo)
-
-**Alternative location**: Speed Table Viewer (insieme a Vstart/Vhigh ESU)
-- **Scartato**: Settings > Locomotives è più logico (CV3/CV4 sono proprietà della loco, non specifici del speed table)
-
----
 
 ### Decoder Health Monitoring
 **Obiettivo**: Detect CV drift o malfunzionamenti decoder
