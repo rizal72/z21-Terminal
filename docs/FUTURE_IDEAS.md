@@ -234,16 +234,27 @@ The following features were in this document but have since been implemented:
 - Serve poter testare diversi valori CV3/CV4 rapidamente
 
 **UI Proposta**: Settings > Locomotives tab
-- Sotto ogni accordion loco, aggiungi:
+- Sotto ogni accordion loco, **PRIMA della lista functions**, aggiungi:
   ```
-  [Acceleration/Deceleration - Normal Mode]
-  CV3 (Accel):  [12] ✏️  (inline edit, 0-255)
-  CV4 (Decel):  [8]  ✏️  (inline edit, 0-255)
-
-  Note: Values applied to decoder when you press T (TEST/NORMAL toggle)
-  Test mode always uses CV3=CV4=0
+  ┌─ Locomotive: Gr.675 017 (Address 1) ────────────────┐
+  │                                                      │
+  │ [Acceleration/Deceleration - Normal Mode]           │
+  │ CV3 (Accel):  [12] ✏️  (inline edit, 0-255)        │
+  │ CV4 (Decel):  [8]  ✏️  (inline edit, 0-255)         │
+  │                                                      │
+  │ Note: Values applied when you press T (toggle mode) │
+  │ Test mode always uses CV3=CV4=0                     │
+  │                                                      │
+  │ ─────────────────────────────────────────────────── │
+  │                                                      │
+  │ [Functions]                                          │
+  │ F0: Light     [Lockable ☐]                          │
+  │ F1: Sound     [Lockable ☑]                          │
+  │ ...                                                  │
+  └──────────────────────────────────────────────────────┘
   ```
-- Modifica → **Salva solo in config.json** (NON scrive al decoder)
+- **Ordine UI**: CV3/CV4 section → Separator → Functions list
+- Modifica CV3/CV4 → **Salva solo in config.json** (NON scrive al decoder)
 - I valori vengono applicati al decoder **solo quando si fa toggle TEST/NORMAL** (hotkey `T`)
 
 **Workflow**:
