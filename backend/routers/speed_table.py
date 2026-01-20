@@ -126,6 +126,9 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
         warning_events=warning_events,
         mean_delta_t_by_speed=mean_delta_t_by_speed,
         fixed_speeds=fixed_speeds,
+        decoder_type=decoder_type,
+        vstart=vstart,
+        vhigh=vhigh,
         critical_threshold=5  # Configurable threshold
     )
 

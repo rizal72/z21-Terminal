@@ -100,6 +100,9 @@ def calculate_cv_recommendations(
     warning_events: Dict[int, int],
     mean_delta_t_by_speed: Dict[int, float],
     fixed_speeds: set,
+    decoder_type: str = 'nmra_standard',
+    vstart: Optional[int] = None,
+    vhigh: Optional[int] = None,
     critical_threshold: int = 5
 ) -> List[Dict]:
     """
@@ -113,6 +116,9 @@ def calculate_cv_recommendations(
         warning_events: Historical WARNING event counts per speed (speed -> count)
         mean_delta_t_by_speed: Historical mean delta_t per speed (speed -> avg_delta_t)
         fixed_speeds: Set of speeds proven OK in last session (no recommendation needed)
+        decoder_type: Decoder type ('esu_mfx' or 'nmra_standard')
+        vstart: CV2 value for ESU decoders (None for NMRA)
+        vhigh: CV5 value for ESU decoders (None for NMRA)
         critical_threshold: Minimum CRITICAL count to trigger recommendation (default: 5)
 
     Returns:
@@ -127,7 +133,8 @@ def calculate_cv_recommendations(
                 'cv_delta': -2,       # Negative = decrease, Positive = increase
                 'critical_count': 12,
                 'warning_count': 5,
-                'mean_delta_t': -1.2  # Negative = adjust faster
+                'mean_delta_t': -1.2,  # Negative = adjust faster
+                'esu_endpoint': False  # True if ESU CV2/CV5 recommendation
             },
             ...
         ]
@@ -138,6 +145,7 @@ def calculate_cv_recommendations(
         - Use mean delta_t sign to determine adjustment direction:
           * delta_t < 0 → adjust loco FASTER (arrives first) → DECREASE CV (slow down)
           * delta_t > 0 → adjust loco SLOWER (arrives second) → INCREASE CV (speed up)
+        - ESU special case: CV67 (step 1) → recommend CV2 (Vstart), CV94 (step 28) → recommend CV5 (Vhigh)
         - Adjustment magnitude based on critical count severity
     """
     recommendations = []
@@ -155,8 +163,26 @@ def calculate_cv_recommendations(
         jmri_step = speed_to_jmri_step(speed)
         cv_index = jmri_step_to_cv(jmri_step)
 
-        # Get current CV value (default 0 if not configured)
-        cv_current = cv_values.get(cv_index, 0)
+        # ESU mfx special case: CV67 (step 1) and CV94 (step 28) are read-only
+        # Redirect recommendations to CV2 (Vstart) and CV5 (Vhigh) instead
+        esu_endpoint = False
+        if decoder_type == 'esu_mfx':
+            if cv_index == 67:
+                # Step 1 (speed 0%) → recommend CV2 (Vstart)
+                cv_index = 2
+                cv_current = vstart if vstart is not None else 0
+                esu_endpoint = True
+            elif cv_index == 94:
+                # Step 28 (speed 100%) → recommend CV5 (Vhigh)
+                cv_index = 5
+                cv_current = vhigh if vhigh is not None else 255
+                esu_endpoint = True
+            else:
+                # Step 2-27 → normal CV68-93
+                cv_current = cv_values.get(cv_index, 0)
+        else:
+            # NMRA standard: all CV67-94 editable
+            cv_current = cv_values.get(cv_index, 0)
 
         # Get mean delta_t for this speed (default 0 if no data)
         mean_delta_t = mean_delta_t_by_speed.get(speed, 0.0)
@@ -195,7 +221,8 @@ def calculate_cv_recommendations(
             'cv_delta': cv_delta,
             'critical_count': critical_count,
             'warning_count': warning_count,
-            'mean_delta_t': round(mean_delta_t, 3)
+            'mean_delta_t': round(mean_delta_t, 3),
+            'esu_endpoint': esu_endpoint
         })
 
     # Sort by CV index (ascending)

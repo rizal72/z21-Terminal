@@ -886,10 +886,15 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           <div className="space-y-2">
             {data.recommendations.map((rec) => {
               const isSelected = selectedRecommendations.has(rec.cv_index);
+              const isEsuEndpoint = rec.esu_endpoint === true;
               return (
                 <div
                   key={rec.cv_index}
-                  className={`flex items-center gap-3 text-sm border-b border-slate-700 pb-2 ${isSelected ? 'opacity-100' : 'opacity-50'}`}
+                  className={`flex items-center gap-3 text-sm border-b pb-2 ${
+                    isEsuEndpoint
+                      ? 'border-blue-500 bg-blue-900/10'
+                      : 'border-slate-700'
+                  } ${isSelected ? 'opacity-100' : 'opacity-50'}`}
                 >
                   {/* Checkbox */}
                   <input
@@ -901,6 +906,11 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
 
                   <div className="flex items-center justify-between flex-1">
                     <div className="flex items-center gap-4">
+                      {isEsuEndpoint && (
+                        <span className="px-2 py-0.5 text-xs bg-blue-600 text-white rounded font-semibold">
+                          ESU
+                        </span>
+                      )}
                       <span className="font-mono text-white font-semibold w-28">
                         Step {rec.jmri_step} <span className="text-slate-500 font-normal">(CV{rec.cv_index})</span>
                       </span>
@@ -910,6 +920,11 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                       <span className={`font-mono ${rec.cv_delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {rec.cv_delta > 0 ? '+' : ''}{rec.cv_delta}
                       </span>
+                      {isEsuEndpoint && (
+                        <span className="text-xs text-blue-300">
+                          ⚠️ Edit {rec.cv_index === 2 ? 'Vstart' : 'Vhigh'} in panel above
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 text-xs">
                       <span className={`font-mono ${rec.mean_delta_t < 0 ? 'text-blue-400' : 'text-amber-400'}`}>
