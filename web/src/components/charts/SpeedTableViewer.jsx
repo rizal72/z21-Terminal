@@ -21,6 +21,17 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
   // Stores decimal values internally, rounds only on display/export
   const [cvValuesFloat, setCvValuesFloat] = useState({});
 
+  // Decoder metadata state (vstart, vhigh, decoder_type)
+  const [vstart, setVstart] = useState(null);
+  const [vhigh, setVhigh] = useState(null);
+  const [decoderType, setDecoderType] = useState('nmra_standard');
+
+  // Vstart/Vhigh editing state (ESU only)
+  const [editingVstart, setEditingVstart] = useState(false);
+  const [editingVstartValue, setEditingVstartValue] = useState('');
+  const [editingVhigh, setEditingVhigh] = useState(false);
+  const [editingVhighValue, setEditingVhighValue] = useState('');
+
   // Checkpoint system - steps marked as fixed points for interpolation
   // Default: operational speed percentages (10%, 20%, ..., 100%)
   const DEFAULT_CHECKPOINTS = [3, 6, 9, 12, 15, 17, 20, 23, 26, 28];
@@ -59,6 +70,11 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
 
       const result = await response.json();
       setData(result);
+
+      // Set decoder metadata
+      setVstart(result.vstart);
+      setVhigh(result.vhigh);
+      setDecoderType(result.decoder_type || 'nmra_standard');
     } catch (err) {
       console.error('Speed table fetch error:', err);
       setError(err.message);
@@ -296,6 +312,45 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     }
   };
 
+  // Write CV2 (Vstart) and/or CV5 (Vhigh) to ESU decoder (ESU only)
+  const writeVstartVhigh = async (newVstart, newVhigh) => {
+    if (!consistId) return;
+
+    setWriting(true);
+    setWriteError(null);
+    setWriteSuccess(null);
+
+    try {
+      const payload = {};
+      if (newVstart !== null && newVstart !== undefined) payload.vstart = newVstart;
+      if (newVhigh !== null && newVhigh !== undefined) payload.vhigh = newVhigh;
+
+      const response = await fetch(`/api/speed-table/write-vstart-vhigh/${consistId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.detail || 'Failed to write CV2/CV5');
+      }
+
+      if (result.success) {
+        setWriteSuccess(`CV2/CV5 written successfully (${result.total_time}s)`);
+        // Reload data to sync UI
+        await fetchSpeedTableData();
+      } else {
+        setWriteError('Failed to write CV2/CV5');
+      }
+    } catch (err) {
+      setWriteError(err.message);
+    } finally {
+      setWriting(false);
+    }
+  };
+
   // Apply & Write: Write to decoder then export CSV
   const applyAndWrite = async () => {
     await writeToDecoder();
@@ -450,11 +505,18 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     // Check if this CV was modified (manual edit or applied recommendation)
     const isModified = data.cv_values && cvValueFloat !== data.cv_values[cvIndex];
 
-    // Border/fill color based on severity (priority: CRITICAL > modified > default)
+    // ESU decoder: step 1 and 28 are read-only (fixed at 1 and 255)
+    const isStepEditable = decoderType === 'esu_mfx' ? (step !== 1 && step !== 28) : true;
+
+    // Border/fill color based on severity (priority: read-only > CRITICAL > modified > default)
     let borderColor = 'border-slate-600'; // Default
     let fillColor = 'bg-slate-600'; // Default
 
-    if (hasRecommendation && recommendation) {
+    if (!isStepEditable) {
+      // ESU read-only steps (grey)
+      borderColor = 'border-slate-700';
+      fillColor = 'bg-slate-700';
+    } else if (hasRecommendation && recommendation) {
       // CRITICAL overrides everything
       if (recommendation.critical_count >= 10) {
         borderColor = 'border-red-500';
@@ -503,9 +565,21 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           </div>
         ) : (
           <div
-            className={`text-xs font-mono mb-1 h-4 flex items-center gap-0.5 ${isCheckpoint ? 'text-blue-400 font-bold cursor-pointer hover:text-blue-300' : 'text-slate-400'}`}
-            onClick={() => isCheckpoint && startEditing(step)}
-            title={isCheckpoint ? 'Click to edit' : 'Auto-interpolated'}
+            className={`text-xs font-mono mb-1 h-4 flex items-center gap-0.5 ${
+              !isStepEditable
+                ? 'text-slate-600'
+                : isCheckpoint
+                ? 'text-blue-400 font-bold cursor-pointer hover:text-blue-300'
+                : 'text-slate-400'
+            }`}
+            onClick={() => isStepEditable && isCheckpoint && startEditing(step)}
+            title={
+              !isStepEditable
+                ? `Step ${step} is read-only for ESU decoders (fixed at ${cvValue})`
+                : isCheckpoint
+                ? 'Click to edit'
+                : 'Auto-interpolated'
+            }
           >
             <span>{cvValue}</span>
             {isModified && <span className="text-blue-400 text-xs">*</span>}
@@ -514,9 +588,15 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
 
         {/* Vertical Bar */}
         <div
-          className={`relative w-8 h-64 border-2 ${borderColor} rounded-sm bg-slate-800 ${isCheckpoint && !isEditing ? 'cursor-pointer' : ''}`}
-          title={`Step ${step} - CV${cvIndex} = ${cvValue}${hasRecommendation ? ` (${recommendation.critical_count} critical)` : ''}`}
-          onClick={() => isCheckpoint && !isEditing && startEditing(step)}
+          className={`relative w-8 h-64 border-2 ${borderColor} rounded-sm bg-slate-800 ${
+            isStepEditable && isCheckpoint && !isEditing ? 'cursor-pointer' : ''
+          }`}
+          title={
+            !isStepEditable
+              ? `Step ${step} - CV${cvIndex} = ${cvValue} (read-only for ESU)`
+              : `Step ${step} - CV${cvIndex} = ${cvValue}${hasRecommendation ? ` (${recommendation.critical_count} critical)` : ''}`
+          }
+          onClick={() => isStepEditable && isCheckpoint && !isEditing && startEditing(step)}
         >
           {/* Fill (bottom-up) */}
           <div
@@ -584,6 +664,111 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           </div>
         </div>
       </div>
+
+      {/* ESU Decoder - Vstart/Vhigh Panel (only for ESU) */}
+      {decoderType === 'esu_mfx' && (
+        <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-white font-semibold text-lg">
+                ESU Decoder - Vstart/Vhigh Endpoints
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Edit CV2/CV5 FIRST to set min/max speed. Then adjust CV68-93 to shape the curve.
+              </p>
+            </div>
+            <span className="px-3 py-1 text-xs bg-blue-600 text-white rounded">
+              ESU mfx
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* CV2 Vstart */}
+            <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+              <div className="text-sm text-slate-400 mb-2">CV2 - Vstart (Step 1)</div>
+              {editingVstart ? (
+                <input
+                  type="number"
+                  min="0"
+                  max="255"
+                  value={editingVstartValue}
+                  onChange={(e) => setEditingVstartValue(e.target.value)}
+                  onBlur={() => {
+                    const val = parseInt(editingVstartValue);
+                    if (!isNaN(val) && val !== vstart) {
+                      writeVstartVhigh(val, null);
+                    }
+                    setEditingVstart(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = parseInt(editingVstartValue);
+                      if (!isNaN(val) && val !== vstart) {
+                        writeVstartVhigh(val, null);
+                      }
+                      setEditingVstart(false);
+                    }
+                  }}
+                  className="w-full px-3 py-2 text-lg font-mono bg-slate-700 text-white border border-blue-500 rounded"
+                  autoFocus
+                />
+              ) : (
+                <div
+                  onClick={() => {
+                    setEditingVstart(true);
+                    setEditingVstartValue((vstart || 0).toString());
+                  }}
+                  className="text-2xl font-mono text-white cursor-pointer hover:text-blue-400"
+                >
+                  {vstart !== null ? vstart : 'N/A'}
+                </div>
+              )}
+            </div>
+
+            {/* CV5 Vhigh */}
+            <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+              <div className="text-sm text-slate-400 mb-2">CV5 - Vhigh (Step 28)</div>
+              {editingVhigh ? (
+                <input
+                  type="number"
+                  min="0"
+                  max="255"
+                  value={editingVhighValue}
+                  onChange={(e) => setEditingVhighValue(e.target.value)}
+                  onBlur={() => {
+                    const val = parseInt(editingVhighValue);
+                    if (!isNaN(val) && val !== vhigh) {
+                      writeVstartVhigh(null, val);
+                    }
+                    setEditingVhigh(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = parseInt(editingVhighValue);
+                      if (!isNaN(val) && val !== vhigh) {
+                        writeVstartVhigh(null, val);
+                      }
+                      setEditingVhigh(false);
+                    }
+                  }}
+                  className="w-full px-3 py-2 text-lg font-mono bg-slate-700 text-white border border-blue-500 rounded"
+                  autoFocus
+                />
+              ) : (
+                <div
+                  onClick={() => {
+                    setEditingVhigh(true);
+                    setEditingVhighValue((vhigh || 0).toString());
+                  }}
+                  className="text-2xl font-mono text-white cursor-pointer hover:text-blue-400"
+                >
+                  {vhigh !== null ? vhigh : 'N/A'}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header: Loco info + Export button */}
       <div className="flex items-center justify-between">
