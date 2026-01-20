@@ -22,6 +22,9 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from read_cv_from_roster import Locomotive, load_all_locomotives
 
+# Import DataDB for centralized database access
+from services.data_db import DataDB
+
 
 def speed_to_jmri_step(dcc_speed: int) -> int:
     """
@@ -253,7 +256,7 @@ def read_cv_speed_table_from_db(loco_address: int) -> Optional[dict]:
             'decoder_type': 'esu_mfx'
         }
     """
-    conn = sqlite3.connect('data/data.db')
+    conn = DataDB.get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -306,7 +309,7 @@ def update_cv_speed_table_in_db(
         True if successful, False if error
     """
     try:
-        conn = sqlite3.connect('data/data.db')
+        conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         # Get current values (for undo snapshot)
@@ -366,7 +369,7 @@ def undo_cv_speed_table(loco_address: int) -> Optional[Dict[int, int]]:
     Returns:
         Dict {67: value, ..., 94: value} (previous values) or None if no undo available
     """
-    conn = sqlite3.connect('data/data.db')
+    conn = DataDB.get_connection()
     cursor = conn.cursor()
 
     # Get previous_values
@@ -427,7 +430,7 @@ def update_decoder_metadata_in_db(loco_address: int, vstart: Optional[int], vhig
         vhigh: CV5 value (ESU endpoint, or max speed for NMRA)
         decoder_type: 'esu_mfx' or 'nmra_standard'
     """
-    conn = sqlite3.connect('data/data.db')
+    conn = DataDB.get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
