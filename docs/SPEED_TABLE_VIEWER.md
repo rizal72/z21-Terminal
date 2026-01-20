@@ -178,6 +178,9 @@ Added 3 columns to `locomotive_speed_table`:
 - `docs/SPEED_TABLE_DECODER_BEHAVIOR.md` - Complete ESU mfx implementation plan
 - `docs/DATABASE_SCHEMA.md` - Database schema with vstart/vhigh/decoder_type columns
 
+### Related Future Enhancements
+- **CV3/CV4 Editor** - Currently CV3 (Accel) and CV4 (Decel) are hardcoded in config.json. Future UI for editing these values would be useful during speed table tuning when testing with momentum enabled. See `docs/FUTURE_IDEAS.md` → "CV3/CV4 Acceleration/Deceleration Editor"
+
 ---
 
 ## 🆕 2025-01-17 Updates - Cumulative Intelligent Recommendations

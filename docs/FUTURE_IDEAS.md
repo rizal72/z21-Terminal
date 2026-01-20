@@ -220,6 +220,45 @@ The following features were in this document but have since been implemented:
 
 ## 🔧 Maintenance & Diagnostics
 
+### CV3/CV4 Acceleration/Deceleration Editor ⚡ Quick Win
+**Obiettivo**: UI editing per CV3 (Acceleration) e CV4 (Deceleration) senza JMRI
+
+**Situazione attuale**:
+- CV3/CV4 hardcoded in `config.json` → `locomotives.X.cv_profiles.normal` e `locomotives.X.cv_profiles.testing`
+- Toggle TEST/NORMAL (hotkey `T`) scrive al decoder ma NON permette di modificare i valori
+- Modifica richiede: JMRI + edit manuale config.json
+
+**Why now**:
+- Durante speed table tuning lavoriamo con momentum off (CV3=CV4=0)
+- Quando attiveremo accel/decel, il tuning speed table potrebbe essere influenzato
+- Serve poter testare diversi valori CV3/CV4 rapidamente
+
+**UI Proposta**: Settings > Locomotives tab
+- Sotto ogni accordion loco, aggiungi:
+  ```
+  [Acceleration/Deceleration]
+  CV3 (Accel):  [12] ✏️  (inline edit, 0-255)
+  CV4 (Decel):  [8]  ✏️  (inline edit, 0-255)
+
+  Profile: [Normal ▼] (dropdown: Normal / Testing)
+  ```
+- Modifica → Scrive a `config.json` + decoder via POM
+- Opzionale: "Apply to Decoder" button (scrive CV3/CV4 immediatamente)
+
+**Infrastruttura già pronta**:
+- ✅ POM write già implementato (`z21.write_cv_ops_mode()`)
+- ✅ Toggle TEST/NORMAL già scrive CV3/CV4
+- ✅ Config save/reload già funziona
+- ❌ Manca solo: UI input fields + save handler
+
+**Complessità**: ~2-3 ore (UI + backend endpoint + test)
+
+**Alternative location**: Speed Table Viewer (insieme a Vstart/Vhigh ESU)
+- **Pro**: CV3/CV4 influenzano comportamento speed table
+- **Contro**: Speed Table Viewer è focus su CV67-94, mischia concetti
+
+---
+
 ### Decoder Health Monitoring
 **Obiettivo**: Detect CV drift o malfunzionamenti decoder
 
