@@ -712,10 +712,6 @@ class DataDB:
 
         all_speeds = [int(row[0]) for row in cursor.fetchall()]
 
-        # Debug logging
-        print(f"[DEBUG] get_critical_events_by_speed: consist_id={consist_id}, current_session_id={current_session_id}")
-        print(f"[DEBUG] Found {len(all_speeds)} unique speeds: {all_speeds}")
-
         # Filter speeds with CRITICAL/WARNING for recommendations
         speeds_with_issues = []
         for speed in all_speeds:
@@ -731,9 +727,7 @@ class DataDB:
                 speeds_with_issues.append(speed)
 
         # For each speed, calculate weighted stats
-        print(f"[DEBUG] About to start loop for {len(all_speeds)} speeds")
         for speed in all_speeds:
-            print(f"[DEBUG] Processing speed {speed}")
             # Get CV modification timestamp for adjust loco (if any)
             # Note: last_modified applies to entire speed table row (all CVs)
             cv_last_modified = None
@@ -750,7 +744,6 @@ class DataDB:
                     from datetime import datetime
                     cv_last_modified_str = cv_row[0]
                     cv_last_modified = datetime.fromisoformat(cv_last_modified_str).timestamp()
-                    print(f"[DEBUG] Speed {speed}: cv_last_modified={cv_last_modified} (from {cv_last_modified_str}, adjust_loco={adjust_loco_address})")
 
             # Query current session events (if session active)
             current_stats = {
@@ -783,8 +776,6 @@ class DataDB:
 
                 cursor.execute(query, params)
                 row = cursor.fetchone()
-
-                print(f"[DEBUG] Speed {speed} current query: params={params}, row={row}")
 
                 if row and row[0] > 0:
                     current_stats['count'] = row[0]
@@ -851,8 +842,6 @@ class DataDB:
                 cursor.execute(query_hist, params_hist)
                 row = cursor.fetchone()
 
-                print(f"[DEBUG] Speed {speed} historical query: sessions={historical_sessions}, row={row}")
-
                 if row and row[0] > 0:
                     historical_stats['count'] = row[0]
                     historical_stats['mean_delta_t'] = float(row[1]) if row[1] else 0.0
@@ -861,8 +850,6 @@ class DataDB:
 
             # Calculate weighted results
             total_count = current_stats['count'] + historical_stats['count']
-
-            print(f"[DEBUG] Speed {speed}: current_count={current_stats['count']}, historical_count={historical_stats['count']}, total={total_count}")
 
             if total_count > 0:
                 # Weighted mean delta_t
