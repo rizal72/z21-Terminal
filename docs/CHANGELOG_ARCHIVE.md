@@ -1,8 +1,35 @@
-# Changelog Archive (2025-12-16 → 2025-01-18)
+# Changelog Archive (2025-12-16 → 2026-01-21)
 
 Archived changelog entries and failed experiments documentation.
 
 For recent changes, see main CLAUDE.md file.
+
+---
+
+## Failed Experiments
+
+### 2026-01-21 - ❌ **WebSocket Badge 3-State Indicator** (REVERTED)
+
+**Attempt**: Add amber state to WebSocket badge (red/amber/green) to detect tracking idle
+- Red: WebSocket disconnected
+- Amber: Connected but tracking idle (session_id = null)
+- Green: Connected and tracking active
+
+**Implementation**:
+- Frontend: Poll `/api/analytics/current` every 10s to get session_id
+- Badge color based on `isConnected` + `currentSessionId` state
+- Click amber badge → `window.location.reload()`
+
+**Problems**:
+1. **Burst of duplicate API calls** when switching browser spaces/visibility
+   - Multiple interval instances active simultaneously
+   - useEffect dependency on `API_URL` caused re-execution
+2. **New FFmpeg warnings** (`global cap_ffmpeg`) not seen before
+3. **Complexity without clear benefit** over manual refresh
+
+**Revert**: Commit 38c75c4
+
+**Lesson**: Polling approaches with visibility changes cause race conditions. Keep it simple: badge red/green + manual refresh when N/A.
 
 ---
 
