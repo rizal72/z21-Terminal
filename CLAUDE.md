@@ -789,8 +789,30 @@ git diff config.json  # Should show no changes if normalized
 
 ## 📊 Recent Changes (Last 30 Days)
 
+**2026-01-21** - Speed Analysis Debug Panel & Weighted Algorithm Refinement:
+- ✅ **Speed Analysis Debug Panel**: Collapsible panel in Speed Table Viewer (purple theme)
+  - Shows ALL tested speeds (not just recommendations)
+  - Current/Historical/Weighted breakdown per speed
+  - Visible only when `debug.enabled=true`
+  - Open by default but collapsible, positioned after speed table
+- ✅ **Debug mode as local-only setting**: Like camera credentials
+  - `config.json` always has `debug.enabled=false` (committed default)
+  - `config.local.json` stores local override (gitignored)
+  - Settings UI saves to config.local.json (preserves local overrides)
+- ✅ **Weighted algorithm improvements**:
+  - **Removed CV modification filter**: Was per-locomotive (not per-CV), too aggressive
+  - **Changed weights to 80/20**: From 70/30 (more reactive to corrections)
+  - **Weight constants**: `WEIGHT_CURRENT_HIGH = 0.8`, `WEIGHT_CURRENT_LOW = 0.2`
+  - **Rationale**: Weighted logic + last 5 sessions sufficient without CV filter
+- ✅ **Critical fixes**:
+  - Fixed `cv_last_modified` timestamp comparison (string vs Unix timestamp)
+  - Fixed `get_validated_sessions()` to filter by consist_id
+  - Validated session fix: Speed Table uses latest validated session (not non-validated current)
+- ✅ **Database debugging pattern**: Added to z21-deployment skill (PC → Mac copy workflow)
+- 📄 Docs: Updated SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md (two-stage system, 80/20 weights), z21-deployment skill
+
 **2026-01-20** - Weighted Speed Table Recommendations:
-- ✅ Algorithm: 3-stage weighted averaging (CV filter + session split + weighted mean)
+- ✅ Algorithm: 2-stage weighted averaging (session split + weighted mean, CV filter removed 2026-01-21)
 - ✅ Config: recommendation_threshold per consist (C10: 5 asymmetric, C11: 10 symmetric)
 - ✅ Backend: Complete refactor of get_critical_events_by_speed() (230 lines)
 - ✅ Weight logic: Current session >= threshold → 70%, else 30% (historical complementary)

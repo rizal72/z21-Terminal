@@ -53,30 +53,32 @@ GROUP BY speed
 
 ## Algorithm Design
 
-### Three-Stage Weighting System
+### Two-Stage Weighting System
 
 ```
-Stage 1: CV Modification Detection
-  ↓ Filter events after last CV write for each speed
-
-Stage 2: Session Segmentation
+Stage 1: Session Segmentation
   ↓ Current session vs Historical (last 5 sessions)
 
-Stage 3: Weighted Averaging
-  ↓ IF current >= threshold: 70% current + 30% historical
-  ↓ ELSE: 30% current + 70% historical
+Stage 2: Weighted Averaging
+  ↓ IF current >= threshold: 80% current + 20% historical
+  ↓ ELSE: 20% current + 80% historical
 ```
+
+**Note on CV Modification Filter** (removed 2026-01-21):
+- **Original design**: Filter events by `timestamp >= cv_last_modified` per speed
+- **Problem**: `last_modified` is per-locomotive (not per-CV), so modifying one CV invalidated ALL speeds
+- **Solution**: Removed filter entirely - weighted logic (80/20) + last 5 sessions already sufficient to handle corrections
 
 ### Formula
 
 **Weighted mean delta_t**:
 ```
 IF current_session_events >= threshold:
-    weight_current = 0.7
-    weight_historical = 0.3
+    weight_current = 0.8  # WEIGHT_CURRENT_HIGH
+    weight_historical = 0.2
 ELSE:
-    weight_current = 0.3
-    weight_historical = 0.7
+    weight_current = 0.2  # WEIGHT_CURRENT_LOW
+    weight_historical = 0.8
 
 weighted_mean = (mean_current * weight_current) + (mean_historical * weight_historical)
 ```
@@ -142,20 +144,14 @@ def get_critical_events_by_speed(
 
 **Query structure**:
 ```sql
--- Step 1: Get CV modification timestamps
-SELECT address, step, last_modified
-FROM locomotive_speed_table
-WHERE address = ?
-
--- Step 2: Get current session events per speed
+-- Step 1: Get current session events per speed
 SELECT speed, COUNT(*), AVG(delta_t), SUM(CASE WHEN status='CRITICAL' THEN 1 ELSE 0 END)
 FROM events
 WHERE consist_id = ?
   AND session_id = ?
-  AND timestamp >= cv_last_modified  -- Filter by CV modification
 GROUP BY speed
 
--- Step 3: Get historical events (last 5 sessions, excluding current)
+-- Step 2: Get historical events (last 5 sessions, excluding current)
 SELECT speed, COUNT(*), AVG(delta_t), SUM(CASE WHEN status='CRITICAL' THEN 1 ELSE 0 END)
 FROM events
 WHERE consist_id = ?
@@ -164,10 +160,9 @@ WHERE consist_id = ?
     WHERE consist_id = ? AND session_id != ?
     ORDER BY session_id DESC LIMIT 5  -- session_id format YYYYMMDD_HHMMSS is sortable
   )
-  AND timestamp >= cv_last_modified
 GROUP BY speed
 
--- Step 4: Combine with weighting (Python logic)
+-- Step 3: Combine with weighting (Python logic)
 ```
 
 **Return structure**:
@@ -381,21 +376,31 @@ WHERE event_type='delta_t'
 ## Implementation Checklist
 
 ### Backend
-- [ ] Add `recommendation_threshold` to config.json (consist 10: 5, consist 11: 10)
-- [ ] Refactor `get_critical_events_by_speed()` with new parameters
-- [ ] Implement CV modification timestamp filtering
-- [ ] Implement current/historical session splitting (last 5 sessions)
-- [ ] Implement weighted averaging logic
-- [ ] Add debug_info to return structure (always calculated)
-- [ ] Pass `recommendation_threshold` from router
-- [ ] Update API response to include `debug_info`
-- [ ] Update `calculate_cv_recommendations()` to attach debug_info to each recommendation
+- [x] Add `recommendation_threshold` to config.json (consist 10: 5, consist 11: 10)
+- [x] Refactor `get_critical_events_by_speed()` with new parameters
+- [x] Implement CV modification timestamp filtering
+- [x] Implement current/historical session splitting (last 5 sessions)
+- [x] Implement weighted averaging logic
+- [x] Add debug_info to return structure (always calculated)
+- [x] Pass `recommendation_threshold` from router
+- [x] Update API response to include `debug_info`
+- [x] Update `calculate_cv_recommendations()` to attach debug_info to each recommendation
+- [x] Use validated sessions only (ignore non-validated current session)
+- [x] Populate debug_info for ALL tested speeds (not just CRITICAL/WARNING)
 
 ### Frontend
-- [ ] Parse `debug_info` from recommendations array
-- [ ] Add weighted breakdown inline under each recommendation (always visible)
-- [ ] Display current/historical/weighted breakdown per recommendation
-- [ ] Format: compact single line with ┗━ prefix
+- [x] Parse `debug_info` from recommendations array
+- [x] Add weighted breakdown inline under each recommendation (always visible)
+- [x] Display current/historical/weighted breakdown per recommendation
+- [x] Format: compact single line with ┗━ prefix
+- [x] **NEW**: Speed Analysis Debug panel (full breakdown, debug mode only)
+
+### Debug Panel (2026-01-21)
+- [x] Collapsible panel above speed table (open by default)
+- [x] Shows ALL tested speeds (not just recommendations)
+- [x] Current/Historical/Weighted stats per speed
+- [x] Visible only when `debug.enabled=true` (config.local.json)
+- [x] Purple theme (distinct from other sections)
 
 ### Testing
 - [ ] Test consist 11 with 10+ events (symmetric, threshold 10)
@@ -405,9 +410,9 @@ WHERE event_type='delta_t'
 - [ ] Compare recommendations old vs new algorithm (sanity check)
 
 ### Documentation
-- [ ] Update SPEED_TABLE_VIEWER.md (reference this doc)
-- [ ] Update CLAUDE.md changelog
-- [ ] Update FUTURE_IDEAS.md (if applicable)
+- [x] Update SPEED_TABLE_VIEWER.md (reference this doc)
+- [x] Update CLAUDE.md changelog
+- [x] z21-deployment skill (database debugging pattern)
 
 ---
 
