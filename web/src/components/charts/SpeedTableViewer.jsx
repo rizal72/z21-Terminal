@@ -17,8 +17,8 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
 
-  // Helper: Convert raw speed (0-255) to percentage (0-100%)
-  const speedToPercentage = (rawSpeed) => Math.round((rawSpeed / 255) * 100);
+  // Helper: Convert DCC speed command (0-126) to percentage (0-100%)
+  const speedToPercentage = (dccSpeed) => Math.round((dccSpeed / 126) * 100);
 
   // Float precision state for interpolation (CV67-94)
   // Stores decimal values internally, rounds only on display/export
