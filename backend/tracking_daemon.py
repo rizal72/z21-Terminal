@@ -366,7 +366,7 @@ class TrackingDaemon:
             if not self.analytics_logger:
                 continue  # No analytics logger, skip
 
-            current_session = self.analytics_logger.current_session_id
+            current_session = self.analytics_logger.session_id
 
             if not current_session:
                 continue  # No current session, skip
@@ -412,7 +412,7 @@ class TrackingDaemon:
 
                     # Create new non-validated session immediately
                     new_session_id = DataDB.create_session()
-                    self.analytics_logger.current_session_id = new_session_id
+                    self.analytics_logger.session_id = new_session_id
                     self.last_delta_t_time = None  # Reset for new session
 
                     log('[SESSION]', f"Session {new_session_id} started (idle timeout)")
