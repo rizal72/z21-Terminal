@@ -496,7 +496,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
           time: formatTime(event.timestamp),
           ...deltaFields,
           status: event.status,
-          gate_type: event.gate_type
+          gate_type: event.gate_type,
+          speed: event.speed
         };
       });
 
@@ -538,7 +539,8 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
         time: formatTime(event.timestamp),
         ...deltaFields,
         status: event.status,
-        gate_type: event.gate_type
+        gate_type: event.gate_type,
+        speed: event.speed
       });
     });
 

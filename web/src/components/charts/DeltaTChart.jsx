@@ -26,6 +26,56 @@ import {
   formatDeltaT
 } from '../../utils/analyticsHelpers';
 
+// Custom Tooltip to show time, delta-t, status, gate type, and speed
+const CustomTooltip = ({ active, payload, viewMode }) => {
+  if (!active || !payload || payload.length === 0) return null;
+
+  const data = payload[0].payload; // Get the data point
+
+  return (
+    <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl">
+      <p className="text-xs text-slate-400 mb-2">
+        {viewMode === 'current' ? data.time : `Event #${data.index}`}
+      </p>
+      {payload.map((entry, index) => {
+        if (entry.value === null) return null;
+        return (
+          <div key={index} className="flex items-center gap-2 mb-1">
+            <div
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: entry.color }}
+            />
+            <span className="text-sm text-white font-medium">
+              {entry.name}: {formatDeltaT(entry.value)}s
+            </span>
+          </div>
+        );
+      })}
+      {data.status && (
+        <p className="text-xs text-slate-400 mt-2">
+          Status: <span className={`font-semibold ${
+            data.status === 'SYNCED' ? 'text-green-400' :
+            data.status === 'WARNING' ? 'text-amber-400' :
+            'text-red-400'
+          }`}>{data.status}</span>
+        </p>
+      )}
+      {data.gate_type && (
+        <p className="text-xs text-slate-400">
+          Gate: <span className="text-slate-300">{data.gate_type}</span>
+        </p>
+      )}
+      {data.speed !== undefined && data.speed !== null && (
+        <p className="text-xs text-slate-400">
+          Speed: <span className="text-slate-300">
+            {data.speed} ({Math.round((data.speed / 126) * 100)}%)
+          </span>
+        </p>
+      )}
+    </div>
+  );
+};
+
 const DeltaTChart = ({
   chartData,
   segmentCount,
@@ -109,7 +159,7 @@ const DeltaTChart = ({
     const boundaries = [];
     let previousDate = null;
 
-    chartData.forEach((point) => {
+    chartData.forEach((point, idx) => {
       const date = new Date(point.timestamp * 1000);
       const dateStr = date.toLocaleDateString('en-US', { day: '2-digit', month: 'short' }); // "21 Jan"
 
@@ -124,16 +174,18 @@ const DeltaTChart = ({
         const prevYear = previousDate.getFullYear();
 
         if (currentDay !== prevDay || currentMonth !== prevMonth || currentYear !== prevYear) {
-          // Day boundary found!
+          // Day boundary found! Use index as x position (more reliable than time string)
           boundaries.push({
-            x: point.time, // HH:MM:SS format (X-axis value in Current mode)
+            x: point.index, // Use index for positioning
+            time: point.time, // Keep time for reference
             label: dateStr  // "21 Jan"
           });
         }
       } else {
         // First point - always show the date
         boundaries.push({
-          x: point.time,
+          x: point.index,
+          time: point.time,
           label: dateStr
         });
       }
@@ -217,10 +269,18 @@ const DeltaTChart = ({
                 onDoubleClick={onDoubleClick}
               >
                 <CartesianGrid {...CHART_AXIS_STYLES.grid} />
-                {/* XAxis: time in Current (readable), index in Overview (compressed) */}
+                {/* XAxis: always use index for positioning (allows ReferenceLine to work) */}
                 <XAxis
-                  dataKey={viewMode === 'current' ? 'time' : 'index'}
+                  dataKey="index"
                   {...CHART_AXIS_STYLES.axis}
+                  tickFormatter={(value) => {
+                    // In Current mode, show time instead of index
+                    if (viewMode === 'current') {
+                      const point = displayData.find(d => d.index === value);
+                      return point ? point.time : value;
+                    }
+                    return value; // Overview mode: show index as-is
+                  }}
                 />
                 <YAxis
                   yAxisId="left"
@@ -242,10 +302,7 @@ const DeltaTChart = ({
                     label={{ value: 'Δt (seconds)', angle: 90, position: 'insideRight', fill: '#9CA3AF' }}
                   />
                 )}
-                <Tooltip
-                  {...TOOLTIP_STYLES}
-                  formatter={(value) => value !== null ? formatDeltaT(value) + 's' : 'N/A'}
-                />
+                <Tooltip content={<CustomTooltip viewMode={viewMode} />} />
                 <ReferenceLine yAxisId="left" y={0} stroke="#10b981" strokeDasharray="3 3" />
                 <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.warning || 1.0} stroke="#f59e0b" strokeDasharray="3 3" />
                 <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.warning || 1.0)} stroke="#f59e0b" strokeDasharray="3 3" />
