@@ -17,6 +17,9 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
 
+  // Helper: Convert raw speed (0-255) to percentage (0-100%)
+  const speedToPercentage = (rawSpeed) => Math.round((rawSpeed / 255) * 100);
+
   // Float precision state for interpolation (CV67-94)
   // Stores decimal values internally, rounds only on display/export
   const [cvValuesFloat, setCvValuesFloat] = useState({});
@@ -912,7 +915,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                       <div key={speed} className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
                         {/* Speed Header */}
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-mono text-white font-semibold">Speed {speed}</span>
+                          <span className="font-mono text-white font-semibold">Speed {speed} ({speedToPercentage(parseInt(speed))}%)</span>
                           <div className="flex items-center gap-2 text-xs">
                             {meetsThreshold && (
                               <span className="px-2 py-0.5 bg-green-600 text-white rounded">
@@ -1075,7 +1078,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                         </span>
                       )}
                       <span className="text-slate-500">
-                        Speed {rec.speed}
+                        Speed {rec.speed} ({speedToPercentage(rec.speed)}%)
                       </span>
                     </div>
 
