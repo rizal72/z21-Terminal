@@ -936,16 +936,12 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                           <span className="text-slate-500">
                             ({Math.round(debugInfo.current_session.weight * 100)}% weight)
                           </span>
-                          {debugInfo.current_session.critical_count > 0 && (
-                            <span className="text-red-400 ml-2">
-                              {debugInfo.current_session.critical_count} critical
-                            </span>
-                          )}
-                          {debugInfo.current_session.warning_count > 0 && (
-                            <span className="text-amber-400 ml-2">
-                              {debugInfo.current_session.warning_count} warning
-                            </span>
-                          )}
+                          <span className={debugInfo.current_session.critical_count > 0 ? 'text-red-400 ml-2' : 'text-slate-500 ml-2'}>
+                            {debugInfo.current_session.critical_count} critical
+                          </span>
+                          <span className={debugInfo.current_session.warning_count > 0 ? 'text-amber-400 ml-2' : 'text-slate-500 ml-2'}>
+                            {debugInfo.current_session.warning_count} warning
+                          </span>
                         </div>
 
                         {/* Historical Stats */}
@@ -957,16 +953,12 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                           <span className="text-slate-500">
                             ({Math.round(debugInfo.historical.weight * 100)}% weight)
                           </span>
-                          {debugInfo.historical.critical_count > 0 && (
-                            <span className="text-red-400 ml-2">
-                              {debugInfo.historical.critical_count} critical
-                            </span>
-                          )}
-                          {debugInfo.historical.warning_count > 0 && (
-                            <span className="text-amber-400 ml-2">
-                              {debugInfo.historical.warning_count} warning
-                            </span>
-                          )}
+                          <span className={debugInfo.historical.critical_count > 0 ? 'text-red-400 ml-2' : 'text-slate-500 ml-2'}>
+                            {debugInfo.historical.critical_count} critical
+                          </span>
+                          <span className={debugInfo.historical.warning_count > 0 ? 'text-amber-400 ml-2' : 'text-slate-500 ml-2'}>
+                            {debugInfo.historical.warning_count} warning
+                          </span>
                         </div>
 
                         {/* Weighted Result */}
