@@ -746,8 +746,11 @@ class DataDB:
                 ''', (adjust_loco_address,))
                 cv_row = cursor.fetchone()
                 if cv_row and cv_row[0]:
-                    cv_last_modified = cv_row[0]
-                    print(f"[DEBUG] Speed {speed}: cv_last_modified={cv_last_modified} (adjust_loco={adjust_loco_address})")
+                    # Convert datetime string to Unix timestamp for comparison with events.timestamp
+                    from datetime import datetime
+                    cv_last_modified_str = cv_row[0]
+                    cv_last_modified = datetime.fromisoformat(cv_last_modified_str).timestamp()
+                    print(f"[DEBUG] Speed {speed}: cv_last_modified={cv_last_modified} (from {cv_last_modified_str}, adjust_loco={adjust_loco_address})")
 
             # Query current session events (if session active)
             current_stats = {
