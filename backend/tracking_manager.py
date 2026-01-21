@@ -76,6 +76,27 @@ class TrackingManager:
 
             log('[OK]', "Tracking daemon started (frame_queue accessible for video feed)")
 
+        except FileNotFoundError as e:
+            log('[WARN]', f"No YOLO model found - tracking disabled")
+            log('[WARN]', f"Auto-compensation disabled for all consists (requires tracking)")
+            log('[INFO]', f"Virtual Mode still available (does not require tracking)")
+            log('[INFO]', f"To enable tracking: add YOLO models to scripts/models/")
+
+            # Disable auto_compensation for all consists (requires tracking)
+            from services.data_db import DataDB
+            from config_loader import load_config
+
+            config = load_config()
+            consists = config.get('consists', {})
+
+            for consist_id_str in consists.keys():
+                consist_id = int(consist_id_str)
+                DataDB.update_consist_auto_compensation(consist_id, False)
+                log('[INFO]', f"Consist {consist_id}: auto_compensation disabled")
+
+            self.daemon = None
+            self.daemon_task = None
+
         except Exception as e:
             log('[WARN]', f"Failed to start tracking daemon: {e}")
             self.daemon = None
