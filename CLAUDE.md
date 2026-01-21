@@ -789,6 +789,14 @@ git diff config.json  # Should show no changes if normalized
 
 ## 📊 Recent Changes (Last 30 Days)
 
+**2026-01-22** - Green Border Indicator for Modified CVs:
+- ✅ **Green left border (2px)**: Persistent visual indicator for CVs modified via web UI (`cv_last_modified > 0`)
+- ✅ **Undo removes border**: Sets `cv_last_modified = 0` when restoring previous values
+- ✅ **Re-import button hidden**: JMRI only for initial new locomotive setup (backend code preserved)
+- ✅ **Fixed Speeds card removed**: Redundant with per-CV filtering (recommendations disappear after write)
+- 📄 Backend: cv_timestamps in GET response, update timestamps on write, reset on undo
+- 📄 Frontend: Parse cv_timestamps, apply border-l-2 border-l-green-500 when > 0
+
 **2026-01-21** - Per-CV Timestamp Filtering + Settings UI Fix:
 - ✅ **cv_modification_timestamps table**: Per-CV tracking (196 rows: 7 locos × 28 steps), recommendations disappear after CV write
 - ✅ **Settings UI bug**: Fixed Consist Manager recommendation_threshold display (C10: 5 not 10)
