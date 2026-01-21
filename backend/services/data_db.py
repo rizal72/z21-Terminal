@@ -678,17 +678,30 @@ class DataDB:
             'debug_info': {}
         }
 
-        # Get all unique speeds with CRITICAL/WARNING events (to know what to analyze)
+        # Get all unique speeds with delta_t events (for debug panel - show ALL tested speeds)
         cursor.execute('''
             SELECT DISTINCT json_extract(data, '$.speed') as speed
             FROM events
             WHERE event_type = 'delta_t'
               AND json_extract(data, '$.consist_id') = ?
-              AND json_extract(data, '$.status') IN ('CRITICAL', 'WARNING')
               AND json_extract(data, '$.speed') IS NOT NULL
         ''', (consist_id,))
 
         all_speeds = [int(row[0]) for row in cursor.fetchall()]
+
+        # Filter speeds with CRITICAL/WARNING for recommendations
+        speeds_with_issues = []
+        for speed in all_speeds:
+            cursor.execute('''
+                SELECT COUNT(*)
+                FROM events
+                WHERE event_type = 'delta_t'
+                  AND json_extract(data, '$.consist_id') = ?
+                  AND json_extract(data, '$.speed') = ?
+                  AND json_extract(data, '$.status') IN ('CRITICAL', 'WARNING')
+            ''', (consist_id, speed))
+            if cursor.fetchone()[0] > 0:
+                speeds_with_issues.append(speed)
 
         # For each speed, calculate weighted stats
         for speed in all_speeds:
@@ -831,18 +844,20 @@ class DataDB:
                     historical_stats['warning_count'] * historical_stats['weight']
                 )
 
-                # Store in results
-                results['mean_delta_t'][speed] = weighted_mean_dt
-                results['critical'][speed] = int(round(weighted_critical))
-                results['warning'][speed] = int(round(weighted_warning))
+                # Store in results (only for speeds with CRITICAL/WARNING for recommendations)
+                if speed in speeds_with_issues:
+                    results['mean_delta_t'][speed] = weighted_mean_dt
+                    results['critical'][speed] = int(round(weighted_critical))
+                    results['warning'][speed] = int(round(weighted_warning))
 
-                # Store debug info (always calculated, used for UI breakdown)
+                # Store debug info (ALWAYS - for ALL tested speeds, even OK ones)
                 results['debug_info'][speed] = {
                     'current_session': current_stats,
                     'historical': historical_stats,
                     'weighted_result': {
                         'mean_delta_t': weighted_mean_dt,
                         'critical_count': weighted_critical,
+                        'warning_count': weighted_warning,
                         'meets_threshold': current_stats['count'] >= recommendation_threshold,
                         'cv_last_modified': cv_last_modified
                     }
