@@ -789,6 +789,19 @@ git diff config.json  # Should show no changes if normalized
 
 ## 📊 Recent Changes (Last 30 Days)
 
+**2026-01-21** - Per-CV Timestamp Filtering DB Schema + Settings UI Bug Fix:
+- ✅ **cv_modification_timestamps table**: New table for per-CV tracking (196 rows: 7 locos × 28 steps)
+  - Track last_modified timestamp for each CV independently (CV67-94)
+  - Filter delta_t events by CV modification time (ignore old data after CV write)
+  - Recommendations disappear immediately after "Apply & Write" to decoder
+  - Reappear only if new tests (after modification) are still CRITICAL
+- ✅ **Settings UI bug fix**: Consist Manager now shows correct recommendation_threshold
+  - Bug: C10 displayed 10 instead of 5 from config.json
+  - Fix: Use `trackingAssignments` (config data) instead of `consists` (runtime state) for config fields
+  - API returns two objects: `consists` (runtime) + `tracking_assignments` (config)
+- 📄 Docs: DATABASE_SCHEMA.md updated with cv_modification_timestamps table reference
+- 📄 Commits: `390e465` (per-CV filtering) → `b175ca9` (import fix) → `c6a0369` (UI fix) → `5367e4f` (DB schema)
+
 **2026-01-21** - Analytics Chart UX Improvements (Date Display + Speed in Tooltip):
 - ✅ **CustomXAxisTick for date display**: Shows date in amber when day changes, time otherwise
   - X-axis labels: "21 Jan" (amber, bold) at start of day or day change, "18:05" (normal) for other ticks
