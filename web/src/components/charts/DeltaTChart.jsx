@@ -10,7 +10,8 @@
  * - Duplicate Y-axis in Current mode (visible when scrolled)
  * - Dynamic width calculation (Current: per-event, Overview: 100%)
  * - Auto-scroll support via ref prop
- * - Custom tooltip with speed information
+ * - Custom tooltip with speed information (no time, already on X-axis)
+ * - CustomXAxisTick: shows date in amber when day changes, time otherwise (Current mode only)
  */
 
 import React, { useMemo } from 'react';
@@ -26,7 +27,7 @@ import {
   formatDeltaT
 } from '../../utils/analyticsHelpers';
 
-// Custom Tooltip to show time, delta-t, status, gate type, and speed
+// Custom Tooltip - NO time shown (already on X-axis)
 const CustomTooltip = ({ active, payload, viewMode }) => {
   if (!active || !payload || payload.length === 0) return null;
 
@@ -34,9 +35,6 @@ const CustomTooltip = ({ active, payload, viewMode }) => {
 
   return (
     <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl">
-      <p className="text-xs text-slate-400 mb-2">
-        {viewMode === 'current' ? data.time : `Event #${data.index}`}
-      </p>
       {payload.map((entry, index) => {
         if (entry.value === null) return null;
         return (
@@ -74,6 +72,58 @@ const CustomTooltip = ({ active, payload, viewMode }) => {
       )}
     </div>
   );
+};
+
+// Custom Tick for X-axis - shows date (amber) when day changes, time otherwise
+const CustomXAxisTick = ({ x, y, payload, displayData }) => {
+  if (!payload || !displayData) return null;
+
+  // Find the data point for this tick
+  const dataPoint = displayData.find(d => d.time === payload.value);
+  if (!dataPoint) return <text x={x} y={y} dy={16} textAnchor="middle" fill="#9CA3AF">{payload.value}</text>;
+
+  // Check if this is the first point or day changed
+  const currentDate = new Date(dataPoint.timestamp * 1000);
+  const currentDay = currentDate.getDate();
+  const currentMonth = currentDate.getMonth();
+  const currentYear = currentDate.getFullYear();
+
+  // Find previous data point
+  const currentIndex = displayData.findIndex(d => d.time === payload.value);
+  const previousPoint = currentIndex > 0 ? displayData[currentIndex - 1] : null;
+
+  let showDate = false;
+  if (!previousPoint) {
+    // First point - always show date
+    showDate = true;
+  } else {
+    // Check if day changed
+    const prevDate = new Date(previousPoint.timestamp * 1000);
+    const prevDay = prevDate.getDate();
+    const prevMonth = prevDate.getMonth();
+    const prevYear = prevDate.getFullYear();
+
+    if (currentDay !== prevDay || currentMonth !== prevMonth || currentYear !== prevYear) {
+      showDate = true;
+    }
+  }
+
+  if (showDate) {
+    // Show date in amber (format: "21 Jan")
+    const dateStr = currentDate.toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
+    return (
+      <text x={x} y={y} dy={16} textAnchor="middle" fill="#f59e0b" fontWeight="bold">
+        {dateStr}
+      </text>
+    );
+  } else {
+    // Show time normally
+    return (
+      <text x={x} y={y} dy={16} textAnchor="middle" fill="#9CA3AF">
+        {payload.value}
+      </text>
+    );
+  }
 };
 
 const DeltaTChart = ({
@@ -229,6 +279,7 @@ const DeltaTChart = ({
                 <XAxis
                   dataKey={viewMode === 'current' ? 'time' : 'index'}
                   {...CHART_AXIS_STYLES.axis}
+                  tick={viewMode === 'current' ? <CustomXAxisTick displayData={displayData} /> : undefined}
                 />
                 <YAxis
                   yAxisId="left"
