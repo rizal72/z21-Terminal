@@ -119,10 +119,12 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
     recommendation_threshold = consist_config.get('recommendation_threshold', 10)  # Default 10
 
     # Get CRITICAL/WARNING events with weighted algorithm (current session prioritized)
+    # Per-CV timestamp filtering: ignore events before specific CV modification
     events_by_status = DataDB.get_critical_events_by_speed(
         consist_id=consist_id,
         current_session_id=session_id,
-        recommendation_threshold=recommendation_threshold
+        recommendation_threshold=recommendation_threshold,
+        adjust_loco_address=adjust_loco_address
     )
     critical_events = events_by_status.get('critical', {})
     warning_events = events_by_status.get('warning', {})

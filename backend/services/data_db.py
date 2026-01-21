@@ -651,15 +651,16 @@ class DataDB:
     def get_critical_events_by_speed(
         consist_id: int,
         current_session_id: Optional[int] = None,
-        recommendation_threshold: int = 10
+        recommendation_threshold: int = 10,
+        adjust_loco_address: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Get CRITICAL/WARNING events per speed with weighted averaging (current session prioritized).
 
         Implements 3-stage weighted algorithm:
-        1. Filter events after CV modification (ignore old data if CV changed)
+        1. Filter events after CV modification per-speed (ignore old data if specific CV changed)
         2. Split current session vs historical (last 5 sessions)
-        3. Weight: IF current >= threshold: 70% current + 30% historical, ELSE: 30% current + 70% historical
+        3. Weight: IF current >= threshold: 80% current + 20% historical, ELSE: 20% current + 80% historical
 
         A speed is considered "fixed" if in its last tested session:
         - At least 3 delta_t events occurred at that speed
@@ -671,6 +672,7 @@ class DataDB:
             consist_id: Consist ID (10, 11, etc.)
             current_session_id: Current session ID (None if no active session)
             recommendation_threshold: Minimum current session events to prioritize (config-driven: 5-10)
+            adjust_loco_address: Adjust locomotive address for CV timestamp filtering (None = no filtering)
 
         Returns:
             {
@@ -696,6 +698,29 @@ class DataDB:
         # Weighting constants (80/20 split when threshold met, 20/80 otherwise)
         WEIGHT_CURRENT_HIGH = 0.8  # Current session weight when >= threshold
         WEIGHT_CURRENT_LOW = 0.2   # Current session weight when < threshold
+
+        # Load CV modification timestamps (per-speed filtering)
+        # Maps: speed → cv_last_modified timestamp (Unix)
+        cv_timestamps = {}
+        if adjust_loco_address:
+            from ..services.speed_table_helpers import speed_to_jmri_step, jmri_step_to_cv
+
+            cursor.execute('''
+                SELECT step, cv_last_modified
+                FROM locomotive_speed_table
+                WHERE address = ?
+            ''', (adjust_loco_address,))
+
+            for row in cursor.fetchall():
+                step = row[0]
+                cv_modified_timestamp = row[1] or 0  # Default 0 if NULL (never modified)
+
+                # Map step → CV index → speed(s) that use this CV
+                # Each step can map to multiple speeds (DCC 0-126 → 28 steps)
+                # For simplicity: assume 1:1 mapping via reverse lookup
+                # We'll apply timestamp filter when querying each speed
+                cv_index = jmri_step_to_cv(step)
+                cv_timestamps[cv_index] = cv_modified_timestamp
 
         # Get all unique speeds with delta_t events (for debug panel - show ALL tested speeds)
         # Exclude speed 0 (stopped locomotives)
@@ -724,8 +749,22 @@ class DataDB:
             if cursor.fetchone()[0] > 0:
                 speeds_with_issues.append(speed)
 
+        # Helper: get CV modification timestamp for a specific speed
+        def get_cv_timestamp_for_speed(speed):
+            """Get cv_last_modified timestamp for the CV corresponding to this speed."""
+            if not adjust_loco_address or not cv_timestamps:
+                return 0  # No filtering
+
+            from ..services.speed_table_helpers import speed_to_jmri_step, jmri_step_to_cv
+            step = speed_to_jmri_step(speed)
+            cv_index = jmri_step_to_cv(step)
+            return cv_timestamps.get(cv_index, 0)
+
         # For each speed, calculate weighted stats
         for speed in all_speeds:
+            # Get CV modification timestamp for this specific speed
+            cv_modified_timestamp = get_cv_timestamp_for_speed(speed)
+
             # Query current session events (if session active)
             current_stats = {
                 'count': 0,
@@ -747,7 +786,8 @@ class DataDB:
                       AND json_extract(data, '$.consist_id') = ?
                       AND session_id = ?
                       AND json_extract(data, '$.speed') = ?
-                ''', (consist_id, current_session_id, speed))
+                      AND timestamp > ?
+                ''', (consist_id, current_session_id, speed, cv_modified_timestamp))
 
                 row = cursor.fetchone()
 
@@ -805,8 +845,9 @@ class DataDB:
                       AND json_extract(data, '$.consist_id') = ?
                       AND session_id IN ({placeholders})
                       AND json_extract(data, '$.speed') = ?
+                      AND timestamp > ?
                 '''
-                params_hist = [consist_id] + historical_sessions + [speed]
+                params_hist = [consist_id] + historical_sessions + [speed, cv_modified_timestamp]
 
                 cursor.execute(query_hist, params_hist)
                 row = cursor.fetchone()
@@ -857,17 +898,21 @@ class DataDB:
                 }
             }
 
-        # Fixed speeds detection (use original logic, but check most recent session)
+        # Fixed speeds detection (use original logic, but check most recent session after CV modification)
         for speed in results['critical'].keys():
+            # Get CV modification timestamp for this speed
+            cv_modified_timestamp = get_cv_timestamp_for_speed(speed)
+
             cursor.execute('''
                 SELECT session_id
                 FROM events
                 WHERE event_type = 'delta_t'
                   AND json_extract(data, '$.consist_id') = ?
                   AND json_extract(data, '$.speed') = ?
+                  AND timestamp > ?
                 ORDER BY timestamp DESC
                 LIMIT 1
-            ''', (consist_id, speed))
+            ''', (consist_id, speed, cv_modified_timestamp))
 
             last_session_row = cursor.fetchone()
             if not last_session_row:
@@ -884,7 +929,8 @@ class DataDB:
                   AND json_extract(data, '$.consist_id') = ?
                   AND session_id = ?
                   AND json_extract(data, '$.speed') = ?
-            ''', (consist_id, last_session_id, speed))
+                  AND timestamp > ?
+            ''', (consist_id, last_session_id, speed, cv_modified_timestamp))
 
             last_session_stats = cursor.fetchone()
             if last_session_stats:
