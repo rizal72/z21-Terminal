@@ -366,64 +366,60 @@ class TrackingDaemon:
             if not self.analytics_logger:
                 continue  # No analytics logger, skip
 
-            current_session = self.analytics_logger.session_id
-
-            if not current_session:
-                continue  # No current session, skip
-
             # Calculate idle time
             if self.last_delta_t_time is not None:
                 # Validated session: idle from last delta_t
                 idle_time = time.time() - self.last_delta_t_time
             else:
                 # Non-validated session: idle from session start_time
-                try:
-                    from services.data_db import DataDB
-                    session = DataDB.get_session_by_id(current_session)
-                    if session:
-                        idle_time = time.time() - session['start_time']
-                    else:
-                        continue  # Session not found, skip
-                except Exception as e:
-                    if self.debug_enabled:
-                        log('[WARN]', f"Session idle check failed: {e}")
-                    continue
+                idle_time = time.time() - self.analytics_logger.session_start
 
             # Debug log idle time
             if self.debug_enabled:
-                log('[SESSION]', f"Idle check: session {current_session}, idle {idle_time/60:.1f} min (threshold: {self.session_idle_timeout/60:.0f} min)")
+                log('[SESSION]', f"Idle check: session {self.analytics_logger.session_id}, idle {idle_time/60:.1f} min (threshold: {self.session_idle_timeout/60:.0f} min)")
 
             # Check if idle timeout exceeded
             if idle_time >= self.session_idle_timeout:
                 try:
-                    from services.data_db import DataDB
+                    current_session_id = self.analytics_logger.session_id
 
                     # Close current session
-                    DataDB.end_session(current_session)
-                    log('[SESSION]', f"Session {current_session} closed (idle {idle_time/60:.0f} min)")
+                    await self.analytics_logger.close_session()
+                    log('[SESSION]', f"Session {current_session_id} closed (idle {idle_time/60:.0f} min)")
 
                     # Broadcast session closed event
                     if self.websocket:
-                        message = {
+                        await self.websocket.send(json.dumps({
                             'type': 'session_closed',
-                            'session_id': current_session
-                        }
-                        await self.websocket.send(json.dumps(message))
+                            'session_id': current_session_id
+                        }))
 
-                    # Create new non-validated session immediately
-                    new_session_id = DataDB.create_session()
-                    self.analytics_logger.session_id = new_session_id
+                    # Cancel old flush task (already cancelled by close_session, but check)
+                    if self.analytics_flush_task and not self.analytics_flush_task.done():
+                        self.analytics_flush_task.cancel()
+                        try:
+                            await self.analytics_flush_task
+                        except asyncio.CancelledError:
+                            pass
+
+                    # Create new session (new AnalyticsLogger)
+                    db_path = Path(__file__).parent / 'data' / 'data.db'
+                    idle_timeout = self.idle_timeout  # Use tracking idle timeout
+                    self.analytics_logger = AnalyticsLogger(db_path=str(db_path), idle_timeout=idle_timeout)
+                    self.analytics_flush_task = asyncio.create_task(self.analytics_logger.start_flush_loop())
                     self.last_delta_t_time = None  # Reset for new session
 
-                    log('[SESSION]', f"Session {new_session_id} started (idle timeout)")
+                    # Update global reference
+                    dependencies.set_analytics_logger(self.analytics_logger)
+
+                    log('[SESSION]', f"Session {self.analytics_logger.session_id} started (idle timeout)")
 
                     # Broadcast session started event
                     if self.websocket:
-                        message = {
+                        await self.websocket.send(json.dumps({
                             'type': 'session_started',
-                            'session_id': new_session_id
-                        }
-                        await self.websocket.send(json.dumps(message))
+                            'session_id': self.analytics_logger.session_id
+                        }))
 
                 except Exception as e:
                     log('[WARN]', f"Session rotation failed: {e}")
