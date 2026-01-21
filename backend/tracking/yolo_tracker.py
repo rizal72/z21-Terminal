@@ -186,36 +186,54 @@ class YOLOTracker:
             else:
                 base_name = 'best'
 
-            # Check for models (priority: .engine > .onnx > .pt)
+            # Check for models (priority: .engine > .onnx > .pt with fallback)
             engine_path = models_dir / f'{base_name}.engine'
             onnx_path = models_dir / f'{base_name}.onnx'
             pt_path = models_dir / f'{base_name}.pt'
 
+            model_loaded = False
+
+            # Try TensorRT engine first (with fallback if fails, e.g., no CUDA on Mac)
             if engine_path.exists():
-                model_path = str(engine_path)
-                # ALWAYS show TensorRT usage (critical performance info)
-                log('[INIT]', f"Using TensorRT engine: \033[91m{engine_path.name}\033[0m (GPU-optimized, 2-5x faster)")
-            elif onnx_path.exists():
-                model_path = str(onnx_path)
-                # ALWAYS show ONNX usage (intermediate performance)
-                log('[INIT]', f"Using ONNX model: \033[91m{onnx_path.name}\033[0m (1.5-2x faster than PyTorch)")
-                log('[INIT]', f"Tip: Export to TensorRT for 2-5x faster inference: python scripts/utils/export_tensorrt.py")
-            elif pt_path.exists():
-                model_path = str(pt_path)
-                # ALWAYS show which model was auto-selected (critical info)
+                try:
+                    log('[INIT]', f"Attempting TensorRT engine: \033[91m{engine_path.name}\033[0m...")
+                    self.model = YOLO(str(engine_path), task='obb' if yolo_obb else 'detect')
+                    log('[INIT]', f"Using TensorRT engine: \033[91m{engine_path.name}\033[0m (GPU-optimized, 2-5x faster)")
+                    model_loaded = True
+                except Exception as e:
+                    log('[WARN]', f"TensorRT engine failed: {e}")
+                    log('[WARN]', f"Falling back to ONNX/PyTorch models...")
+
+            # Fallback to ONNX if engine failed or doesn't exist
+            if not model_loaded and onnx_path.exists():
+                try:
+                    log('[INIT]', f"Using ONNX model: \033[91m{onnx_path.name}\033[0m (1.5-2x faster than PyTorch)")
+                    self.model = YOLO(str(onnx_path), task='obb' if yolo_obb else 'detect')
+                    log('[INIT]', f"Tip: Export to TensorRT for 2-5x faster inference on GPU: python scripts/utils/export_tensorrt.py")
+                    model_loaded = True
+                except Exception as e:
+                    log('[WARN]', f"ONNX model failed: {e}")
+                    log('[WARN]', f"Falling back to PyTorch model...")
+
+            # Final fallback to PyTorch
+            if not model_loaded and pt_path.exists():
                 log('[INIT]', f"Auto-selected model: \033[91m{pt_path.name}\033[0m (yolo_obb={yolo_obb})")
-                log('[INIT]', f"Tip: Export to ONNX for 1.5-2x faster inference: python scripts/utils/export_tensorrt.py")
-            else:
-                raise FileNotFoundError(f"No YOLO model found: checked {engine_path}, {onnx_path}, and {pt_path}")
+                self.model = YOLO(str(pt_path), task='obb' if yolo_obb else 'detect')
+                log('[INIT]', f"Tip: Export to ONNX for 1.5-2x faster inference: python scripts/utils/export_onnx.py")
+                model_loaded = True
 
-        if self.debug_enabled:
-            log('[INIT]', f"Loading YOLO model: {model_path}")
-
-        # Explicitly specify task (ONNX/TensorRT don't preserve task metadata)
-        if yolo_obb:
-            self.model = YOLO(model_path, task='obb')
+            if not model_loaded:
+                raise FileNotFoundError(f"No YOLO model found or all models failed to load: checked {engine_path}, {onnx_path}, and {pt_path}")
         else:
-            self.model = YOLO(model_path, task='detect')
+            # Model path provided explicitly
+            if self.debug_enabled:
+                log('[INIT]', f"Loading YOLO model: {model_path}")
+
+            # Explicitly specify task (ONNX/TensorRT don't preserve task metadata)
+            if yolo_obb:
+                self.model = YOLO(model_path, task='obb')
+            else:
+                self.model = YOLO(model_path, task='detect')
 
         # Load gates and thresholds from config
         self.gates = {}
