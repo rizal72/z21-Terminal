@@ -64,13 +64,14 @@ class DataDB:
         }
 
     @staticmethod
-    def get_validated_sessions(limit: Optional[int] = None, exclude_running: bool = False) -> List[Dict]:
+    def get_validated_sessions(limit: Optional[int] = None, exclude_running: bool = False, consist_id: Optional[int] = None) -> List[Dict]:
         """
         Get validated sessions from database.
 
         Args:
             limit: Maximum number of sessions to return (most recent first)
             exclude_running: If True, exclude sessions with NULL end_time
+            consist_id: Optional consist ID to filter sessions (by events linked to that consist)
 
         Returns:
             List of session dicts with id, start_time, end_time, event_count, duration
@@ -78,14 +79,36 @@ class DataDB:
         conn = DataDB.get_connection()
         cursor = conn.cursor()
 
-        query = "SELECT id, start_time, end_time, event_count FROM sessions WHERE validated = 1"
-        if exclude_running:
-            query += " AND end_time IS NOT NULL"
-        query += " ORDER BY start_time DESC"
-        if limit:
-            query += f" LIMIT {limit}"
+        if consist_id is not None:
+            # Filter sessions that have delta_t events for this consist_id
+            query = """
+                SELECT DISTINCT s.id, s.start_time, s.end_time, s.event_count
+                FROM sessions s
+                INNER JOIN events e ON e.session_id = s.id
+                WHERE s.validated = 1
+                  AND e.event_type = 'delta_t'
+                  AND json_extract(e.data, '$.consist_id') = ?
+            """
+            params = [consist_id]
 
-        cursor.execute(query)
+            if exclude_running:
+                query += " AND s.end_time IS NOT NULL"
+            query += " ORDER BY s.start_time DESC"
+            if limit:
+                query += f" LIMIT {limit}"
+
+            cursor.execute(query, params)
+        else:
+            # Original query (no consist filter)
+            query = "SELECT id, start_time, end_time, event_count FROM sessions WHERE validated = 1"
+            if exclude_running:
+                query += " AND end_time IS NOT NULL"
+            query += " ORDER BY start_time DESC"
+            if limit:
+                query += f" LIMIT {limit}"
+
+            cursor.execute(query)
+
         sessions = []
         for row in cursor.fetchall():
             sessions.append({

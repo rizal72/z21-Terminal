@@ -106,7 +106,8 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
 
     # Get latest validated session (with at least one delta_t event)
     # Non-validated sessions (no delta_t yet) are ignored for recommendations
-    validated_sessions = DataDB.get_validated_sessions(limit=1)
+    # Filter by consist_id to ensure we get the correct session for this consist
+    validated_sessions = DataDB.get_validated_sessions(limit=1, consist_id=consist_id)
     current_session = validated_sessions[0] if validated_sessions else None
 
     # Extract session info (or None if no validated sessions exist)
