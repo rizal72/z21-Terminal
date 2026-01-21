@@ -5,7 +5,7 @@
 **Version**: v1.0.0 (Production Ready - JMRI Independence Achieved)
 **Repository**: https://github.com/rizal72/z21-Terminal (Private, SSH)
 **Project**: BiancAlice Railway Layout
-**Last Updated**: 2026-01-20
+**Last Updated**: 2026-01-21
 
 ---
 
@@ -788,6 +788,18 @@ git diff config.json  # Should show no changes if normalized
 ---
 
 ## 📊 Recent Changes (Last 30 Days)
+
+**2026-01-21** - Analytics Chart UX Improvements (Date Display + Speed in Tooltip):
+- ✅ **CustomXAxisTick for date display**: Shows date in amber when day changes, time otherwise
+  - X-axis labels: "21 Jan" (amber, bold) at start of day or day change, "18:05" (normal) for other ticks
+  - First event always shows date for immediate context
+  - Current mode only (no downsampling, reliable tick logic)
+  - Solves 7 previous failed attempts (tick sampling issue was due to Overview downsampling)
+- ✅ **Speed field in tooltip**: Format "88 (70%)" - DCC raw value + percentage
+  - Backend fix: `get_delta_t_events()` now extracts `speed` from JSON data
+  - Frontend: Added `speed` field to chart data preparation (both fast/slow path)
+  - Tooltip simplified: removed time display (already on X-axis), shows only Δt, status, gate, speed
+- 📄 Commits: `378055c` (backend speed fix) → `6162f1a` (cleanup) → `9903a8c` (CustomXAxisTick)
 
 **2026-01-21** - Session Idle Timeout Completion, Model Fallback, Auto_compensation Disable:
 - ✅ **Session idle timeout remaining time**: Countdown display in logs (debug mode only)
