@@ -809,6 +809,8 @@ git diff config.json  # Should show no changes if normalized
   - Continuous movement = 1 session, long pauses = new session
   - Prevents zombie sessions, accurate session duration
   - Settings UI: Analytics tab (5-120 min, backend restart required)
+  - Periodic check logs every 60s (debug mode only), close/open logs always visible
+  - Architecture: `analytics_logger.close_session()` + new `AnalyticsLogger()`, updates global reference
 - ✅ **Weighted algorithm improvements**:
   - **Removed CV modification filter**: Was per-locomotive (not per-CV), too aggressive
   - **Changed weights to 80/20**: From 70/30 (more reactive to corrections)
