@@ -379,7 +379,7 @@ class TrackingDaemon:
                 # Non-validated session: idle from session start_time
                 try:
                     from services.data_db import DataDB
-                    session = DataDB.get_session(current_session)
+                    session = DataDB.get_session_by_id(current_session)
                     if session:
                         idle_time = time.time() - session['start_time']
                     else:
