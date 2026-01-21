@@ -867,9 +867,14 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
         </div>
       )}
 
+      {/* 28 Vertical Bars */}
+      <div className="flex justify-center gap-1 overflow-x-auto pb-4">
+        {bars}
+      </div>
+
       {/* Speed Analysis Debug Panel (only if debug enabled) */}
       {debugEnabled && data.debug_info && Object.keys(data.debug_info).length > 0 && (
-        <div className="mb-6 bg-purple-900/20 border border-purple-700 rounded-lg overflow-hidden">
+        <div className="mt-6 bg-purple-900/20 border border-purple-700 rounded-lg overflow-hidden">
           {/* Collapsible Header */}
           <button
             onClick={() => setDebugPanelOpen(!debugPanelOpen)}
@@ -990,11 +995,6 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           )}
         </div>
       )}
-
-      {/* 28 Vertical Bars */}
-      <div className="flex justify-center gap-1 overflow-x-auto pb-4">
-        {bars}
-      </div>
 
       {/* CV Recommendations (below chart) */}
       {data.recommendations && data.recommendations.length > 0 ? (
