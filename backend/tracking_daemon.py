@@ -357,6 +357,9 @@ class TrackingDaemon:
 
     async def check_session_idle(self):
         """Background task to close session after idle timeout."""
+        if self.debug_enabled:
+            log('[SESSION]', f"Session idle checker started (timeout: {self.session_idle_timeout/60:.0f} min)")
+
         while self.running:
             await asyncio.sleep(60)  # Check every minute
 
@@ -385,6 +388,10 @@ class TrackingDaemon:
                     if self.debug_enabled:
                         log('[WARN]', f"Session idle check failed: {e}")
                     continue
+
+            # Debug log idle time
+            if self.debug_enabled:
+                log('[SESSION]', f"Idle check: session {current_session}, idle {idle_time/60:.1f} min (threshold: {self.session_idle_timeout/60:.0f} min)")
 
             # Check if idle timeout exceeded
             if idle_time >= self.session_idle_timeout:
