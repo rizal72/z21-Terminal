@@ -65,7 +65,6 @@ export default function ConsistManagerModal({ onClose }) {
   const handleEdit = (consistAddress) => {
     const assignment = trackingAssignments[consistAddress];
     const refLoco = referenceLocos[consistAddress];
-    const consistData = consists[consistAddress];
 
     if (assignment) {
       // Determine which is reference: "lead" or "rear"
@@ -83,8 +82,8 @@ export default function ConsistManagerModal({ onClose }) {
         gate_ids: assignment.gate_ids || [],
         gate_assignment: assignment.gate_assignment,  // null = symmetric, object = asymmetric
         reference_loco: referenceLoco,
-        virtual_mode: consistData?.virtual_mode !== undefined ? consistData.virtual_mode : true,
-        recommendation_threshold: consistData?.recommendation_threshold || 10  // default: 10
+        virtual_mode: assignment.virtual_mode !== undefined ? assignment.virtual_mode : true,
+        recommendation_threshold: assignment.recommendation_threshold !== undefined ? assignment.recommendation_threshold : 10  // default: 10
       });
       setShowForm(true);
     }
@@ -92,8 +91,8 @@ export default function ConsistManagerModal({ onClose }) {
 
   const handleDelete = (consistAddress) => {
     // Check if consist is in DCC mode (virtual_mode=false)
-    const consistData = consists[consistAddress];
-    const isDccMode = consistData && !consistData.virtual_mode;
+    const assignment = trackingAssignments[consistAddress];
+    const isDccMode = assignment && !assignment.virtual_mode;
 
     // Show confirmation modal
     setDeleteConfirm({
