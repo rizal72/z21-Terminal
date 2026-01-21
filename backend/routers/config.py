@@ -99,7 +99,7 @@ async def update_settings(request: dict):
         restart_needed = []
         changes_summary = []  # Log all changes made
 
-        # System settings (debug.enabled)
+        # System settings (debug.enabled - local-only, saved to config.local.json)
         if "debug" in request:
             old_debug = config.get("debug", {}).get("enabled", False)
             new_debug = request["debug"].get("enabled", False)
@@ -109,9 +109,15 @@ async def update_settings(request: dict):
                 log('[SETTINGS]', f"Debug mode: {old_debug} -> {new_debug} (backend restart required)")
                 changes_summary.append(f"debug.enabled: {old_debug} -> {new_debug}")
 
+            # Save debug.enabled to config.local.json (local-only setting)
+            config_local["debug"] = {
+                "enabled": new_debug
+            }
+
+            # Keep debug.enabled = false in config.json (fallback default)
             if "debug" not in config:
                 config["debug"] = {}
-            config["debug"]["enabled"] = new_debug
+            config["debug"]["enabled"] = False  # Always false in config.json
 
         # Z21 Network settings (z21.host, z21.port)
         if "z21" in request:

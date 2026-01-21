@@ -127,15 +127,53 @@ def save_config(config: Dict[str, Any], config_path: Path = None) -> None:
     # Filter out keys starting with _ (comments, metadata)
     filtered_config = {k: v for k, v in filtered_config.items() if not k.startswith('_')}
 
-    # Remove camera credentials (they belong in config.local.json only)
+    # Remove local-only settings (they belong in config.local.json only)
+    # Camera credentials
     if 'camera' in filtered_config:
         filtered_config['camera'].pop('username', None)
         filtered_config['camera'].pop('password', None)
+
+    # Debug mode (local development setting)
+    if 'debug' in filtered_config and 'enabled' in filtered_config['debug']:
+        filtered_config['debug']['enabled'] = False  # Always false in config.json (fallback)
 
     # Generate JSON with standard formatting
     json_str = json.dumps(filtered_config, indent=2, ensure_ascii=False)
 
     with open(config_path, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(json_str)
+
+
+def save_local_config(local_overrides: Dict[str, Any]) -> None:
+    """
+    Save local-only settings to config.local.json (gitignored).
+
+    Used for machine-specific overrides (camera credentials, debug mode, etc.)
+
+    Args:
+        local_overrides: Dict with local overrides (e.g., {"debug": {"enabled": true}})
+
+    Raises:
+        IOError: If unable to write config.local.json
+    """
+    project_root = Path(__file__).parent.parent
+    local_config_path = project_root / "config.local.json"
+
+    # Load existing config.local.json (if exists)
+    existing_local = {}
+    if local_config_path.exists():
+        try:
+            with open(local_config_path, 'r', encoding='utf-8') as f:
+                existing_local = json.load(f)
+        except json.JSONDecodeError:
+            pass  # Ignore, will overwrite
+
+    # Deep merge new overrides into existing
+    merged_local = deep_merge(existing_local, local_overrides)
+
+    # Write to config.local.json
+    json_str = json.dumps(merged_local, indent=2, ensure_ascii=False)
+    with open(local_config_path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(json_str)
         f.write('\n')  # Add trailing newline
 
