@@ -155,7 +155,8 @@ class DataDB:
                 'consist_id': data['consist_id'],
                 'delta_t': data['delta_t'],
                 'status': data['status'],
-                'gate_type': data['gate_type']
+                'gate_type': data['gate_type'],
+                'speed': data.get('speed')  # May be None for old events
             })
 
         conn.close()
