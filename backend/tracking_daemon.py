@@ -573,6 +573,14 @@ class TrackingDaemon:
                 except asyncio.CancelledError:
                     pass
 
+            # Cancel session idle check task
+            if self.session_idle_check_task and not self.session_idle_check_task.done():
+                self.session_idle_check_task.cancel()
+                try:
+                    await self.session_idle_check_task
+                except asyncio.CancelledError:
+                    pass
+
             self.stop()
 
     def stop(self):
