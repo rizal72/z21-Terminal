@@ -793,20 +793,28 @@ git diff config.json  # Should show no changes if normalized
 - ✅ **Speed Analysis Debug Panel**: Collapsible panel in Speed Table Viewer (purple theme)
   - Shows ALL tested speeds (not just recommendations)
   - Current/Historical/Weighted breakdown per speed
+  - Critical/warning count always visible: colored (red/amber) if >0, grey if =0
+  - Excludes speed 0 (stopped locomotives)
   - Visible only when `debug.enabled=true`
   - Open by default but collapsible, positioned after speed table
 - ✅ **Debug mode as local-only setting**: Like camera credentials
   - `config.json` always has `debug.enabled=false` (committed default)
   - `config.local.json` stores local override (gitignored)
   - Settings UI saves to config.local.json (preserves local overrides)
+- ✅ **Debug mode log unification**:
+  - Moved from yolo_tracker.py to main.py (application-wide)
+  - ENABLED/DISABLED colored in yellow (STATUS_YELLOW) for high visibility
+  - Appears immediately at backend startup
 - ✅ **Weighted algorithm improvements**:
   - **Removed CV modification filter**: Was per-locomotive (not per-CV), too aggressive
   - **Changed weights to 80/20**: From 70/30 (more reactive to corrections)
   - **Weight constants**: `WEIGHT_CURRENT_HIGH = 0.8`, `WEIGHT_CURRENT_LOW = 0.2`
   - **Rationale**: Weighted logic + last 5 sessions sufficient without CV filter
 - ✅ **Critical fixes**:
-  - Fixed `cv_last_modified` timestamp comparison (string vs Unix timestamp)
+  - Fixed `cv_last_modified` timestamp comparison bug (string vs Unix timestamp)
   - Fixed `get_validated_sessions()` to filter by consist_id
+  - Fixed debug_info population for ALL speeds (even with total_count=0)
+  - Fixed speed 0 exclusion in query (stopped locomotives)
   - Validated session fix: Speed Table uses latest validated session (not non-validated current)
 - ✅ **Database debugging pattern**: Added to z21-deployment skill (PC → Mac copy workflow)
 - 📄 Docs: Updated SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md (two-stage system, 80/20 weights), z21-deployment skill

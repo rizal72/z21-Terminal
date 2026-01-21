@@ -396,9 +396,11 @@ WHERE event_type='delta_t'
 - [x] **NEW**: Speed Analysis Debug panel (full breakdown, debug mode only)
 
 ### Debug Panel (2026-01-21)
-- [x] Collapsible panel above speed table (open by default)
+- [x] Collapsible panel positioned after speed table (open by default)
 - [x] Shows ALL tested speeds (not just recommendations)
 - [x] Current/Historical/Weighted stats per speed
+- [x] Critical/warning count always visible (colored if >0, grey if =0)
+- [x] Excludes speed 0 (stopped locomotives)
 - [x] Visible only when `debug.enabled=true` (config.local.json)
 - [x] Purple theme (distinct from other sections)
 
