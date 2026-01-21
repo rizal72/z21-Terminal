@@ -14,6 +14,7 @@
 | `events` | Time-series analytics events | ~thousands |
 | `locomotive_stats` | Operating time per locomotive | 7 (one per loco) |
 | `locomotive_speed_table` | CV67-94 speed tables | 7 (one per loco) |
+| `cv_modification_timestamps` | Per-CV modification timestamps | 196 (7 locos × 28 steps) |
 | `consist_state` | Virtual Mode + Auto Compensation state | 2 (one per consist) |
 | `system_state` | System-wide key-value state | ~few |
 
@@ -242,6 +243,63 @@ source: "web_ui"
   - CV2/CV5 not used as speed table endpoints
 - **previous_values**: JSON backup for 1-level undo
 - **source** values: `jmri_import`, `jmri_reimport`, `web_ui`, `test_mode`, `undo`
+
+---
+
+## Table: cv_modification_timestamps
+
+**Purpose**: Track per-CV modification timestamps for speed table filtering (28 steps per locomotive)
+
+```sql
+CREATE TABLE cv_modification_timestamps (
+    loco_address INTEGER NOT NULL,
+    step INTEGER NOT NULL CHECK(step BETWEEN 1 AND 28),
+    cv_last_modified REAL DEFAULT 0,  -- Unix timestamp (0 = never modified)
+    PRIMARY KEY (loco_address, step),
+    FOREIGN KEY (loco_address) REFERENCES locomotive_speed_table(loco_address)
+);
+
+CREATE INDEX idx_cv_timestamps_loco
+    ON cv_modification_timestamps(loco_address);
+```
+
+**Example**:
+```
+loco_address: 1
+step: 15
+cv_last_modified: 1737492738.25  -- Unix timestamp (2026-01-21 23:12:18)
+```
+
+**Notes**:
+- **28 rows per locomotive** (step 1-28, corresponding to CV67-94)
+- **cv_last_modified = 0**: CV never modified (initial state after import)
+- **cv_last_modified > 0**: Last time this specific CV was modified via web UI
+- **Purpose**: Filter delta_t events by CV modification time
+  - When CV76 is modified → ignore events before that timestamp
+  - Recommendations disappear immediately after "Apply & Write"
+  - Reappear only if new tests (after modification) are still CRITICAL
+- **Updated by**: Speed Table Viewer "Apply & Write to Decoder" button
+- **Total rows**: 7 locomotives × 28 steps = 196 rows
+
+**Query examples**:
+```sql
+-- Get all CV timestamps for locomotive 1
+SELECT step, cv_last_modified
+FROM cv_modification_timestamps
+WHERE loco_address = 1
+ORDER BY step;
+
+-- Get CV timestamp for specific step (e.g., step 15 → CV81)
+SELECT cv_last_modified
+FROM cv_modification_timestamps
+WHERE loco_address = 1 AND step = 15;
+
+-- Find recently modified CVs (last 24 hours)
+SELECT loco_address, step, datetime(cv_last_modified, 'unixepoch', 'localtime') as modified_at
+FROM cv_modification_timestamps
+WHERE cv_last_modified > (strftime('%s', 'now') - 86400)
+ORDER BY cv_last_modified DESC;
+```
 
 ---
 

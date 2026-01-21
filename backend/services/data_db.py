@@ -707,8 +707,8 @@ class DataDB:
 
             cursor.execute('''
                 SELECT step, cv_last_modified
-                FROM locomotive_speed_table
-                WHERE address = ?
+                FROM cv_modification_timestamps
+                WHERE loco_address = ?
             ''', (adjust_loco_address,))
 
             for row in cursor.fetchall():
@@ -755,7 +755,7 @@ class DataDB:
             if not adjust_loco_address or not cv_timestamps:
                 return 0  # No filtering
 
-            from ..services.speed_table_helpers import speed_to_jmri_step, jmri_step_to_cv
+            # Use already-imported functions from outer scope
             step = speed_to_jmri_step(speed)
             cv_index = jmri_step_to_cv(step)
             return cv_timestamps.get(cv_index, 0)
