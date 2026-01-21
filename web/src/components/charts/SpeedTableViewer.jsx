@@ -932,7 +932,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                           <div className="flex items-center gap-2 text-xs">
                             {meetsThreshold && (
                               <span className="px-2 py-0.5 bg-green-600 text-white rounded">
-                                Meets threshold
+                                Sufficient data
                               </span>
                             )}
                             {hasRecommendation && (
