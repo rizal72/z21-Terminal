@@ -789,7 +789,7 @@ git diff config.json  # Should show no changes if normalized
 
 ## 📊 Recent Changes (Last 30 Days)
 
-**2026-01-21** - Speed Analysis Debug Panel & Weighted Algorithm Refinement:
+**2026-01-21** - Speed Analysis Debug Panel, Weighted Algorithm, Session Idle Timeout:
 - ✅ **Speed Analysis Debug Panel**: Collapsible panel in Speed Table Viewer (purple theme)
   - Shows ALL tested speeds (not just recommendations)
   - Current/Historical/Weighted breakdown per speed
@@ -805,6 +805,10 @@ git diff config.json  # Should show no changes if normalized
   - Moved from yolo_tracker.py to main.py (application-wide)
   - ENABLED/DISABLED colored in yellow (STATUS_YELLOW) for high visibility
   - Appears immediately at backend startup
+- ✅ **Session idle timeout**: Auto-close after N min without movement (config: `analytics.session_idle_timeout_minutes`, default 30)
+  - Continuous movement = 1 session, long pauses = new session
+  - Prevents zombie sessions, accurate session duration
+  - Settings UI: Analytics tab (5-120 min, backend restart required)
 - ✅ **Weighted algorithm improvements**:
   - **Removed CV modification filter**: Was per-locomotive (not per-CV), too aggressive
   - **Changed weights to 80/20**: From 70/30 (more reactive to corrections)
