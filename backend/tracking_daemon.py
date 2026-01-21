@@ -376,7 +376,8 @@ class TrackingDaemon:
 
             # Debug log idle time
             if self.debug_enabled:
-                log('[SESSION]', f"Idle check: session {self.analytics_logger.session_id}, idle {idle_time/60:.1f} min (threshold: {self.session_idle_timeout/60:.0f} min)")
+                remaining_time = self.session_idle_timeout - idle_time
+                log('[SESSION]', f"Idle check: session {self.analytics_logger.session_id}, idle {idle_time/60:.1f} min ({remaining_time/60:.1f} min remaining)")
 
             # Check if idle timeout exceeded
             if idle_time >= self.session_idle_timeout:
