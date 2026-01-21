@@ -324,6 +324,23 @@ Visual JMRI-style speed table viewer (CV67-94) with interactive editing, direct 
 - **Amber** - 5-9 CRITICAL events (moderate issues)
 - **Red** - 10+ CRITICAL events (severe issues)
 
+**CV Modification State** (border indicators - NEW 2026-01-22):
+- **Green left border (2px)** - CV modified via web UI (persistent, `cv_last_modified > 0`)
+  - Indicates: "This CV has been manually adjusted from JMRI import"
+  - Persists across page reloads and sessions
+  - **Removed by**: Undo operation (sets `cv_last_modified = 0`)
+  - **NOT removed by**: Re-applying recommendations (updates timestamp, keeps border)
+- **Blue border + asterisk** - CV modified but not saved (temporary, UI session only)
+  - Indicates: "Pending changes not written to decoder"
+  - Disappears after "Apply & Write to Decoder"
+  - Does NOT persist across page reloads
+
+**State Combinations**:
+1. **Gray** - Original JMRI import value, never modified
+2. **Green border** - Modified via web UI and saved (persistent)
+3. **Blue border + asterisk** - Modified in current session, not saved yet (temporary)
+4. **Green + Blue border + asterisk** - Previously modified (green) + new pending changes (blue)
+
 **Recommendations Δt** (mean delta_t sign):
 - **Blue** - Negative Δt (adjust loco FASTER, need to slow down)
 - **Amber** - Positive Δt (adjust loco SLOWER, need to speed up)
@@ -351,14 +368,14 @@ Visual JMRI-style speed table viewer (CV67-94) with interactive editing, direct 
   - Reads `previous_values` from database
   - Writes to decoder via POM
   - Swaps current ↔ previous (can undo the undo)
+  - **Removes green border** (sets `cv_last_modified = 0`)
   - Tooltip: "Undo last change (restore previous CV values)"
 
-- **Re-import** (fa-sync icon, slate) - Force sync from JMRI roster
-  - Reads CV67-94 from JMRI roster XML for **ONLY this locomotive** (adjust_loco)
-  - Updates database with JMRI values (source='jmri_reimport')
-  - **Safe operation**: Does NOT touch other locomotives in roster
-  - Use when roster changed outside the system (e.g., modified via JMRI DecoderPro)
-  - Tooltip: "Re-import from JMRI roster (sync database with JMRI)"
+- ~~**Re-import** (DEPRECATED - Hidden from UI as of 2026-01-22)~~
+  - **Reason**: JMRI used ONLY for initial new locomotive setup
+  - **Alternative**: Use `scripts/import_single_locomotive.py` for new locomotives
+  - Backend code preserved but button removed from UI
+  - Daily operations never require JMRI interaction
 
 ---
 
@@ -410,10 +427,57 @@ backend/
    - Example: Step 15 → CV81
 
 7. **`calculate_cv_recommendations()`** - Generate CV adjustment suggestions
-   - Uses mean Δt sign for direction (negative → decrease CV, positive → increase CV)
-   - **Fixed ±1 adjustment** (2025-01-17 update - was scaling with count)
-   - Excludes "fixed" speeds (proven OK in last session: >= 3 events, < 20% CRITICAL rate)
-   - Clamps suggested CV between 0-255
+
+---
+
+### Green Border Implementation (2026-01-22)
+
+**Purpose**: Visual indicator for CVs modified via web UI (persistent across sessions)
+
+**Backend**:
+- **Table**: `cv_modification_timestamps` (196 rows: 7 locos × 28 steps)
+- **Query**: Load all 28 timestamps when fetching speed table data
+```python
+# backend/routers/speed_table.py - GET /api/speed-table/{consist_id}
+cursor.execute('''
+    SELECT step, cv_last_modified
+    FROM cv_modification_timestamps
+    WHERE loco_address = ?
+''', (adjust_loco_address,))
+cv_timestamps = {row[0]: row[1] for row in cursor.fetchall()}
+# Returns: {1: 1737578400.0, 2: 0, 3: 1737492738.25, ..., 28: 0}
+```
+
+**Frontend Logic** (`web/src/components/SpeedTableViewer.jsx`):
+```javascript
+// For each bar (step 1-28):
+const cvTimestamp = cvTimestamps[step] || 0;
+const isModified = cvTimestamp > 0;  // Green border if > 0
+
+// CSS classes:
+const borderClass = isModified ? 'border-l-2 border-green-500' : '';
+```
+
+**State Transitions**:
+1. **JMRI Import**: All `cv_last_modified = 0` → no green border
+2. **Apply & Write**: Modified CVs get `cv_last_modified = NOW()` → green border appears
+3. **Undo**: Sets `cv_last_modified = 0` → green border disappears
+4. **Page Reload**: Green border persists (based on DB query)
+
+**API Response Structure**:
+```json
+{
+  "speed_table": {
+    "67": 10, "68": 15, ..., "94": 255
+  },
+  "cv_timestamps": {
+    "1": 0, "2": 1737492738.25, ..., "28": 0
+  },
+  "previous_values": {...}
+}
+```
+
+---
 
 ### Frontend Components
 
