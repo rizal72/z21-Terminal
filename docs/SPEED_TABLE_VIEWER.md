@@ -339,6 +339,8 @@ Visual JMRI-style speed table viewer (CV67-94) with interactive editing, direct 
   - Disabled when no modifications present
   - Shows success/error message with timing (~2.8s)
   - Blue highlight on modified CVs (border + asterisk)
+  - **Updates cv_modification_timestamps** (NEW 2026-01-21): Records timestamp for each modified CV
+  - **Recommendations workflow**: Recommendation disappears immediately → test speed again → if still CRITICAL, reappears (based only on new data)
 
 - **Export CSV Only** - Exports current values without decoder write
   - Useful for manual JMRI import or backup

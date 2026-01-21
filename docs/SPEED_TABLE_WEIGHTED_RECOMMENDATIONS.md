@@ -64,10 +64,12 @@ Stage 2: Weighted Averaging
   ↓ ELSE: 20% current + 80% historical
 ```
 
-**Note on CV Modification Filter** (removed 2026-01-21):
-- **Original design**: Filter events by `timestamp >= cv_last_modified` per speed
-- **Problem**: `last_modified` is per-locomotive (not per-CV), so modifying one CV invalidated ALL speeds
-- **Solution**: Removed filter entirely - weighted logic (80/20) + last 5 sessions already sufficient to handle corrections
+**Per-CV Timestamp Filtering** (implemented 2026-01-21):
+- **Database**: New table `cv_modification_timestamps` tracks last_modified for each CV independently (28 rows per loco)
+- **Filtering**: Events filtered by `timestamp > cv_last_modified` for specific CV corresponding to each speed
+- **Granularity**: Modifying CV76 only ignores events for that speed, other speeds unaffected
+- **Workflow**: Apply & Write → recommendation disappears → test again → if still bad, reappears (based only on new data)
+- **History**: Per-locomotive filter removed (too aggressive), replaced with per-CV filter (surgical precision)
 
 ### Formula
 
@@ -138,17 +140,25 @@ weighted_critical_count = (count_current * weight_current) + (count_historical *
 def get_critical_events_by_speed(
     consist_id: int,
     current_session_id: Optional[int] = None,  # NEW
-    recommendation_threshold: int = 10         # NEW (from config)
+    recommendation_threshold: int = 10,        # NEW (from config)
+    adjust_loco_address: Optional[int] = None  # NEW (2026-01-21, per-CV filtering)
 ) -> Dict[str, Any]:
 ```
 
 **Query structure**:
 ```sql
+-- Step 0: Load per-CV timestamps (NEW 2026-01-21)
+SELECT step, cv_last_modified
+FROM cv_modification_timestamps
+WHERE loco_address = ?
+-- Returns 28 rows (one per CV67-94), maps step → timestamp
+
 -- Step 1: Get current session events per speed
 SELECT speed, COUNT(*), AVG(delta_t), SUM(CASE WHEN status='CRITICAL' THEN 1 ELSE 0 END)
 FROM events
 WHERE consist_id = ?
   AND session_id = ?
+  AND timestamp > ?  -- NEW: cv_last_modified for this speed's CV
 GROUP BY speed
 
 -- Step 2: Get historical events (last 5 sessions, excluding current)
@@ -160,6 +170,7 @@ WHERE consist_id = ?
     WHERE consist_id = ? AND session_id != ?
     ORDER BY session_id DESC LIMIT 5  -- session_id format YYYYMMDD_HHMMSS is sortable
   )
+  AND timestamp > ?  -- NEW: cv_last_modified for this speed's CV
 GROUP BY speed
 
 -- Step 3: Combine with weighting (Python logic)
