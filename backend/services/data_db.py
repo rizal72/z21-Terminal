@@ -747,6 +747,7 @@ class DataDB:
                 cv_row = cursor.fetchone()
                 if cv_row and cv_row[0]:
                     cv_last_modified = cv_row[0]
+                    print(f"[DEBUG] Speed {speed}: cv_last_modified={cv_last_modified} (adjust_loco={adjust_loco_address})")
 
             # Query current session events (if session active)
             current_stats = {
@@ -779,6 +780,8 @@ class DataDB:
 
                 cursor.execute(query, params)
                 row = cursor.fetchone()
+
+                print(f"[DEBUG] Speed {speed} current query: params={params}, row={row}")
 
                 if row and row[0] > 0:
                     current_stats['count'] = row[0]
@@ -844,6 +847,8 @@ class DataDB:
 
                 cursor.execute(query_hist, params_hist)
                 row = cursor.fetchone()
+
+                print(f"[DEBUG] Speed {speed} historical query: sessions={historical_sessions}, row={row}")
 
                 if row and row[0] > 0:
                     historical_stats['count'] = row[0]
