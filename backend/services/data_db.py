@@ -731,7 +731,9 @@ class DataDB:
                 speeds_with_issues.append(speed)
 
         # For each speed, calculate weighted stats
+        print(f"[DEBUG] About to start loop for {len(all_speeds)} speeds")
         for speed in all_speeds:
+            print(f"[DEBUG] Processing speed {speed}")
             # Get CV modification timestamp for adjust loco (if any)
             # Note: last_modified applies to entire speed table row (all CVs)
             cv_last_modified = None
@@ -851,6 +853,8 @@ class DataDB:
 
             # Calculate weighted results
             total_count = current_stats['count'] + historical_stats['count']
+
+            print(f"[DEBUG] Speed {speed}: current_count={current_stats['count']}, historical_count={historical_stats['count']}, total={total_count}")
 
             if total_count > 0:
                 # Weighted mean delta_t
