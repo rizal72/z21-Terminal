@@ -1328,6 +1328,36 @@ function AnalyticsTab({ settings, setSettings }) {
           <span>Lower values = better performance but less visible history. Higher values = more data but slower rendering. Recommended: 300-1000.</span>
         </p>
       </div>
+
+      {/* Session Idle Timeout */}
+      <div>
+        <label className="block">
+          <span className="text-sm font-medium text-white">Session Idle Timeout</span>
+          <div className="text-xs text-slate-400 mb-2">
+            Close session after N minutes without movement (delta_t events). Creates new non-validated session immediately.
+          </div>
+          <input
+            type="number"
+            min="5"
+            max="120"
+            step="5"
+            value={settings.analytics.session_idle_timeout_minutes || 30}
+            onChange={(e) => setSettings({
+              ...settings,
+              analytics: { ...settings.analytics, session_idle_timeout_minutes: parseInt(e.target.value) || 30 }
+            })}
+            className="w-32 px-3 py-2 bg-slate-900 border border-slate-700 rounded text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          <span className="ml-2 text-sm text-slate-400">minutes</span>
+        </label>
+      </div>
+
+      <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded">
+        <p className="text-sm text-amber-200 flex items-start gap-2">
+          <i className="fa-solid fa-info-circle mt-0.5"></i>
+          <span>Continuous movement = 1 long session. Long pauses (idle timeout) = new session. Prevents zombie sessions from staying open for hours. Requires backend restart.</span>
+        </p>
+      </div>
     </div>
   );
 }

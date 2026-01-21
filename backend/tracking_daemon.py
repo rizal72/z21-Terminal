@@ -69,12 +69,17 @@ class TrackingDaemon:
             self.fps_active = fps_config.get('active', 30)
             self.fps_idle = fps_config.get('idle', 1)
             self.idle_timeout = tracking_config.get('idle_timeout_seconds', 10)
+
+            # Load session idle timeout from analytics config
+            analytics_config = config.get('analytics', {})
+            self.session_idle_timeout = analytics_config.get('session_idle_timeout_minutes', 30) * 60  # Convert to seconds
         except Exception as e:
             if self.debug_enabled:
                 log('[WARN]', f"Error loading config: {e}, using defaults")
             self.fps_active = 30
             self.fps_idle = 1
             self.idle_timeout = 10
+            self.session_idle_timeout = 30 * 60  # 30 minutes default
 
         # Dynamic FPS control
         self.consist_speeds = {}  # {consist_address: speed}
@@ -82,6 +87,10 @@ class TrackingDaemon:
         self.last_fps_mode = None  # Track mode changes for logging
         self.video_connected = True  # Track video connection state for logging
         self.idle_timer_task = None  # Asyncio task for 10s cooldown timer
+
+        # Session idle timeout tracking
+        self.last_delta_t_time = None  # Timestamp of last delta_t event (for session idle detection)
+        self.session_idle_check_task = None  # Asyncio task for session idle timeout
 
     async def connect_backend(self):
         """Connect to FastAPI backend via WebSocket."""
@@ -203,6 +212,9 @@ class TrackingDaemon:
                         'gate_type': current_type,
                         'speed': self.consist_speeds.get(consist_id, 0)  # Current consist speed
                     })
+
+                # Update last delta_t timestamp (for session idle detection)
+                self.last_delta_t_time = current_timestamp
             except Exception as e:
                 log('[WARN]', f"Backend disconnected: {e}")
                 self.websocket = None  # Mark as disconnected
@@ -343,6 +355,72 @@ class TrackingDaemon:
                 # Don't crash the daemon on error, just log and retry
                 await asyncio.sleep(1)
 
+    async def check_session_idle(self):
+        """Background task to close session after idle timeout."""
+        while self.running:
+            await asyncio.sleep(60)  # Check every minute
+
+            if not self.analytics_logger:
+                continue  # No analytics logger, skip
+
+            current_session = self.analytics_logger.current_session_id
+
+            if not current_session:
+                continue  # No current session, skip
+
+            # Calculate idle time
+            if self.last_delta_t_time is not None:
+                # Validated session: idle from last delta_t
+                idle_time = time.time() - self.last_delta_t_time
+            else:
+                # Non-validated session: idle from session start_time
+                try:
+                    from services.data_db import DataDB
+                    session = DataDB.get_session(current_session)
+                    if session:
+                        idle_time = time.time() - session['start_time']
+                    else:
+                        continue  # Session not found, skip
+                except Exception as e:
+                    if self.debug_enabled:
+                        log('[WARN]', f"Session idle check failed: {e}")
+                    continue
+
+            # Check if idle timeout exceeded
+            if idle_time >= self.session_idle_timeout:
+                try:
+                    from services.data_db import DataDB
+
+                    # Close current session
+                    DataDB.end_session(current_session)
+                    log('[SESSION]', f"Session {current_session} closed (idle {idle_time/60:.0f} min)")
+
+                    # Broadcast session closed event
+                    if self.websocket:
+                        message = {
+                            'type': 'session_closed',
+                            'session_id': current_session
+                        }
+                        await self.websocket.send(json.dumps(message))
+
+                    # Create new non-validated session immediately
+                    new_session_id = DataDB.create_session()
+                    self.analytics_logger.current_session_id = new_session_id
+                    self.last_delta_t_time = None  # Reset for new session
+
+                    log('[SESSION]', f"Session {new_session_id} started (idle timeout)")
+
+                    # Broadcast session started event
+                    if self.websocket:
+                        message = {
+                            'type': 'session_started',
+                            'session_id': new_session_id
+                        }
+                        await self.websocket.send(json.dumps(message))
+
+                except Exception as e:
+                    log('[WARN]', f"Session rotation failed: {e}")
+
     async def run(self):
         """Main tracking loop with dynamic FPS."""
         self.running = True
@@ -396,6 +474,9 @@ class TrackingDaemon:
 
         # Start backend message listener in parallel
         listener_task = asyncio.create_task(self.listen_backend_messages())
+
+        # Start session idle timeout checker in parallel
+        self.session_idle_check_task = asyncio.create_task(self.check_session_idle())
 
         try:
             while self.running:
