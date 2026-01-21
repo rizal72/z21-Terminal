@@ -789,6 +789,23 @@ git diff config.json  # Should show no changes if normalized
 
 ## 📊 Recent Changes (Last 30 Days)
 
+**2026-01-21** - Session Idle Timeout Completion, Model Fallback, Auto_compensation Disable:
+- ✅ **Session idle timeout remaining time**: Countdown display in logs (debug mode only)
+  - Changed from "idle X min (threshold Y min)" to "idle X min (Z min remaining)"
+  - More useful for monitoring, shows time to timeout instead of fixed threshold
+- ✅ **Session idle checker task cancellation**: Fixed zombie checker on daemon stop
+  - Bug: old checker task not cancelled on page reload → multiple checkers running
+  - Fix: cancel `session_idle_check_task` in finally block (like listener/flush tasks)
+- ✅ **Auto_compensation auto-disable**: When no YOLO model found (FileNotFoundError)
+  - Disables auto_compensation for all consists (requires tracking, persisted to DB)
+  - Virtual Mode still available (does not require tracking, cleaner than DCC mode)
+  - Clear logs: what happened, why, and how to fix (add models to scripts/models/)
+- ✅ **Model fallback**: Automatic .engine → .onnx → .pt with exception handling
+  - Mac with PC's .engine: auto-fallback to .onnx (no CUDA, but 1.5-2x faster than .pt)
+  - Robust: one failing model doesn't crash tracking daemon
+  - If all fail/missing: FileNotFoundError → auto_compensation disabled
+- ✅ **ONNX models on Mac**: Copied from PC (12 MB each, 1.5-2x faster than PyTorch)
+
 **2026-01-21** - Speed Analysis Debug Panel, Weighted Algorithm, Session Idle Timeout:
 - ✅ **Speed Analysis Debug Panel**: Collapsible panel in Speed Table Viewer (purple theme)
   - Shows ALL tested speeds (not just recommendations)
