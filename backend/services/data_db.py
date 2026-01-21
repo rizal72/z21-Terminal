@@ -697,12 +697,14 @@ class DataDB:
         WEIGHT_CURRENT_LOW = 0.2   # Current session weight when < threshold
 
         # Get all unique speeds with delta_t events (for debug panel - show ALL tested speeds)
+        # Exclude speed 0 (stopped locomotives)
         cursor.execute('''
             SELECT DISTINCT json_extract(data, '$.speed') as speed
             FROM events
             WHERE event_type = 'delta_t'
               AND json_extract(data, '$.consist_id') = ?
               AND json_extract(data, '$.speed') IS NOT NULL
+              AND json_extract(data, '$.speed') > 0
         ''', (consist_id,))
 
         all_speeds = [int(row[0]) for row in cursor.fetchall()]
