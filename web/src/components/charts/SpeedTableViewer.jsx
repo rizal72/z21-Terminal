@@ -936,10 +936,10 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                           <span className="text-slate-500">
                             ({Math.round(debugInfo.current_session.weight * 100)}% weight)
                           </span>
-                          <span className="text-red-400 ml-2">
+                          <span className={debugInfo.current_session.critical_count > 0 ? 'text-red-400 ml-2' : 'text-slate-500 ml-2'}>
                             {debugInfo.current_session.critical_count} critical
                           </span>
-                          <span className="text-amber-400 ml-2">
+                          <span className={debugInfo.current_session.warning_count > 0 ? 'text-amber-400 ml-2' : 'text-slate-500 ml-2'}>
                             {debugInfo.current_session.warning_count} warning
                           </span>
                         </div>
@@ -953,10 +953,10 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                           <span className="text-slate-500">
                             ({Math.round(debugInfo.historical.weight * 100)}% weight)
                           </span>
-                          <span className="text-red-400 ml-2">
+                          <span className={debugInfo.historical.critical_count > 0 ? 'text-red-400 ml-2' : 'text-slate-500 ml-2'}>
                             {debugInfo.historical.critical_count} critical
                           </span>
-                          <span className="text-amber-400 ml-2">
+                          <span className={debugInfo.historical.warning_count > 0 ? 'text-amber-400 ml-2' : 'text-slate-500 ml-2'}>
                             {debugInfo.historical.warning_count} warning
                           </span>
                         </div>
