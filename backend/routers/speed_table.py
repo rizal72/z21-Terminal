@@ -154,7 +154,9 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
         'critical_events': critical_events,
         'warning_events': warning_events,
         'recommendations': recommendations,
-        'fixed_count': len(fixed_speeds)  # Number of speeds proven OK in last session
+        'fixed_count': len(fixed_speeds),  # Number of speeds proven OK in last session
+        'recommendation_threshold': recommendation_threshold,  # Threshold used for weighting
+        'debug_info': debug_info  # Current/historical breakdown per speed (for debug UI)
     }
 
 

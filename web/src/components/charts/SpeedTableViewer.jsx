@@ -53,6 +53,26 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
   const [undoing, setUndoing] = useState(false);
   const [reimporting, setReimporting] = useState(false);
 
+  // Debug panel state
+  const [debugEnabled, setDebugEnabled] = useState(false);
+  const [debugPanelOpen, setDebugPanelOpen] = useState(true);
+
+  // Fetch config to check debug mode
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const config = await response.json();
+          setDebugEnabled(config.debug?.enabled || false);
+        }
+      } catch (err) {
+        console.error('Failed to fetch config:', err);
+      }
+    };
+    fetchConfig();
+  }, []);
+
   // Fetch speed table data from API
   const fetchSpeedTableData = async () => {
     if (!consistId) return;
@@ -851,6 +871,130 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
       <div className="flex justify-center gap-1 overflow-x-auto pb-4">
         {bars}
       </div>
+
+      {/* Speed Analysis Debug Panel (only if debug enabled) */}
+      {debugEnabled && data.debug_info && Object.keys(data.debug_info).length > 0 && (
+        <div className="bg-purple-900/20 border border-purple-700 rounded-lg overflow-hidden">
+          {/* Collapsible Header */}
+          <button
+            onClick={() => setDebugPanelOpen(!debugPanelOpen)}
+            className="w-full flex items-center justify-between p-4 hover:bg-purple-900/30 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <i className={`fa-solid fa-chart-line text-purple-400 text-lg`}></i>
+              <h3 className="text-white font-semibold text-lg">Speed Analysis Debug</h3>
+              <span className="px-2 py-1 text-xs bg-purple-600 text-white rounded">
+                {Object.keys(data.debug_info).length} speeds analyzed
+              </span>
+            </div>
+            <i className={`fa-solid fa-chevron-${debugPanelOpen ? 'up' : 'down'} text-purple-400`}></i>
+          </button>
+
+          {/* Debug Content */}
+          {debugPanelOpen && (
+            <div className="p-4 pt-0 space-y-3">
+              {/* Header Info */}
+              <div className="text-xs text-slate-400 flex items-center gap-4 border-b border-purple-700/50 pb-2">
+                <span>Consist {data.consist_id}</span>
+                <span>Session: {data.session_id || 'None'}</span>
+                <span>Threshold: {data.recommendation_threshold || 10} events</span>
+              </div>
+
+              {/* Speed Analysis Rows */}
+              <div className="space-y-3">
+                {Object.entries(data.debug_info)
+                  .sort(([speedA], [speedB]) => parseInt(speedA) - parseInt(speedB))
+                  .map(([speed, debugInfo]) => {
+                    const hasRecommendation = data.recommendations?.some(r => r.speed === parseInt(speed));
+                    const meetsThreshold = debugInfo.weighted_result?.meets_threshold;
+
+                    return (
+                      <div key={speed} className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                        {/* Speed Header */}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-mono text-white font-semibold">Speed {speed}</span>
+                          <div className="flex items-center gap-2 text-xs">
+                            {meetsThreshold && (
+                              <span className="px-2 py-0.5 bg-green-600 text-white rounded">
+                                Meets threshold
+                              </span>
+                            )}
+                            {hasRecommendation && (
+                              <span className="px-2 py-0.5 bg-amber-600 text-white rounded">
+                                Has recommendation
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Current Session Stats */}
+                        <div className="text-xs text-slate-300 mb-1">
+                          <span className="text-blue-400 font-semibold">Current:</span>{' '}
+                          {debugInfo.current_session.count} events, Δt{' '}
+                          {debugInfo.current_session.mean_delta_t >= 0 ? '+' : ''}
+                          {debugInfo.current_session.mean_delta_t.toFixed(2)}s{' '}
+                          <span className="text-slate-500">
+                            ({Math.round(debugInfo.current_session.weight * 100)}% weight)
+                          </span>
+                          {debugInfo.current_session.critical_count > 0 && (
+                            <span className="text-red-400 ml-2">
+                              {debugInfo.current_session.critical_count} critical
+                            </span>
+                          )}
+                          {debugInfo.current_session.warning_count > 0 && (
+                            <span className="text-amber-400 ml-2">
+                              {debugInfo.current_session.warning_count} warning
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Historical Stats */}
+                        <div className="text-xs text-slate-300 mb-1">
+                          <span className="text-green-400 font-semibold">Historical:</span>{' '}
+                          {debugInfo.historical.count} events, Δt{' '}
+                          {debugInfo.historical.mean_delta_t >= 0 ? '+' : ''}
+                          {debugInfo.historical.mean_delta_t.toFixed(2)}s{' '}
+                          <span className="text-slate-500">
+                            ({Math.round(debugInfo.historical.weight * 100)}% weight)
+                          </span>
+                          {debugInfo.historical.critical_count > 0 && (
+                            <span className="text-red-400 ml-2">
+                              {debugInfo.historical.critical_count} critical
+                            </span>
+                          )}
+                          {debugInfo.historical.warning_count > 0 && (
+                            <span className="text-amber-400 ml-2">
+                              {debugInfo.historical.warning_count} warning
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Weighted Result */}
+                        <div className="text-xs mt-2 pt-2 border-t border-slate-700">
+                          <span className="text-purple-400 font-semibold">→ Weighted:</span>{' '}
+                          <span className={`font-mono ${debugInfo.weighted_result.mean_delta_t < 0 ? 'text-blue-400' : 'text-amber-400'}`}>
+                            Δt {debugInfo.weighted_result.mean_delta_t >= 0 ? '+' : ''}
+                            {debugInfo.weighted_result.mean_delta_t.toFixed(2)}s
+                          </span>
+                          {!meetsThreshold && debugInfo.current_session.count > 0 && (
+                            <span className="text-slate-500 ml-2">
+                              (below threshold, historical weighted)
+                            </span>
+                          )}
+                          {debugInfo.current_session.count === 0 && (
+                            <span className="text-slate-500 ml-2">
+                              (no current data)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* CV Recommendations (below chart) */}
       {data.recommendations && data.recommendations.length > 0 ? (
