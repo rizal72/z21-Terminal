@@ -29,6 +29,9 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
   const [vhigh, setVhigh] = useState(null);
   const [decoderType, setDecoderType] = useState('nmra_standard');
 
+  // CV modification timestamps (step → Unix timestamp, for green border indicator)
+  const [cvTimestamps, setCvTimestamps] = useState({});
+
   // Vstart/Vhigh editing state (ESU only)
   const [editingVstart, setEditingVstart] = useState(false);
   const [editingVstartValue, setEditingVstartValue] = useState('');
@@ -98,6 +101,9 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
       setVstart(result.vstart);
       setVhigh(result.vhigh);
       setDecoderType(result.decoder_type || 'nmra_standard');
+
+      // Set CV modification timestamps (for green border indicator)
+      setCvTimestamps(result.cv_timestamps || {});
     } catch (err) {
       console.error('Speed table fetch error:', err);
       setError(err.message);
@@ -528,12 +534,17 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     // Check if this CV was modified (manual edit or applied recommendation)
     const isModified = data.cv_values && cvValueFloat !== data.cv_values[cvIndex];
 
+    // Check if this CV has been modified via web UI (persistent, from DB)
+    const cvTimestamp = cvTimestamps[step] || 0;
+    const isPersistentlyModified = cvTimestamp > 0;
+
     // ESU decoder: step 1 and 28 are read-only (fixed at 1 and 255)
     const isStepEditable = decoderType === 'esu_mfx' ? (step !== 1 && step !== 28) : true;
 
     // Border/fill color based on severity (priority: read-only > CRITICAL > modified > default)
     let borderColor = 'border-slate-600'; // Default
     let fillColor = 'bg-slate-600'; // Default
+    let leftBorderClass = ''; // Green left border for persistent modifications
 
     if (!isStepEditable) {
       // ESU read-only steps (grey)
@@ -551,6 +562,11 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     } else if (isModified) {
       // Modified (no CRITICAL) shows blue border
       borderColor = 'border-blue-400';
+    }
+
+    // Green left border if CV was modified via web UI (persistent state)
+    if (isPersistentlyModified && isStepEditable) {
+      leftBorderClass = 'border-l-2 border-l-green-500';
     }
 
     const percentLabel = getPercentLabel(step);
@@ -611,13 +627,13 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
 
         {/* Vertical Bar */}
         <div
-          className={`relative w-8 h-64 border-2 ${borderColor} rounded-sm bg-slate-800 ${
+          className={`relative w-8 h-64 border-2 ${borderColor} ${leftBorderClass} rounded-sm bg-slate-800 ${
             isStepEditable && isCheckpoint && !isEditing ? 'cursor-pointer' : ''
           }`}
           title={
             !isStepEditable
               ? `Step ${step} - CV${cvIndex} = ${cvValue} (read-only for ESU)`
-              : `Step ${step} - CV${cvIndex} = ${cvValue}${hasRecommendation ? ` (${recommendation.critical_count} critical)` : ''}`
+              : `Step ${step} - CV${cvIndex} = ${cvValue}${hasRecommendation ? ` (${recommendation.critical_count} critical)` : ''}${isPersistentlyModified ? ' [Modified]' : ''}`
           }
           onClick={() => isStepEditable && isCheckpoint && !isEditing && startEditing(step)}
         >
@@ -658,7 +674,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
           <div className="text-sm text-slate-400">Adjust Locomotive</div>
           <div className="text-xl font-bold text-white mt-1">
@@ -677,15 +693,8 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
             CV adjustments needed
           </div>
         </div>
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-green-700/50">
-          <div className="text-sm text-slate-400">Fixed Speeds</div>
-          <div className="text-3xl font-bold text-green-400 mt-1">
-            {data.fixed_count || 0}
-          </div>
-          <div className="text-xs text-slate-500 mt-1">
-            Proven OK recently
-          </div>
-        </div>
+        {/* Fixed Speeds card removed (2026-01-22): Redundant with per-CV filtering */}
+        {/* Recommendations disappear after CV write, implicit "fixed" when not reappearing */}
       </div>
 
       {/* ESU Decoder - Vstart/Vhigh Panel (only for ESU) */}
@@ -845,6 +854,9 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           >
             <i className={`fa-solid ${undoing ? 'fa-spinner fa-spin' : 'fa-undo'}`}></i>
           </button>
+          {/* Re-import button DEPRECATED (2026-01-22) - Hidden from UI, backend code preserved */}
+          {/* JMRI used ONLY for initial new locomotive setup via scripts/import_single_locomotive.py */}
+          {/*
           <button
             onClick={handleReimport}
             disabled={reimporting}
@@ -853,6 +865,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
           >
             <i className={`fa-solid ${reimporting ? 'fa-spinner fa-spin' : 'fa-sync'}`}></i>
           </button>
+          */}
         </div>
       </div>
 

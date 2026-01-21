@@ -424,8 +424,17 @@ def undo_cv_speed_table(loco_address: int) -> Optional[Dict[int, int]]:
         WHERE loco_address=?
     """, (*new_values, current_values_json, loco_address))
 
+    # Reset cv_modification_timestamps to 0 (removes green border indicator)
+    cursor.execute("""
+        UPDATE cv_modification_timestamps
+        SET cv_last_modified = 0
+        WHERE loco_address = ?
+    """, (loco_address,))
+
     conn.commit()
     conn.close()
+
+    log('[SPEED-TABLE]', f"Loco {loco_address}: CV timestamps reset to 0 (green border removed)")
 
     return previous_values
 

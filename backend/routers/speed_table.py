@@ -146,6 +146,17 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
         debug_info=debug_info
     )
 
+    # Load cv_timestamps for green border indicator (persistent modification state)
+    conn = DataDB.get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT step, cv_last_modified
+        FROM cv_modification_timestamps
+        WHERE loco_address = ?
+    ''', (adjust_loco_address,))
+    cv_timestamps = {row[0]: row[1] for row in cursor.fetchall()}
+    conn.close()
+
     return {
         'consist_id': consist_id,
         'adjust_loco_address': adjust_loco_address,
@@ -161,7 +172,8 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
         'recommendations': recommendations,
         'fixed_count': len(fixed_speeds),  # Number of speeds proven OK in last session
         'recommendation_threshold': recommendation_threshold,  # Threshold used for weighting
-        'debug_info': debug_info  # Current/historical breakdown per speed (for debug UI)
+        'debug_info': debug_info,  # Current/historical breakdown per speed (for debug UI)
+        'cv_timestamps': cv_timestamps  # Per-CV modification timestamps (step → Unix timestamp)
     }
 
 
@@ -271,6 +283,25 @@ async def write_speed_table_to_decoder(
 
         if db_success:
             log('[SPEED-TABLE]', f"Database updated for loco {adjust_loco_address} (undo snapshot saved)")
+
+            # Update cv_modification_timestamps for all written CVs (green border indicator)
+            conn = DataDB.get_connection()
+            cursor = conn.cursor()
+            current_timestamp = time.time()
+
+            for cv_index in range(67, 95):  # CV67-94
+                step = cv_index - 66  # CV67 → step 1, CV94 → step 28
+                new_value = cv_values_int.get(cv_index)
+                if new_value is not None:
+                    cursor.execute('''
+                        UPDATE cv_modification_timestamps
+                        SET cv_last_modified = ?
+                        WHERE loco_address = ? AND step = ?
+                    ''', (current_timestamp, adjust_loco_address, step))
+
+            conn.commit()
+            conn.close()
+            log('[SPEED-TABLE]', f"CV modification timestamps updated for loco {adjust_loco_address}")
         else:
             log('[ERROR]', f"Failed to update database for loco {adjust_loco_address}")
     else:

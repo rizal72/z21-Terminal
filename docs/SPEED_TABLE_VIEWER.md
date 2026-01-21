@@ -10,9 +10,9 @@
 - ✅ Interactive CV editing with checkpoint interpolation
 - ✅ Direct CV write to decoder via Z21 POM
 - ✅ CV67-94 stored in database (data.db - locomotive_speed_table table)
-- ✅ Undo support (1-level, restore previous values)
-- ✅ Re-import from JMRI roster (manual sync when needed)
-- ✅ Backward compatible (JMRI roster fallback)
+- ✅ Undo support (1-level, restore previous values, green border persists)
+- ✅ Green border indicator for modified CVs (persistent, cv_last_modified > 0)
+- ~~Re-import from JMRI roster~~ (DEPRECATED 2026-01-22, hidden from UI)
 
 ---
 
