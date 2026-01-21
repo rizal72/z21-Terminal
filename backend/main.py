@@ -20,7 +20,7 @@ from tracking_manager import TrackingManager
 import video_feed as video_feed_module
 from video_feed import generate_video_frames
 from config_loader import load_config, save_config, get_config_path
-from log_colors import log, colorize_status, enable_auto_coloring
+from log_colors import log, colorize_status, enable_auto_coloring, STATUS_YELLOW, RESET
 from services.data_db import DataDB
 from services.broadcast import (
     init_broadcast_service,
@@ -184,6 +184,12 @@ async def lifespan(app: FastAPI):
 
     # Load debug mode configuration FIRST
     debug_enabled = ConfigManager.get_debug_enabled()
+
+    # Log debug mode status (colored ENABLED/DISABLED for visibility)
+    if debug_enabled:
+        log('[INIT]', f"Debug mode: {STATUS_YELLOW}ENABLED{RESET} (verbose logging)")
+    else:
+        log('[INIT]', f"Debug mode: {STATUS_YELLOW}DISABLED{RESET} (only connections, dT updates, and speed corrections)")
 
     # Load timing thresholds from config.json
     log('[INIT]', f"Loading timing thresholds from config.json...")

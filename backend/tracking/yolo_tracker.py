@@ -174,12 +174,6 @@ class YOLOTracker:
         debug_config = config.get('debug', {'enabled': False})
         self.debug_enabled = debug_config.get('enabled', False)
 
-        # Log debug mode status
-        if self.debug_enabled:
-            log('[INIT]', "Debug mode: ENABLED (verbose logging)")
-        else:
-            log('[INIT]', "Debug mode: DISABLED (only connections, dT updates, and speed corrections)")
-
         # Auto-detect model path if not provided (based on yolo_obb flag)
         if model_path is None:
             tracking_config = config.get('tracking', {})
