@@ -712,6 +712,10 @@ class DataDB:
 
         all_speeds = [int(row[0]) for row in cursor.fetchall()]
 
+        # Debug logging
+        print(f"[DEBUG] get_critical_events_by_speed: consist_id={consist_id}, current_session_id={current_session_id}")
+        print(f"[DEBUG] Found {len(all_speeds)} unique speeds: {all_speeds}")
+
         # Filter speeds with CRITICAL/WARNING for recommendations
         speeds_with_issues = []
         for speed in all_speeds:
