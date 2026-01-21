@@ -61,7 +61,7 @@
       "name": "Gate 1",
       "center": [
         995,
-        27
+        49
       ],
       "width": 65,
       "height": 43,
@@ -76,8 +76,8 @@
       "id": 2,
       "name": "Gate 2",
       "center": [
-        10,
-        269
+        14,
+        295
       ],
       "width": 44,
       "height": 47,
@@ -92,12 +92,12 @@
       "id": 3,
       "name": "Gate 3",
       "center": [
-        1086,
-        326
+        229,
+        540
       ],
-      "width": 80,
-      "height": 80,
-      "angle": 300,
+      "width": 65,
+      "height": 68,
+      "angle": 319,
       "color": [
         0,
         255,
@@ -108,12 +108,12 @@
       "id": 4,
       "name": "Gate 4",
       "center": [
-        479,
-        29
+        1148,
+        169
       ],
-      "width": 50,
-      "height": 50,
-      "angle": 0,
+      "width": 65,
+      "height": 61,
+      "angle": -35,
       "color": [
         0,
         255,
