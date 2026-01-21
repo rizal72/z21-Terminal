@@ -817,20 +817,20 @@ class DataDB:
             # Calculate weighted results
             total_count = current_stats['count'] + historical_stats['count']
 
+            # Weighted mean delta_t (default 0 if no data)
+            weighted_mean_dt = 0.0
+            weighted_critical = 0.0
+            weighted_warning = 0.0
+
             if total_count > 0:
-                # Weighted mean delta_t
                 weighted_mean_dt = (
                     current_stats['mean_delta_t'] * current_stats['weight'] +
                     historical_stats['mean_delta_t'] * historical_stats['weight']
                 )
-
-                # Weighted CRITICAL count
                 weighted_critical = (
                     current_stats['critical_count'] * current_stats['weight'] +
                     historical_stats['critical_count'] * historical_stats['weight']
                 )
-
-                # Weighted WARNING count
                 weighted_warning = (
                     current_stats['warning_count'] * current_stats['weight'] +
                     historical_stats['warning_count'] * historical_stats['weight']
@@ -842,17 +842,17 @@ class DataDB:
                     results['critical'][speed] = int(round(weighted_critical))
                     results['warning'][speed] = int(round(weighted_warning))
 
-                # Store debug info (ALWAYS - for ALL tested speeds, even OK ones)
-                results['debug_info'][speed] = {
-                    'current_session': current_stats,
-                    'historical': historical_stats,
-                    'weighted_result': {
-                        'mean_delta_t': weighted_mean_dt,
-                        'critical_count': weighted_critical,
-                        'warning_count': weighted_warning,
-                        'meets_threshold': current_stats['count'] >= recommendation_threshold
-                    }
+            # Store debug info (ALWAYS - for ALL tested speeds, even with 0 events)
+            results['debug_info'][speed] = {
+                'current_session': current_stats,
+                'historical': historical_stats,
+                'weighted_result': {
+                    'mean_delta_t': weighted_mean_dt,
+                    'critical_count': weighted_critical,
+                    'warning_count': weighted_warning,
+                    'meets_threshold': current_stats['count'] >= recommendation_threshold
                 }
+            }
 
         # Fixed speeds detection (use original logic, but check most recent session)
         for speed in results['critical'].keys():
