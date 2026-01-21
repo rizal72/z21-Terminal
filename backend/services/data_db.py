@@ -683,15 +683,6 @@ class DataDB:
         conn = DataDB.get_connection()
         cursor = conn.cursor()
 
-        # Load consist config to get adjust_loco address (for CV modification filtering)
-        import sys
-        from pathlib import Path
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-        from config_loader import load_config
-        config = load_config()
-        consist_config = config.get('consists', {}).get(str(consist_id), {})
-        adjust_loco_address = consist_config.get('adjust_loco')
-
         # Initialize results
         results = {
             'critical': {},
@@ -700,6 +691,10 @@ class DataDB:
             'fixed_speeds': set(),
             'debug_info': {}
         }
+
+        # Weighting constants (80/20 split when threshold met, 20/80 otherwise)
+        WEIGHT_CURRENT_HIGH = 0.8  # Current session weight when >= threshold
+        WEIGHT_CURRENT_LOW = 0.2   # Current session weight when < threshold
 
         # Get all unique speeds with delta_t events (for debug panel - show ALL tested speeds)
         cursor.execute('''
@@ -728,34 +723,17 @@ class DataDB:
 
         # For each speed, calculate weighted stats
         for speed in all_speeds:
-            # Get CV modification timestamp for adjust loco (if any)
-            # Note: last_modified applies to entire speed table row (all CVs)
-            cv_last_modified = None
-
-            if adjust_loco_address:
-                cursor.execute('''
-                    SELECT last_modified
-                    FROM locomotive_speed_table
-                    WHERE loco_address = ?
-                ''', (adjust_loco_address,))
-                cv_row = cursor.fetchone()
-                if cv_row and cv_row[0]:
-                    # Convert datetime string to Unix timestamp for comparison with events.timestamp
-                    from datetime import datetime
-                    cv_last_modified_str = cv_row[0]
-                    cv_last_modified = datetime.fromisoformat(cv_last_modified_str).timestamp()
-
             # Query current session events (if session active)
             current_stats = {
                 'count': 0,
                 'mean_delta_t': 0.0,
                 'critical_count': 0,
                 'warning_count': 0,
-                'weight': 0.3  # Default low weight
+                'weight': WEIGHT_CURRENT_LOW  # Default low weight
             }
 
             if current_session_id:
-                query = '''
+                cursor.execute('''
                     SELECT
                         COUNT(*) as count,
                         AVG(json_extract(data, '$.delta_t')) as mean_delta_t,
@@ -766,15 +744,8 @@ class DataDB:
                       AND json_extract(data, '$.consist_id') = ?
                       AND session_id = ?
                       AND json_extract(data, '$.speed') = ?
-                '''
-                params = [consist_id, current_session_id, speed]
+                ''', (consist_id, current_session_id, speed))
 
-                # Filter by CV modification if exists
-                if cv_last_modified:
-                    query += ' AND timestamp >= ?'
-                    params.append(cv_last_modified)
-
-                cursor.execute(query, params)
                 row = cursor.fetchone()
 
                 if row and row[0] > 0:
@@ -783,11 +754,11 @@ class DataDB:
                     current_stats['critical_count'] = row[2] or 0
                     current_stats['warning_count'] = row[3] or 0
 
-                    # Determine weight: >= threshold → 70%, else 30%
+                    # Determine weight based on threshold
                     if current_stats['count'] >= recommendation_threshold:
-                        current_stats['weight'] = 0.7
+                        current_stats['weight'] = WEIGHT_CURRENT_HIGH
                     else:
-                        current_stats['weight'] = 0.3
+                        current_stats['weight'] = WEIGHT_CURRENT_LOW
 
             # Query historical events (last 5 sessions, excluding current)
             historical_stats = {
@@ -834,11 +805,6 @@ class DataDB:
                 '''
                 params_hist = [consist_id] + historical_sessions + [speed]
 
-                # Filter by CV modification if exists
-                if cv_last_modified:
-                    query_hist += ' AND timestamp >= ?'
-                    params_hist.append(cv_last_modified)
-
                 cursor.execute(query_hist, params_hist)
                 row = cursor.fetchone()
 
@@ -884,8 +850,7 @@ class DataDB:
                         'mean_delta_t': weighted_mean_dt,
                         'critical_count': weighted_critical,
                         'warning_count': weighted_warning,
-                        'meets_threshold': current_stats['count'] >= recommendation_threshold,
-                        'cv_last_modified': cv_last_modified
+                        'meets_threshold': current_stats['count'] >= recommendation_threshold
                     }
                 }
 
