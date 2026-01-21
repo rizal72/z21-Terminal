@@ -10,6 +10,7 @@
  * - Duplicate Y-axis in Current mode (visible when scrolled)
  * - Dynamic width calculation (Current: per-event, Overview: 100%)
  * - Auto-scroll support via ref prop
+ * - Day boundary markers in Current mode (vertical amber lines with "DD MMM" labels)
  */
 
 import React, { useMemo } from 'react';
@@ -100,6 +101,48 @@ const DeltaTChart = ({
   const chartWidth = useMemo(() => {
     return viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
   }, [chartData.length, viewMode]);
+
+  // Calculate day boundaries for Current mode (vertical lines at day changes)
+  const dayBoundaries = useMemo(() => {
+    if (viewMode !== 'current' || chartData.length === 0) return [];
+
+    const boundaries = [];
+    let previousDate = null;
+
+    chartData.forEach((point) => {
+      const date = new Date(point.timestamp * 1000);
+      const dateStr = date.toLocaleDateString('en-US', { day: '2-digit', month: 'short' }); // "21 Jan"
+
+      // Check if day changed
+      const currentDay = date.getDate();
+      const currentMonth = date.getMonth();
+      const currentYear = date.getFullYear();
+
+      if (previousDate) {
+        const prevDay = previousDate.getDate();
+        const prevMonth = previousDate.getMonth();
+        const prevYear = previousDate.getFullYear();
+
+        if (currentDay !== prevDay || currentMonth !== prevMonth || currentYear !== prevYear) {
+          // Day boundary found!
+          boundaries.push({
+            x: point.time, // HH:MM:SS format (X-axis value in Current mode)
+            label: dateStr  // "21 Jan"
+          });
+        }
+      } else {
+        // First point - always show the date
+        boundaries.push({
+          x: point.time,
+          label: dateStr
+        });
+      }
+
+      previousDate = date;
+    });
+
+    return boundaries;
+  }, [chartData, viewMode]);
 
   if (chartData.length === 0) return null;
 
@@ -208,6 +251,24 @@ const DeltaTChart = ({
                 <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.warning || 1.0)} stroke="#f59e0b" strokeDasharray="3 3" />
                 <ReferenceLine yAxisId="left" y={trackingConfig.timing_thresholds?.critical || 1.5} stroke="#ef4444" strokeDasharray="3 3" />
                 <ReferenceLine yAxisId="left" y={-(trackingConfig.timing_thresholds?.critical || 1.5)} stroke="#ef4444" strokeDasharray="3 3" />
+
+                {/* Day boundary markers - Current mode only */}
+                {viewMode === 'current' && dayBoundaries.map((boundary, idx) => (
+                  <ReferenceLine
+                    key={`day-${idx}`}
+                    x={boundary.x}
+                    stroke="#f59e0b"
+                    strokeWidth={1.5}
+                    strokeDasharray="5 5"
+                    label={{
+                      value: boundary.label,
+                      position: 'top',
+                      fill: '#f59e0b',
+                      fontSize: 12,
+                      fontWeight: 'bold'
+                    }}
+                  />
+                ))}
 
                 {/* Dynamic lines: simple or segmented based on showSessionBreaks */}
                 {Object.keys(trackingConfig.consists || {})
