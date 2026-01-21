@@ -789,135 +789,31 @@ git diff config.json  # Should show no changes if normalized
 
 ## 📊 Recent Changes (Last 30 Days)
 
-**2026-01-21** - Per-CV Timestamp Filtering DB Schema + Settings UI Bug Fix:
-- ✅ **cv_modification_timestamps table**: New table for per-CV tracking (196 rows: 7 locos × 28 steps)
-  - Track last_modified timestamp for each CV independently (CV67-94)
-  - Filter delta_t events by CV modification time (ignore old data after CV write)
-  - Recommendations disappear immediately after "Apply & Write" to decoder
-  - Reappear only if new tests (after modification) are still CRITICAL
-- ✅ **Settings UI bug fix**: Consist Manager now shows correct recommendation_threshold
-  - Bug: C10 displayed 10 instead of 5 from config.json
-  - Fix: Use `trackingAssignments` (config data) instead of `consists` (runtime state) for config fields
-  - API returns two objects: `consists` (runtime) + `tracking_assignments` (config)
-- 📄 Docs: DATABASE_SCHEMA.md updated with cv_modification_timestamps table reference
-- 📄 Commits: `390e465` (per-CV filtering) → `b175ca9` (import fix) → `c6a0369` (UI fix) → `5367e4f` (DB schema)
+**2026-01-21** - Per-CV Timestamp Filtering + Settings UI Fix:
+- ✅ **cv_modification_timestamps table**: Per-CV tracking (196 rows: 7 locos × 28 steps), recommendations disappear after CV write
+- ✅ **Settings UI bug**: Fixed Consist Manager recommendation_threshold display (C10: 5 not 10)
+- 📄 Docs: DATABASE_SCHEMA.md, SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md, SPEED_TABLE_VIEWER.md
 
-**2026-01-21** - Analytics Chart UX Improvements (Date Display + Speed in Tooltip):
-- ✅ **CustomXAxisTick for date display**: Shows date in amber when day changes, time otherwise
-  - X-axis labels: "21 Jan" (amber, bold) at start of day or day change, "18:05" (normal) for other ticks
-  - First event always shows date for immediate context
-  - Current mode only (no downsampling, reliable tick logic)
-  - Solves 7 previous failed attempts (tick sampling issue was due to Overview downsampling)
-- ✅ **Speed field in tooltip**: Format "88 (70%)" - DCC raw value + percentage
-  - Backend fix: `get_delta_t_events()` now extracts `speed` from JSON data
-  - Frontend: Added `speed` field to chart data preparation (both fast/slow path)
-  - Tooltip simplified: removed time display (already on X-axis), shows only Δt, status, gate, speed
-- 📄 Commits: `378055c` (backend speed fix) → `6162f1a` (cleanup) → `9903a8c` (CustomXAxisTick)
+**2026-01-21** - Analytics Chart UX (Date Display + Speed Tooltip):
+- ✅ **CustomXAxisTick**: Shows date (amber) on day change, time otherwise (Current mode)
+- ✅ **Speed in tooltip**: Format "88 (70%)" - DCC raw + percentage
+- 📄 Backend fix: `get_delta_t_events()` extracts speed from JSON
 
-**2026-01-21** - Session Idle Timeout Completion, Model Fallback, Auto_compensation Disable:
-- ✅ **Session idle timeout remaining time**: Countdown display in logs (debug mode only)
-  - Changed from "idle X min (threshold Y min)" to "idle X min (Z min remaining)"
-  - More useful for monitoring, shows time to timeout instead of fixed threshold
-- ✅ **Session idle checker task cancellation**: Fixed zombie checker on daemon stop
-  - Bug: old checker task not cancelled on page reload → multiple checkers running
-  - Fix: cancel `session_idle_check_task` in finally block (like listener/flush tasks)
+**2026-01-21** - Session Idle Timeout + Model Fallback:
+- ✅ **Session idle timeout**: Auto-close after N min without movement (default 30, config: `analytics.session_idle_timeout_minutes`)
+- ✅ **Model fallback**: .engine → .onnx → .pt with graceful error handling
 - ✅ **Auto_compensation auto-disable**: When no YOLO model found (FileNotFoundError)
-  - Disables auto_compensation for all consists (requires tracking, persisted to DB)
-  - Virtual Mode still available (does not require tracking, cleaner than DCC mode)
-  - Clear logs: what happened, why, and how to fix (add models to scripts/models/)
-- ✅ **Model fallback**: Automatic .engine → .onnx → .pt with exception handling
-  - Mac with PC's .engine: auto-fallback to .onnx (no CUDA, but 1.5-2x faster than .pt)
-  - Robust: one failing model doesn't crash tracking daemon
-  - If all fail/missing: FileNotFoundError → auto_compensation disabled
-- ✅ **ONNX models on Mac**: Copied from PC (12 MB each, 1.5-2x faster than PyTorch)
 
-**2026-01-21** - Speed Analysis Debug Panel, Weighted Algorithm, Session Idle Timeout:
-- ✅ **Speed Analysis Debug Panel**: Collapsible panel in Speed Table Viewer (purple theme)
-  - Shows ALL tested speeds (not just recommendations)
-  - Current/Historical/Weighted breakdown per speed
-  - Critical/warning count always visible: colored (red/amber) if >0, grey if =0
-  - Excludes speed 0 (stopped locomotives)
-  - Visible only when `debug.enabled=true`
-  - Open by default but collapsible, positioned after speed table
-- ✅ **Debug mode as local-only setting**: Like camera credentials
-  - `config.json` always has `debug.enabled=false` (committed default)
-  - `config.local.json` stores local override (gitignored)
-  - Settings UI saves to config.local.json (preserves local overrides)
-- ✅ **Debug mode log unification**:
-  - Moved from yolo_tracker.py to main.py (application-wide)
-  - ENABLED/DISABLED colored in yellow (STATUS_YELLOW) for high visibility
-  - Appears immediately at backend startup
-- ✅ **Session idle timeout**: Auto-close after N min without movement (config: `analytics.session_idle_timeout_minutes`, default 30)
-  - Continuous movement = 1 session, long pauses = new session
-  - Prevents zombie sessions, accurate session duration
-  - Settings UI: Analytics tab (5-120 min, backend restart required)
-  - Periodic check logs every 60s (debug mode only), close/open logs always visible
-  - Architecture: `analytics_logger.close_session()` + new `AnalyticsLogger()`, updates global reference
-- ✅ **Weighted algorithm improvements**:
-  - **Removed CV modification filter**: Was per-locomotive (not per-CV), too aggressive
-  - **Changed weights to 80/20**: From 70/30 (more reactive to corrections)
-  - **Weight constants**: `WEIGHT_CURRENT_HIGH = 0.8`, `WEIGHT_CURRENT_LOW = 0.2`
-  - **Rationale**: Weighted logic + last 5 sessions sufficient without CV filter
-- ✅ **Critical fixes**:
-  - Fixed `cv_last_modified` timestamp comparison bug (string vs Unix timestamp)
-  - Fixed `get_validated_sessions()` to filter by consist_id
-  - Fixed debug_info population for ALL speeds (even with total_count=0)
-  - Fixed speed 0 exclusion in query (stopped locomotives)
-  - Validated session fix: Speed Table uses latest validated session (not non-validated current)
-- ✅ **Database debugging pattern**: Added to z21-deployment skill (PC → Mac copy workflow)
-- 📄 Docs: Updated SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md (two-stage system, 80/20 weights), z21-deployment skill
+**2026-01-21** - Speed Analysis Debug Panel:
+- ✅ **Debug panel**: Collapsible panel (purple theme) shows ALL tested speeds with Current/Historical/Weighted breakdown
+- ✅ **Debug mode**: Local-only setting (config.local.json, gitignored)
+- ✅ **Weighted algorithm**: Changed to 80/20 weights (from 70/30), more reactive
 
-**2026-01-20** - Weighted Speed Table Recommendations:
-- ✅ Algorithm: 2-stage weighted averaging (session split + weighted mean, CV filter removed 2026-01-21)
-- ✅ Config: recommendation_threshold per consist (C10: 5 asymmetric, C11: 10 symmetric)
-- ✅ Backend: Complete refactor of get_critical_events_by_speed() (230 lines)
-- ✅ Weight logic: Current session >= threshold → 70%, else 30% (historical complementary)
-- ✅ CV modification filtering: Ignore events before last CV write
-- ✅ UI: Inline breakdown under each recommendation (always visible)
-- ✅ Example: "┗━ Current: 12 events, Δt +1.5s (70%) | Historical: 45 events, Δt -0.3s (30%)"
-- 📄 Docs: SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md
-
-**2026-01-20** - CV3/CV4 Editor:
-- ✅ Settings UI: Inline editor for CV3 (Acceleration) and CV4 (Deceleration)
-- ✅ Compact design in Locomotives tab, before Functions list
-- ✅ Values saved to config.json, applied on hotkey T toggle
-- 📄 Docs: CV3_CV4_EDITOR.md
-
-**2026-01-20** - ESU mfx Decoder Support:
-- ✅ Database: Added vstart/vhigh/decoder_type columns to locomotive_speed_table
-- ✅ Backend: ESU decoder detection, CV67/CV94 write validation (read-only for ESU)
-- ✅ API: New endpoint POST /api/speed-table/write-vstart-vhigh (CV2/CV5 for ESU)
-- ✅ Frontend: Grey out step 1/28 for ESU, Vstart/Vhigh panel (ESU only)
-- ✅ Migration: ONE-SHOT script migrated 7 locomotives (5 ESU, 2 NMRA)
-- 📄 Docs: SPEED_TABLE_DECODER_BEHAVIOR.md
-
-**v1.0.0** (2026-01-17) - JMRI Independence Achieved:
-- ✅ Speed tables CV67-94 migrated to database (`locomotive_speed_table` table)
-- ✅ Function labels F0-F28 moved to config.json (editable via Settings UI)
-- ✅ Locomotive metadata unified in config.json (name, decoder, color, notes)
-- ✅ Complete consist CRUD via web UI (Consist Manager)
-- ✅ JMRI now optional (only for initial setup)
-
-**2026-01-20** - Database Schema Documentation:
-- ✅ Complete DATABASE_SCHEMA.md reference (tables, queries, event types)
-- ✅ Camera config cleanup (camera_config.json → config.local.json)
-- ✅ Database outlier cleanup (removed 3 false positive Δt events)
-
-**2026-01-19** - Analytics Configuration:
-- ✅ Configurable `max_chart_events` (100-2000, default 500)
-- ✅ Settings UI: Analytics tab for performance tuning
-- ✅ Config reorganization (sections reordered to match UI flow)
-- ✅ Locomotives sorted by ID (1,2,4,5,6,7,8)
-
-**2026-01-18** - Timing Thresholds Refactoring:
-- ✅ Renamed `normal` → `warning` (1.0s), `warning` → `critical` (1.5s)
-- ✅ Consistent 3-level system: SYNCED (<1.0s), WARNING (≥1.0s), CRITICAL (≥1.5s)
-
-**2026-01-14** - Analytics Dashboard:
-- ✅ Session tracking with lifecycle management
-- ✅ Δt trends chart (Current vs Overview views)
-- ✅ YOLO performance monitoring (FPS + confidence)
-- ✅ Locomotive operating time tracking
+**2026-01-20** - Speed Table Features (3 Major Updates):
+- ✅ **Weighted Recommendations**: 2-stage algorithm, per-consist thresholds (C10: 5, C11: 10), inline UI breakdown
+- ✅ **CV3/CV4 Editor**: Acceleration/Deceleration inline editor (Settings → Locomotives)
+- ✅ **ESU mfx Support**: Vstart/Vhigh (CV2/CV5) editor, step 1/28 read-only validation
+- 📄 Docs: SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md, CV3_CV4_EDITOR.md, SPEED_TABLE_DECODER_BEHAVIOR.md
 
 **Complete history**: See [docs/CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md)
 

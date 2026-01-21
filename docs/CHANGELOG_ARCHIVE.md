@@ -33,6 +33,38 @@ For recent changes, see main CLAUDE.md file.
 
 ---
 
+## Changelog 2026-01-14 to 2026-01-19
+
+**v1.0.0** (2026-01-17) - JMRI Independence Achieved:
+- ✅ Speed tables CV67-94 migrated to database (`locomotive_speed_table` table)
+- ✅ Function labels F0-F28 moved to config.json (editable via Settings UI)
+- ✅ Locomotive metadata unified in config.json (name, decoder, color, notes)
+- ✅ Complete consist CRUD via web UI (Consist Manager)
+- ✅ JMRI now optional (only for initial setup)
+
+**2026-01-20** - Database Schema Documentation:
+- ✅ Complete DATABASE_SCHEMA.md reference (tables, queries, event types)
+- ✅ Camera config cleanup (camera_config.json → config.local.json)
+- ✅ Database outlier cleanup (removed 3 false positive Δt events)
+
+**2026-01-19** - Analytics Configuration:
+- ✅ Configurable `max_chart_events` (100-2000, default 500)
+- ✅ Settings UI: Analytics tab for performance tuning
+- ✅ Config reorganization (sections reordered to match UI flow)
+- ✅ Locomotives sorted by ID (1,2,4,5,6,7,8)
+
+**2026-01-18** - Timing Thresholds Refactoring:
+- ✅ Renamed `normal` → `warning` (1.0s), `warning` → `critical` (1.5s)
+- ✅ Consistent 3-level system: SYNCED (<1.0s), WARNING (≥1.0s), CRITICAL (≥1.5s)
+
+**2026-01-14** - Analytics Dashboard:
+- ✅ Session tracking with lifecycle management
+- ✅ Δt trends chart (Current vs Overview views)
+- ✅ YOLO performance monitoring (FPS + confidence)
+- ✅ Locomotive operating time tracking
+
+---
+
 ## Changelog 2025-01-16 to 2025-01-18
 
 ### 2025-01-18 - ⚙️ **Settings UI Complete + Consist Manager Enhancements**
