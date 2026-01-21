@@ -703,7 +703,7 @@ class DataDB:
         # Maps: speed → cv_last_modified timestamp (Unix)
         cv_timestamps = {}
         if adjust_loco_address:
-            from ..services.speed_table_helpers import speed_to_jmri_step, jmri_step_to_cv
+            from .speed_table_helpers import speed_to_jmri_step, jmri_step_to_cv
 
             cursor.execute('''
                 SELECT step, cv_last_modified
