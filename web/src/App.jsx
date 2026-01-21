@@ -68,7 +68,6 @@ function App() {
   const [z21HealthOpen, setZ21HealthOpen] = useState(false); // Z21 health popover
   const [wsStatsOpen, setWsStatsOpen] = useState(false); // WebSocket stats popover
   const [telemetryWarnings, setTelemetryWarnings] = useState({ track: false, z21: false }); // Warning indicators
-  const [currentSessionId, setCurrentSessionId] = useState(null); // Current analytics session ID (for tracking idle state)
 
   // Dynamic controllers array (scalable UI with focus management)
   const [controllers, setControllers] = useState([
@@ -453,26 +452,6 @@ function App() {
       })
       .catch(err => console.error('Failed to fetch debug status:', err));
   }, []);
-
-  // Poll current session ID (every 10s) to detect tracking idle state
-  useEffect(() => {
-    const fetchSessionId = () => {
-      fetch(`${API_URL}/api/analytics/current`)
-        .then(res => res.json())
-        .then(data => {
-          setCurrentSessionId(data.session_id || null);
-        })
-        .catch(err => console.error('Failed to fetch session ID:', err));
-    };
-
-    // Initial fetch
-    fetchSessionId();
-
-    // Poll every 10 seconds
-    const interval = setInterval(fetchSessionId, 10000);
-
-    return () => clearInterval(interval);
-  }, [API_URL]);
 
   // Wake Lock API - Keep screen awake while using the app (iOS/Android)
   const wakeLockRef = useRef(null);
@@ -1123,16 +1102,10 @@ function App() {
 
               {/* WebSocket Status - Hover on desktop, click on mobile */}
               <div
-                className={`flex items-center gap-2 px-2 py-2 bg-control-dark rounded border border-control-grey transition-all duration-200 md:hover:border-signal-amber ${!isConnected ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                title={
-                  !isConnected
-                    ? "WebSocket Disconnected"
-                    : currentSessionId === null
-                      ? "Click to reconnect"
-                      : "WebSocket Connection Statistics"
-                }
+                className={`flex items-center gap-2 px-2 py-2 bg-control-dark rounded border border-control-grey transition-all duration-200 md:hover:border-signal-amber cursor-pointer`}
+                title="WebSocket Connection Statistics"
                 onMouseEnter={() => {
-                  if (window.innerWidth >= 768 && isConnected && currentSessionId !== null) {
+                  if (window.innerWidth >= 768) {
                     setWsStatsOpen(true);
                   }
                 }}
@@ -1142,31 +1115,14 @@ function App() {
                   }
                 }}
                 onClick={() => {
-                  if (isConnected && currentSessionId === null) {
-                    // WebSocket OK but session idle → refresh
-                    window.location.reload();
-                  } else if (window.innerWidth < 768 && isConnected && currentSessionId !== null) {
-                    // Mobile and everything OK → popover stats
+                  if (window.innerWidth < 768) {
                     setWsStatsOpen(!wsStatsOpen);
                   }
-                  // If disconnected (red) → no action (badge disabled)
                 }}
               >
-                <i className={`fa-solid fa-wifi text-lg md:text-xl ${
-                  !isConnected
-                    ? 'text-signal-red'
-                    : currentSessionId === null
-                      ? 'text-amber-500'
-                      : 'text-signal-green'
-                }`}></i>
+                <i className={`fa-solid fa-wifi text-lg md:text-xl ${isConnected ? 'text-signal-green' : 'text-signal-red'}`}></i>
                 <div className="hidden lg:block text-xs font-mono">
-                  <div className={
-                    !isConnected
-                      ? 'text-signal-red'
-                      : currentSessionId === null
-                        ? 'text-amber-500'
-                        : 'text-signal-green'
-                  }>
+                  <div className={isConnected ? 'text-signal-green' : 'text-signal-red'}>
                     WS
                   </div>
                 </div>
