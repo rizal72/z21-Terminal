@@ -257,15 +257,38 @@ python3 z21_controller.py 10            # Control consist 10
 5. Start backend: `python backend/main.py`
 6. Start frontend: `cd web && npm run dev` (development) or `npm run build` (production)
 
+## What's New (Jan 19-21, 2026)
+
+### Analytics UX Improvements
+- **Date Display on X-Axis**: Shows "21 Jan" (amber, bold) when day changes, time "18:05" otherwise (Current mode)
+- **Speed in Tooltip**: Format "88 (70%)" - DCC raw value + percentage
+- **Weighted Speed Table Recommendations**: 80/20 algorithm (current session priority), inline breakdown per speed
+- **Speed Analysis Debug Panel**: Collapsible panel showing all tested speeds with current/historical/weighted breakdown (debug mode only)
+- **Configurable Chart Performance**: `max_chart_events` setting (100-2000, default 500) for performance tuning
+
+### Settings & Configuration
+- **CV3/CV4 Editor**: Inline editor for Acceleration (CV3) and Deceleration (CV4) in Settings → Locomotives tab
+- **Session Idle Timeout**: Auto-close analytics session after N minutes without movement (configurable 5-120 min, default 30)
+- **Debug Mode as Local Setting**: Like camera credentials, stored in `config.local.json` (gitignored)
+
+### Speed Table Enhancements
+- **ESU mfx Decoder Support**: Edit Vstart (CV2) and Vhigh (CV5) for ESU decoders, step 1/28 greyed out
+- **Decoder Type Detection**: Automatic ESU mfx vs NMRA speed table behavior
+
+### Robustness
+- **Model Fallback**: Automatic `.engine` → `.onnx` → `.pt` with exception handling (no crashes if model missing)
+- **Auto-compensation Disable**: Graceful degradation when YOLO models not found (Virtual Mode still works)
+
 ## Features
 
 ### Web Dashboard ✅
 - [x] Modern web UI (Vite + React + Tailwind CSS + Font Awesome 6)
 - [x] FastAPI backend with WebSocket real-time sync
 - [x] **Function Editor**: Edit F0-F28 labels and lockable flags (accordion UI, add/delete, 20 char max, hot reload)
-- [x] **Speed Table Editor**: View/edit CV67-94 speed curves (direct CV write, visual 28-step chart, recommendations)
+- [x] **CV3/CV4 Editor**: Inline editor for Acceleration (CV3) and Deceleration (CV4) in Settings UI
+- [x] **Speed Table Editor**: View/edit CV67-94 speed curves (direct CV write, visual 28-step chart, weighted recommendations, ESU mfx support)
 - [x] **Consist Manager**: CRUD operations via web UI (create/edit/delete consists, gate assignment)
-- [x] **Settings UI**: Fully configurable (locomotives, consists, gates, tracking, analytics)
+- [x] **Settings UI**: Fully configurable (locomotives, consists, gates, tracking, analytics, session idle timeout, debug mode)
 - [x] **Scalable UI**: Dynamic controller panels with [+] button
 - [x] **Mobile Header**: Responsive hamburger menu (<768px)
 - [x] Flexible roster selection (consists + standalone locomotives)
@@ -303,14 +326,19 @@ python3 z21_controller.py 10            # Control consist 10
 - [x] **Auto-Compensation Toggle**: Enable/disable compensation per consist (UI switch)
 
 ### Analytics Dashboard ✅
-- [x] **Session Tracking**: Automatic session lifecycle (first Δt validates session, page close ends session)
+- [x] **Session Tracking**: Automatic session lifecycle (first Δt validates session, page close ends session, idle timeout after N min)
 - [x] **Session Statistics**: Duration, gate crossings, critical events (|Δt| ≥ 1.5s)
 - [x] **Δt Trends Chart**: Speed matching quality visualization over time (line chart with color-coded thresholds)
+  - **Date Display**: Shows "21 Jan" (amber, bold) when day changes, time "18:05" otherwise (Current mode only)
+  - **Speed in Tooltip**: Format "88 (70%)" - DCC raw + percentage
+- [x] **Weighted Speed Table Recommendations**: 80/20 algorithm (current session priority), inline breakdown per speed
+- [x] **Speed Analysis Debug Panel**: Collapsible panel showing all tested speeds with current/historical/weighted breakdown (debug mode only)
 - [x] **YOLO Performance Monitoring**: FPS trends (line chart) + confidence per locomotive (bar chart)
 - [x] **Locomotive Operating Time**: Cumulative operating hours per locomotive (maintenance planning)
 - [x] **Current vs Overview Views**: Session-specific vs cumulative historical data
 - [x] **Consist Filtering**: Filter charts by All/C10/C11 (color-coded, sticky header)
 - [x] **Intelligent Downsampling**: LTTB algorithm preserves chart shape, critical events (|Δt| ≥ 1.5s) always visible
+- [x] **Configurable Performance**: `max_chart_events` setting (100-2000, default 500) for chart performance tuning
 - [x] **Horizontal Scroll**: Navigate large datasets (1000+ events) with smooth scrolling
 - [x] **Auto-Refresh**: Current view updates every 10s when locomotives moving
 - [x] **SQLite Async Logging**: Zero impact on YOLO tracking (buffered writes)
@@ -327,9 +355,10 @@ python3 z21_controller.py 10            # Control consist 10
 
 ### Debug Mode ✅
 - [x] **Production Clean Logs**: Only critical operational events visible by default
-- [x] **Configurable**: Toggle via `config.json` (`debug.enabled: true/false`)
+- [x] **Local-Only Setting**: Stored in `config.local.json` (gitignored), like camera credentials
+- [x] **Configurable**: Toggle via Settings UI → System tab
 - [x] **Always Visible**: 🚪 Δt, 🎯 speeds, 🎚️ compensations, 🔄 mode switches, ⚠️ warnings
-- [x] **Debug Only**: ✓ startup logs, 🚦 gate details, 📊 session summary
+- [x] **Debug Only**: ✓ startup logs, 🚦 gate details, 📊 session summary, Speed Analysis Debug Panel
 
 ### Z21 Library ✅
 - [x] Complete Z21 LAN protocol (UDP)
