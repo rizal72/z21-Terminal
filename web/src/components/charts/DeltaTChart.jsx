@@ -213,8 +213,8 @@ const DeltaTChart = ({
       }
     });
 
-    // Add intermediate time ticks (every ~15 events, adjust based on data density)
-    const tickInterval = Math.max(Math.floor(displayData.length / 10), 1);
+    // Add intermediate time ticks (~20 ticks total = 5% interval)
+    const tickInterval = Math.max(Math.floor(displayData.length / 20), 1);
     for (let i = tickInterval; i < displayData.length; i += tickInterval) {
       const tick = displayData[i].time;
       // Only add if not already a date tick
