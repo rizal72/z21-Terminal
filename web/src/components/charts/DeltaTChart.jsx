@@ -75,12 +75,22 @@ const CustomTooltip = ({ active, payload, viewMode }) => {
 };
 
 // Custom Tick for X-axis - shows date (amber) when day changes, time otherwise
-const CustomXAxisTick = ({ x, y, payload, displayData }) => {
-  if (!payload || !displayData) return null;
+const CustomXAxisTick = ({ x, y, payload, displayData, index }) => {
+  if (!payload || !displayData || displayData.length === 0) return null;
 
-  // Find the data point for this tick
-  const dataPoint = displayData.find(d => d.time === payload.value);
-  if (!dataPoint) return <text x={x} y={y} dy={16} textAnchor="middle" fill="#9CA3AF">{payload.value}</text>;
+  // Find the closest data point to this tick using index or time
+  let dataPoint = null;
+  if (index !== undefined && index < displayData.length) {
+    dataPoint = displayData[index];
+  } else {
+    // Fallback: find by time
+    dataPoint = displayData.find(d => d.time === payload.value);
+  }
+
+  if (!dataPoint) {
+    // If no dataPoint found, just show the time normally
+    return <text x={x} y={y} dy={16} textAnchor="middle" fill="#9CA3AF">{payload.value}</text>;
+  }
 
   // Check if this is the first point or day changed
   const currentDate = new Date(dataPoint.timestamp * 1000);
@@ -89,11 +99,11 @@ const CustomXAxisTick = ({ x, y, payload, displayData }) => {
   const currentYear = currentDate.getFullYear();
 
   // Find previous data point
-  const currentIndex = displayData.findIndex(d => d.time === payload.value);
+  const currentIndex = index !== undefined ? index : displayData.findIndex(d => d.time === payload.value);
   const previousPoint = currentIndex > 0 ? displayData[currentIndex - 1] : null;
 
   let showDate = false;
-  if (!previousPoint) {
+  if (!previousPoint || currentIndex === 0) {
     // First point - always show date
     showDate = true;
   } else {
@@ -110,7 +120,7 @@ const CustomXAxisTick = ({ x, y, payload, displayData }) => {
 
   if (showDate) {
     // Show date in amber (format: "21 Jan")
-    const dateStr = currentDate.toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
+    const dateStr = currentDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
     return (
       <text x={x} y={y} dy={16} textAnchor="middle" fill="#f59e0b" fontWeight="bold">
         {dateStr}
