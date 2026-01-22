@@ -1099,7 +1099,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                     {rec.debug_info && (
                       <div className="mt-1 pl-4 text-xs text-slate-400 flex items-center gap-4 flex-wrap">
                         <span>
-                          ┗━ Current: {rec.debug_info.current_session.count} events,
+                          → Current: {rec.debug_info.current_session.count} events,
                           Δt {rec.debug_info.current_session.mean_delta_t >= 0 ? '+' : ''}{rec.debug_info.current_session.mean_delta_t.toFixed(2)}s
                           ({Math.round(rec.debug_info.current_session.weight * 100)}%)
                         </span>
