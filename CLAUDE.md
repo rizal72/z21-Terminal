@@ -5,7 +5,7 @@
 **Version**: v0.9.9 (Development - v1.0.0 Coming Soon)
 **Repository**: https://github.com/rizal72/z21-Terminal (Private, SSH)
 **Project**: BiancAlice Railway Layout
-**Last Updated**: 2026-01-22
+**Last Updated**: 2026-01-23
 
 ---
 
@@ -788,6 +788,21 @@ git diff config.json  # Should show no changes if normalized
 ---
 
 ## 📊 Recent Changes (Last 30 Days)
+
+**2026-01-23** - Auto-Sync Functions + Unified Rounding:
+- ✅ **Auto-sync on WebSocket connect**: Functions synced from Z21 every time UI connects (not just backend startup)
+- ✅ **Edge case resolved**: Z21 offline during startup → functions stay false → refresh UI = auto-fix
+- ✅ **Unified rounding strategy**: Created `math_utils.js_round()` - "round half up" matches JavaScript `Math.round()`
+- ✅ **Backend consistency**: Replaced ALL 20 `round()` calls with `js_round()` (speed table, gates, analytics, percentages)
+- ✅ **Frontend already consistent**: All 22 `Math.round()` calls already use "round half up"
+- ✅ **Fixes**: CV smoothing false positives (170.5 now rounds to 171 everywhere, no more asterisk mismatch)
+- ✅ **Speed Analysis panel**: Now always visible (was debug-only), starts open if debug=true, closed otherwise
+- ✅ **CV change logging**: Detailed logs show exact CVs changed with old->new values (e.g. `CV68(45->50)`)
+- ✅ **Log colors**: `[SPEED-TABLE]` now light blue (soft, friendly), `[CV]` logs consolidated under CV tag
+- ✅ **Log visibility**: "Write blocked" CV67/CV94 messages now debug-only (cleaner production logs)
+- 📄 Backend: `math_utils.py` (js_round utility), `z21_manager.py` (sync helper + refactoring), `log_colors.py` (light blue)
+- 📄 Frontend: `SpeedTableViewer.jsx` (rounded value comparison, panel always visible with smart defaults)
+- 📄 Docs: Updated math consistency notes
 
 **2026-01-22** - Analytics Chart UX (X-Axis Tick Density + Enhanced Tooltip):
 - ✅ **X-Axis tick density**: Increased from 5% (20 ticks) to 1% (100 ticks) for better time label distribution
