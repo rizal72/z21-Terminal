@@ -27,6 +27,7 @@ PREFIXES = {
     '[ANALYTICS]': '\033[38;5;213m',  # Pink - analytics/metrics
     '[SESSION]': '\033[38;5;213m',  # Pink - session lifecycle (same as ANALYTICS)
     '[SETTINGS]': '\033[38;5;220m',  # Gold/yellow - configuration changes
+    '[SPEED-TABLE]': '\033[38;5;117m',  # Light blue - speed table operations (soft, friendly)
 }
 
 RESET = '\033[0m'

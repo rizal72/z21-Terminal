@@ -350,10 +350,9 @@ async def write_speed_table_to_decoder(
             # Log with detailed CV changes
             if changed_cvs_details:
                 changes_str = ", ".join(changed_cvs_details)
-                log('[SPEED-TABLE]', f"CV modification timestamps updated for loco {adjust_loco_address} ({modified_count} CVs changed)")
-                log('[SPEED-TABLE]', f"Changed CVs: {changes_str}")
+                log('[CV]', f"Changed CVs: {changes_str}")
             else:
-                log('[SPEED-TABLE]', f"CV modification timestamps updated for loco {adjust_loco_address} (0 CVs changed, all values identical)")
+                log('[CV]', f"No CV changes: all values identical to previous")
         else:
             log('[ERROR]', f"Failed to update database for loco {adjust_loco_address}")
     else:
