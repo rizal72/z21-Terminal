@@ -200,24 +200,41 @@ const DeltaTChart = ({
     return viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
   }, [chartData.length, viewMode]);
 
-  // Force ticks where day changes (Current mode only)
+  // Force ticks where day changes + intermediate time ticks (Current mode only)
   const forcedTicks = useMemo(() => {
-    if (viewMode !== 'current') return undefined;
+    if (viewMode !== 'current' || displayData.length === 0) return undefined;
 
-    // Find all datapoints with showDate flag
-    const dateTicks = displayData
-      .filter(d => d.showDate)
-      .map(d => d.time);
+    const ticks = [];
 
-    // Always include first and last tick
-    if (displayData.length > 0) {
-      const firstTick = displayData[0].time;
-      const lastTick = displayData[displayData.length - 1].time;
-      if (!dateTicks.includes(firstTick)) dateTicks.unshift(firstTick);
-      if (!dateTicks.includes(lastTick)) dateTicks.push(lastTick);
+    // Add all date change ticks
+    displayData.forEach((d, idx) => {
+      if (d.showDate) {
+        ticks.push(d.time);
+      }
+    });
+
+    // Add intermediate time ticks (every ~15 events, adjust based on data density)
+    const tickInterval = Math.max(Math.floor(displayData.length / 10), 1);
+    for (let i = tickInterval; i < displayData.length; i += tickInterval) {
+      const tick = displayData[i].time;
+      // Only add if not already a date tick
+      if (!ticks.includes(tick)) {
+        ticks.push(tick);
+      }
     }
 
-    return dateTicks;
+    // Always include last tick
+    const lastTick = displayData[displayData.length - 1].time;
+    if (!ticks.includes(lastTick)) {
+      ticks.push(lastTick);
+    }
+
+    // Sort chronologically (important!)
+    return ticks.sort((a, b) => {
+      const timeA = displayData.find(d => d.time === a)?.timestamp || 0;
+      const timeB = displayData.find(d => d.time === b)?.timestamp || 0;
+      return timeA - timeB;
+    });
   }, [displayData, viewMode]);
 
   if (chartData.length === 0) return null;
