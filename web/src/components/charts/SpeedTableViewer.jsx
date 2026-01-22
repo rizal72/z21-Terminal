@@ -61,7 +61,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
 
   // Debug panel state
   const [debugEnabled, setDebugEnabled] = useState(false);
-  const [debugPanelOpen, setDebugPanelOpen] = useState(true);
+  const [debugPanelOpen, setDebugPanelOpen] = useState(false); // Default closed
 
   // Fetch config to check debug mode
   useEffect(() => {
@@ -70,7 +70,9 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
         const response = await fetch('/api/config');
         if (response.ok) {
           const config = await response.json();
-          setDebugEnabled(config.debug?.enabled || false);
+          const isDebug = config.debug?.enabled || false;
+          setDebugEnabled(isDebug);
+          setDebugPanelOpen(isDebug); // Open if debug mode, closed otherwise
         }
       } catch (err) {
         console.error('Failed to fetch config:', err);
@@ -900,8 +902,8 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
         {bars}
       </div>
 
-      {/* Speed Analysis Debug Panel (only if debug enabled) */}
-      {debugEnabled && data.debug_info && Object.keys(data.debug_info).length > 0 && (
+      {/* Speed Analysis Debug Panel (always visible, starts open if debug mode) */}
+      {data.debug_info && Object.keys(data.debug_info).length > 0 && (
         <div className="mt-6 bg-purple-900/20 border border-purple-700 rounded-lg overflow-hidden">
           {/* Collapsible Header */}
           <button
