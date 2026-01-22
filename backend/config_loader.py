@@ -142,6 +142,7 @@ def save_config(config: Dict[str, Any], config_path: Path = None) -> None:
 
     with open(config_path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(json_str)
+        f.write('\n')  # Add trailing newline (POSIX standard)
 
 
 def save_local_config(local_overrides: Dict[str, Any]) -> None:
