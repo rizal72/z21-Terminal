@@ -543,7 +543,8 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     const recommendation = data.recommendations?.find(r => r.cv_index === cvIndex);
 
     // Check if this CV was modified (manual edit or applied recommendation)
-    const isModified = data.cv_values && cvValueFloat !== data.cv_values[cvIndex];
+    // Compare ROUNDED values to avoid false positives from smoothing (170.2 -> 170 = no change)
+    const isModified = data.cv_values && Math.round(cvValueFloat) !== data.cv_values[cvIndex];
 
     // Check if this CV has been modified via web UI (persistent, from DB)
     const cvTimestamp = cvTimestamps[step] || 0;
