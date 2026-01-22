@@ -27,14 +27,26 @@ import {
   formatDeltaT
 } from '../../utils/analyticsHelpers';
 
-// Custom Tooltip - NO time shown (already on X-axis)
+// Custom Tooltip - Shows date/time for each event (not all events have X-axis ticks)
 const CustomTooltip = ({ active, payload, viewMode }) => {
   if (!active || !payload || payload.length === 0) return null;
 
   const data = payload[0].payload; // Get the data point
 
+  // Format timestamp to compact date/time
+  const eventDate = data.timestamp ? new Date(data.timestamp * 1000) : null;
+  const dateStr = eventDate ? eventDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : '';
+  const timeStr = eventDate ? eventDate.toLocaleTimeString('en-US', { hour12: false }) : '';
+
   return (
     <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl">
+      {/* Date and time */}
+      {eventDate && (
+        <p className="text-xs text-slate-400 mb-2 pb-2 border-b border-slate-700">
+          <span className="text-amber-400 font-semibold">{dateStr}</span>
+          <span className="text-slate-300">, {timeStr}</span>
+        </p>
+      )}
       {payload.map((entry, index) => {
         if (entry.value === null) return null;
         return (
