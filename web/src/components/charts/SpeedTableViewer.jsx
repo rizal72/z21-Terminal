@@ -555,7 +555,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     // Border/fill color based on severity (priority: read-only > CRITICAL > modified > default)
     let borderColor = 'border-slate-600'; // Default
     let fillColor = 'bg-slate-600'; // Default
-    let leftBorderClass = ''; // Green left border for persistent modifications
+    let topBorderClass = ''; // Green top border for persistent modifications
 
     if (!isStepEditable) {
       // ESU read-only steps (grey)
@@ -575,9 +575,9 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
       borderColor = 'border-blue-400';
     }
 
-    // Green left border if CV was modified via web UI (persistent state)
+    // Green top border if CV was modified via web UI (persistent state)
     if (isPersistentlyModified && isStepEditable) {
-      leftBorderClass = 'border-l-2 border-l-green-500';
+      topBorderClass = 'border-t-2 border-t-green-500';
     }
 
     const percentLabel = getPercentLabel(step);
@@ -638,7 +638,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
 
         {/* Vertical Bar */}
         <div
-          className={`relative w-8 h-64 border-2 ${borderColor} ${leftBorderClass} rounded-sm bg-slate-800 ${
+          className={`relative w-8 h-64 border-2 ${borderColor} ${topBorderClass} rounded-sm bg-slate-800 ${
             isStepEditable && isCheckpoint && !isEditing ? 'cursor-pointer' : ''
           }`}
           title={

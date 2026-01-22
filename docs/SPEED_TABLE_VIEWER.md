@@ -183,6 +183,295 @@ Added 3 columns to `locomotive_speed_table`:
 
 ---
 
+## 🆕 2026-01-22 Updates - ESU Decoder Fixes & UX Improvements
+
+**Status**: ✅ PRODUCTION TESTED
+
+### Summary of Changes
+
+Five critical fixes and UX improvements for ESU decoder support and visual indicators:
+
+1. **Blocked CVs Separation** - ESU CV67/CV94 write operations now succeed correctly
+2. **Green Border Accuracy** - Timestamp update only for actually modified CVs
+3. **Database Migration** - Populated vstart/vhigh/decoder_type for all locomotives
+4. **ESU Endpoints NO Smoothing** - CV2/CV5 recommendations don't apply automatic smoothing
+5. **Green Border Position** - Changed from left border to top border (better visibility)
+
+---
+
+### 1. Blocked CVs vs Failed CVs Separation
+
+**Problem**:
+- ESU decoders have CV67=1 and CV94=255 (read-only, fixed endpoints)
+- Backend blocked these CVs but counted them as `failed_cvs`
+- Result: `success=false` even when all modifiable CVs (CV68-93) were written successfully
+- Database not updated, recommendations remained visible despite CVs being modified
+
+**Solution** (commit 20b573a):
+```python
+blocked_cvs = []  # Read-only CVs (expected, not errors)
+failed_cvs = []   # Real write errors
+
+# Separate tracking
+if cv_index in [67, 94] and decoder_type == 'esu_mfx':
+    blocked_cvs.append(cv_index)  # Expected block
+else:
+    # Real write attempt
+    success = z21.write_cv_ops_mode(address, cv_index, value)
+    if not success:
+        failed_cvs.append(cv_index)
+
+# Success if no real failures (blocked CVs don't count)
+all_success = len(failed_cvs) == 0
+```
+
+**API Response**:
+```json
+{
+  "success": true,
+  "blocked_cvs": [67, 94],
+  "failed_cvs": [],
+  "cvs_written": 26,
+  "total_time": 2.62
+}
+```
+
+**Result**:
+- ESU writes now succeed with 26/28 CVs (2 blocked, read-only)
+- Database updated correctly
+- Recommendations disappear after write
+- UI shows: "Successfully wrote 26/28 CVs (2 read-only) [2.6s]"
+
+---
+
+### 2. Green Border Accuracy - Only Actually Modified CVs
+
+**Problem**:
+- Backend sent all 28 CVs to decoder (even if only 2-3 changed via recommendation)
+- All 28 timestamps updated → all 28 bars showed green border
+- Confusing for user (can't tell which CVs were actually modified)
+
+**Solution** (commit c0fb443):
+```python
+# Read OLD values from database (previous_values JSON)
+old_values = json.loads(row['previous_values'])
+
+# Update timestamps ONLY for CVs that changed value
+for cv_index in range(67, 95):
+    new_value = cv_values_int.get(cv_index)
+    old_value = old_values.get(cv_index)
+
+    # Skip if: blocked CV, missing value, or value unchanged
+    if cv_index in blocked_cvs or new_value is None:
+        continue
+    if old_value is not None and new_value == old_value:
+        continue  # Value unchanged, don't update timestamp
+
+    # Value changed, update timestamp
+    cursor.execute('''
+        UPDATE cv_modification_timestamps
+        SET cv_last_modified = ?
+        WHERE loco_address = ? AND step = ?
+    ''', (current_timestamp, loco_address, step))
+```
+
+**Result**:
+- Green border appears only on bars with changed values
+- Example: Apply recommendation CV83 → CV82, CV83, CV84 green (with smoothing)
+- Other 25 CVs remain without green border
+
+**Workflow to fix existing all-green state**:
+1. **Undo** → resets all timestamps to 0 (all green borders removed)
+2. **Reapply recommendation** → only changed CVs get green border
+
+---
+
+### 3. Database Migration - Decoder Metadata
+
+**Problem**:
+- PC database had `vstart=NULL, vhigh=NULL, decoder_type=NULL` for all locomotives
+- Step 1 and 28 were editable (should be grey/read-only for ESU)
+- API returned `"decoder_type": null` → frontend couldn't apply ESU rules
+
+**Solution** (manual migration):
+```bash
+# 1. Copy DB from PC to Mac
+scp riccardo@gaming-pc:C:/z21-Terminal/backend/data/data.db ~/Documents/_PROGETTI/z21-Terminal/backend/data/data.db
+
+# 2. Run migration script (Mac only, requires JMRI roster)
+python scripts/migrate_decoder_metadata.py
+
+# 3. Copy DB from Mac to PC
+scp ~/Documents/_PROGETTI/z21-Terminal/backend/data/data.db riccardo@gaming-pc:C:/z21-Terminal/backend/data/data.db
+```
+
+**Migration Results**:
+```
+Loco 1: CV2=2, CV5=133, decoder=esu_mfx
+Loco 2: CV2=2, CV5=80, decoder=esu_mfx
+Loco 4: CV2=4, CV5=140, decoder=nmra_standard
+Loco 5: CV2=2, CV5=110, decoder=esu_mfx
+Loco 6: CV2=2, CV5=104, decoder=esu_mfx
+Loco 7: CV2=2, CV5=80, decoder=nmra_standard
+Loco 8: CV2=3, CV5=91, decoder=esu_mfx
+```
+
+**Result**:
+- ✅ Step 1 and 28 now grey/non-editable for ESU decoders (loco 1, 2, 5, 6, 8)
+- ✅ Vstart/Vhigh panel appears for ESU decoders
+- ✅ API returns correct `decoder_type='esu_mfx'`
+- ✅ Frontend applies ESU-specific rules correctly
+
+---
+
+### 4. ESU Endpoints NO Smoothing
+
+**Problem**:
+- Recommendations for speed 100% (step 28) → redirect to CV5 (Vhigh)
+- Apply recommendation called `applyInterpolation(28, new_cv5_value)`
+- Applied smoothing to CV92-93 (step 27-26)
+- **BUT**: new_value is for CV5 (endpoint), not CV94 (which stays at 255)
+- Incorrect smoothing calculation using wrong reference value
+
+**Solution** (commit 3b72f28):
+```javascript
+// Apply each selected recommendation
+data.recommendations.forEach(rec => {
+  if (selectedRecommendations.has(rec.cv_index)) {
+    // Skip smoothing for ESU endpoints (CV2/CV5 for step 1/28)
+    // User will manually adjust adjacent CVs if needed (like JMRI behavior)
+    if (rec.esu_endpoint === true) {
+      return; // ESU endpoints don't apply smoothing
+    }
+
+    const step = rec.jmri_step;
+    applyInterpolation(step, rec.cv_suggested);
+  }
+});
+```
+
+**Rationale**:
+- CV2/CV5 define the **endpoints of the curve** (min/max speed)
+- CV67-94 are the **28 intermediate points** of the curve
+- Modifying CV5 (Vhigh) should NOT auto-smooth CV92-93
+- User decides manually if step 27/26 need adjustment (depends on magnitude of change)
+- **Same behavior as JMRI** (step 28 is grey/non-editable, no smoothing)
+
+**Note**: Speed 0 already excluded from recommendations (backend filter: `speed > 0`)
+
+---
+
+### 5. Green Border Position - Left → Top
+
+**Problem**:
+- Green left border (2px) less visible on narrow bars
+- User requested: "se invece di fare verde il bordo sx della barra facessimo verde il bordo top? Mi piace di più"
+
+**Solution** (commit pending):
+```javascript
+// Before
+let leftBorderClass = '';
+if (isPersistentlyModified && isStepEditable) {
+  leftBorderClass = 'border-l-2 border-l-green-500';
+}
+
+// After
+let topBorderClass = '';
+if (isPersistentlyModified && isStepEditable) {
+  topBorderClass = 'border-t-2 border-t-green-500';
+}
+```
+
+**Result**:
+- Green top border (2px) more visible and cleaner
+- Better visual hierarchy (top = modified status, sides = severity color)
+
+---
+
+### Visual Indicators Summary (Updated)
+
+**1. Default** (no issues, not modified):
+- Border: slate-600 (grey)
+- Fill: slate-600 (grey)
+- No decorations
+
+**2. Read-Only** (ESU step 1/28):
+- Border: slate-700 (darker grey)
+- Fill: slate-700 (darker grey)
+- Not clickable, no green border
+
+**3. CRITICAL** (≥10 events):
+- Border: red-500
+- Fill: red-500
+- Overrides all other colors
+
+**4. WARNING** (≥5 events):
+- Border: amber-500
+- Fill: amber-500
+
+**5. Modified (pending write)**:
+- Border: blue-400
+- Blue asterisk next to value
+- Temporary state until write/undo
+
+**6. Persistently Modified** (written via web UI):
+- **Green top border (2px)** - `border-t-2 border-t-green-500`
+- Persists across sessions
+- Removed by Undo
+- Shows which CVs were tuned via web UI
+
+**7. CRITICAL + Modified**:
+- Border: red-500/amber-500 (priority: severity > modified)
+- Fill: red-500/amber-500
+- Green top border (2px) if persistently modified
+- Blue asterisk if pending changes
+
+---
+
+### Database Schema Updates
+
+**cv_modification_timestamps table**:
+- Tracks per-CV modification timestamps (196 rows: 7 locos × 28 steps)
+- Used for green border indicator (persistent state)
+- Updated ONLY when CV value actually changes (not on every write)
+
+**locomotive_speed_table table**:
+- Added columns: `vstart`, `vhigh`, `decoder_type` (2026-01-20)
+- Populated via migration script (requires JMRI roster on Mac)
+- ESU decoders: vstart=CV2, vhigh=CV5, decoder_type='esu_mfx'
+- NMRA decoders: vstart=NULL, vhigh=NULL, decoder_type='nmra_standard'
+
+---
+
+### Testing Workflow
+
+**Scenario 1: Apply ESU Recommendation (26/28 CVs)**
+1. Open Speed Table for Consist 10 (loco 1 - ESU LokSound V4.0)
+2. Select recommendation for step 17 (CV83)
+3. Click "Apply & Write to Decoder"
+4. **Expected**:
+   - Log: "26/28 CVs written (2 blocked, read-only)"
+   - UI success message: "Successfully wrote 26/28 CVs (2 read-only) [2.6s]"
+   - Green top border on CV82, CV83, CV84 (smoothed values)
+   - Recommendations disappear
+5. **Verify**: Undo → all green borders removed → Reapply → only 3 CVs green
+
+**Scenario 2: ESU Step 1/28 Read-Only**
+1. Open Speed Table for Consist 10 (loco 1)
+2. **Expected**:
+   - Step 1 (CV67): Grey bar, not clickable, tooltip "read-only for ESU"
+   - Step 28 (CV94): Grey bar, not clickable, tooltip "read-only for ESU"
+   - Vstart/Vhigh panel visible below speed table
+3. Try clicking step 1/28 → no effect (not editable)
+
+**Scenario 3: ESU Endpoint Recommendation (hypothetical)**
+1. If recommendation appears for speed 100% (step 28)
+2. Recommendation shows: "CV5 (Vhigh): 133 → 134" (not CV94)
+3. Click "Apply" → NO smoothing to CV92-93
+4. User manually adjusts step 27/26 if needed
+
+---
+
 ## 🆕 2025-01-17 Updates - Cumulative Intelligent Recommendations
 
 **Status**: ✅ IMPLEMENTED
@@ -324,12 +613,13 @@ Visual JMRI-style speed table viewer (CV67-94) with interactive editing, direct 
 - **Amber** - 5-9 CRITICAL events (moderate issues)
 - **Red** - 10+ CRITICAL events (severe issues)
 
-**CV Modification State** (border indicators - NEW 2026-01-22):
-- **Green left border (2px)** - CV modified via web UI (persistent, `cv_last_modified > 0`)
+**CV Modification State** (border indicators - UPDATED 2026-01-22):
+- **Green top border (2px)** - CV modified via web UI (persistent, `cv_last_modified > 0`)
   - Indicates: "This CV has been manually adjusted from JMRI import"
   - Persists across page reloads and sessions
   - **Removed by**: Undo operation (sets `cv_last_modified = 0`)
   - **NOT removed by**: Re-applying recommendations (updates timestamp, keeps border)
+  - Changed from left to top border (2026-01-22) for better visibility
 - **Blue border + asterisk** - CV modified but not saved (temporary, UI session only)
   - Indicates: "Pending changes not written to decoder"
   - Disappears after "Apply & Write to Decoder"
@@ -454,13 +744,13 @@ cv_timestamps = {row[0]: row[1] for row in cursor.fetchall()}
 const cvTimestamp = cvTimestamps[step] || 0;
 const isModified = cvTimestamp > 0;  // Green border if > 0
 
-// CSS classes:
-const borderClass = isModified ? 'border-l-2 border-green-500' : '';
+// CSS classes (updated 2026-01-22: left → top border):
+const borderClass = isModified ? 'border-t-2 border-t-green-500' : '';
 ```
 
 **State Transitions**:
 1. **JMRI Import**: All `cv_last_modified = 0` → no green border
-2. **Apply & Write**: Modified CVs get `cv_last_modified = NOW()` → green border appears
+2. **Apply & Write**: Modified CVs get `cv_last_modified = NOW()` → green top border appears
 3. **Undo**: Sets `cv_last_modified = 0` → green border disappears
 4. **Page Reload**: Green border persists (based on DB query)
 

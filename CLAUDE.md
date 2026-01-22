@@ -796,7 +796,19 @@ git diff config.json  # Should show no changes if normalized
 - 📄 Frontend: `DeltaTChart.jsx` - forcedTicks calculation (1% interval), CustomTooltip with timestamp
 - 📄 Docs: ANALYTICS.md - Changelog 2026-01-22 section, Chart Features section updated
 
-**2026-01-22** - UI/UX Improvements + Bug Fixes:
+**2026-01-22** - Speed Table ESU Decoder Fixes & UX:
+- ✅ **Blocked CVs separation**: ESU CV67/CV94 (read-only) now separate from failed_cvs → writes succeed with 26/28 CVs
+- ✅ **Green border accuracy**: Timestamp update only for CVs with changed values (compare old vs new)
+- ✅ **Database migration**: Populated vstart/vhigh/decoder_type for all locomotives (PC→Mac→PC workflow)
+- ✅ **ESU step 1/28 non-editable**: Grey bars, not clickable, decoder_type='esu_mfx' from DB
+- ✅ **ESU endpoints NO smoothing**: CV2/CV5 recommendations don't apply automatic smoothing (user manual adjustment)
+- ✅ **Green border position**: Changed from left (border-l-2) to top (border-t-2) for better visibility
+- ✅ **Speed 0 filtered**: Already excluded from recommendations (backend: `speed > 0`)
+- 📄 Backend: blocked_cvs tracking, old vs new comparison, skip blocked CV timestamps
+- 📄 Frontend: Green top border, ESU endpoint smoothing skip, step 1/28 grey/non-editable
+- 📄 Docs: SPEED_TABLE_VIEWER.md - Complete "2026-01-22 Updates" section with 5 fixes
+
+**2026-01-22** - UI/UX Improvements + Bug Fixes (Early Session):
 - ✅ **Green left border (2px)**: Persistent visual indicator for CVs modified via web UI (`cv_last_modified > 0`)
 - ✅ **Undo removes border**: Sets `cv_last_modified = 0` when restoring previous values
 - ✅ **Re-import button hidden**: JMRI only for initial new locomotive setup (backend code preserved)
