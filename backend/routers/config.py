@@ -283,7 +283,7 @@ async def update_settings(request: dict):
             if "analytics" not in config:
                 config["analytics"] = {}
             config["analytics"]["max_chart_events"] = new_max
-            config["analytics"]["notes"] = "Chart optimization: Current shows last N events, Overview downsamples if > N total events"
+            # Preserve existing notes field (documentation only, no need to overwrite)
 
         # Locomotive settings (locomotives.*.functions - hot reload via roster reload)
         if "locomotives" in request:
