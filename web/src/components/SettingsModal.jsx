@@ -261,7 +261,7 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
             <>
               {activeTab === 'system' && <SystemTab settings={settings} setSettings={setSettings} />}
               {activeTab === 'z21' && <Z21NetworkTab settings={settings} setSettings={setSettings} apiUrl={apiUrl} />}
-              {activeTab === 'camera' && <CameraTab settings={settings} setSettings={setSettings} apiUrl={apiUrl} />}
+              {activeTab === 'camera' && <CameraTab settings={settings} setSettings={setSettings} apiUrl={apiUrl} showPassword={showPassword} setShowPassword={setShowPassword} />}
               {activeTab === 'video' && <VideoFeedTab settings={settings} setSettings={setSettings} />}
               {activeTab === 'yolo' && <YoloModelTab settings={settings} setSettings={setSettings} apiUrl={apiUrl} />}
               {activeTab === 'tracking' && <TrackingTab settings={settings} setSettings={setSettings} />}
@@ -425,7 +425,7 @@ function Z21NetworkTab({ settings, setSettings, apiUrl }) {
   );
 }
 
-function CameraTab({ settings, setSettings, apiUrl }) {
+function CameraTab({ settings, setSettings, apiUrl, showPassword, setShowPassword }) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
