@@ -149,6 +149,12 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
     // Apply each selected recommendation
     data.recommendations.forEach(rec => {
       if (selectedRecommendations.has(rec.cv_index)) {
+        // Skip smoothing for ESU endpoints (CV2/CV5 for step 1/28)
+        // User will manually adjust adjacent CVs if needed (like JMRI behavior)
+        if (rec.esu_endpoint === true) {
+          return; // ESU endpoints don't apply smoothing
+        }
+
         const step = rec.jmri_step;
         applyInterpolation(step, rec.cv_suggested);
       }
