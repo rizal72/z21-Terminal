@@ -75,51 +75,20 @@ const CustomTooltip = ({ active, payload, viewMode }) => {
 };
 
 // Custom Tick for X-axis - shows date (amber) when day changes, time otherwise
-const CustomXAxisTick = ({ x, y, payload, displayData, index }) => {
+const CustomXAxisTick = ({ x, y, payload, displayData }) => {
   if (!payload || !displayData || displayData.length === 0) return null;
 
-  // Find the closest data point to this tick using index or time
-  let dataPoint = null;
-  if (index !== undefined && index < displayData.length) {
-    dataPoint = displayData[index];
-  } else {
-    // Fallback: find by time
-    dataPoint = displayData.find(d => d.time === payload.value);
-  }
+  // Find the closest data point to this tick by time value
+  const dataPoint = displayData.find(d => d.time === payload.value);
 
   if (!dataPoint) {
-    // If no dataPoint found, just show the time normally
+    // If no exact match, just show the time normally
     return <text x={x} y={y} dy={16} textAnchor="middle" fill="#9CA3AF">{payload.value}</text>;
   }
 
-  // Check if this is the first point or day changed
-  const currentDate = new Date(dataPoint.timestamp * 1000);
-  const currentDay = currentDate.getDate();
-  const currentMonth = currentDate.getMonth();
-  const currentYear = currentDate.getFullYear();
-
-  // Find previous data point
-  const currentIndex = index !== undefined ? index : displayData.findIndex(d => d.time === payload.value);
-  const previousPoint = currentIndex > 0 ? displayData[currentIndex - 1] : null;
-
-  let showDate = false;
-  if (!previousPoint || currentIndex === 0) {
-    // First point - always show date
-    showDate = true;
-  } else {
-    // Check if day changed
-    const prevDate = new Date(previousPoint.timestamp * 1000);
-    const prevDay = prevDate.getDate();
-    const prevMonth = prevDate.getMonth();
-    const prevYear = prevDate.getFullYear();
-
-    if (currentDay !== prevDay || currentMonth !== prevMonth || currentYear !== prevYear) {
-      showDate = true;
-    }
-  }
-
-  if (showDate) {
-    // Show date in amber (format: "21 Jan")
+  // Use pre-calculated showDate flag
+  if (dataPoint.showDate) {
+    const currentDate = new Date(dataPoint.timestamp * 1000);
     const dateStr = currentDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
     return (
       <text x={x} y={y} dy={16} textAnchor="middle" fill="#f59e0b" fontWeight="bold">
@@ -153,13 +122,32 @@ const DeltaTChart = ({
   collapsed,
   onToggleCollapse
 }) => {
-  // Apply zoom filter if zoomDomain is set (Overview mode only)
+  // Apply zoom filter + pre-calculate showDate flags
   const displayData = useMemo(() => {
-    if (viewMode !== 'overview' || !zoomDomain) return chartData;
+    let data = chartData;
 
-    // Filter data to show only zoomed range
-    const [xMin, xMax] = zoomDomain.x;
-    return chartData.filter(d => d.index >= xMin && d.index <= xMax);
+    // Apply zoom filter if set (Overview mode only)
+    if (viewMode === 'overview' && zoomDomain) {
+      const [xMin, xMax] = zoomDomain.x;
+      data = chartData.filter(d => d.index >= xMin && d.index <= xMax);
+    }
+
+    // Pre-calculate showDate flags (when day changes)
+    return data.map((point, idx) => {
+      if (idx === 0) {
+        // First point always shows date
+        return { ...point, showDate: true };
+      }
+
+      const currentDate = new Date(point.timestamp * 1000);
+      const prevDate = new Date(data[idx - 1].timestamp * 1000);
+
+      const dayChanged = currentDate.getDate() !== prevDate.getDate() ||
+                         currentDate.getMonth() !== prevDate.getMonth() ||
+                         currentDate.getFullYear() !== prevDate.getFullYear();
+
+      return { ...point, showDate: dayChanged };
+    });
   }, [chartData, zoomDomain, viewMode]);
 
   // Calculate Y domain to ensure all points are visible (5% padding)
