@@ -16,6 +16,7 @@ import time
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
 from datetime import datetime
+from math_utils import js_round
 
 # Database path (relative to this service file)
 DB_PATH = Path(__file__).parent.parent / "data" / "data.db"
@@ -269,7 +270,7 @@ class DataDB:
             {
                 'address': row[0],
                 'name': row[1] or f"Loco {row[0]}",
-                'total_operating_hours': round(row[2] / 3600, 2) if row[2] else 0,
+                'total_operating_hours': js_round(row[2] / 3600, 2) if row[2] else 0,
                 'total_operating_seconds': row[2],
                 'total_sessions': row[3],
                 'last_active_time': row[4],
@@ -459,14 +460,14 @@ class DataDB:
 
                 consists[str(consist_id)] = {
                     'total_crossings': total_crossings,
-                    'avg_delta_t': round(avg_delta_t, 3),
-                    'min_delta_t': round(min_delta_t, 3),
-                    'max_delta_t': round(max_delta_t, 3),
+                    'avg_delta_t': js_round(avg_delta_t, 3),
+                    'min_delta_t': js_round(min_delta_t, 3),
+                    'max_delta_t': js_round(max_delta_t, 3),
                     'trend': trend,
                     'synced_count': data['synced_count'],
                     'warning_count': data['warning_count'],
                     'critical_count': data['critical_count'],
-                    'synced_percent': round(synced_percent, 1)
+                    'synced_percent': js_round(synced_percent, 1)
                 }
 
             # Only include sessions that have consist data after filtering
@@ -883,8 +884,8 @@ class DataDB:
                 # Store in results (only for speeds with CRITICAL/WARNING for recommendations)
                 if speed in speeds_with_issues:
                     results['mean_delta_t'][speed] = weighted_mean_dt
-                    results['critical'][speed] = int(round(weighted_critical))
-                    results['warning'][speed] = int(round(weighted_warning))
+                    results['critical'][speed] = int(js_round(weighted_critical))
+                    results['warning'][speed] = int(js_round(weighted_warning))
 
             # Store debug info (ALWAYS - for ALL tested speeds, even with 0 events)
             results['debug_info'][speed] = {

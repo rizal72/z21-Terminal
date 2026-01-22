@@ -25,6 +25,7 @@ from config_loader import load_config
 from dependencies import get_z21_manager, get_debug_enabled
 from z21_manager import Z21Manager
 from log_colors import log
+from math_utils import js_round
 
 router = APIRouter()
 
@@ -259,7 +260,7 @@ async def write_speed_table_to_decoder(
             continue
 
         # Round float to int (0-255)
-        cv_value_int = max(0, min(255, round(cv_value)))
+        cv_value_int = max(0, min(255, js_round(cv_value)))
 
         try:
             success = z21_manager.z21.write_cv_ops_mode(adjust_loco_address, cv_index, cv_value_int)
@@ -362,7 +363,7 @@ async def write_speed_table_to_decoder(
         'success': all_success,
         'blocked_cvs': blocked_cvs,  # Read-only CVs (not errors)
         'failed_cvs': failed_cvs,    # Real write errors
-        'total_time': round(total_time, 2),
+        'total_time': js_round(total_time, 2),
         'adjust_loco_address': adjust_loco_address,
         'cvs_written': 28 - len(blocked_cvs) - len(failed_cvs)
     }
@@ -573,7 +574,7 @@ async def undo_speed_table_change(
         'adjust_loco_address': adjust_loco_address,
         'previous_values': previous_values,
         'failed_cvs': failed_cvs,
-        'total_time': round(total_time, 2),
+        'total_time': js_round(total_time, 2),
         'cvs_written': 28 - len(failed_cvs)
     }
 
@@ -649,7 +650,7 @@ async def write_vstart_vhigh_to_decoder(
     vhigh_written = False
 
     if vstart is not None:
-        vstart_int = max(0, min(255, round(vstart)))
+        vstart_int = max(0, min(255, js_round(vstart)))
         log('[CV]', f"Writing CV2 (Vstart) = {vstart_int} to loco {adjust_loco_address}...")
 
         try:
@@ -664,7 +665,7 @@ async def write_vstart_vhigh_to_decoder(
 
     # Write CV5 (Vhigh) if provided
     if vhigh is not None:
-        vhigh_int = max(0, min(255, round(vhigh)))
+        vhigh_int = max(0, min(255, js_round(vhigh)))
         log('[CV]', f"Writing CV5 (Vhigh) = {vhigh_int} to loco {adjust_loco_address}...")
 
         try:
@@ -707,5 +708,5 @@ async def write_vstart_vhigh_to_decoder(
         'vhigh_written': vhigh_written,
         'adjust_loco_address': adjust_loco_address,
         'decoder_type': decoder_type,
-        'total_time': round(total_time, 2)
+        'total_time': js_round(total_time, 2)
     }

@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 from typing import Dict, Optional, List
 from log_colors import log
+from math_utils import js_round
 
 # Add scripts/utils/cv_operations to path for Locomotive class import
 SCRIPT_DIR = Path(__file__).parent.parent.parent / "scripts" / "utils" / "cv_operations"
@@ -230,7 +231,7 @@ def calculate_cv_recommendations(
             'cv_delta': cv_delta,
             'critical_count': critical_count,
             'warning_count': warning_count,
-            'mean_delta_t': round(mean_delta_t, 3),
+            'mean_delta_t': js_round(mean_delta_t, 3),
             'esu_endpoint': esu_endpoint
         }
 

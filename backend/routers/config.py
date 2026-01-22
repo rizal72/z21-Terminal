@@ -18,6 +18,7 @@ from services.config_manager import ConfigManager
 from dependencies import get_consist_data, get_z21_manager
 from z21_manager import Z21Manager
 from log_colors import log
+from math_utils import js_round
 
 router = APIRouter(tags=["config"])
 
@@ -892,11 +893,11 @@ async def save_gates(gates: List[Dict[str, Any]]):
 
         # Round all numeric values to integers (OpenCV requires int for coordinates)
         for gate in gates:
-            gate['center'] = [int(round(gate['center'][0])), int(round(gate['center'][1]))]
-            gate['width'] = int(round(gate['width']))
-            gate['height'] = int(round(gate['height']))
-            gate['angle'] = int(round(gate['angle']))
-            gate['color'] = [int(round(c)) for c in gate['color']]
+            gate['center'] = [int(js_round(gate['center'][0])), int(js_round(gate['center'][1]))]
+            gate['width'] = int(js_round(gate['width']))
+            gate['height'] = int(js_round(gate['height']))
+            gate['angle'] = int(js_round(gate['angle']))
+            gate['color'] = [int(js_round(c)) for c in gate['color']]
 
         # Update gates in config
         config['gates'] = gates
