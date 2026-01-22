@@ -200,6 +200,26 @@ const DeltaTChart = ({
     return viewMode === 'current' ? Math.max(chartData.length * 40, 800) : '100%';
   }, [chartData.length, viewMode]);
 
+  // Force ticks where day changes (Current mode only)
+  const forcedTicks = useMemo(() => {
+    if (viewMode !== 'current') return undefined;
+
+    // Find all datapoints with showDate flag
+    const dateTicks = displayData
+      .filter(d => d.showDate)
+      .map(d => d.time);
+
+    // Always include first and last tick
+    if (displayData.length > 0) {
+      const firstTick = displayData[0].time;
+      const lastTick = displayData[displayData.length - 1].time;
+      if (!dateTicks.includes(firstTick)) dateTicks.unshift(firstTick);
+      if (!dateTicks.includes(lastTick)) dateTicks.push(lastTick);
+    }
+
+    return dateTicks;
+  }, [displayData, viewMode]);
+
   if (chartData.length === 0) return null;
 
   return (
@@ -277,6 +297,7 @@ const DeltaTChart = ({
                 <XAxis
                   dataKey={viewMode === 'current' ? 'time' : 'index'}
                   {...CHART_AXIS_STYLES.axis}
+                  ticks={forcedTicks}
                   tick={viewMode === 'current' ? <CustomXAxisTick displayData={displayData} /> : undefined}
                 />
                 <YAxis
