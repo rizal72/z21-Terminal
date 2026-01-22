@@ -291,25 +291,52 @@ async def write_speed_table_to_decoder(
         if db_success:
             log('[SPEED-TABLE]', f"Database updated for loco {adjust_loco_address} (undo snapshot saved)")
 
-            # Update cv_modification_timestamps for all written CVs (green border indicator)
+            # Update cv_modification_timestamps ONLY for CVs that actually changed
             conn = DataDB.get_connection()
             cursor = conn.cursor()
             current_timestamp = time.time()
 
+            # First, read OLD values from database (previous_values JSON in locomotive_speed_table)
+            cursor.execute('''
+                SELECT previous_values FROM locomotive_speed_table
+                WHERE loco_address = ?
+            ''', (adjust_loco_address,))
+            row = cursor.fetchone()
+            old_values = {}
+            if row and row[0]:
+                import json
+                try:
+                    # previous_values stores the OLD values (before this write)
+                    old_values = {int(k): int(v) for k, v in json.loads(row[0]).items()}
+                except:
+                    pass
+
+            # Update timestamps ONLY for CVs that changed value
+            modified_count = 0
             for cv_index in range(67, 95):  # CV67-94
                 step = cv_index - 66  # CV67 → step 1, CV94 → step 28
                 new_value = cv_values_int.get(cv_index)
-                # Skip blocked CVs (not modified, no timestamp update)
-                if new_value is not None and cv_index not in blocked_cvs:
-                    cursor.execute('''
-                        UPDATE cv_modification_timestamps
-                        SET cv_last_modified = ?
-                        WHERE loco_address = ? AND step = ?
-                    ''', (current_timestamp, adjust_loco_address, step))
+
+                # Skip if: blocked CV, missing value, or value unchanged
+                if cv_index in blocked_cvs or new_value is None:
+                    continue
+
+                old_value = old_values.get(cv_index)
+                if old_value is not None and new_value == old_value:
+                    # Value unchanged, don't update timestamp
+                    continue
+
+                # Value changed or first write, update timestamp
+                cursor.execute('''
+                    UPDATE cv_modification_timestamps
+                    SET cv_last_modified = ?
+                    WHERE loco_address = ? AND step = ?
+                ''', (current_timestamp, adjust_loco_address, step))
+                modified_count += 1
 
             conn.commit()
             conn.close()
-            log('[SPEED-TABLE]', f"CV modification timestamps updated for loco {adjust_loco_address}")
+            log('[SPEED-TABLE]', f"CV modification timestamps updated for loco {adjust_loco_address} ({modified_count} CVs actually modified)")
         else:
             log('[ERROR]', f"Failed to update database for loco {adjust_loco_address}")
     else:
