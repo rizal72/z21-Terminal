@@ -256,9 +256,15 @@ return events.map(event => ({
   - CRITICAL: |Δt| ≥ 1.5s (red dashed lines)
 
 ### Chart Features
-- **Time-series X-axis**: HH:MM:SS format
+- **Time-series X-axis**: HH:MM:SS format with date labels (amber) when day changes
+  - **Tick density**: 1% interval (~100 ticks) for detailed time coverage (commit e6eeca0, 2026-01-22)
+  - Date labels show "21 Jan" format when day changes, time labels distributed throughout
 - **Δt Y-axis**: Seconds (positive = lead ahead, negative = rear ahead)
-- **Tooltip**: Timestamp, Δt value, status, gate type
+- **Tooltip**: Exact timestamp (date + time), Δt value, status, gate type, speed
+  - **Enhanced tooltip** (commit ca58289, 2026-01-22): Shows "21 Jan, 14:32:15" format
+  - Date in amber (matches X-axis date labels), time in grey
+  - Positioned at top of tooltip with separator line below
+  - Essential since not all events have corresponding X-axis ticks
 - **Legend**: Consist 10 / Consist 11 labels
 
 ---
@@ -1728,6 +1734,147 @@ label={viewMode === 'overview' ?
 5. **Good enough > perfect**: Attempted label centering not worth complexity/fragility
 
 **Result**: ✅ Interactive zoom working, Y-axes properly configured, UI responsive and intuitive
+
+---
+
+## Changelog 2026-01-22 - X-Axis Tick Density & Enhanced Tooltip
+
+### X-Axis Tick Density Optimization
+
+**Problem**: With 5% tick interval (20 ticks), only 1-2 time labels visible in chart width → poor temporal resolution
+
+**User Feedback**: "5% è ancora poco, nella larghezza della chart si vede un solo orario"
+
+**Evolution**:
+1. Initial: 10% interval (10 ticks) - too sparse
+2. Iteration 1: 5% interval (20 ticks) - still insufficient
+3. Iteration 2: 2% interval (50 ticks) - proposed but skipped
+4. **Final**: 1% interval (100 ticks) - optimal density
+
+**Implementation** (`web/src/components/charts/DeltaTChart.jsx`):
+```javascript
+// Force ticks where day changes + intermediate time ticks (~100 ticks total = 1% interval)
+const forcedTicks = useMemo(() => {
+  if (viewMode !== 'current' || displayData.length === 0) return undefined;
+
+  const ticks = [];
+
+  // Add all date change ticks (amber "21 Jan" labels)
+  displayData.forEach((d, idx) => {
+    if (d.showDate) {
+      ticks.push(d.time);
+    }
+  });
+
+  // Add intermediate time ticks (~100 ticks total = 1% interval)
+  const tickInterval = Math.max(Math.floor(displayData.length / 100), 1);
+  for (let i = tickInterval; i < displayData.length; i += tickInterval) {
+    const tick = displayData[i].time;
+    if (!ticks.includes(tick)) {
+      ticks.push(tick);
+    }
+  }
+
+  // Always include last tick
+  const lastTick = displayData[displayData.length - 1].time;
+  if (!ticks.includes(lastTick)) {
+    ticks.push(lastTick);
+  }
+
+  // Sort chronologically
+  return ticks.sort((a, b) => {
+    const timeA = displayData.find(d => d.time === a)?.timestamp || 0;
+    const timeB = displayData.find(d => d.time === b)?.timestamp || 0;
+    return timeA - timeB;
+  });
+}, [displayData, viewMode]);
+
+// Apply to XAxis
+<XAxis
+  dataKey={viewMode === 'current' ? 'time' : 'index'}
+  {...CHART_AXIS_STYLES.axis}
+  ticks={forcedTicks}
+  tick={viewMode === 'current' ? <CustomXAxisTick displayData={displayData} /> : undefined}
+/>
+```
+
+**Result**:
+- ✅ Date labels (amber) appear correctly when day changes
+- ✅ Time labels (grey) distributed throughout chart width
+- ✅ ~100 time labels total for fine-grained temporal navigation
+- ✅ Works correctly with consist filtering (All/C10/C11)
+
+**Commit**: `e6eeca0` (2026-01-22)
+
+---
+
+### Enhanced Tooltip with Exact Timestamp
+
+**Problem**: Not all events have corresponding X-axis ticks (1% = ~100 ticks, but hundreds of events) → user can't determine exact time of events without ticks
+
+**User Feedback**: "potrebbe essere bene aggiungere data e ora in formato compatto nel popover a rollover su ogni evento"
+
+**Solution**: Add exact timestamp to tooltip header
+
+**Implementation** (`web/src/components/charts/DeltaTChart.jsx`):
+```javascript
+const CustomTooltip = ({ active, payload, viewMode }) => {
+  if (!active || !payload || payload.length === 0) return null;
+
+  const data = payload[0].payload;
+
+  // Format timestamp to compact date/time
+  const eventDate = data.timestamp ? new Date(data.timestamp * 1000) : null;
+  const dateStr = eventDate ? eventDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : '';
+  const timeStr = eventDate ? eventDate.toLocaleTimeString('en-US', { hour12: false }) : '';
+
+  return (
+    <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl">
+      {/* Date and time */}
+      {eventDate && (
+        <p className="text-xs text-slate-400 mb-2 pb-2 border-b border-slate-700">
+          <span className="text-amber-400 font-semibold">{dateStr}</span>
+          <span className="text-slate-300">, {timeStr}</span>
+        </p>
+      )}
+      {/* ... rest of tooltip (Δt, status, gate, speed) ... */}
+    </div>
+  );
+};
+```
+
+**Format**:
+- Date: "21 Jan" (amber, matches X-axis date labels)
+- Time: "14:32:15" (grey, 24h format with seconds)
+- Separator: Border line below timestamp
+- Positioned: Top of tooltip (first element)
+
+**Result**:
+- ✅ Every event shows exact timestamp on hover
+- ✅ Consistent styling with X-axis date labels (amber)
+- ✅ Compact single-line format
+- ✅ Essential for events between ticks (majority of events)
+
+**Commit**: `ca58289` (2026-01-22)
+
+---
+
+### Key Lessons Learned
+
+1. **Tick Density Trade-offs**:
+   - Too sparse (10%) → poor temporal resolution
+   - Too dense (>100 ticks) → potential X-axis crowding (not tested)
+   - 1% (100 ticks) → sweet spot for readable time distribution
+
+2. **Tooltip Enhancement Necessity**:
+   - Forcing ticks at every event = thousands of ticks → X-axis illegible
+   - 1% tick density = good compromise
+   - Tooltip timestamp = essential fallback for exact time determination
+
+3. **User Feedback Iteration**:
+   - Initial proposal (2% → 50 ticks) rejected
+   - User proposed "facciamo già 1%" → jumped directly to final solution
+   - Saved iteration cycle by accepting user expertise
 
 ---
 

@@ -789,6 +789,13 @@ git diff config.json  # Should show no changes if normalized
 
 ## 📊 Recent Changes (Last 30 Days)
 
+**2026-01-22** - Analytics Chart UX (X-Axis Tick Density + Enhanced Tooltip):
+- ✅ **X-Axis tick density**: Increased from 5% (20 ticks) to 1% (100 ticks) for better time label distribution
+- ✅ **Enhanced tooltip**: Added exact timestamp (date + time) to every event ("21 Jan, 14:32:15" format)
+- ✅ **Rationale**: Not all events have X-axis ticks (1% = ~100 ticks, but hundreds of events), tooltip provides fallback
+- 📄 Frontend: `DeltaTChart.jsx` - forcedTicks calculation (1% interval), CustomTooltip with timestamp
+- 📄 Docs: ANALYTICS.md - Changelog 2026-01-22 section, Chart Features section updated
+
 **2026-01-22** - UI/UX Improvements + Bug Fixes:
 - ✅ **Green left border (2px)**: Persistent visual indicator for CVs modified via web UI (`cv_last_modified > 0`)
 - ✅ **Undo removes border**: Sets `cv_last_modified = 0` when restoring previous values
