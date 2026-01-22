@@ -312,7 +312,7 @@
 │                                                   │
 │  Password                                         │
 │  ┌──────────────────────────────────────────┐    │
-│  │ ••••••••••••••                            │    │
+│  │ ••••••••••••••                         👁️  │    │
 │  └──────────────────────────────────────────┘    │
 │                                                   │
 │  [Test RTSP Stream]                               │
@@ -330,7 +330,9 @@
 - `camera.resolution.width` (numeric input)
 - `camera.resolution.height` (numeric input)
 - `camera.username` (text input, saved to config.local.json)
-- `camera.password` (password input, saved to config.local.json)
+- `camera.password` (password input with visibility toggle, saved to config.local.json)
+  - **Eye icon** (fa-eye / fa-eye-slash): Click to show/hide password text
+  - Default: hidden (type="password"), click to reveal (type="text")
 
 **Security**:
 - Username/password read from merged config (includes config.local.json)
