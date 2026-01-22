@@ -11,6 +11,12 @@ Examples:
 """
 
 import sys
+import os
+
+# Add scripts to path (z21.py is in scripts/)
+scripts_path = os.path.join(os.path.dirname(__file__), '..', '..')
+sys.path.insert(0, scripts_path)
+
 from z21 import Z21
 
 
