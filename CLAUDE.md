@@ -798,8 +798,10 @@ git diff config.json  # Should show no changes if normalized
 - ✅ **Debug badge renamed**: "Meets threshold" → "Sufficient data" (more user-friendly)
 - ✅ **Trailing newline fix**: Config.json save now adds POSIX-compliant newline (prevents git diff)
 - ✅ **Config preservation**: analytics.notes field no longer overwritten when saving settings
+- ✅ **Analytics chart date display**: Force XAxis ticks where day changes (fixes missing dates "21 Jan")
+- ✅ **Recommendation breakdown arrow**: Changed from `┗━` to `→` (visual consistency)
 - 📄 Backend: cv_timestamps in GET response, update timestamps on write, reset on undo, preserve notes fields
-- 📄 Frontend: Green border indicator, password visibility toggle, "Sufficient data" badge
+- 📄 Frontend: Green border indicator, password toggle, forced ticks, arrow indicator
 
 **2026-01-21** - Per-CV Timestamp Filtering + Settings UI Fix:
 - ✅ **cv_modification_timestamps table**: Per-CV tracking (196 rows: 7 locos × 28 steps), recommendations disappear after CV write
