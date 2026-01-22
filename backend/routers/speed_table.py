@@ -22,7 +22,7 @@ from services.speed_table_helpers import (
 )
 from services.config_helpers import get_locomotive_name, get_all_locomotives
 from config_loader import load_config
-from dependencies import get_z21_manager
+from dependencies import get_z21_manager, get_debug_enabled
 from z21_manager import Z21Manager
 from log_colors import log
 
@@ -181,7 +181,8 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
 async def write_speed_table_to_decoder(
     consist_id: int,
     request: Dict[str, Any],
-    z21_manager: Z21Manager = Depends(get_z21_manager)
+    z21_manager: Z21Manager = Depends(get_z21_manager),
+    debug_enabled: bool = Depends(get_debug_enabled)
 ) -> Dict[str, Any]:
     """
     Write speed table CV67-94 to adjust loco decoder (Phase 2 - Direct CV Write).
@@ -252,7 +253,8 @@ async def write_speed_table_to_decoder(
         try:
             validate_cv_write_allowed(adjust_loco_address, cv_index, decoder_type)
         except ValueError as e:
-            log('[CV]', f"Write blocked: {e}")
+            if debug_enabled:
+                log('[CV]', f"Write blocked: {e}")
             blocked_cvs.append(cv_index)  # Track separately (not a failure)
             continue
 
@@ -313,6 +315,7 @@ async def write_speed_table_to_decoder(
 
             # Update timestamps ONLY for CVs that changed value
             modified_count = 0
+            changed_cvs_details = []  # Track changed CVs for detailed log
             for cv_index in range(67, 95):  # CV67-94
                 step = cv_index - 66  # CV67 → step 1, CV94 → step 28
                 new_value = cv_values_int.get(cv_index)
@@ -334,9 +337,22 @@ async def write_speed_table_to_decoder(
                 ''', (current_timestamp, adjust_loco_address, step))
                 modified_count += 1
 
+                # Track change details for log
+                if old_value is not None:
+                    changed_cvs_details.append(f"CV{cv_index}({old_value}→{new_value})")
+                else:
+                    changed_cvs_details.append(f"CV{cv_index}(new:{new_value})")
+
             conn.commit()
             conn.close()
-            log('[SPEED-TABLE]', f"CV modification timestamps updated for loco {adjust_loco_address} ({modified_count} CVs actually modified)")
+
+            # Log with detailed CV changes
+            if changed_cvs_details:
+                changes_str = ", ".join(changed_cvs_details)
+                log('[SPEED-TABLE]', f"CV modification timestamps updated for loco {adjust_loco_address} ({modified_count} CVs changed)")
+                log('[SPEED-TABLE]', f"Changed CVs: {changes_str}")
+            else:
+                log('[SPEED-TABLE]', f"CV modification timestamps updated for loco {adjust_loco_address} (0 CVs changed, all values identical)")
         else:
             log('[ERROR]', f"Failed to update database for loco {adjust_loco_address}")
     else:
