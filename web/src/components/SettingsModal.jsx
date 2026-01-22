@@ -19,6 +19,7 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Tab definitions (order: System first, then by logical grouping)
   const tabs = [
@@ -519,13 +520,23 @@ function CameraTab({ settings, setSettings, apiUrl }) {
           <label className="block text-sm font-medium text-slate-300 mb-2">
             Password
           </label>
-          <input
-            type="password"
-            value={settings.camera.password || ''}
-            onChange={(e) => setSettings({ ...settings, camera: { ...settings.camera, password: e.target.value } })}
-            className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded text-white focus:border-signal-amber focus:ring-1 focus:ring-signal-amber outline-none"
-            autoComplete="off"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={settings.camera.password || ''}
+              onChange={(e) => setSettings({ ...settings, camera: { ...settings.camera, password: e.target.value } })}
+              className="w-full px-4 py-2 pr-10 bg-slate-900 border border-slate-700 rounded text-white focus:border-signal-amber focus:ring-1 focus:ring-signal-amber outline-none"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+              tabIndex={-1}
+            >
+              <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+            </button>
+          </div>
         </div>
       </div>
 
