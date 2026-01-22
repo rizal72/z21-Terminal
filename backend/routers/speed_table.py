@@ -339,7 +339,7 @@ async def write_speed_table_to_decoder(
 
                 # Track change details for log
                 if old_value is not None:
-                    changed_cvs_details.append(f"CV{cv_index}({old_value}→{new_value})")
+                    changed_cvs_details.append(f"CV{cv_index}({old_value}->{new_value})")
                 else:
                     changed_cvs_details.append(f"CV{cv_index}(new:{new_value})")
 
