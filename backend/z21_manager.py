@@ -111,22 +111,7 @@ class Z21Manager:
             self.consist_state[address]['functions'][fn['number']] = False
 
         # Sync initial state from Z21 (read current function states from lead loco)
-        if self.z21:
-            locomotives = data.get('locomotives', [])
-            if locomotives:
-                lead_addr = locomotives[0]['address']  # First in array = lead
-                try:
-                    loco_info = self.z21.get_loco_info(lead_addr)
-                    if loco_info and 'functions' in loco_info:
-                        # Update function states from actual locomotive
-                        for fn_num, fn_state in loco_info['functions'].items():
-                            if fn_num in self.consist_state[address]['functions']:
-                                self.consist_state[address]['functions'][fn_num] = fn_state
-                        if self.debug_enabled:
-                            log('[SYNC]', f"Synced functions for consist {address} from lead loco {lead_addr}")
-                except Exception as e:
-                    if self.debug_enabled:
-                        log('[WARN]', f"Could not sync functions for consist {address}: {e}")
+        self._sync_functions_for_address(address)
 
     def get_consist_state(self, address):
         """Get current state of a consist"""
@@ -135,6 +120,71 @@ class Z21Manager:
     def get_all_consists_state(self):
         """Get state of all consists"""
         return self.consist_state
+
+    def _sync_functions_for_address(self, address):
+        """
+        Internal helper: Sync function states from Z21 for a single address.
+
+        Args:
+            address: Consist or locomotive address
+
+        Returns:
+            bool: True if sync succeeded, False otherwise
+        """
+        if not self.z21 or address not in self.consist_state:
+            return False
+
+        state = self.consist_state[address]
+        locomotives = state.get('locomotives', [])
+        if not locomotives:
+            return False
+
+        lead_addr = locomotives[0]['address']
+        try:
+            loco_info = self.z21.get_loco_info(lead_addr)
+            if loco_info and 'functions' in loco_info:
+                # Update function states from Z21
+                for fn_num, fn_state in loco_info['functions'].items():
+                    if fn_num in state['functions']:
+                        state['functions'][fn_num] = fn_state
+
+                if self.debug_enabled:
+                    fn_count = len(state['functions'])
+                    is_consist = len(locomotives) > 1
+                    entity_type = "consist" if is_consist else "locomotive"
+                    log('[SYNC]', f"Synced {entity_type} {address} ({fn_count} functions) from lead loco {lead_addr}")
+                return True
+        except Exception as e:
+            if self.debug_enabled:
+                log('[WARN]', f"Could not sync functions for address {address}: {e}")
+
+        return False
+
+    def sync_all_functions_from_z21(self):
+        """
+        Sync function states from Z21 for all consists and locomotives.
+        Called on WebSocket connect to ensure UI has fresh state.
+
+        Returns:
+            tuple: (consist_count, locomotive_count, failed_count)
+        """
+        synced_consists = 0
+        synced_locos = 0
+        failed = 0
+
+        for address, state in self.consist_state.items():
+            locomotives = state.get('locomotives', [])
+            is_consist = len(locomotives) > 1
+
+            if self._sync_functions_for_address(address):
+                if is_consist:
+                    synced_consists += 1
+                else:
+                    synced_locos += 1
+            else:
+                failed += 1
+
+        return (synced_consists, synced_locos, failed)
 
     def set_speed(self, address, speed, forward=True, is_auto_compensation=False):
         """

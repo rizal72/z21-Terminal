@@ -56,6 +56,15 @@ async def handle_ws_control(
     log('[WS]', f"Client connected (total: {len(connected_clients)})")
 
     try:
+        # Sync function states from Z21 on new connection
+        # (ensures UI has fresh state even if Z21 was offline during backend startup)
+        consist_count, loco_count, failed_count = z21_manager.sync_all_functions_from_z21()
+        total_synced = consist_count + loco_count
+        if total_synced > 0:
+            log('[SYNC]', f"Function sync completed ({consist_count} consists, {loco_count} locomotives)")
+        if failed_count > 0 and debug_enabled:
+            log('[WARN]', f"Function sync: {failed_count} addresses failed")
+
         # Send initial state to new client
         roster_data = await get_full_roster(consist_data, locomotive_data, z21_manager)
         await websocket.send_json({
