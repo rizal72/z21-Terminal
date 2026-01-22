@@ -237,7 +237,8 @@ async def write_speed_table_to_decoder(
 
     # Write CV67-94 (28 speed table values)
     log('[CV]', f"Writing speed table CV67-94 to loco {adjust_loco_address} (consist {consist_id}, decoder={decoder_type})...")
-    failed_cvs = []
+    blocked_cvs = []  # Read-only CVs (expected, not errors)
+    failed_cvs = []   # Real write errors
 
     for cv_index in range(67, 95):  # CV67-94 (28 values)
         cv_value = cv_values.get(str(cv_index))
@@ -252,7 +253,7 @@ async def write_speed_table_to_decoder(
             validate_cv_write_allowed(adjust_loco_address, cv_index, decoder_type)
         except ValueError as e:
             log('[CV]', f"Write blocked: {e}")
-            failed_cvs.append(cv_index)
+            blocked_cvs.append(cv_index)  # Track separately (not a failure)
             continue
 
         # Round float to int (0-255)
@@ -268,10 +269,16 @@ async def write_speed_table_to_decoder(
             failed_cvs.append(cv_index)
 
     total_time = time.time() - start_time
+    # Success = all modifiable CVs written (blocked CVs don't count as failures)
     all_success = len(failed_cvs) == 0
 
     if all_success:
-        log('[CV]', f"Speed table write complete: 28 CVs written successfully [{total_time:.2f}s]")
+        # Log success message (acknowledge blocked CVs if any)
+        cvs_written = 28 - len(blocked_cvs)
+        if len(blocked_cvs) > 0:
+            log('[CV]', f"Speed table write complete: {cvs_written}/28 CVs written ({len(blocked_cvs)} blocked, read-only) [{total_time:.2f}s]")
+        else:
+            log('[CV]', f"Speed table write complete: 28 CVs written successfully [{total_time:.2f}s]")
 
         # Update database after successful write (with undo snapshot)
         cv_values_int = {int(k): int(v) for k, v in cv_values.items()}
@@ -292,7 +299,8 @@ async def write_speed_table_to_decoder(
             for cv_index in range(67, 95):  # CV67-94
                 step = cv_index - 66  # CV67 → step 1, CV94 → step 28
                 new_value = cv_values_int.get(cv_index)
-                if new_value is not None:
+                # Skip blocked CVs (not modified, no timestamp update)
+                if new_value is not None and cv_index not in blocked_cvs:
                     cursor.execute('''
                         UPDATE cv_modification_timestamps
                         SET cv_last_modified = ?
@@ -305,14 +313,15 @@ async def write_speed_table_to_decoder(
         else:
             log('[ERROR]', f"Failed to update database for loco {adjust_loco_address}")
     else:
-        log('[CV]', f"Speed table write partial: {28 - len(failed_cvs)}/28 CVs written [{total_time:.2f}s]")
+        log('[CV]', f"Speed table write FAILED: {28 - len(failed_cvs) - len(blocked_cvs)}/{28 - len(blocked_cvs)} modifiable CVs written [{total_time:.2f}s]")
 
     return {
         'success': all_success,
-        'failed_cvs': failed_cvs,
+        'blocked_cvs': blocked_cvs,  # Read-only CVs (not errors)
+        'failed_cvs': failed_cvs,    # Real write errors
         'total_time': round(total_time, 2),
         'adjust_loco_address': adjust_loco_address,
-        'cvs_written': 28 - len(failed_cvs)
+        'cvs_written': 28 - len(blocked_cvs) - len(failed_cvs)
     }
 
 

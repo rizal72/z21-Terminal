@@ -328,7 +328,12 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
       }
 
       if (result.success) {
-        setWriteSuccess(`Successfully wrote 28 CVs to loco ${result.adjust_loco_address} (${result.total_time}s)`);
+        // Success message (acknowledge blocked CVs if any)
+        const blockedCount = result.blocked_cvs?.length || 0;
+        const successMsg = blockedCount > 0
+          ? `Successfully wrote ${result.cvs_written}/28 CVs to loco ${result.adjust_loco_address} (${blockedCount} read-only) [${result.total_time}s]`
+          : `Successfully wrote 28 CVs to loco ${result.adjust_loco_address} [${result.total_time}s]`;
+        setWriteSuccess(successMsg);
         // Reload speed table data to sync UI (remove asterisks and highlights)
         await fetchSpeedTableData();
       } else {
