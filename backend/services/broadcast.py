@@ -156,6 +156,11 @@ async def broadcast_state_update(address: int):
         log('[WARN]', f"Address {address} not found in consists or locomotives")
         return
 
+    # Guard check for Z21 manager
+    if _z21_manager is None:
+        log('[WARN]', "Z21 manager not initialized")
+        return
+
     state = _z21_manager.get_consist_state(address)
 
     # Get function definitions from roster data

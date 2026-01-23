@@ -544,7 +544,7 @@ async def undo_speed_table_change(
     failed_cvs = []
 
     for cv_index in range(67, 95):  # CV67-94 (28 values)
-        cv_value = previous_values.get(str(cv_index))
+        cv_value = previous_values.get(cv_index)
 
         if cv_value is None:
             log('[CV]', f"CV{cv_index} missing in previous_values, skipping")

@@ -201,6 +201,10 @@ class TrackingDaemon:
             }
 
             try:
+                # Guard check for websocket connection
+                if self.websocket is None:
+                    continue
+
                 await self.websocket.send(json.dumps(message))
 
                 # Log analytics event (async, non-blocking)
