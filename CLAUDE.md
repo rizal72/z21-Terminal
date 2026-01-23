@@ -790,12 +790,13 @@ git diff config.json  # Should show no changes if normalized
 ## 📊 Recent Changes (Last 30 Days)
 
 **2026-01-23** - Pyright Type Checker Integration:
-- ✅ **Pyright installed**: Static type checker via Claude Code plugin (automatic real-time analysis)
+- ✅ **Pyright installed**: Static type checker via brew (`brew install pyright`, auto-updates with `brew upgrade`)
+- ✅ **Claude Code plugin**: python-lsp enabled, real-time type analysis during development
 - ✅ **Phase 1+2 refactoring**: Fixed Optional type hints (config_loader, analytics_logger, main, dependencies, ws_control, ws_tracking)
 - ✅ **BUG FOUND**: `/api/restart-daemon` called non-existent `.stop()`/`.start()` methods → fixed to `.stop_tracking()`/`.start_tracking()`
 - ✅ **Guard checks**: WebSocket handlers reject connections if managers not initialized (graceful error handling)
 - ✅ **Errors reduced**: 69 → 59 type errors (-10), baseline tagged v0.9.10
-- 📄 Plugin active: automatic type checking during development, catches bugs before runtime
+- 📄 Manual audit: `pyright backend/` for complete codebase analysis
 
 **2026-01-23** - Auto-Sync Functions + Unified Rounding:
 - ✅ **Auto-sync on WebSocket connect**: Functions synced from Z21 every time UI connects (not just backend startup)
