@@ -68,6 +68,32 @@ z21-frontend     # Run frontend dev server (port 5173)
 - **PC Prod Local**: http://localhost:8000
 - **PC Prod (Tailscale)**: https://gaming-pc.tail9350d7.ts.net
 
+### Development Tools
+
+**Pyright Type Checker** (Static type analysis for Python):
+```bash
+# Run full backend analysis
+pyright backend/
+
+# Check specific file
+pyright backend/main.py
+
+# Config file (already configured)
+cat pyrightconfig.json  # extraPaths: scripts, scripts/utils/cv_operations
+```
+
+**Current Status** (v0.9.11):
+- ✅ **26 errors remaining** (59→26, -56% reduction)
+- ✅ All WebSocket handlers validated (ws_control.py, ws_tracking.py)
+- ✅ All import errors resolved (z21.py, read_cv_from_roster.py)
+- ✅ Z21Manager guard checks added (enable/disable_virtual_mode, toggle_test_mode)
+- ⚠️ **Deferred** (high risk): data_db.py (9), video_feed.py (6), downsampling.py (6)
+
+**When to run**:
+- Before committing major backend refactoring
+- After adding new WebSocket handlers or API endpoints
+- When troubleshooting type-related bugs (None access, wrong argument types)
+
 ---
 
 ## 📚 Complete Documentation Index
@@ -806,14 +832,34 @@ git diff config.json  # Should show no changes if normalized
 - 📄 Frontend: DeltaTChart.jsx (+139 lines), AnalyticsPanel.jsx (onDataReload prop)
 - 📄 Commits: 8f72367 (feature), 29f7bb5 (id fix), 4b91e86 (render fn), ecb3200 (activeDot)
 
-**2026-01-23** - Pyright Type Checker Integration:
+**2026-01-23** - Pyright Type Checker Integration (4 phases, 59→26 errors, -56%):
 - ✅ **Pyright installed**: Static type checker via brew (`brew install pyright`, auto-updates with `brew upgrade`)
 - ✅ **Claude Code plugin**: python-lsp enabled, real-time type analysis during development
-- ✅ **Phase 1+2 refactoring**: Fixed Optional type hints (config_loader, analytics_logger, main, dependencies, ws_control, ws_tracking)
-- ✅ **BUG FOUND**: `/api/restart-daemon` called non-existent `.stop()`/`.start()` methods → fixed to `.stop_tracking()`/`.start_tracking()`
-- ✅ **Guard checks**: WebSocket handlers reject connections if managers not initialized (graceful error handling)
-- ✅ **Errors reduced**: 69 → 59 type errors (-10), baseline tagged v0.9.10
-- 📄 Manual audit: `pyright backend/` for complete codebase analysis
+- ✅ **Phase 1 - Import Resolution** (59→49 errors, -10):
+  - Created `pyrightconfig.json` with extraPaths for scripts/ imports
+  - Resolved all import errors (z21.py, read_cv_from_roster.py)
+  - Added scripts/utils/cv_operations to Python path
+- ✅ **Phase 2 - Z21Manager Guard Checks** (49→40 errors, -9):
+  - Added z21 connection checks in enable/disable_virtual_mode
+  - Added z21 check in toggle_test_mode
+  - Fixed unbound variable: initialize current_mode before try block
+- ✅ **Phase 3 - WebSocket Validation** (40→29 errors, -11):
+  - Fixed all ws_control.py handlers (8 errors → 0)
+  - Fixed ws_tracking.py (3 errors → 0)
+  - Added validation + int()/float() cast for all WebSocket payload extractions
+  - Handlers: set_speed, set_direction, set_function, sync, toggle_virtual_mode, toggle_auto_compensation, delta_t_update
+- ✅ **Phase 4 - Single-File Fixes** (29→26 errors, -3):
+  - Fixed broadcast.py: Z21 manager guard check
+  - Fixed speed_table.py: Dict key type (str→int)
+  - Fixed tracking_daemon.py: WebSocket guard check
+- 📄 **Files modified** (13): pyrightconfig.json (new), z21_manager.py, ws_control.py, ws_tracking.py, broadcast.py, speed_table.py, tracking_daemon.py
+- 📄 **Commits**: 4 commits (dabd3b4, 7981430, 808e6e7, version bump)
+- ⚠️ **Remaining errors** (26, intentionally deferred):
+  - data_db.py (9) - Complex accumulator int|list type inference (risk: high)
+  - video_feed.py (6) - Return type None vs str mismatches (risk: moderate)
+  - downsampling.py (6) - Slicing type issues (risk: moderate)
+  - Others (5) - Unbound variables, class method access (risk: low-moderate)
+- 📊 **Result**: 59→26 errors (-33, -56%) - Excellent baseline for future type safety work
 
 **2026-01-23** - Auto-Sync Functions + Unified Rounding:
 - ✅ **Auto-sync on WebSocket connect**: Functions synced from Z21 every time UI connects (not just backend startup)
