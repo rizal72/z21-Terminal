@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from collections import deque
 from datetime import datetime
+from typing import Optional
 from log_colors import log
 
 
@@ -240,7 +241,7 @@ class AnalyticsLogger:
         # Close DB connection
         self.conn.close()
 
-    def log_loco_operating_time(self, address: int, start_time: float, end_time: float, duration_seconds: float, consist_id: int = None):
+    def log_loco_operating_time(self, address: int, start_time: float, end_time: float, duration_seconds: float, consist_id: Optional[int] = None):
         """
         Log locomotive operating time event (both events table + stats table)
 

@@ -6,7 +6,7 @@ Supports base config.json + optional config.local.json override (gitignored)
 
 import json
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from log_colors import log
 
 # Track first load to print local override message only once
@@ -37,7 +37,7 @@ def deep_merge(base: Dict[Any, Any], override: Dict[Any, Any]) -> Dict[Any, Any]
     return result
 
 
-def load_config(config_path: Path = None) -> Dict[str, Any]:
+def load_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
     """
     Load configuration from config.json with optional config.local.json override.
 
@@ -103,7 +103,7 @@ def get_config_path() -> Path:
     return project_root / "config.json"
 
 
-def save_config(config: Dict[str, Any], config_path: Path = None) -> None:
+def save_config(config: Dict[str, Any], config_path: Optional[Path] = None) -> None:
     """
     Save configuration to config.json (does NOT save to config.local.json).
 
@@ -179,7 +179,7 @@ def save_local_config(local_overrides: Dict[str, Any]) -> None:
         f.write('\n')  # Add trailing newline
 
 
-def save_config_backup(config: Dict[str, Any], config_path: Path = None) -> None:
+def save_config_backup(config: Dict[str, Any], config_path: Optional[Path] = None) -> None:
     """Save configuration backup to config.json.backup (unified backup for gates + CV profiles + future features)."""
     if config_path is None:
         config_path = get_config_path()
@@ -190,7 +190,7 @@ def save_config_backup(config: Dict[str, Any], config_path: Path = None) -> None
         f.write('\n')
 
 
-def load_config_backup(config_path: Path = None) -> Dict[str, Any]:
+def load_config_backup(config_path: Optional[Path] = None) -> Dict[str, Any]:
     """Load configuration from config.json.backup if exists, otherwise return empty dict."""
     if config_path is None:
         config_path = get_config_path()
