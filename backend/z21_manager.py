@@ -152,7 +152,9 @@ class Z21Manager:
                     fn_count = len(state['functions'])
                     is_consist = len(locomotives) > 1
                     entity_type = "consist" if is_consist else "locomotive"
-                    log('[SYNC]', f"Synced {entity_type} {address} ({fn_count} functions) from lead loco {lead_addr}")
+                    # Show "from lead loco X" only for consists (redundant for single locos)
+                    source = f" from lead loco {lead_addr}" if is_consist else ""
+                    log('[SYNC]', f"Synced {entity_type} {address} ({fn_count} functions){source}")
                 return True
         except Exception as e:
             if self.debug_enabled:
