@@ -270,6 +270,11 @@ async def handle_set_direction(
     direction = data.get('direction', 'forward')
     forward = direction == 'forward'
 
+    # Validate address
+    if address is None:
+        return
+    address = int(address)
+
     if z21_manager and (address in consist_data or address in locomotive_data):
         # Get current speed (from consist_state or default)
         state = z21_manager.get_consist_state(address) if address in consist_data else {}
@@ -288,6 +293,11 @@ async def handle_set_function(
     address = data.get('address')
     function_num = data.get('function')
     state = data.get('state', False)
+
+    # Validate address
+    if address is None:
+        return
+    address = int(address)
 
     is_consist = address in consist_data
     is_loco = address in locomotive_data
@@ -333,6 +343,12 @@ async def handle_sync(
 ):
     """Handle sync consist state from Z21"""
     address = data.get('address')
+
+    # Validate address
+    if address is None:
+        return
+    address = int(address)
+
     if z21_manager and address in consist_data:
         z21_manager.sync_consist_state(address)
         await broadcast_state_update(address)
@@ -402,6 +418,11 @@ async def handle_toggle_virtual_mode(
     consist_address = data.get('address')
     enable = data.get('enable', False)
 
+    # Validate consist_address
+    if consist_address is None:
+        return
+    consist_address = int(consist_address)
+
     if z21_manager and consist_address in consist_data:
         if enable:
             success = z21_manager.enable_virtual_mode(consist_address)
@@ -424,6 +445,11 @@ async def handle_toggle_auto_compensation(
     """Handle toggle Auto-Compensation (only allowed in Virtual Mode)"""
     consist_address = data.get('address')
     enable = data.get('enable', False)
+
+    # Validate consist_address
+    if consist_address is None:
+        return
+    consist_address = int(consist_address)
 
     if z21_manager and consist_address in z21_manager.consist_state:
         consist = z21_manager.consist_state[consist_address]

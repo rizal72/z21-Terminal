@@ -117,6 +117,12 @@ async def handle_delta_t_update(
     time_str = data.get('time_str', '')  # Pre-calculated elapsed time
     thresholds = data.get('thresholds', timing_thresholds)  # From daemon or fallback to loaded
 
+    # Validate consist_address and delta_t
+    if consist_address is None or delta_t is None:
+        return
+    consist_address = int(consist_address)
+    delta_t = float(delta_t)
+
     if z21_manager and consist_address in consist_data:
         # Update consist state with ALL dT data from tracking_daemon (single source of truth)
         z21_manager.consist_state[consist_address]['delta_t'] = delta_t
