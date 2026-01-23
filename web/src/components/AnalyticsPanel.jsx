@@ -491,6 +491,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
         });
 
         return {
+          id: event.id,  // Event ID for deletion
           index: idx + 1,
           timestamp: event.timestamp,
           time: formatTime(event.timestamp),
@@ -534,6 +535,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
       });
 
       result.push({
+        id: event.id,  // Event ID for deletion
         index: eventIndex++,
         timestamp: event.timestamp,
         time: formatTime(event.timestamp),
