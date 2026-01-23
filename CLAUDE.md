@@ -2,7 +2,7 @@
 
 **Web-based DCC locomotive controller** with real-time YOLO tracking, automatic speed compensation, and multi-device sync via Z21 LAN protocol.
 
-**Version**: v0.9.9 (Development - v1.0.0 Coming Soon)
+**Version**: v0.9.11 (Development - v1.0.0 Coming Soon)
 **Repository**: https://github.com/rizal72/z21-Terminal (Private, SSH)
 **Project**: BiancAlice Railway Layout
 **Last Updated**: 2026-01-23
