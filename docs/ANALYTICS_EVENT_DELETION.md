@@ -1,9 +1,72 @@
 # Event Deletion Feature (YOLO False Positive Cleanup)
 
-**Status**: 📋 Planned (Future Implementation)
+**Status**: ✅ **IMPLEMENTED** (2026-01-23)
 **Complexity**: ⭐⭐☆☆☆ (2/5 - BASSA-MEDIA)
-**Estimated Time**: 4-5 hours (1-2 days with testing)
-**Version Target**: v1.1.0
+**Actual Time**: 5 hours (including 3 Recharts bugfixes)
+**Version**: v0.9.9 (develop branch)
+
+---
+
+## ⚠️ CRITICAL: Recharts Lesson Learned
+
+**IF YOU NEED TO MAKE CHART POINTS CLICKABLE IN RECHARTS, READ THIS FIRST!**
+
+### ❌ What DOESN'T Work
+```jsx
+// WRONG #1: Direct component on dot prop
+dot={<CustomDot onDelete={...} />}
+// Result: onClick never fires, no cursor change
+
+// WRONG #2: Render function on dot prop
+dot={(props) => <CustomDot {...props} onDelete={...} />}
+// Result: onClick never fires, no cursor change
+
+// WRONG #3: onClick on LineChart
+<LineChart onClick={(data) => handleClick(data.activePayload)}>
+// Result: Conflicts with zoom events, unreliable
+```
+
+### ✅ What WORKS (The Only Way)
+```jsx
+// CORRECT: Use activeDot prop with render function
+<Line
+  dot={{ r: 4 }}  // Normal dots (always visible, not clickable)
+  activeDot={(props) => (  // Active dot (appears on hover, clickable!)
+    <circle
+      cx={props.cx}
+      cy={props.cy}
+      r={6}
+      fill={props.fill}
+      stroke="#fff"
+      strokeWidth={2}
+      style={{ cursor: 'pointer' }}
+      onClick={(e) => {
+        e.stopPropagation();  // Prevent chart zoom interference
+        onDelete(props.payload);
+      }}
+    />
+  )}
+/>
+```
+
+**Why activeDot works**:
+- `activeDot` is specifically designed by Recharts to handle hover/click events
+- It appears **only on hover**, making it clear to users that it's interactive
+- Recharts properly passes all props (cx, cy, payload, fill) to activeDot
+- Click handlers work reliably on activeDot, unlike dot
+
+**Key Insights**:
+1. **Never use `dot` for interactive behavior** → use `activeDot` instead
+2. **Always use `e.stopPropagation()`** → prevents interference with chart zoom/pan
+3. **Use render function**: `(props) => <Component {...props} />` → ensures Recharts passes props correctly
+4. **Keep normal `dot` visible**: `{ r: 4 }` → users see all points, activeDot appears on hover
+
+**Debugging took 3 attempts**:
+- Attempt 1: Direct CustomDot on dot → no events
+- Attempt 2: Render function on dot → no events
+- Attempt 3: activeDot approach → ✅ WORKS!
+
+**Recharts documentation is poor on this topic** - remember this approach for future chart interactions!
 
 ---
 
@@ -469,4 +532,64 @@ ORDER BY timestamp DESC;
 
 ---
 
-**End of EVENT_DELETION_FEATURE.md**
+## 🧪 Production Testing (2026-01-23)
+
+**Environment**: PC Windows (gaming-pc), develop branch
+
+**Test Flow**:
+1. ✅ Hard refresh browser (Ctrl+F5)
+2. ✅ Analytics → Current view
+3. ✅ Hover over point → activeDot appears (r=6, white stroke, pointer cursor)
+4. ✅ Click activeDot → modal opens with event details
+5. ✅ Click "Delete" → modal shows "Deleting..."
+6. ✅ Backend log: `[ANALYTICS] Deleted event 4830 (session: 20260123_153406, user action)`
+7. ✅ HTTP 200 OK response
+8. ✅ Chart auto-reloads (GET /api/analytics/cumulative?tail=500)
+9. ✅ Point disappears from chart
+
+**Backend Logs** (C:\z21-Terminal\backend.log):
+```
+[ANALYTICS] Session 20260123_223054 started
+[ANALYTICS] Analytics logging enabled (DB: C:\z21-Terminal\backend\data\data.db)
+INFO:     100.84.143.128:0 - "GET /api/analytics/cumulative?tail=500 HTTP/1.1" 200 OK
+[ANALYTICS] Deleted event 4830 (session: 20260123_153406, user action)
+INFO:     100.84.143.128:0 - "DELETE /api/analytics/events/4830 HTTP/1.1" 200 OK
+INFO:     100.84.143.128:0 - "GET /api/analytics/cumulative?tail=500 HTTP/1.1" 200 OK
+INFO:     100.84.143.128:0 - "GET /api/analytics/locomotive-stats HTTP/1.1" 200 OK
+INFO:     100.84.143.128:0 - "GET /api/analytics/current HTTP/1.1" 200 OK
+```
+
+**Result**: ✅ **COMPLETE SUCCESS** - Feature working perfectly in production!
+
+---
+
+## 📝 Implementation Summary
+
+**Commits**:
+- `8f72367` - feat: implement click-to-delete for false positive Δt events
+- `29f7bb5` - fix: include event id in chartData for click-to-delete
+- `4b91e86` - fix: use render function for CustomDot in Recharts Line
+- `ecb3200` - fix: use activeDot instead of dot for clickable points (FINAL SOLUTION)
+
+**Files Modified**:
+- `backend/routers/analytics.py` (+88 lines) - DELETE endpoint
+- `backend/services/data_db.py` (+1 field) - Include event 'id' in response
+- `web/src/components/charts/DeltaTChart.jsx` (+139 lines) - CustomActiveDot + modal
+- `web/src/components/AnalyticsPanel.jsx` (+2 lines) - Include event 'id' in chartData + onDataReload prop
+
+**Bugfixes Required**: 3
+1. Missing `id` field in chartData construction
+2. Wrong prop passing to CustomDot (needed render function)
+3. **`dot` prop doesn't support clicks → use `activeDot` instead** (CRITICAL INSIGHT!)
+
+**Time Investment**:
+- Planning: 1 hour
+- Initial implementation: 2 hours
+- Debugging Recharts: 2 hours (3 attempts)
+- **Total**: 5 hours
+
+**Key Takeaway**: Recharts `activeDot` is THE way to make chart points interactive. Never use `dot` for click events!
+
+---
+
+**End of ANALYTICS_EVENT_DELETION.md**
