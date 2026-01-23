@@ -90,23 +90,25 @@ const CustomTooltip = ({ active, payload, viewMode }) => {
   );
 };
 
-// Custom Dot - Clickable for event deletion
-const CustomDot = ({ cx, cy, payload, fill, onDelete }) => {
+// Custom Active Dot - Clickable for event deletion (appears on hover)
+const CustomActiveDot = ({ cx, cy, payload, fill, onDelete }) => {
   if (!payload) return null;
 
   return (
     <circle
       cx={cx}
       cy={cy}
-      r={4}
+      r={6}
       fill={fill}
+      stroke="#fff"
+      strokeWidth={2}
       style={{
-        cursor: 'pointer',
-        transition: 'r 0.2s'
+        cursor: 'pointer'
       }}
-      onMouseEnter={(e) => e.target.setAttribute('r', 6)}
-      onMouseLeave={(e) => e.target.setAttribute('r', 4)}
-      onClick={() => onDelete(payload)}
+      onClick={(e) => {
+        e.stopPropagation();  // Prevent chart zoom events
+        onDelete(payload);
+      }}
     />
   );
 };
@@ -444,7 +446,8 @@ const DeltaTChart = ({
                           dataKey={`delta_t_c${consistId}`}
                           stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
                           strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                          dot={viewMode === 'current' ? (props) => <CustomDot {...props} onDelete={handleDeleteEvent} /> : false}
+                          dot={viewMode === 'current' ? { r: 4 } : false}
+                          activeDot={viewMode === 'current' ? (props) => <CustomActiveDot {...props} onDelete={handleDeleteEvent} /> : false}
                           name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
                           connectNulls={true}
                         />
@@ -460,7 +463,8 @@ const DeltaTChart = ({
                         dataKey={`delta_t_c${consistId}_seg${segIdx}`}
                         stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
                         strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                        dot={viewMode === 'current' ? (props) => <CustomDot {...props} onDelete={handleDeleteEvent} /> : false}
+                        dot={viewMode === 'current' ? { r: 4 } : false}
+                        activeDot={viewMode === 'current' ? (props) => <CustomActiveDot {...props} onDelete={handleDeleteEvent} /> : false}
                         name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
                         legendType={segIdx === 0 ? undefined : 'none'}
                         connectNulls={true}
