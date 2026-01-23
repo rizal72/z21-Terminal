@@ -444,7 +444,7 @@ const DeltaTChart = ({
                           dataKey={`delta_t_c${consistId}`}
                           stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
                           strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                          dot={viewMode === 'current' ? <CustomDot onDelete={handleDeleteEvent} /> : false}
+                          dot={viewMode === 'current' ? (props) => <CustomDot {...props} onDelete={handleDeleteEvent} /> : false}
                           name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
                           connectNulls={true}
                         />
@@ -460,7 +460,7 @@ const DeltaTChart = ({
                         dataKey={`delta_t_c${consistId}_seg${segIdx}`}
                         stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
                         strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                        dot={viewMode === 'current' ? <CustomDot onDelete={handleDeleteEvent} /> : false}
+                        dot={viewMode === 'current' ? (props) => <CustomDot {...props} onDelete={handleDeleteEvent} /> : false}
                         name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
                         legendType={segIdx === 0 ? undefined : 'none'}
                         connectNulls={true}
