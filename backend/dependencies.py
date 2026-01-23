@@ -40,8 +40,8 @@ _debug_enabled: bool = False
 
 
 def init_dependencies(
-    z21_mgr: "Z21Manager",
-    tracking_mgr: "TrackingManager",
+    z21_mgr: Optional["Z21Manager"],
+    tracking_mgr: Optional["TrackingManager"],
     clients: List[WebSocket],
     consists: Dict[int, Dict[str, Any]],
     locomotives: Dict[int, Dict[str, Any]],

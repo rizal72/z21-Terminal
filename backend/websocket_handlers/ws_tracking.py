@@ -10,7 +10,7 @@ Handles tracking daemon WebSocket endpoint:
 """
 
 from fastapi import WebSocket, WebSocketDisconnect
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 
 from z21_manager import Z21Manager
@@ -20,7 +20,7 @@ import dependencies
 
 async def handle_ws_tracking(
     websocket: WebSocket,
-    z21_manager: Z21Manager,
+    z21_manager: Optional[Z21Manager],
     consist_data: Dict[int, Dict[str, Any]],
     connected_clients: List[WebSocket],
     timing_thresholds: Dict[str, float]
@@ -42,10 +42,16 @@ async def handle_ws_tracking(
 
     log('[WS]', f"Tracking daemon connected")
 
+    # Guard: z21_manager must be initialized
+    if z21_manager is None:
+        log('[ERROR]', "Tracking daemon connection rejected: z21_manager not initialized")
+        await websocket.close(code=1011, reason="Backend not ready")
+        dependencies.set_tracking_daemon_ws(None)
+        return
+
     # Sync daemon with current speeds immediately on connect
     # Critical for page reload: daemon must know if locos are moving
-    if z21_manager:
-        for consist_address, consist_state in z21_manager.consist_state.items():
+    for consist_address, consist_state in z21_manager.consist_state.items():
             speed = consist_state.get('speed', 0)
             if speed > 0:
                 try:

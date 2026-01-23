@@ -50,8 +50,8 @@ DEFAULT_CONTROLLER = {'id': None, 'type': None, 'address': None}
 CONFIG_PATH = get_config_path()  # Centralized config path
 
 # Global instances
-z21_manager: Z21Manager = None
-tracking_manager: TrackingManager = None
+z21_manager: Optional[Z21Manager] = None
+tracking_manager: Optional[TrackingManager] = None
 connected_clients: List[WebSocket] = []
 consist_data: Dict[int, Dict[str, Any]] = {}
 locomotive_data: Dict[int, Dict[str, Any]] = {}
@@ -361,7 +361,7 @@ async def lifespan(app: FastAPI):
 
         # Get initial track power state (with error handling for unreachable Z21)
         try:
-            status = z21_manager.z21.get_status()
+            status = z21_manager.z21.get_status()  # type: ignore[union-attr]
             if status:
                 last_track_power_state = not status.get('track_power_off', False)
                 if debug_enabled:
@@ -555,9 +555,9 @@ async def restart_tracking_daemon():
         global tracking_manager
         if tracking_manager:
             # Stop current daemon
-            await tracking_manager.stop()
+            await tracking_manager.stop_tracking()
             # Start with reloaded config
-            await tracking_manager.start()
+            await tracking_manager.start_tracking()
             return {"success": True, "message": "Tracking daemon restarted"}
         else:
             return {"success": False, "error": "Tracking manager not initialized"}
@@ -601,7 +601,7 @@ async def toggle_debug():
 @app.post("/api/toggle-test-mode")
 async def toggle_test_mode():
     """Toggle test mode between 'normal' and 'testing' for ALL locomotives (hotkey T in UI) - controls momentum (CV3/CV4)"""
-    success, new_mode, message = z21_manager.toggle_test_mode()
+    success, new_mode, message = z21_manager.toggle_test_mode()  # type: ignore[union-attr]
     return {"status": "success" if success else "error", "mode": new_mode, "message": message}
 
 

@@ -8,7 +8,7 @@ Handles real-time locomotive control WebSocket endpoint:
 """
 
 from fastapi import WebSocket, WebSocketDisconnect
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 import asyncio
 import time
@@ -26,8 +26,8 @@ async def handle_ws_control(
     connected_clients: List[WebSocket],
     consist_data: Dict[int, Dict[str, Any]],
     locomotive_data: Dict[int, Dict[str, Any]],
-    z21_manager: Z21Manager,
-    tracking_manager: TrackingManager,
+    z21_manager: Optional[Z21Manager],
+    tracking_manager: Optional[TrackingManager],
     controllers_config: List[Dict[str, Any]],
     last_track_power_state: bool,
     z21_online: bool,
@@ -54,6 +54,13 @@ async def handle_ws_control(
     connected_clients.append(websocket)
 
     log('[WS]', f"Client connected (total: {len(connected_clients)})")
+
+    # Guard: managers must be initialized after app startup
+    if z21_manager is None or tracking_manager is None:
+        log('[ERROR]', "WebSocket connection rejected: managers not initialized")
+        await websocket.close(code=1011, reason="Backend not ready")
+        connected_clients.remove(websocket)
+        return
 
     try:
         # Sync function states from Z21 on new connection
