@@ -10,7 +10,7 @@ Handles all analytics-related endpoints:
 - Session lifecycle management
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 from services.data_db import DataDB
 from services.downsampling import smart_downsample_delta_t, lttb_downsample, format_duration_hms
@@ -43,6 +43,93 @@ async def get_session_data(session_id: str):
     if result is None:
         return {"error": "Session not found"}
     return result
+
+
+@router.delete("/events/{event_id}")
+async def delete_event(event_id: int):
+    """
+    Delete a single delta_t event (YOLO false positive cleanup).
+
+    Validates:
+    - Event exists
+    - Event type is 'delta_t' (only delta_t events can be deleted)
+
+    Side effects:
+    - Session event_count updated (-1)
+    - Session validation might be invalidated if this was the only delta_t event
+    - Weighted recommendations recalculated on next Speed Table Viewer load
+    - Fixed speeds detection might change
+
+    Args:
+        event_id: Event ID from events table (INTEGER PRIMARY KEY)
+
+    Returns:
+        {"success": True, "event_id": 123, "session_id": "20260123_143215"}
+
+    Raises:
+        404: Event not found
+        400: Event is not delta_t type (cannot delete speed_setting, loco_operating_time, yolo_performance)
+    """
+    conn = DataDB.get_connection()
+    cursor = conn.cursor()
+
+    # Verify event exists and is delta_t
+    cursor.execute('''
+        SELECT event_type, session_id FROM events WHERE id = ?
+    ''', (event_id,))
+
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    event_type, session_id = row
+
+    if event_type != 'delta_t':
+        conn.close()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only delta_t events can be deleted (found: {event_type})"
+        )
+
+    # Delete event
+    cursor.execute('DELETE FROM events WHERE id = ?', (event_id,))
+
+    # Update session event_count (-1)
+    cursor.execute('''
+        UPDATE sessions
+        SET event_count = event_count - 1
+        WHERE id = ?
+    ''', (session_id,))
+
+    # Check if session still has delta_t events (for validation)
+    cursor.execute('''
+        SELECT COUNT(*) FROM events
+        WHERE session_id = ? AND event_type = 'delta_t'
+    ''', (session_id,))
+
+    remaining_delta_t = cursor.fetchone()[0]
+
+    # If no more delta_t events, invalidate session
+    if remaining_delta_t == 0:
+        cursor.execute('''
+            UPDATE sessions
+            SET validated = 0
+            WHERE id = ?
+        ''', (session_id,))
+        log('[ANALYTICS]', f"Session {session_id} invalidated (no delta_t events after deletion)")
+
+    conn.commit()
+    conn.close()
+
+    log('[ANALYTICS]', f"Deleted event {event_id} (session: {session_id}, user action)")
+
+    return {
+        "success": True,
+        "event_id": event_id,
+        "session_id": session_id,
+        "session_invalidated": remaining_delta_t == 0
+    }
 
 
 @router.get("/cumulative")

@@ -899,6 +899,7 @@ export default function AnalyticsPanel({ isOpen, onClose }) {
                   refAreaRight={refAreaRight}
                   collapsed={collapsedPanels.deltaTrends}
                   onToggleCollapse={() => togglePanel('deltaTrends')}
+                  onDataReload={loadCumulativeData}
                 />
               )}
 

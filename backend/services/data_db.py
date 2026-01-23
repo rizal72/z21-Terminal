@@ -132,27 +132,28 @@ class DataDB:
             session_id: Optional session ID to filter by
 
         Returns:
-            List of delta_t event dicts with session_id, timestamp, consist_id, delta_t, status, gate_type
+            List of delta_t event dicts with id, session_id, timestamp, consist_id, delta_t, status, gate_type, speed
         """
         conn = DataDB.get_connection()
         cursor = conn.cursor()
 
         if session_id:
             cursor.execute(
-                "SELECT session_id, timestamp, data FROM events WHERE session_id = ? AND event_type = 'delta_t' ORDER BY timestamp",
+                "SELECT id, session_id, timestamp, data FROM events WHERE session_id = ? AND event_type = 'delta_t' ORDER BY timestamp",
                 (session_id,)
             )
         else:
             cursor.execute(
-                "SELECT session_id, timestamp, data FROM events WHERE event_type = 'delta_t' ORDER BY timestamp"
+                "SELECT id, session_id, timestamp, data FROM events WHERE event_type = 'delta_t' ORDER BY timestamp"
             )
 
         events = []
         for row in cursor.fetchall():
-            data = json.loads(row[2])
+            data = json.loads(row[3])
             events.append({
-                'session_id': row[0],
-                'timestamp': row[1],
+                'id': row[0],
+                'session_id': row[1],
+                'timestamp': row[2],
                 'consist_id': data['consist_id'],
                 'delta_t': data['delta_t'],
                 'status': data['status'],

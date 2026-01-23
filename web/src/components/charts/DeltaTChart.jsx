@@ -14,7 +14,7 @@
  * - CustomXAxisTick: shows date in amber when day changes, time otherwise (Current mode only)
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea
 } from 'recharts';
@@ -82,7 +82,32 @@ const CustomTooltip = ({ active, payload, viewMode }) => {
           </span>
         </p>
       )}
+      {/* Click to delete hint */}
+      <div className="mt-2 pt-2 border-t border-slate-700 text-xs text-slate-400">
+        💡 Click point to delete
+      </div>
     </div>
+  );
+};
+
+// Custom Dot - Clickable for event deletion
+const CustomDot = ({ cx, cy, payload, fill, onDelete }) => {
+  if (!payload) return null;
+
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={4}
+      fill={fill}
+      style={{
+        cursor: 'pointer',
+        transition: 'r 0.2s'
+      }}
+      onMouseEnter={(e) => e.target.setAttribute('r', 6)}
+      onMouseLeave={(e) => e.target.setAttribute('r', 4)}
+      onClick={() => onDelete(payload)}
+    />
   );
 };
 
@@ -132,8 +157,55 @@ const DeltaTChart = ({
   refAreaLeft,
   refAreaRight,
   collapsed,
-  onToggleCollapse
+  onToggleCollapse,
+  onDataReload  // Callback to reload analytics data after deletion
 }) => {
+  // State for delete confirmation modal
+  const [eventToDelete, setEventToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  // Handle event deletion (opens modal)
+  const handleDeleteEvent = (eventData) => {
+    setEventToDelete(eventData);
+    setDeleteError(null);
+  };
+
+  // Confirm deletion (API call)
+  const confirmDelete = async () => {
+    if (!eventToDelete || !eventToDelete.id) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const response = await fetch(`/api/analytics/events/${eventToDelete.id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Delete failed');
+      }
+
+      // Success - close modal and reload data
+      setEventToDelete(null);
+      if (onDataReload) {
+        await onDataReload();
+      }
+    } catch (error) {
+      setDeleteError(error.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Cancel deletion (closes modal)
+  const cancelDelete = () => {
+    setEventToDelete(null);
+    setDeleteError(null);
+  };
+
   // Apply zoom filter + pre-calculate showDate flags
   const displayData = useMemo(() => {
     let data = chartData;
@@ -372,7 +444,7 @@ const DeltaTChart = ({
                           dataKey={`delta_t_c${consistId}`}
                           stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
                           strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                          dot={viewMode === 'current' ? { r: 4 } : false}
+                          dot={viewMode === 'current' ? <CustomDot onDelete={handleDeleteEvent} /> : false}
                           name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
                           connectNulls={true}
                         />
@@ -388,7 +460,7 @@ const DeltaTChart = ({
                         dataKey={`delta_t_c${consistId}_seg${segIdx}`}
                         stroke={getConsistStrokeColor(consistId, trackingConfig.consists)}
                         strokeWidth={viewMode === 'current' ? 2 : 1.5}
-                        dot={viewMode === 'current' ? { r: 4 } : false}
+                        dot={viewMode === 'current' ? <CustomDot onDelete={handleDeleteEvent} /> : false}
                         name={trackingConfig.consists[consistId]?.name || `Consist ${consistId}`}
                         legendType={segIdx === 0 ? undefined : 'none'}
                         connectNulls={true}
@@ -409,6 +481,80 @@ const DeltaTChart = ({
                 )}
               </LineChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {eventToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 max-w-sm w-full mx-4">
+            <h3 className="text-xl font-bold text-white mb-4">Delete Event?</h3>
+
+            <div className="space-y-2 mb-6 text-sm text-slate-300">
+              <div>
+                <span className="font-semibold text-slate-400">Δt:</span> {formatDeltaT(eventToDelete.delta_t)}s
+              </div>
+              {eventToDelete.timestamp && (
+                <div>
+                  <span className="font-semibold text-slate-400">Time:</span>{' '}
+                  {new Date(eventToDelete.timestamp * 1000).toLocaleString('en-US', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                  })}
+                </div>
+              )}
+              {eventToDelete.status && (
+                <div>
+                  <span className="font-semibold text-slate-400">Status:</span>{' '}
+                  <span className={`font-semibold ${
+                    eventToDelete.status === 'SYNCED' ? 'text-green-400' :
+                    eventToDelete.status === 'WARNING' ? 'text-amber-400' :
+                    'text-red-400'
+                  }`}>
+                    {eventToDelete.status}
+                  </span>
+                </div>
+              )}
+              {eventToDelete.speed !== undefined && eventToDelete.speed !== null && (
+                <div>
+                  <span className="font-semibold text-slate-400">Speed:</span>{' '}
+                  {eventToDelete.speed} ({Math.round((eventToDelete.speed / 126) * 100)}%)
+                </div>
+              )}
+            </div>
+
+            {deleteError && (
+              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded text-red-400 text-sm">
+                {deleteError}
+              </div>
+            )}
+
+            <p className="text-amber-400 text-xs mb-4">
+              ⚠️ This action cannot be undone
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={cancelDelete}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-red-800 disabled:text-slate-500 rounded transition-colors"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}
