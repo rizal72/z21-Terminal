@@ -790,17 +790,21 @@ git diff config.json  # Should show no changes if normalized
 
 ## 📊 Recent Changes (Last 30 Days)
 
-**2026-01-23** - Click-to-Delete False Positive Events:
+**2026-01-23** - Click-to-Delete False Positive Events (5 hours, 4 commits):
 - ✅ **Backend endpoint**: DELETE /api/analytics/events/{event_id} (validates delta_t only)
 - ✅ **Event ID tracking**: get_delta_t_events() now includes 'id' field for each event
-- ✅ **Clickable points**: CustomDot component with hover effect (r=4→6, pointer cursor)
+- ✅ **Clickable points**: CustomActiveDot component (r=6, white stroke, pointer cursor on hover)
 - ✅ **Confirmation modal**: Shows Δt, timestamp, status, speed before deletion
 - ✅ **Auto-reload**: Chart refreshes after successful deletion
 - ✅ **Tooltip hint**: "💡 Click point to delete" in CustomTooltip
 - ✅ **Side effects**: Session invalidated if last delta_t removed, recommendations recalculated
 - ✅ **Current view only**: Deletion available only in Current mode (not Overview)
+- ⚠️ **CRITICAL Recharts lesson**: Use `activeDot` prop (NOT `dot`) for clickable chart points - see ANALYTICS_EVENT_DELETION.md
+- 🐛 **3 bugfixes**: Missing id in chartData, render function syntax, activeDot discovery
+- ✅ **Production tested**: Event 4830 deleted successfully, logs confirmed
 - 📄 Backend: analytics.py (+88 lines), data_db.py (SELECT id added)
 - 📄 Frontend: DeltaTChart.jsx (+139 lines), AnalyticsPanel.jsx (onDataReload prop)
+- 📄 Commits: 8f72367 (feature), 29f7bb5 (id fix), 4b91e86 (render fn), ecb3200 (activeDot)
 
 **2026-01-23** - Pyright Type Checker Integration:
 - ✅ **Pyright installed**: Static type checker via brew (`brew install pyright`, auto-updates with `brew upgrade`)
