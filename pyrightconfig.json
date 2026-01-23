@@ -1,0 +1,19 @@
+{
+  "include": [
+    "backend"
+  ],
+  "exclude": [
+    "backend/data",
+    "**/__pycache__",
+    "**/.pytest_cache"
+  ],
+  "extraPaths": [
+    "scripts",
+    "scripts/utils/cv_operations"
+  ],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "reportPrivateImportUsage": false
+}

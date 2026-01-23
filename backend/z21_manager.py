@@ -600,6 +600,11 @@ class Z21Manager:
         lead_addr = locomotives[0]['address']
         rear_addr = locomotives[1]['address']
 
+        # Guard check for Z21 connection
+        if self.z21 is None:
+            log('[ERROR]', "Z21 not connected")
+            return False
+
         # Always log Virtual Mode toggle (critical operation)
         log('[CV]', f"Enabling Virtual Mode for consist {consist_address}...")
         log('[CV]', f"Writing CV19=0 to loco {lead_addr} (lead)")
@@ -649,6 +654,11 @@ class Z21Manager:
 
         lead_addr = locomotives[0]['address']
         rear_addr = locomotives[1]['address']
+
+        # Guard check for Z21 connection
+        if self.z21 is None:
+            log('[ERROR]', "Z21 not connected")
+            return False
 
         # Always log Virtual Mode toggle (critical operation)
         log('[CV]', f"Disabling Virtual Mode for consist {consist_address}...")
@@ -742,12 +752,17 @@ class Z21Manager:
 
     def toggle_test_mode(self):
         """Toggle test mode between 'normal' and 'testing' for ALL locomotives. Returns (success: bool, new_mode: str, message: str)."""
+        current_mode = 'normal'  # Default fallback for error handling
         try:
             # Load current mode from database (Phase 2 DB refactoring)
             current_mode = DataDB.get_test_mode()
             locomotives = get_all_locomotives()
             if not locomotives:
                 return False, current_mode, "No locomotives configured in config.json"
+
+            # Guard check for Z21 connection
+            if self.z21 is None:
+                return False, current_mode, "Z21 not connected"
 
             # Check track power before attempting writes
             status = self.z21.get_status()

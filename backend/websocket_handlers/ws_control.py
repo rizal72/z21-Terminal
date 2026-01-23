@@ -181,6 +181,11 @@ async def handle_set_speed(
     speed = data.get('speed', 0)
     forward = data.get('forward', True)
 
+    # Validate address
+    if address is None:
+        return
+    address = int(address)
+
     if z21_manager and (address in consist_data or address in locomotive_data):
         # Get old speed before changing (for speed_setting event logging)
         old_speed = z21_manager.consist_state.get(address, {}).get('speed', 0)
