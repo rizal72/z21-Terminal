@@ -790,6 +790,18 @@ git diff config.json  # Should show no changes if normalized
 
 ## 📊 Recent Changes (Last 30 Days)
 
+**2026-01-23** - Click-to-Delete False Positive Events:
+- ✅ **Backend endpoint**: DELETE /api/analytics/events/{event_id} (validates delta_t only)
+- ✅ **Event ID tracking**: get_delta_t_events() now includes 'id' field for each event
+- ✅ **Clickable points**: CustomDot component with hover effect (r=4→6, pointer cursor)
+- ✅ **Confirmation modal**: Shows Δt, timestamp, status, speed before deletion
+- ✅ **Auto-reload**: Chart refreshes after successful deletion
+- ✅ **Tooltip hint**: "💡 Click point to delete" in CustomTooltip
+- ✅ **Side effects**: Session invalidated if last delta_t removed, recommendations recalculated
+- ✅ **Current view only**: Deletion available only in Current mode (not Overview)
+- 📄 Backend: analytics.py (+88 lines), data_db.py (SELECT id added)
+- 📄 Frontend: DeltaTChart.jsx (+139 lines), AnalyticsPanel.jsx (onDataReload prop)
+
 **2026-01-23** - Pyright Type Checker Integration:
 - ✅ **Pyright installed**: Static type checker via brew (`brew install pyright`, auto-updates with `brew upgrade`)
 - ✅ **Claude Code plugin**: python-lsp enabled, real-time type analysis during development
