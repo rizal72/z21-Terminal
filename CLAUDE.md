@@ -94,6 +94,7 @@ z21-frontend     # Run frontend dev server (port 5173)
 
 ### Analytics & Monitoring
 - **[ANALYTICS.md](docs/ANALYTICS.md)** - Session tracking, Δt trends, YOLO performance, locomotive operating time
+- **[ANALYTICS_EVENT_DELETION.md](docs/ANALYTICS_EVENT_DELETION.md)** - Click-to-delete false positive Δt events (planned v1.1.0)
 - **[DB_REFACTORING.md](docs/DB_REFACTORING.md)** - Database consolidation: analytics.db → data.db migration (2026-01-17)
 - **[LOCOMOTIVE_SYNC_MAC_PC.md](docs/LOCOMOTIVE_SYNC_MAC_PC.md)** - Multi-environment config sync
 
