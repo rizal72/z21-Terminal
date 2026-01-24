@@ -130,6 +130,9 @@ cat pyrightconfig.json  # extraPaths: scripts, scripts/utils/cv_operations
 - **[CONSIST_MANAGER_UI.md](docs/CONSIST_MANAGER_UI.md)** - Consist CRUD operations via web UI (Phase 6)
 - **[CONFIG_REFACTOR.md](docs/CONFIG_REFACTOR.md)** - Config.json structure evolution (2025-01-03)
 
+### Development & Type Safety
+- **[PYRIGHT_ANALYSIS.md](docs/PYRIGHT_ANALYSIS.md)** - Complete type error analysis (26 remaining errors), risk assessment (HIGH/MODERATE/LOW), fix strategies, and roadmap
+
 ### Planning & Archive
 - **[CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md)** - Historical changes (2025-12-16 → 2026-01-16)
 - **[FUTURE_IDEAS.md](docs/FUTURE_IDEAS.md)** - Enhancement ideas (Session Replay, Autopilot, Notifications, Multi-User, etc.)
