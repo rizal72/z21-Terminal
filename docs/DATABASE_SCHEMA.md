@@ -403,6 +403,64 @@ ORDER BY last_modified DESC;
 
 ---
 
+## Common Queries
+
+### Find all CRITICAL delta_t events for consist 11
+```sql
+SELECT datetime(timestamp, 'unixepoch', 'localtime') as time,
+       json_extract(data, '$.delta_t') as delta_t,
+       json_extract(data, '$.status') as status
+FROM events
+WHERE event_type='delta_t'
+  AND json_extract(data, '$.consist_id')=11
+  AND json_extract(data, '$.status')='CRITICAL'
+ORDER BY timestamp DESC;
+```
+
+### Find all gate crossings for consist 11 (last 24h)
+```sql
+SELECT datetime(timestamp, 'unixepoch', 'localtime') as time,
+       json_extract(data, '$.delta_t') as delta_t,
+       json_extract(data, '$.status') as status,
+       json_extract(data, '$.speed') as speed
+FROM events
+WHERE event_type='delta_t'
+  AND json_extract(data, '$.consist_id')=11
+  AND timestamp > (strftime('%s', 'now') - 86400)
+ORDER BY timestamp DESC;
+```
+
+### Get locomotive operating time summary
+```sql
+SELECT address, name,
+       total_operating_seconds / 3600.0 as hours,
+       total_sessions
+FROM locomotive_stats
+ORDER BY total_operating_seconds DESC;
+```
+
+### Delete outlier delta_t events (|Δt| > 3s without speed)
+```sql
+DELETE FROM events
+WHERE id IN (
+  SELECT id FROM events
+  WHERE event_type='delta_t'
+    AND (json_extract(data, '$.delta_t') > 3.0 OR json_extract(data, '$.delta_t') < -3.0)
+    AND json_extract(data, '$.speed') IS NULL
+);
+```
+
+### Copy database between Mac and PC
+```bash
+# Mac → PC
+scp backend/data/data.db riccardo@gaming-pc:C:/z21-Terminal/backend/data/data.db
+
+# PC → Mac
+scp riccardo@gaming-pc:C:/z21-Terminal/backend/data/data.db backend/data/data.db
+```
+
+---
+
 ## Maintenance
 
 ### Database size

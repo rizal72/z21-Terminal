@@ -1,8 +1,86 @@
-# Changelog Archive (2025-12-16 → 2026-01-21)
+# Changelog Archive (2025-12-16 → 2026-01-27)
 
 Archived changelog entries and failed experiments documentation.
 
 For recent changes, see main CLAUDE.md file.
+
+---
+
+## Changelog 2026-01-20 to 2026-01-23
+
+### 2026-01-23 - Click-to-Delete False Positive Events (5 hours, 4 commits)
+- ✅ **Backend endpoint**: DELETE /api/analytics/events/{event_id} (validates delta_t only)
+- ✅ **Event ID tracking**: get_delta_t_events() now includes 'id' field for each event
+- ✅ **Clickable points**: CustomActiveDot component (r=6, white stroke, pointer cursor on hover)
+- ✅ **Confirmation modal**: Shows Δt, timestamp, status, speed before deletion
+- ✅ **Auto-reload**: Chart refreshes after successful deletion
+- ✅ **Tooltip hint**: "Click point to delete" in CustomTooltip
+- ✅ **Side effects**: Session invalidated if last delta_t removed, recommendations recalculated
+- ✅ **Current view only**: Deletion available only in Current mode (not Overview)
+- ⚠️ **CRITICAL Recharts lesson**: Use `activeDot` prop (NOT `dot`) for clickable chart points
+- 🐛 **3 bugfixes**: Missing id in chartData, render function syntax, activeDot discovery
+- ✅ **Production tested**: Event 4830 deleted successfully, logs confirmed
+- 📄 Backend: analytics.py (+88 lines), data_db.py (SELECT id added)
+- 📄 Frontend: DeltaTChart.jsx (+139 lines), AnalyticsPanel.jsx (onDataReload prop)
+- 📄 Commits: 8f72367, 29f7bb5, 4b91e86, ecb3200
+
+### 2026-01-23 - Pyright Type Checker Integration (4 phases, 59→26 errors, -56%)
+- ✅ **Pyright installed**: Static type checker via brew (`brew install pyright`, auto-updates)
+- ✅ **Claude Code plugin**: python-lsp enabled, real-time type analysis during development
+- ✅ **Phase 1 - Import Resolution** (59→49): Created pyrightconfig.json, resolved imports
+- ✅ **Phase 2 - Z21Manager Guard Checks** (49→40): Added z21 checks in virtual_mode, toggle_test_mode
+- ✅ **Phase 3 - WebSocket Validation** (40→29): Fixed all ws_control.py + ws_tracking.py handlers
+- ✅ **Phase 4 - Single-File Fixes** (29→26): Fixed broadcast.py, speed_table.py, tracking_daemon.py
+- 📄 **Files modified** (13): pyrightconfig.json (new), z21_manager.py, ws_control.py, ws_tracking.py, broadcast.py, speed_table.py, tracking_daemon.py
+- ⚠️ **Remaining errors** (26, deferred): data_db.py (9), video_feed.py (6), downsampling.py (6), others (5)
+
+### 2026-01-23 - Auto-Sync Functions + Unified Rounding
+- ✅ **Auto-sync on WebSocket connect**: Functions synced from Z21 every time UI connects
+- ✅ **Edge case resolved**: Z21 offline during startup → functions stay false → refresh UI = auto-fix
+- ✅ **Unified rounding strategy**: Created `math_utils.js_round()` - "round half up" matches JavaScript
+- ✅ **Backend consistency**: Replaced ALL 20 `round()` calls with `js_round()`
+- ✅ **Fixes**: CV smoothing false positives (170.5 now rounds to 171 everywhere)
+- ✅ **Speed Analysis panel**: Now always visible with smart defaults
+- ✅ **CV change logging**: Detailed logs show exact CVs changed (e.g. `CV68(45->50)`)
+- ✅ **Log colors**: `[SPEED-TABLE]` now light blue, `[CV]` logs consolidated
+- 📄 Backend: math_utils.py, z21_manager.py, log_colors.py
+- 📄 Frontend: SpeedTableViewer.jsx
+
+### 2026-01-22 - Analytics Chart UX (X-Axis Tick Density + Enhanced Tooltip)
+- ✅ **X-Axis tick density**: Increased from 5% (20 ticks) to 1% (100 ticks)
+- ✅ **Enhanced tooltip**: Added exact timestamp (date + time) to every event
+- 📄 Frontend: DeltaTChart.jsx - forcedTicks calculation, CustomTooltip with timestamp
+
+### 2026-01-22 - Speed Table ESU Decoder Fixes & UX
+- ✅ **Blocked CVs separation**: ESU CV67/CV94 (read-only) separate from failed_cvs
+- ✅ **Green border accuracy**: Timestamp update only for CVs with changed values
+- ✅ **Database migration**: Populated vstart/vhigh/decoder_type for all locomotives
+- ✅ **ESU step 1/28 non-editable**: Grey bars, not clickable
+- ✅ **Green border position**: Changed from left to top for better visibility
+- 📄 Docs: SPEED_TABLE_VIEWER.md - "2026-01-22 Updates" section
+
+### 2026-01-22 - UI/UX Improvements + Bug Fixes
+- ✅ **Green border (2px)**: Persistent visual indicator for CVs modified via web UI
+- ✅ **Undo removes border**: Sets `cv_last_modified = 0` when restoring
+- ✅ **Password toggle**: Eye icon in Camera settings
+- ✅ **Debug badge renamed**: "Meets threshold" → "Sufficient data"
+- ✅ **Trailing newline fix**: Config.json save now POSIX-compliant
+- ✅ **Config preservation**: analytics.notes no longer overwritten
+- ✅ **Analytics chart date display**: Force ticks where day changes
+
+### 2026-01-21 - Per-CV Timestamp Filtering + Settings UI Fix
+- ✅ **cv_modification_timestamps table**: Per-CV tracking (196 rows: 7 locos × 28 steps)
+- ✅ **Settings UI bug**: Fixed Consist Manager recommendation_threshold (C10: 5 not 10)
+
+### 2026-01-21 - Session Idle Timeout + Model Fallback
+- ✅ **Session idle timeout**: Auto-close after N min (default 30, config: session_idle_timeout_minutes)
+- ✅ **Model fallback**: .engine → .onnx → .pt with graceful error handling
+- ✅ **Auto_compensation auto-disable**: When no YOLO model found
+
+### 2026-01-20 - Speed Table Features (3 Major Updates)
+- ✅ **Weighted Recommendations**: 2-stage algorithm, per-consist thresholds (C10: 5, C11: 10)
+- ✅ **CV3/CV4 Editor**: Acceleration/Deceleration inline editor (Settings → Locomotives)
+- ✅ **ESU mfx Support**: Vstart/Vhigh (CV2/CV5) editor, step 1/28 read-only
 
 ---
 

@@ -5,7 +5,7 @@
 **Version**: v0.9.11 (Development - v1.0.0 Coming Soon)
 **Repository**: https://github.com/rizal72/z21-Terminal (Private, SSH)
 **Project**: BiancAlice Railway Layout
-**Last Updated**: 2026-01-23
+**Last Updated**: 2026-01-27
 
 ---
 
@@ -62,7 +62,6 @@ z21-frontend     # Run frontend dev server (port 5173)
 ```
 
 ### Access URLs
-
 - **Mac Dev**: http://localhost:5173 or http://192.168.1.xxx:5173
 - **Mac Dev (Tailscale)**: https://mbp16diriccardo.tail9350d7.ts.net
 - **PC Prod Local**: http://localhost:8000
@@ -82,17 +81,17 @@ pyright backend/main.py
 cat pyrightconfig.json  # extraPaths: scripts, scripts/utils/cv_operations
 ```
 
+**When to run Pyright**:
+- Before committing major backend refactoring
+- After adding new WebSocket handlers or API endpoints
+- When troubleshooting type-related bugs (None access, wrong argument types)
+
 **Current Status** (v0.9.11):
 - ✅ **26 errors remaining** (59→26, -56% reduction)
 - ✅ All WebSocket handlers validated (ws_control.py, ws_tracking.py)
 - ✅ All import errors resolved (z21.py, read_cv_from_roster.py)
 - ✅ Z21Manager guard checks added (enable/disable_virtual_mode, toggle_test_mode)
 - ⚠️ **Deferred** (high risk): data_db.py (9), video_feed.py (6), downsampling.py (6)
-
-**When to run**:
-- Before committing major backend refactoring
-- After adding new WebSocket handlers or API endpoints
-- When troubleshooting type-related bugs (None access, wrong argument types)
 
 ---
 
@@ -111,6 +110,7 @@ cat pyrightconfig.json  # extraPaths: scripts, scripts/utils/cv_operations
 - **[SPEED_TABLE_VIEWER.md](docs/SPEED_TABLE_VIEWER.md)** - Phase 1+2: Read-only analysis + direct CV write (operations mode)
 - **[SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md](docs/SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md)** - Weighted algorithm: current session priority, CV filtering, inline UI breakdown
 - **[SPEED_TABLE_DECODER_BEHAVIOR.md](docs/SPEED_TABLE_DECODER_BEHAVIOR.md)** - ESU mfx vs NMRA speed table differences, implementation plan
+- **[CV3_CV4_EDITOR.md](docs/CV3_CV4_EDITOR.md)** - Acceleration/Deceleration editor (Settings > Locomotives)
 
 ### Computer Vision & Tracking
 - **[COMPUTER_VISION.md](docs/COMPUTER_VISION.md)** - YOLO training workflow (4 classes), gate timing detection, Virtual Mode
@@ -120,13 +120,12 @@ cat pyrightconfig.json  # extraPaths: scripts, scripts/utils/cv_operations
 
 ### Analytics & Monitoring
 - **[ANALYTICS.md](docs/ANALYTICS.md)** - Session tracking, Δt trends, YOLO performance, locomotive operating time
-- **[ANALYTICS_EVENT_DELETION.md](docs/ANALYTICS_EVENT_DELETION.md)** - Click-to-delete false positive Δt events (planned v1.1.0)
+- **[ANALYTICS_EVENT_DELETION.md](docs/ANALYTICS_EVENT_DELETION.md)** - Click-to-delete false positive Δt events (v1.1.0)
 - **[DB_REFACTORING.md](docs/DB_REFACTORING.md)** - Database consolidation: analytics.db → data.db migration (2026-01-17)
 - **[LOCOMOTIVE_SYNC_MAC_PC.md](docs/LOCOMOTIVE_SYNC_MAC_PC.md)** - Multi-environment config sync
 
 ### UI & Configuration
 - **[SETTINGS_UI_DESIGN.md](docs/SETTINGS_UI_DESIGN.md)** - Settings modal (8 tabs), locomotive function editor, gate editor
-- **[CV3_CV4_EDITOR.md](docs/CV3_CV4_EDITOR.md)** - Acceleration/Deceleration editor (Settings > Locomotives)
 - **[CONSIST_MANAGER_UI.md](docs/CONSIST_MANAGER_UI.md)** - Consist CRUD operations via web UI (Phase 6)
 - **[CONFIG_REFACTOR.md](docs/CONFIG_REFACTOR.md)** - Config.json structure evolution (2025-01-03)
 
@@ -134,7 +133,7 @@ cat pyrightconfig.json  # extraPaths: scripts, scripts/utils/cv_operations
 - **[PYRIGHT_ANALYSIS.md](docs/PYRIGHT_ANALYSIS.md)** - Complete type error analysis (26 remaining errors), risk assessment (HIGH/MODERATE/LOW), fix strategies, and roadmap
 
 ### Planning & Archive
-- **[CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md)** - Historical changes (2025-12-16 → 2026-01-16)
+- **[CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md)** - Historical changes (2025-12-16 → 2026-01-27)
 - **[FUTURE_IDEAS.md](docs/FUTURE_IDEAS.md)** - Enhancement ideas (Session Replay, Autopilot, Notifications, Multi-User, etc.)
 - **[REFACTOR_PLAN.md](docs/REFACTOR_PLAN.md)** - Backend modular architecture design (2340 lines → 742 main + 2648 modular)
 - **[FRONTEND_REFACTOR_PLAN.md](docs/FRONTEND_REFACTOR_PLAN.md)** - Frontend component refactoring
@@ -310,16 +309,6 @@ See [docs/REFACTOR_PLAN.md](docs/REFACTOR_PLAN.md) for complete design
     "yolo_imgsz": 640,
     "yolo_obb": true                           // Oriented Bounding Boxes
   },
-  "tracking_OBB": {                            // Quick-load preset
-    "yolo_confidence": 0.4,
-    "yolo_iou": 0.6,
-    "yolo_obb": true
-  },
-  "tracking_standard": {                       // Quick-load preset
-    "yolo_confidence": 0.2,
-    "yolo_iou": 0.95,
-    "yolo_obb": false
-  },
   "analytics": {
     "max_chart_events": 500                    // Chart optimization (100-2000)
   },
@@ -332,14 +321,11 @@ See [docs/REFACTOR_PLAN.md](docs/REFACTOR_PLAN.md) for complete design
         "normal": { "cv3": 78, "cv4": 58 },
         "testing": { "cv3": 0, "cv4": 0 }
       },
-      "notes": "",
       "functions": [                           // F0-F28 labels and lockable flags
         { "number": 0, "label": "light", "lockable": true },
-        { "number": 1, "label": "sound", "lockable": true },
-        ...
+        { "number": 1, "label": "sound", "lockable": true }
       ]
-    },
-    ...
+    }
   }
 }
 ```
@@ -400,26 +386,6 @@ See `README_CAMERA.md` for camera setup instructions
 - `yolo_performance` - YOLO tracking metrics (avg_fps, avg_confidence per loco, miss_rate)
 
 **Complete schema**: See [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md)
-
-**Common Queries**:
-```sql
--- Find all CRITICAL delta_t events for consist 11
-SELECT datetime(timestamp, 'unixepoch', 'localtime') as time,
-       json_extract(data, '$.delta_t') as delta_t,
-       json_extract(data, '$.status') as status
-FROM events
-WHERE event_type='delta_t'
-  AND json_extract(data, '$.consist_id')=11
-  AND json_extract(data, '$.status')='CRITICAL'
-ORDER BY timestamp DESC;
-
--- Get locomotive operating time summary
-SELECT address, name,
-       total_operating_seconds / 3600.0 as hours,
-       total_sessions
-FROM locomotive_stats
-ORDER BY total_operating_seconds DESC;
-```
 
 ---
 
@@ -662,41 +628,25 @@ git remote -v
 
 ### Database Queries (Common Operations)
 
-**Find all gate crossings for consist 11 (last 24h)**:
+**Find all CRITICAL delta_t events for consist 11**:
 ```sql
-SELECT
-    datetime(timestamp, 'unixepoch', 'localtime') as time,
-    json_extract(data, '$.delta_t') as delta_t,
-    json_extract(data, '$.status') as status,
-    json_extract(data, '$.speed') as speed
+SELECT datetime(timestamp, 'unixepoch', 'localtime') as time,
+       json_extract(data, '$.delta_t') as delta_t,
+       json_extract(data, '$.status') as status
 FROM events
 WHERE event_type='delta_t'
   AND json_extract(data, '$.consist_id')=11
-  AND timestamp > (strftime('%s', 'now') - 86400)
+  AND json_extract(data, '$.status')='CRITICAL'
 ORDER BY timestamp DESC;
 ```
 
 **Get locomotive operating time summary**:
 ```sql
-SELECT
-    address,
-    name,
-    total_operating_seconds / 3600.0 as hours,
-    total_sessions,
-    datetime(last_active_time, 'unixepoch', 'localtime') as last_active
+SELECT address, name,
+       total_operating_seconds / 3600.0 as hours,
+       total_sessions
 FROM locomotive_stats
 ORDER BY total_operating_seconds DESC;
-```
-
-**Delete outlier delta_t events** (|Δt| > 3s without speed):
-```sql
-DELETE FROM events
-WHERE id IN (
-  SELECT id FROM events
-  WHERE event_type='delta_t'
-    AND (json_extract(data, '$.delta_t') > 3.0 OR json_extract(data, '$.delta_t') < -3.0)
-    AND json_extract(data, '$.speed') IS NULL
-);
 ```
 
 **Database maintenance**:
@@ -817,156 +767,6 @@ git diff config.json  # Should show no changes if normalized
 
 ---
 
-## 📊 Recent Changes (Last 30 Days)
-
-**2026-01-23** - Click-to-Delete False Positive Events (5 hours, 4 commits):
-- ✅ **Backend endpoint**: DELETE /api/analytics/events/{event_id} (validates delta_t only)
-- ✅ **Event ID tracking**: get_delta_t_events() now includes 'id' field for each event
-- ✅ **Clickable points**: CustomActiveDot component (r=6, white stroke, pointer cursor on hover)
-- ✅ **Confirmation modal**: Shows Δt, timestamp, status, speed before deletion
-- ✅ **Auto-reload**: Chart refreshes after successful deletion
-- ✅ **Tooltip hint**: "💡 Click point to delete" in CustomTooltip
-- ✅ **Side effects**: Session invalidated if last delta_t removed, recommendations recalculated
-- ✅ **Current view only**: Deletion available only in Current mode (not Overview)
-- ⚠️ **CRITICAL Recharts lesson**: Use `activeDot` prop (NOT `dot`) for clickable chart points - see ANALYTICS_EVENT_DELETION.md
-- 🐛 **3 bugfixes**: Missing id in chartData, render function syntax, activeDot discovery
-- ✅ **Production tested**: Event 4830 deleted successfully, logs confirmed
-- 📄 Backend: analytics.py (+88 lines), data_db.py (SELECT id added)
-- 📄 Frontend: DeltaTChart.jsx (+139 lines), AnalyticsPanel.jsx (onDataReload prop)
-- 📄 Commits: 8f72367 (feature), 29f7bb5 (id fix), 4b91e86 (render fn), ecb3200 (activeDot)
-
-**2026-01-23** - Pyright Type Checker Integration (4 phases, 59→26 errors, -56%):
-- ✅ **Pyright installed**: Static type checker via brew (`brew install pyright`, auto-updates with `brew upgrade`)
-- ✅ **Claude Code plugin**: python-lsp enabled, real-time type analysis during development
-- ✅ **Phase 1 - Import Resolution** (59→49 errors, -10):
-  - Created `pyrightconfig.json` with extraPaths for scripts/ imports
-  - Resolved all import errors (z21.py, read_cv_from_roster.py)
-  - Added scripts/utils/cv_operations to Python path
-- ✅ **Phase 2 - Z21Manager Guard Checks** (49→40 errors, -9):
-  - Added z21 connection checks in enable/disable_virtual_mode
-  - Added z21 check in toggle_test_mode
-  - Fixed unbound variable: initialize current_mode before try block
-- ✅ **Phase 3 - WebSocket Validation** (40→29 errors, -11):
-  - Fixed all ws_control.py handlers (8 errors → 0)
-  - Fixed ws_tracking.py (3 errors → 0)
-  - Added validation + int()/float() cast for all WebSocket payload extractions
-  - Handlers: set_speed, set_direction, set_function, sync, toggle_virtual_mode, toggle_auto_compensation, delta_t_update
-- ✅ **Phase 4 - Single-File Fixes** (29→26 errors, -3):
-  - Fixed broadcast.py: Z21 manager guard check
-  - Fixed speed_table.py: Dict key type (str→int)
-  - Fixed tracking_daemon.py: WebSocket guard check
-- 📄 **Files modified** (13): pyrightconfig.json (new), z21_manager.py, ws_control.py, ws_tracking.py, broadcast.py, speed_table.py, tracking_daemon.py
-- 📄 **Commits**: 4 commits (dabd3b4, 7981430, 808e6e7, version bump)
-- ⚠️ **Remaining errors** (26, intentionally deferred):
-  - data_db.py (9) - Complex accumulator int|list type inference (risk: high)
-  - video_feed.py (6) - Return type None vs str mismatches (risk: moderate)
-  - downsampling.py (6) - Slicing type issues (risk: moderate)
-  - Others (5) - Unbound variables, class method access (risk: low-moderate)
-- 📊 **Result**: 59→26 errors (-33, -56%) - Excellent baseline for future type safety work
-
-**2026-01-23** - Auto-Sync Functions + Unified Rounding:
-- ✅ **Auto-sync on WebSocket connect**: Functions synced from Z21 every time UI connects (not just backend startup)
-- ✅ **Edge case resolved**: Z21 offline during startup → functions stay false → refresh UI = auto-fix
-- ✅ **Unified rounding strategy**: Created `math_utils.js_round()` - "round half up" matches JavaScript `Math.round()`
-- ✅ **Backend consistency**: Replaced ALL 20 `round()` calls with `js_round()` (speed table, gates, analytics, percentages)
-- ✅ **Frontend already consistent**: All 22 `Math.round()` calls already use "round half up"
-- ✅ **Fixes**: CV smoothing false positives (170.5 now rounds to 171 everywhere, no more asterisk mismatch)
-- ✅ **Speed Analysis panel**: Now always visible (was debug-only), starts open if debug=true, closed otherwise
-- ✅ **CV change logging**: Detailed logs show exact CVs changed with old->new values (e.g. `CV68(45->50)`)
-- ✅ **Log colors**: `[SPEED-TABLE]` now light blue (soft, friendly), `[CV]` logs consolidated under CV tag
-- ✅ **Log visibility**: "Write blocked" CV67/CV94 messages now debug-only (cleaner production logs)
-- 📄 Backend: `math_utils.py` (js_round utility), `z21_manager.py` (sync helper + refactoring), `log_colors.py` (light blue)
-- 📄 Frontend: `SpeedTableViewer.jsx` (rounded value comparison, panel always visible with smart defaults)
-- 📄 Docs: Updated math consistency notes
-
-**2026-01-22** - Analytics Chart UX (X-Axis Tick Density + Enhanced Tooltip):
-- ✅ **X-Axis tick density**: Increased from 5% (20 ticks) to 1% (100 ticks) for better time label distribution
-- ✅ **Enhanced tooltip**: Added exact timestamp (date + time) to every event ("21 Jan, 14:32:15" format)
-- ✅ **Rationale**: Not all events have X-axis ticks (1% = ~100 ticks, but hundreds of events), tooltip provides fallback
-- 📄 Frontend: `DeltaTChart.jsx` - forcedTicks calculation (1% interval), CustomTooltip with timestamp
-- 📄 Docs: ANALYTICS.md - Changelog 2026-01-22 section, Chart Features section updated
-
-**2026-01-22** - Speed Table ESU Decoder Fixes & UX:
-- ✅ **Blocked CVs separation**: ESU CV67/CV94 (read-only) now separate from failed_cvs → writes succeed with 26/28 CVs
-- ✅ **Green border accuracy**: Timestamp update only for CVs with changed values (compare old vs new)
-- ✅ **Database migration**: Populated vstart/vhigh/decoder_type for all locomotives (PC→Mac→PC workflow)
-- ✅ **ESU step 1/28 non-editable**: Grey bars, not clickable, decoder_type='esu_mfx' from DB
-- ✅ **ESU endpoints NO smoothing**: CV2/CV5 recommendations don't apply automatic smoothing (user manual adjustment)
-- ✅ **Green border position**: Changed from left (border-l-2) to top (border-t-2) for better visibility
-- ✅ **Speed 0 filtered**: Already excluded from recommendations (backend: `speed > 0`)
-- 📄 Backend: blocked_cvs tracking, old vs new comparison, skip blocked CV timestamps
-- 📄 Frontend: Green top border, ESU endpoint smoothing skip, step 1/28 grey/non-editable
-- 📄 Docs: SPEED_TABLE_VIEWER.md - Complete "2026-01-22 Updates" section with 5 fixes
-
-**2026-01-22** - UI/UX Improvements + Bug Fixes (Early Session):
-- ✅ **Green left border (2px)**: Persistent visual indicator for CVs modified via web UI (`cv_last_modified > 0`)
-- ✅ **Undo removes border**: Sets `cv_last_modified = 0` when restoring previous values
-- ✅ **Re-import button hidden**: JMRI only for initial new locomotive setup (backend code preserved)
-- ✅ **Fixed Speeds card removed**: Redundant with per-CV filtering (recommendations disappear after write)
-- ✅ **Password toggle**: Eye icon to show/hide password in Camera settings (Settings UI)
-- ✅ **Debug badge renamed**: "Meets threshold" → "Sufficient data" (more user-friendly)
-- ✅ **Trailing newline fix**: Config.json save now adds POSIX-compliant newline (prevents git diff)
-- ✅ **Config preservation**: analytics.notes field no longer overwritten when saving settings
-- ✅ **Analytics chart date display**: Force XAxis ticks where day changes (fixes missing dates "21 Jan")
-- ✅ **Recommendation breakdown arrow**: Changed from `┗━` to `→` (visual consistency)
-- 📄 Backend: cv_timestamps in GET response, update timestamps on write, reset on undo, preserve notes fields
-- 📄 Frontend: Green border indicator, password toggle, forced ticks, arrow indicator
-
-**2026-01-21** - Per-CV Timestamp Filtering + Settings UI Fix:
-- ✅ **cv_modification_timestamps table**: Per-CV tracking (196 rows: 7 locos × 28 steps), recommendations disappear after CV write
-- ✅ **Settings UI bug**: Fixed Consist Manager recommendation_threshold display (C10: 5 not 10)
-- 📄 Docs: DATABASE_SCHEMA.md, SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md, SPEED_TABLE_VIEWER.md
-
-**2026-01-21** - Analytics Chart UX (Date Display + Speed Tooltip):
-- ✅ **CustomXAxisTick**: Shows date (amber) on day change, time otherwise (Current mode)
-- ✅ **Speed in tooltip**: Format "88 (70%)" - DCC raw + percentage
-- 📄 Backend fix: `get_delta_t_events()` extracts speed from JSON
-
-**2026-01-21** - Session Idle Timeout + Model Fallback:
-- ✅ **Session idle timeout**: Auto-close after N min without movement (default 30, config: `analytics.session_idle_timeout_minutes`)
-- ✅ **Model fallback**: .engine → .onnx → .pt with graceful error handling
-- ✅ **Auto_compensation auto-disable**: When no YOLO model found (FileNotFoundError)
-
-**2026-01-21** - Speed Analysis Debug Panel:
-- ✅ **Debug panel**: Collapsible panel (purple theme) shows ALL tested speeds with Current/Historical/Weighted breakdown
-- ✅ **Debug mode**: Local-only setting (config.local.json, gitignored)
-- ✅ **Weighted algorithm**: Changed to 80/20 weights (from 70/30), more reactive
-
-**2026-01-20** - Speed Table Features (3 Major Updates):
-- ✅ **Weighted Recommendations**: 2-stage algorithm, per-consist thresholds (C10: 5, C11: 10), inline UI breakdown
-- ✅ **CV3/CV4 Editor**: Acceleration/Deceleration inline editor (Settings → Locomotives)
-- ✅ **ESU mfx Support**: Vstart/Vhigh (CV2/CV5) editor, step 1/28 read-only validation
-- 📄 Docs: SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md, CV3_CV4_EDITOR.md, SPEED_TABLE_DECODER_BEHAVIOR.md
-
-**Complete history**: See [docs/CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md)
-
----
-
-## 🔮 Future Enhancements
-
-### Quick Wins (1-2 Days)
-- **Motor Load Monitoring** (Phase 9): Z21 track-level telemetry (current, voltage, temperature)
-- **Telegram/Email Notifications**: Critical event alerts (derailment, Δt > 2.0s, backend crash)
-- **Function Test Mode**: Cycle F0-F28 automatically to verify decoder responses
-
-### Medium Effort (3-5 Days)
-- **Session Replay Mode**: Playback stored events with timeline scrubber
-- **Consist Lock Mechanism**: Prevent control conflicts with multiple devices
-- **Decoder Health Monitoring**: Periodic CV read (CV2, CV5, CV19, CV29) to detect drift
-
-### Large Projects (1-2 Weeks)
-- **Track Occupancy Map** (Phase 7 - postponed): Real-time locomotive positions on SVG track layout
-- **Virtual Stations & Routes**: Gate-based triggers for automatic stops and scheduled operations
-- **Spectator Mode**: View-only access for visitors (no controls, read-only dashboard)
-
-### External Dependencies
-- **Motor Load Monitoring**: Requires RailCom support (Z21 Pro or compatible decoder)
-- **Track Power Telemetry**: Requires Z21 Pro or similar (voltage/current monitoring)
-
-**Complete list**: See [docs/FUTURE_IDEAS.md](docs/FUTURE_IDEAS.md)
-
----
-
 ## 📁 Critical Files Reference
 
 ### Backend Core
@@ -999,6 +799,31 @@ git diff config.json  # Should show no changes if normalized
 - `docs/COMPUTER_VISION.md` - YOLO training + gate timing detection
 - `docs/JMRI_INTEGRATION.md` - JMRI relationship + independence roadmap
 - `~/.claude/skills/z21-deployment/SKILL.md` - Deployment workflow + critical rules
+
+---
+
+## 🔮 Future Enhancements
+
+### Quick Wins (1-2 Days)
+- **Motor Load Monitoring** (Phase 9): Z21 track-level telemetry (current, voltage, temperature)
+- **Telegram/Email Notifications**: Critical event alerts (derailment, Δt > 2.0s, backend crash)
+- **Function Test Mode**: Cycle F0-F28 automatically to verify decoder responses
+
+### Medium Effort (3-5 Days)
+- **Session Replay Mode**: Playback stored events with timeline scrubber
+- **Consist Lock Mechanism**: Prevent control conflicts with multiple devices
+- **Decoder Health Monitoring**: Periodic CV read (CV2, CV5, CV19, CV29) to detect drift
+
+### Large Projects (1-2 Weeks)
+- **Track Occupancy Map** (Phase 7 - postponed): Real-time locomotive positions on SVG track layout
+- **Virtual Stations & Routes**: Gate-based triggers for automatic stops and scheduled operations
+- **Spectator Mode**: View-only access for visitors (no controls, read-only dashboard)
+
+### External Dependencies
+- **Motor Load Monitoring**: Requires RailCom support (Z21 Pro or compatible decoder)
+- **Track Power Telemetry**: Requires Z21 Pro or similar (voltage/current monitoring)
+
+**Complete list**: See [docs/FUTURE_IDEAS.md](docs/FUTURE_IDEAS.md)
 
 ---
 

@@ -18,6 +18,36 @@ This document explains **why** each category of errors was deferred and **when**
 
 ---
 
+## When to Run Pyright
+
+### Development Workflow
+```bash
+# Run full backend analysis
+pyright backend/
+
+# Check specific file
+pyright backend/main.py
+
+# Config file (already configured)
+cat pyrightconfig.json  # extraPaths: scripts, scripts/utils/cv_operations
+```
+
+### Recommended Triggers
+- **Before committing major backend refactoring** - Catch type errors early
+- **After adding new WebSocket handlers or API endpoints** - Validate payload types
+- **When troubleshooting type-related bugs** - None access, wrong argument types
+- **Before releases** - Ensure baseline type safety (26 errors is acceptable)
+
+### Current Baseline (v0.9.11)
+- ✅ All WebSocket handlers validated (ws_control.py, ws_tracking.py)
+- ✅ All import errors resolved (z21.py, read_cv_from_roster.py)
+- ✅ Z21Manager guard checks added (enable/disable_virtual_mode, toggle_test_mode)
+- ⚠️ **Deferred** (high risk): data_db.py (9), video_feed.py (6), downsampling.py (6)
+
+---
+
+---
+
 ## Error Distribution (26 Remaining)
 
 | File | Errors | Category | Risk Level | Effort |
