@@ -5,7 +5,7 @@
 **Version**: v0.9.11 (Development - v1.0.0 Coming Soon)
 **Repository**: https://github.com/rizal72/z21-Terminal (Private, SSH)
 **Project**: BiancAlice Railway Layout
-**Last Updated**: 2026-01-27
+**Last Updated**: 2026-01-28
 
 ---
 
@@ -131,6 +131,12 @@ cat pyrightconfig.json  # extraPaths: scripts, scripts/utils/cv_operations
 
 ### Development & Type Safety
 - **[PYRIGHT_ANALYSIS.md](docs/PYRIGHT_ANALYSIS.md)** - Complete type error analysis (26 remaining errors), risk assessment (HIGH/MODERATE/LOW), fix strategies, and roadmap
+
+### Deployment & Testing
+- **[PC_DOCKER_DEPLOYMENT.md](docs/PC_DOCKER_DEPLOYMENT.md)** - Docker deployment su PC (Windows/Linux) con Tailscale HTTPS e GPU opzionale
+- **[JETSON_DEPLOYMENT.md](docs/JETSON_DEPLOYMENT.md)** - Docker deployment su NVIDIA Jetson Orin Nano (container standalone, ottimizzato CUDA/TensorRT)
+- **[test/README.md](test/README.md)** - Test suite completa (memory testing + Docker)
+- **[test/memory/README_MEMORY.md](test/memory/README_MEMORY.md)** - Memory testing per valutare requisiti hardware
 
 ### Planning & Archive
 - **[CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md)** - Historical changes (2025-12-16 → 2026-01-27)
@@ -847,6 +853,33 @@ git diff config.json  # Should show no changes if normalized
 ---
 
 ## 🔮 Future Enhancements
+
+### 🐳 Docker Distribution (Priority Goal)
+
+**Vision**: Creare un container Docker standalone completamente autonomo per distribuire z21-Terminal a chiunque abbia solo Docker installato.
+
+**Strategy**:
+- **Repository GitHub**: Privato (codice sorgente, IP, documentazione interna)
+- **Docker Hub**: Pubblico (container standalone per chiunque)
+- **Versioning**: Semantic versioning (v1.0.0, latest, develop)
+
+**Workflow**:
+1. Sviluppo locale su Mac (git workflow normale)
+2. Build container: `docker build -t rizal72/z21-terminal:v1.0.0 .`
+3. Push su Docker Hub: `docker push rizal72/z21-terminal:v1.0.0`
+4. Utenti installano con: `docker run -d -p 8000:8000 rizal72/z21-terminal:latest`
+
+**Vantaggi**:
+- Zero install (solo Docker, niente Python/node/venv)
+- Portabilità (Windows, Mac, Linux - stessa immagine)
+- Aggiornamenti one-command (`docker pull`)
+- Rollback facilitato (`docker pull v1.0.0`)
+
+**Documentazione completa**: See [docs/PC_DOCKER_DEPLOYMENT.md](docs/PC_DOCKER_DEPLOYMENT.md) → "Docker Distribution Strategy"
+
+**Status**: 🟡 Planning phase (target: post v1.0.0)
+
+---
 
 ### Testing & Quality Assurance
 - **Chrome DevTools MCP Testing**: End-to-end testing, performance monitoring, and debugging workflows using official Google Chrome DevTools MCP server. See [docs/CHROME_DEVTOOLS_OPTIMIZATION.md](docs/CHROME_DEVTOOLS_OPTIMIZATION.md) for complete guide (non-blocking, v1.0.0+)

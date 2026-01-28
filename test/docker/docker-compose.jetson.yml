@@ -1,0 +1,94 @@
+# z21-Terminal Docker Compose for Jetson Orin Nano
+#
+# Usage:
+#   docker-compose -f docker-compose.jetson.yml up -d
+#   docker-compose -f docker-compose.jetson.yml logs -f
+#   docker-compose -f docker-compose.jetson.yml down
+
+version: '3.8'
+
+services:
+  z21-terminal:
+    build:
+      context: ..
+      dockerfile: test/docker/Dockerfile.jetson
+    image: z21-terminal:jetson
+    container_name: z21-terminal-jetson
+    restart: unless-stopped
+
+    # GPU support (NVIDIA Jetson)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, compute, utility]
+
+    # Environment variables
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - PYTHONUNBUFFERED=1
+      # Z21 configuration (override with .env)
+      - Z21_HOST=${Z21_HOST:-192.168.1.111}
+      - Z21_PORT=${Z21_PORT:-21105}
+      # Camera configuration (override with .env)
+      - CAMERA_IP=${CAMERA_IP:-192.168.1.4}
+      - CAMERA_PORT=${CAMERA_PORT:-554}
+
+    # Port mappings
+    ports:
+      - "8000:8000"  # FastAPI backend + Frontend
+      # No need for 5173, production build is served by backend
+
+    # Volumes
+    volumes:
+      # Mount local config for easy editing
+      - ./config.local.json:/app/config.local.json:ro
+      # Persist database
+      - z21-data:/app/backend/data
+      # Persist YOLO TensorRT models (built on device)
+      - z21-models:/app/scripts/models
+      # Logs
+      - z21-logs:/app/logs
+
+    # Network
+    network_mode: host  # Use host network for Z21 UDP communication
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  z21-data:
+    driver: local
+  z21-models:
+    driver: local
+  z21-logs:
+    driver: local
+
+# Optional: Traefik reverse proxy for HTTPS
+# Uncomment if you want to add HTTPS support
+#
+# services:
+#   traefik:
+#     image: traefik:v2.10
+#     ports:
+#       - "80:80"
+#       - "443:443"
+#     volumes:
+#       - /var/run/docker.sock:/var/run/docker.sock
+#       - ./traefik.yml:/etc/traefik/traefik.yml
+#       - ./acme.json:/acme.json

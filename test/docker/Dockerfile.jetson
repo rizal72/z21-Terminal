@@ -1,0 +1,137 @@
+# z21-Terminal for Jetson Orin Nano - Dockerfile
+#
+# Dockerizza l'ambiente z21-Terminal esistente ottimizzandolo per Jetson.
+# L'immagine base L4T include già PyTorch, CUDA, cuDNN, TensorRT.
+#
+# Build (sul Mac): docker build -f test/docker/Dockerfile.jetson -t z21-terminal:jetson .
+# Build (sul Jetson): docker build -f test/docker/Dockerfile.jetson -t z21-terminal:jetson .
+# Run: docker run --gpus all -p 8000:8000 --network host z21-terminal:jetson
+
+# ============================================================================
+# BASE IMAGE - NVIDIA L4T-PyTorch (PyTorch + CUDA + TensorRT già inclusi)
+# ============================================================================
+FROM nvcr.io/nvidia/l4t-pytorch:r36.2.0-pth2.1-py3
+
+# Metadata
+LABEL maintainer="rizal72"
+LABEL description="z21-Terminal for Jetson Orin Nano (optimized Docker)"
+LABEL version="1.0.0"
+LABEL project="z21-Terminal"
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    # Jetson optimizations
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# ============================================================================
+# SYSTEM DEPENDENCIES (minime - il resto è già nell'immagine L4T)
+# ============================================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Node.js 20.x LTS (per frontend build)
+    curl \
+    gnupg \
+    # Video/streaming (per RTSP camera)
+    libopencv-dev \
+    python3-opencv \
+    # Database
+    sqlite3 \
+    # Cleanup
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Install Node.js from NodeSource
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && node --version \
+    && npm --version
+
+# ============================================================================
+# PYTHON DEPENDENCIES (usa requirements.txt esistenti)
+# ============================================================================
+# NOTA: PyTorch è GIA' incluso nell'immagine L4T, non serve reinstallarlo!
+
+# Backend dependencies (FastAPI, uvicorn, websockets)
+COPY backend/requirements.txt /tmp/backend-requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/backend-requirements.txt \
+    && rm /tmp/backend-requirements.txt
+
+# Scripts dependencies (ultralytics per YOLO, opencv)
+COPY scripts/requirements.txt /tmp/scripts-requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/scripts-requirements.txt \
+    && rm /tmp/scripts-requirements.txt
+
+# Additional Python utilities (psutil per monitoring, etc.)
+RUN pip3 install --no-cache-dir \
+    psutil \
+    aiosqlite \
+    python-multipart
+
+# ============================================================================
+# APPLICATION SETUP (copia progetto esistente)
+# ============================================================================
+WORKDIR /app
+
+# Copy application code
+COPY backend/ ./backend/
+COPY scripts/ ./scripts/
+COPY config.json ./
+COPY config.local.json.example ./config.local.json
+
+# Create directories
+RUN mkdir -p backend/data logs scripts/models
+
+# ============================================================================
+# FRONTEND BUILD (React + Vite + Tailwind CSS)
+# ============================================================================
+# Copy package files and install dependencies
+COPY web/package*.json ./web/
+RUN cd web && npm ci --production=false
+
+# Copy web source and build production bundle
+COPY web/ ./web/
+RUN cd web && npm run build
+
+# Verifica build completato
+RUN ls -lah web/dist/ || (echo "Frontend build failed!" && exit 1)
+
+# ============================================================================
+# YOLO MODELS (usa modelli esistenti)
+# ============================================================================
+# Copia modelli YOLO esistenti
+# Priorità: .engine (TensorRT, primario) → .onnx (fallback) → .pt (fallback)
+COPY scripts/models/best_obb.engine ./scripts/models/ || true
+COPY scripts/models/best_obb.onnx ./scripts/models/ || true
+COPY scripts/models/best_obb.pt ./scripts/models/ || true
+
+# NOTA IMPORTANTE: Priorità modelli YOLO
+# 1. best_obb.engine (TensorRT) - PRIMARIO, compilato per GPU specifica
+# 2. best_obb.onnx (ONNX) - Fallback se .engine non disponibile
+# 3. best_obb.pt (PyTorch) - Fallback finale per export
+#
+# Se .engine NON è presente per la GPU del Jetson:
+# - yolo_tracker.py lo compilerà automaticamente al primo avvio
+# - Tempo di compilazione: ~5-10 minuti (solo prima volta)
+# - Il file .engine viene salvato in scripts/models/ e persiste
+
+# ============================================================================
+# STARTUP SCRIPT
+# ============================================================================
+COPY test/docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Ports
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/api/status || exit 1
+
+# Entry point
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["--host", "0.0.0.0", "--port", "8000"]
