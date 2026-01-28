@@ -214,6 +214,494 @@ Per z21-Terminal:
 | **Distribuzione** | Docker Hub pubblico o privato |
 | **Documentazione** | README Docker Hub con istruzioni |
 
+---
+
+## 🐳 Docker All-in-One Solution (Reference Architecture)
+
+**Target Audience**: Hobbisti DCC tecnici con competenze informatiche
+**Purpose**: Container standalone completamente autonomo con opzioni di customizzazione
+
+### Architettura Completa
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  DOCKER HOST (Windows/Linux/Mac)                                            │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │  Docker Volume: z21-data                                              │  │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
+│  │  │  /var/lib/docker/volumes/z21-data/_data/                        │  │  │
+│  │  │  └─ data.db                                                     │  │  │
+│  │  │     ↑                                                            │  │  │
+│  │  │     │ PERSISTISCE FUORI DAL CONTAINER                            │  │  │
+│  │  │     │ (sopravvive a rimozione container)                         │  │  │
+│  │  └─────────────────────────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                    │ MOUNT                                   │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │  Host Volume (opzionale): YOLO models custom                         │  │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
+│  │  │  C:/z21-Terminal/models/ (o path equivalente)                   │  │  │
+│  │  │  ├─ best_obb.engine  ← Modello custom addestrato               │  │  │
+│  │  │  ├─ best_obb.onnx    ← Modello custom exportato                 │  │  │
+│  │  │  └─ best_obb.pt      ← Modello custom PyTorch                  │  │  │
+│  │  └─────────────────────────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                    │ MOUNT (opzionale)                     │
+│                                    ▼                                       │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │  CONTAINER DOCKER: rizal72/z21-terminal:latest                       │  │
+│  │                                                                       │  │
+│  │  ┌────────────────────────────────────────────────────────────────┐  │  │
+│  │  │  FRONTEND (/app/web/dist/)                                    │  │  │
+│  │  │  ├─ index.html                                                │  │  │
+│  │  │  ├─ assets/ (CSS/JS bundle)                                   │  │  │
+│  │  │  └─ ... (React buildato, static files)                        │  │  │
+│  │  └────────────────────────────────────────────────────────────────┘  │  │
+│  │                              ▲ FastAPI serve static                  │  │
+│  │                              ▼                                       │  │
+│  │  ┌────────────────────────────────────────────────────────────────┐  │  │
+│  │  │  BACKEND (/app/backend/)                                       │  │  │
+│  │  │  ├─ main.py (FastAPI entrypoint)                              │  │  │
+│  │  │  ├─ routers/ (API endpoints)                                  │  │  │
+│  │  │  ├─ services/ (business logic)                                │  │  │
+│  │  │  └─ websocket_handlers/ (real-time)                           │  │  │
+│  │  └────────────────────────────────────────────────────────────────┘  │  │
+│  │                              ▼                                       │  │
+│  │  ┌────────────────────────────────────────────────────────────────┐  │  │
+│  │  │  YOLO MODELS (/app/scripts/models/)                           │  │  │
+│  │  │  ├─ best_obb.engine  ← Default (nell'immagine)                │  │  │
+│  │  │  ├─ best_obb.onnx    ← Default (nell'immagine)                │  │  │
+│  │  │  └─ best_obb.pt      ← Default (nell'immagine)                │  │  │
+│  │  │          │                                                   │  │  │
+│  │  │          └─ Se montato volume custom, questi vengono         │  │  │
+│  │  │            SOVRASCRITTI dalla cartella dell'host              │  │  │
+│  │  └────────────────────────────────────────────────────────────────┘  │  │
+│  │                              ▼                                       │  │
+│  │  ┌────────────────────────────────────────────────────────────────┐  │  │
+│  │  │  CONFIGURAZIONE (/app/)                                        │  │  │
+│  │  │  ├─ config.json (default, modificabile via mount)             │  │  │
+│  │  │  └─ config.local.json (credaentials, mount obbligatorio)      │  │  │
+│  │  └────────────────────────────────────────────────────────────────┘  │  │
+│  │                              ▼                                       │  │
+│  │  ┌────────────────────────────────────────────────────────────────┐  │  │
+│  │  │  DATABASE (/app/backend/data/)                                │  │  │
+│  │  │  └─ data.db  ← MOUNT da volume "z21-data"                    │  │  │
+│  │  │               (persiste fuori dal container)                   │  │  │
+│  │  └────────────────────────────────────────────────────────────────┘  │  │
+│  │                                                                       │  │
+│  │  Exposed Port: 8000 (FastAPI)                                       │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                    │                                       │
+│                                    ▼                                       │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │  HOST NETWORK                                                          │  │
+│  │  Port 8000 mapped to container port 8000                               │  │
+│  │  Accessibile via:                                                      │  │
+│  │  - http://localhost:8000                                               │  │
+│  │  - http://192.168.1.xxx:8000 (LAN)                                    │  │
+│  │  - https://hostname.tailnet.ts.net (Tailscale Funnel, se configurato) │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Componenti Container
+
+| Componente | Path nel Container | Source | Persistence |
+|------------|-------------------|--------|-------------|
+| **Frontend** | `/app/web/dist/` | Buildato nell'immagine | ❌ No |
+| **Backend** | `/app/backend/` | Nell'immagine | ❌ No |
+| **YOLO Models (default)** | `/app/scripts/models/` | Nell'immagine | ❌ No |
+| **YOLO Models (custom)** | `/app/scripts/models/` | Volume host (opzionale) | ✅ Sì |
+| **Config (default)** | `/app/config.json` | Nell'immagine | ❌ No |
+| **Config (local)** | `/app/config.local.json` | Volume host | ✅ Sì |
+| **Database** | `/app/backend/data/data.db` | Volume Docker | ✅ Sì |
+
+### Scenari di Deploy
+
+#### Scenario 1: Utente Base (Modelli Default)
+
+**Utente**: Vuole provare z21-Terminal senza modifiche
+
+```bash
+# Pull immagine
+docker pull rizal72/z21-terminal:latest
+
+# Run con configurazione minima
+docker run -d \
+  --name z21-terminal \
+  -p 8000:8000 \
+  -v z21-data:/app/backend/data \
+  --restart unless-stopped \
+  rizal72/z21-terminal:latest
+
+# Accesso
+# http://localhost:8000
+```
+
+**Cosa include**:
+- ✅ Frontend React pre-buildato
+- ✅ Backend FastAPI
+- ✅ YOLO models pre-addestrati (7 locomotive)
+- ✅ Configurazioni default
+- ❌ NO credentials (config.local.json)
+
+**Configurazione first-run**:
+```bash
+# Copia template config
+docker exec z21-terminal cat /app/config.local.json.example > /tmp/config.local.json
+
+# Edit con le tue credenziali
+nano /tmp/config.local.json
+
+# Copia nel container
+docker cp /tmp/config.local.json z21-terminal:/app/config.local.json
+
+# Riavvia
+docker restart z21-terminal
+```
+
+---
+
+#### Scenario 2: Utente Avanzato (YOLO Custom)
+
+**Utente**: Ha addestrato YOLO sulle proprie locomotive
+
+```bash
+# 1. Prepara modelli custom sul host
+mkdir -p ~/z21-custom/models
+# Copia best_obb.engine, best_obb.onnx, best_obb.pt
+
+# 2. Run con volume models
+docker run -d \
+  --name z21-terminal \
+  -p 8000:8000 \
+  -v z21-data:/app/backend/data \
+  -v ~/z21-custom/models:/app/scripts/models:ro \
+  -v ~/z21-custom/config.local.json:/app/config.local.json:ro \
+  --restart unless-stopped \
+  rizal72/z21-terminal:latest
+```
+
+**Cosa succede**:
+- I modelli in `~/z21-custom/models` SOVRASCRIVONO quelli default
+- `:ro` = read-only per sicurezza
+- Modelli aggiornabili dall'host senza rebuild
+
+---
+
+#### Scenario 3: Sviluppatore (Training YOLO + Deploy)
+
+**Utente**: Vuole addestrare YOLO e deployare
+
+```bash
+# STEP 1: Clone codice sorgente (per training)
+git clone https://github.com/rizal72/z21-Terminal.git
+cd z21-Terminal
+
+# STEP 2: Setup ambiente training
+python -m venv venv
+source venv/bin/activate
+pip install -r scripts/requirements.txt
+
+# STEP 3: Addestra modello YOLO
+cd scripts/utils/yolo
+python train.py --epochs 100 --data locomotives.yaml
+
+# STEP 4: Export modelli
+yolo export model=runs/detect/train/weights/best.pt format=engine
+yolo export model=runs/detect/train/weights/best.pt format=onnx
+
+# STEP 5: Deploy container con modelli custom
+docker run -d \
+  --name z21-terminal \
+  -p 8000:8000 \
+  -v z21-data:/app/backend/data \
+  -v $(pwd)/scripts/models:/app/scripts/models:ro \
+  rizal72/z21-terminal:latest
+```
+
+---
+
+### Workflow Training YOLO
+
+#### Approccio A: Training nel Container (Avanzato)
+
+```bash
+# 1. Entra nel container
+docker exec -it z21-terminal bash
+
+# 2. Verifica dipendenze training (pre-installate)
+pip list | grep -E "ultralytics|roboflow|torch"
+
+# 3. Copia training data nel container
+docker cp ~/yolo-training/data/ z21-terminal:/app/scripts/utils/yolo/data/
+
+# 4. Avvia training
+cd /app/scripts/utils/yolo
+python train.py --epochs 100 --data locomotives.yaml
+
+# 5. Export modelli
+yolo export model=runs/detect/train/weights/best.pt format=engine
+yolo export model=runs/detect/train/weights/best.pt format=onnx
+
+# 6. Modelli salvati in /app/scripts/models/
+# ma vanno persi se rimuovi il container!
+```
+
+**Pro**: Tutto nel container, isolato
+**Contro**: Modelli persi se rimuovi container
+
+---
+
+#### Approccio B: Training sull'Host + Volume Mount (Consigliato)
+
+```bash
+# SULL'HOST (non Docker)
+
+# 1. Clone repository
+git clone https://github.com/rizal72/z21-Terminal.git
+cd z21-Terminal
+
+# 2. Setup environment
+python -m venv venv
+source venv/bin/activate
+pip install -r scripts/requirements.txt
+
+# 3. Training
+cd scripts/utils/yolo
+python train.py --epochs 100 --data locomotives.yaml
+
+# 4. Export
+yolo export model=runs/detect/train/weights/best.pt format=engine
+yolo export model=runs/detect/train/weights/best.pt format=onnx
+cp runs/detect/train/weights/best.pt scripts/models/best_obb.pt
+
+# 5. Deploy con modelli custom
+docker run -d \
+  --name z21-terminal \
+  -p 8000:8000 \
+  -v z21-data:/app/backend/data \
+  -v $(pwd)/scripts/models:/app/scripts/models:ro \
+  rizal72/z21-terminal:latest
+```
+
+**Pro**: Modelli persistenti sul host, facilmente aggiornabili
+**Contro**: Richiede Python locale
+
+---
+
+### Gestione Database
+
+#### Backup Database
+
+```bash
+# Backup periodico
+docker cp z21-terminal:/app/backend/data/data.db \
+  ~/backups/z21-terminal-$(date +%Y%m%d-%H%M).db
+
+# Backup automatico (cron job)
+0 2 * * * docker cp z21-terminal:/app/backend/data/data.db \
+  ~/backups/z21-terminal-$(date +\%Y\%m\%d).db
+```
+
+#### Restore Database
+
+```bash
+# Stop container
+docker stop z21-terminal
+
+# Ripristina backup
+docker cp ~/backups/z21-terminal-20260128.db \
+  z21-terminal:/app/backend/data/data.db
+
+# Riavvia
+docker start z21-terminal
+```
+
+#### Migrazione da Installazione Tradizionale
+
+```bash
+# 1. Backup database attuale
+cp C:/z21-Terminal/backend/data/data.db ~/data.db.backup
+
+# 2. Avvia container (crea DB vuoto)
+docker run -d \
+  --name z21-terminal \
+  -p 8000:8000 \
+  -v z21-data:/app/backend/data \
+  rizal72/z21-terminal:latest
+
+# 3. Sostituisci DB vuoto con backup
+docker stop z21-terminal
+docker rm z21-terminal  # Volume rimane!
+docker cp ~/data.db.backup \
+  $(docker volume inspect z21-data -f '{{.Mountpoint}}')/data.db
+
+# 4. Riavvia con DB migrato
+docker run -d \
+  --name z21-terminal \
+  -p 8000:8000 \
+  -v z21-data:/app/backend/data \
+  rizal72/z21-terminal:latest
+```
+
+---
+
+### Aggiornamento Container
+
+#### Aggiornamento Standard
+
+```bash
+# 1. Pull nuova immagine
+docker pull rizal72/z21-terminal:latest
+
+# 2. Stop e rimuovi container vecchio
+docker stop z21-terminal
+docker rm z21-terminal
+
+# 3. Avvia nuovo container (VOLUMI PRESERVATI!)
+docker run -d \
+  --name z21-terminal \
+  -p 8000:8000 \
+  -v z21-data:/app/backend/data \
+  -v ~/z21-custom/models:/app/scripts/models:ro \
+  rizal72/z21-terminal:latest
+```
+
+**Nota**: Il volume `z21-data` sopravvive alla rimozione del container!
+
+#### Rollback a Versione Precedente
+
+```bash
+# Problemi con la nuova versione? Rollback!
+
+docker stop z21-terminal
+docker rm z21-terminal
+docker run -d \
+  --name z21-terminal \
+  -p 8000:8000 \
+  -v z21-data:/app/backend/data \
+  rizal72/z21-terminal:v1.0.0  # Versione precedente
+```
+
+---
+
+### Docker Compose (Semplificato)
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  z21-terminal:
+    image: rizal72/z21-terminal:latest
+    container_name: z21-terminal
+    ports:
+      - "8000:8000"
+    volumes:
+      # Database (persistente)
+      - z21-data:/app/backend/data
+
+      # YOLO models custom (opzionale)
+      - ./models:/app/scripts/models:ro
+
+      # Config local (opzionale ma consigliato)
+      - ./config.local.json:/app/config.local.json:ro
+
+    restart: unless-stopped
+
+    # GPU support (opzionale)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  z21-data:
+    driver: local
+```
+
+```bash
+# Avvio con compose
+docker-compose up -d
+
+# Aggiornamento
+docker-compose pull
+docker-compose up -d
+
+# Stop
+docker-compose down
+```
+
+---
+
+### Troubleshooting Specifico
+
+#### Container non parte
+
+```bash
+# Controlla log
+docker logs z21-terminal
+
+# Container esiste ma non running?
+docker ps -a
+
+# Rimuovi e ricrea
+docker rm -f z21-terminal
+docker run -d --name z21-terminal -p 8000:8000 \
+  -v z21-data:/app/backend/data \
+  rizal72/z21-terminal:latest
+```
+
+#### Database non persiste
+
+```bash
+# Verifica volume montato
+docker inspect z21-terminal | grep -A 10 Mounts
+
+# Verifica dati nel volume
+docker exec z21-terminal ls -lah /app/backend/data/
+
+# Backup immediato se DB c'è
+docker cp z21-terminal:/app/backend/data/data.db ~/emergency-backup.db
+```
+
+#### YOLO models non caricati
+
+```bash
+# Verifica modelli presenti
+docker exec z21-terminal ls -lah /app/scripts/models/
+
+# Se mount custom, verifica path host
+docker inspect z21-terminal | grep models
+
+# Test caricamento modello
+docker exec z21-terminal python -c \
+  "from ultralytics import YOLO; YOLO('/app/scripts/models/best_obb.pt')"
+```
+
+#### Configurazione non applicata
+
+```bash
+# Verifica config.local.json montato
+docker exec z21-terminal cat /app/config.local.json
+
+# Se mancante, montalo
+docker run -d \
+  --name z21-terminal \
+  -p 8000:8000 \
+  -v z21-data:/app/backend/data \
+  -v ~/config.local.json:/app/config.local.json:ro \
+  rizal72/z21-terminal:latest
+```
+
+---
+
 ### Stack Tecnologico
 
 ```
