@@ -11,7 +11,7 @@
 
 ## ⚠️ CRITICAL: Read Deployment Skill First
 
-**Location**: `~/.claude/skills/z21-deployment/SKILL.md`
+**Location**: `.claude/skills/z21-deployment/SKILL.md` (project-local)
 
 Contains ALL critical rules for:
 - Git workflow (develop/main branches, fast-forward merge)
@@ -563,7 +563,7 @@ If Δt < 0: Loco 7 too slow → speed up Loco 7
 
 ### Deployment Workflow (Mac → PC)
 
-**IMPORTANT**: Read `~/.claude/skills/z21-deployment/SKILL.md` for complete rules
+**IMPORTANT**: Read `.claude/skills/z21-deployment/SKILL.md` for complete rules
 
 **Mac Development**:
 ```bash
@@ -597,7 +597,7 @@ ssh riccardo@gaming-pc "cd C:\z21-Terminal && git pull && z21-restart"
 2. ✅ Always use PowerShell aliases (NOT manual git/npm)
 3. ✅ Always include username: `riccardo@gaming-pc` (NOT just `gaming-pc`)
 
-**Complete guide**: See `~/.claude/skills/z21-deployment/SKILL.md`
+**Complete guide**: See `.claude/skills/z21-deployment/SKILL.md`
 
 ---
 
@@ -848,7 +848,7 @@ git diff config.json  # Should show no changes if normalized
 - `docs/DATABASE_SCHEMA.md` - Complete database schema reference
 - `docs/COMPUTER_VISION.md` - YOLO training + gate timing detection
 - `docs/JMRI_INTEGRATION.md` - JMRI relationship + independence roadmap
-- `~/.claude/skills/z21-deployment/SKILL.md` - Deployment workflow + critical rules
+- `.claude/skills/z21-deployment/SKILL.md` - Deployment workflow + critical rules
 
 ---
 

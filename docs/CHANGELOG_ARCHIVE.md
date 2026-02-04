@@ -3590,7 +3590,7 @@ Only v1.0.0 JMRI Independence, Speed Table Phase 2, and Phase 1 remain in main f
 
 **Implementation**:
 
-1. **Created Deployment Skill** (`~/.claude/skills/z21-deployment/SKILL.md` - 314 lines):
+1. **Created Deployment Skill** (`.claude/skills/z21-deployment/SKILL.md` - 314 lines):
    - Deployment decision tree (docs/backend/frontend → correct command)
    - PowerShell aliases (z21-deploy-dev, z21-deploy, z21-restart, z21-stop, z21-log)
    - 8 CRITICAL rules (venv, CV test mode, git workflow, frontend rebuild, secrets, SSH protocol, encoding, README language)
@@ -3607,7 +3607,7 @@ Only v1.0.0 JMRI Independence, Speed Table Phase 2, and Phase 1 remain in main f
 3. **Simplified CLAUDE.md** (~73 lines removed):
    - Python Virtual Environment section: 56 lines → 8 lines
    - Production Deployment section: 35 lines → 10 lines
-   - Replaced with references to `~/.claude/skills/z21-deployment/SKILL.md`
+   - Replaced with references to `.claude/skills/z21-deployment/SKILL.md`
 
 **Benefits**:
 - ✅ Single source of truth (skill file)
@@ -3624,7 +3624,7 @@ Only v1.0.0 JMRI Independence, Speed Table Phase 2, and Phase 1 remain in main f
 - "hai fatto un check per vedere se alcune regole sono duplicate?"
 
 **Files Created**:
-- `~/.claude/skills/z21-deployment/SKILL.md` - Complete deployment workflow
+- `.claude/skills/z21-deployment/SKILL.md` - Complete deployment workflow
 
 **Files Modified**:
 - `/Users/riccardosallusti/Documents/_PROGETTI/z21-Terminal/CLAUDE.md` - Simplified deployment sections
