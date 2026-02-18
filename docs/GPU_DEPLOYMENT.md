@@ -212,13 +212,17 @@ ping 192.168.1.36   # IP del Mac (esempio)
 # IMPORTANTE: Servono DUE configurazioni per frontend + WebSocket
 
 # 1. Porta 443 default (frontend - URL pulito senza porta)
-tailscale serve --bg http://localhost:8000
+tailscale serve --https=443 --bg http://localhost:8000
 
 # 2. Porta 8000 (WebSocket - necessaria per connessioni WS)
-tailscale serve --bg --https 8000 http://localhost:8000
+tailscale serve --https=8000 --bg http://localhost:8000
 
 # Verifica configurazione
 tailscale serve status
+
+# ⚠️ IMPORTANTE: I certificati HTTPS vengono generati AUTOMATICAMENTE da Tailscale Serve
+# Non serve usare "tailscale cert" - il comando serve solo per server web personalizzati (nginx, Caddy, etc.)
+# Tailscale Serve gestisce i certificati Let's Encrypt in automatico (validità: 90 giorni, rinnovo automatico)
 
 # Output atteso:
 # https://gaming-pc.tail9350d7.ts.net (tailnet only)
@@ -249,6 +253,49 @@ tailscale serve status
 
 **Contro**:
 - Overhead VPN minimo (~5-10ms latency)
+
+### Differenza Mac vs PC (Importante!)
+
+**Mac** (Development):
+- Frontend Vite: porta 5173
+- Backend FastAPI: porta 8000
+- Due servizi separati → **NON serve** `tailscale serve` per Mac
+
+**PC** (Production):
+- Backend FastAPI (porta 8000) serve TUTTO (frontend + API + WebSocket)
+- Frontend servito da `web/dist/` (production build)
+- **Richiede** `tailscale serve` per esporre HTTPS
+
+**Nota**: La sintassi corretta usa `=`:
+```powershell
+# ✅ CORRETTO
+tailscale serve --https=443 --bg http://localhost:8000
+
+# ❌ SBAGLIATO (senza =)
+tailscale serve --bg --https 443 http://localhost:8000
+```
+
+### Reinstallazione Tailscale
+
+Se reinstalli Tailscale o sostituisci il dispositivo, la configurazione `tailscale serve` viene persa.
+
+**Riconfigurazione** (da eseguire dopo reinstallazione):
+```powershell
+# 1. Reset configurazione precedente
+tailscale serve reset
+
+# 2. Riconfigura con sintassi corretta
+tailscale serve --https=443 --bg http://localhost:8000
+tailscale serve --https=8000 --bg http://localhost:8000
+
+# 3. Verifica
+tailscale serve status
+```
+
+⚠️ **NOTA IMPORTANTE**: Non usare `tailscale cert` per generare certificati manualmente!
+- `tailscale cert` serve SOLO per server web personalizzati (nginx, Caddy, Apache)
+- `tailscale serve` gestisce i certificati AUTOMATICAMENTE (Let's Encrypt, validità 90 giorni)
+- Il comando `tailscale cert` genererà file `.crt` e `.key` nella directory corrente, ma questi NON vengono usati da `tailscale serve`
 
 ### Opzione C: LAN Access Diretto (senza Tailscale) ✅
 
@@ -512,7 +559,7 @@ npm run dev -- --host 0.0.0.0
 http://PC_IP:5173
 
 # Oppure via Tailscale (se configurato anche frontend con serve):
-tailscale serve --bg --https 5173 http://localhost:5173
+tailscale serve --https=5173 --bg http://localhost:5173
 # Accesso: https://gaming-pc.tail9350d7.ts.net
 ```
 
