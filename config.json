@@ -61,7 +61,7 @@
       "name": "Gate 1",
       "center": [
         995,
-        49
+        39
       ],
       "width": 65,
       "height": 43,
@@ -81,7 +81,7 @@
       ],
       "width": 44,
       "height": 47,
-      "angle": -30,
+      "angle": -29,
       "color": [
         255,
         165,
@@ -92,8 +92,8 @@
       "id": 3,
       "name": "Gate 3",
       "center": [
-        229,
-        540
+        235,
+        533
       ],
       "width": 65,
       "height": 68,
@@ -113,7 +113,7 @@
       ],
       "width": 65,
       "height": 61,
-      "angle": -35,
+      "angle": -34,
       "color": [
         0,
         255,
