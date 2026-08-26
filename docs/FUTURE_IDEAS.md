@@ -102,6 +102,36 @@ The following features were in this document but have since been implemented:
 
 ---
 
+### Sync Speed Table z21 → JMRI Roster
+**Obiettivo**: Mantenere il roster JMRI sincronizzato con le modifiche CV fatte via z21-Terminal, senza programming track
+
+**Contesto/Problema**:
+- z21-Terminal scrive i CV via POM (operations mode) e li salva nel DB (`locomotive_speed_table`)
+- La Hornby TXS (loco 7) NON supporta la lettura CV via POM → per sincronizzare il roster JMRI serve il programming track (scomodo)
+- Le altre loco (ESU) si possono rileggere al volo via POM
+
+**Proposta**: Script `sync_speed_table_to_jmri.py` (lanciato su Mac, dove sta il roster)
+- Legge i valori CV67-94 dal DB z21 **via SSH dal PC** (query remota con Python del venv PC, output JSON — nessun trasferimento file)
+- Li scrive nel file XML del roster JMRI (`<CVvalue name="N" value="V" />`)
+- Backup automatico del file XML prima della scrittura
+- Uso: `python sync_speed_table_to_jmri.py 7` (singola loco) o senza argomenti (tutte)
+
+**Pro**:
+- Elimina il programming track per la loco 7 (il problema principale)
+- Nessun trasferimento file: i valori vengono letti via SSH dal DB del PC (sempre fresco)
+- Il roster JMRI resta coerente con "Re-import from JMRI" (niente sovrascritture con valori vecchi)
+- Funziona per tutte le loco, non solo la 7
+- Scrive solo CV67-94, non tocca il resto del file
+
+**Contro**:
+- JMRI deve essere chiuso durante il sync (potrebbe sovrascrivere il file)
+- Richiede SSH funzionante Mac → PC (già usato per il deploy)
+- Il PC deve avere Python accessibile (venv già presente)
+
+**Status**: Idea - non pianificata (2026-08-26)
+
+---
+
 ## 🎮 Advanced Control Features
 
 ### Autopilot Mode
@@ -343,4 +373,4 @@ These ideas are NOT in the roadmap. If any are needed in the future, consider:
 
 ---
 
-**Last Updated**: 2026-01-20
+**Last Updated**: 2026-08-26
