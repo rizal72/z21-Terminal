@@ -284,6 +284,9 @@ function App() {
         const adjustLocoAddress = lastMessage.adjust_loco_address; // Which loco is being adjusted
         const adjustSpeed = lastMessage.adjust_speed; // Actual speed sent to adjust loco
         const adjustCorrection = lastMessage.adjust_correction; // Difference from target
+        const referenceLocoAddress = lastMessage.reference_loco_address; // Reference loco (compensated on overflow)
+        const referenceSpeed = lastMessage.reference_speed; // Actual speed sent to reference loco
+        const referenceCorrection = lastMessage.reference_correction; // Difference from target
 
         // Update consist with delta_t data (only if changed)
         setConsists(prev => {
@@ -297,26 +300,41 @@ function App() {
             return prev; // Same value, don't update
           }
 
-          // Detect correction state
-          const wasCorrection = currentConsist.adjust_correction && currentConsist.adjust_correction !== 0;
-          const nowCorrecting = adjustCorrection && adjustCorrection !== 0;
-          const justFinishedCorrecting = wasCorrection && adjustCorrection === 0;
-          const correctionChanged = currentConsist.adjust_correction !== adjustCorrection;
+          // Detect correction state (adjust and/or reference may be compensated)
+          const wasCorrection =
+            (currentConsist.adjust_correction && currentConsist.adjust_correction !== 0) ||
+            (currentConsist.reference_correction && currentConsist.reference_correction !== 0);
+          const nowCorrecting =
+            (adjustCorrection && adjustCorrection !== 0) ||
+            (referenceCorrection && referenceCorrection !== 0);
+          const justFinishedCorrecting = wasCorrection && !nowCorrecting;
+          const correctionChanged =
+            currentConsist.adjust_correction !== adjustCorrection ||
+            currentConsist.reference_correction !== referenceCorrection;
 
           // Show notifications
           if (nowCorrecting) {
             // Auto-compensation active: distinguish between new correction and maintained correction
-            const sign = adjustCorrection > 0 ? '+' : '';
-            const message = correctionChanged
-              ? `Loco ${adjustLocoAddress}: Speed ${sign}${adjustCorrection}%`  // New or changed correction
-              : `Loco ${adjustLocoAddress}: still at ${sign}${adjustCorrection}%`;  // Same correction maintained
+            const parts = [];
+            if (adjustCorrection && adjustCorrection !== 0) {
+              const sign = adjustCorrection > 0 ? '+' : '';
+              parts.push(correctionChanged
+                ? `Loco ${adjustLocoAddress}: Speed ${sign}${adjustCorrection}%`
+                : `Loco ${adjustLocoAddress}: still at ${sign}${adjustCorrection}%`);
+            }
+            if (referenceCorrection && referenceCorrection !== 0) {
+              const sign = referenceCorrection > 0 ? '+' : '';
+              parts.push(correctionChanged
+                ? `Loco ${referenceLocoAddress} (ref): Speed ${sign}${referenceCorrection}%`
+                : `Loco ${referenceLocoAddress} (ref): still at ${sign}${referenceCorrection}%`);
+            }
             showNotification({
-              message: message,
+              message: parts.join(', '),
               type: 'error',
               duration: 5000
             });
           } else if (justFinishedCorrecting) {
-            // SYNCED: Backend reset speeds to equal (adjust_correction: 0 after corrections)
+            // SYNCED: Backend reset speeds to equal (corrections back to 0)
             showNotification({
               message: `Consist ${consistAddress}: SYNCED`,
               type: 'success',
@@ -334,7 +352,10 @@ function App() {
               timing_thresholds: thresholds, // Store thresholds for DeltaTStatsPanel
               adjust_loco_address: adjustLocoAddress, // Compensation info
               adjust_speed: adjustSpeed,
-              adjust_correction: adjustCorrection
+              adjust_correction: adjustCorrection,
+              reference_loco_address: referenceLocoAddress, // Reference compensation info
+              reference_speed: referenceSpeed,
+              reference_correction: referenceCorrection
             }
           };
         });

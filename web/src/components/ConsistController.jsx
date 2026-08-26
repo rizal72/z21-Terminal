@@ -500,6 +500,9 @@ export default function ConsistController({
             adjustLocoAddress={item.adjust_loco_address}
             adjustSpeed={item.adjust_speed}
             adjustCorrection={item.adjust_correction}
+            referenceLocoAddress={item.reference_loco_address}
+            referenceSpeed={item.reference_speed}
+            referenceCorrection={item.reference_correction}
           />
         </div>
       )}

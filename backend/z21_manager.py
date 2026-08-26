@@ -387,6 +387,9 @@ class Z21Manager:
                     consist['adjust_loco_address'] = adjust_addr
                     consist['adjust_speed'] = speed_adjust
                     consist['adjust_correction'] = speed_adjust - speed  # Difference from target
+                    consist['reference_loco_address'] = reference_addr
+                    consist['reference_speed'] = speed_reference
+                    consist['reference_correction'] = speed_reference - speed  # Difference from target
 
                     # Virtual Mode speed command
                     log('[VIRT]', f"Virtual Mode: L{adjust_addr}={speed_adjust}, L{reference_addr}={speed_reference}")

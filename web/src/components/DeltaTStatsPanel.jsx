@@ -1,4 +1,4 @@
-export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimestamp, deltaTTimeStr, timingThresholds, virtualMode, adjustLocoAddress, adjustSpeed, adjustCorrection }) {
+export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimestamp, deltaTTimeStr, timingThresholds, virtualMode, adjustLocoAddress, adjustSpeed, adjustCorrection, referenceLocoAddress, referenceSpeed, referenceCorrection }) {
   // Use dynamic thresholds from backend (or fallback to defaults)
   const thresholdWarning = timingThresholds?.warning || 1.0;
   const thresholdCritical = timingThresholds?.critical || 1.5;
@@ -88,6 +88,17 @@ export default function DeltaTStatsPanel({ consistAddress, deltaT, deltaTTimesta
                     ({adjustCorrection > 0 ? '+' : ''}{adjustCorrection})
                   </span>
                 )}
+              </div>
+            )}
+
+            {/* Reference compensation info (only when reference is compensated on overflow) */}
+            {referenceLocoAddress !== null && referenceLocoAddress !== undefined && referenceSpeed !== null && referenceSpeed !== undefined && referenceCorrection !== 0 && (
+              <div className="flex items-center gap-2 text-sm font-mono">
+                <span className="text-track-steel">Loco {referenceLocoAddress} (ref):</span>
+                <span className="text-white font-semibold">{referenceSpeed}</span>
+                <span className={referenceCorrection > 0 ? 'text-signal-green' : 'text-signal-red'}>
+                  ({referenceCorrection > 0 ? '+' : ''}{referenceCorrection})
+                </span>
               </div>
             )}
           </div>

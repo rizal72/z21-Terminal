@@ -167,6 +167,9 @@ async def handle_delta_t_update(
         adjust_loco_address = consist.get('adjust_loco_address')
         adjust_speed = consist.get('adjust_speed')
         adjust_correction = consist.get('adjust_correction')
+        reference_loco_address = consist.get('reference_loco_address')
+        reference_speed = consist.get('reference_speed')
+        reference_correction = consist.get('reference_correction')
 
         # Broadcast to all frontend clients (include thresholds and time_str)
         message = {
@@ -179,7 +182,10 @@ async def handle_delta_t_update(
             'thresholds': thresholds,  # Dynamic thresholds from daemon
             'adjust_loco_address': adjust_loco_address,  # Which loco is being adjusted
             'adjust_speed': adjust_speed,  # Actual speed sent to adjust loco
-            'adjust_correction': adjust_correction  # Difference from target (speed_adjust - speed)
+            'adjust_correction': adjust_correction,  # Difference from target (speed_adjust - speed)
+            'reference_loco_address': reference_loco_address,  # Reference loco (compensated on overflow)
+            'reference_speed': reference_speed,  # Actual speed sent to reference loco
+            'reference_correction': reference_correction  # Difference from target (speed_reference - speed)
         }
 
         disconnected_clients = []
