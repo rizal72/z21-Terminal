@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from typing import List, Dict, Any
 from pathlib import Path
 import json
+import asyncio
 from config_loader import load_config, save_config, get_config_path
 from roster_loader import load_consists_from_config
 from services.broadcast import build_consist_response, broadcast_initial_state
@@ -516,16 +517,17 @@ async def test_camera_stream(request: dict):
 
         log('[SETTINGS]', f"Testing camera stream: {ip}:{port}/{stream}")
 
-        # Try to open stream
-        cap = cv2.VideoCapture(rtsp_url)
+        # Try to open stream (in executor to avoid blocking the event loop)
+        loop = asyncio.get_running_loop()
+        cap = await loop.run_in_executor(None, lambda: cv2.VideoCapture(rtsp_url))
 
         if not cap.isOpened():
             log('[SETTINGS]', f"Camera stream test: FAILED (cannot open)")
             return {"status": "error", "message": "Failed to open camera stream"}
 
-        # Read one frame to verify
-        ret, frame = cap.read()
-        cap.release()
+        # Read one frame to verify (in executor)
+        ret, frame = await loop.run_in_executor(None, cap.read)
+        await loop.run_in_executor(None, cap.release)
 
         if ret and frame is not None:
             height, width = frame.shape[:2]

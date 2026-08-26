@@ -9,10 +9,15 @@ Used by both:
 All use the same 'stream' from unified config.json (credentials from config.local.json).
 Handles camera config loading and RTSP stream setup with optimal buffering.
 """
-import cv2
+import os
 import json
 import sys
 from pathlib import Path
+
+# TCP transport + 5s socket timeout (UDP over WiFi = packet loss = decode errors)
+os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|stimeout;5000000'
+
+import cv2
 
 # Add backend to path for log_colors and config_loader imports
 backend_path = Path(__file__).parent.parent

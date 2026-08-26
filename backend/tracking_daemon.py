@@ -10,6 +10,7 @@ import os
 # Silence FFmpeg/H264 decoder warnings BEFORE importing cv2
 os.environ['OPENCV_FFMPEG_LOGLEVEL'] = '-8'  # Quiet mode
 os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
+os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|stimeout;5000000'  # TCP transport (UDP over WiFi = packet loss = decode errors) + 5s socket timeout
 
 import cv2
 import time
@@ -86,6 +87,7 @@ class TrackingDaemon:
         self.active_tracking = False
         self.last_fps_mode = None  # Track mode changes for logging
         self.video_connected = True  # Track video connection state for logging
+        self.video_reconnect_attempts = 0  # Consecutive video reconnect attempts (for backoff + hard restart)
         self.idle_timer_task = None  # Asyncio task for 10s cooldown timer
 
         # Session idle timeout tracking
@@ -437,9 +439,17 @@ class TrackingDaemon:
         # Try initial connection (but don't fail if backend not ready)
         await self.connect_backend()
 
-        # Open video capture with optimal buffering
+        # Open video capture with optimal buffering (retry with backoff instead of silent exit)
         self.cap = setup_rtsp_stream(RTSP_URL, description="tracking daemon stream")
         if not self.cap:
+            log('[WARN]', "Failed to open video stream at startup, retrying...")
+            for attempt in range(1, 6):
+                await asyncio.sleep(min(2.0 * attempt, 10.0))
+                self.cap = setup_rtsp_stream(RTSP_URL, description="tracking daemon stream")
+                if self.cap:
+                    break
+        if not self.cap:
+            log('[ERROR]', "Video stream unreachable at startup - tracking daemon exiting")
             return
 
         log('[INIT]', f"Tracking daemon started - Low-Power Mode ({self.fps_idle} FPS)")
@@ -489,14 +499,24 @@ class TrackingDaemon:
         try:
             while self.running:
                 ret, frame = self.cap.read()
-                if not ret:
+                if not ret or frame is None or frame.size == 0:
                     # Log only on state change (avoid spam)
                     if self.video_connected:
                         log('[WARN]', f"Lost video connection, reconnecting...")
                         self.video_connected = False
+                        self.video_reconnect_attempts = 0
 
-                    # Reconnect RTSP stream (same logic as video_feed.py)
-                    await asyncio.sleep(2)
+                    self.video_reconnect_attempts += 1
+                    # Exponential backoff (2s -> 4s -> 8s -> ... capped at 30s)
+                    backoff = min(2.0 * (2 ** (self.video_reconnect_attempts - 1)), 30.0)
+                    # Escalation log every 5 attempts
+                    if self.video_reconnect_attempts % 5 == 0:
+                        log('[WARN]', f"Video reconnect attempt {self.video_reconnect_attempts} (backoff {backoff:.0f}s) - stream may be down")
+                    # Hard restart after 10 consecutive failures (triggers watchdog restart)
+                    if self.video_reconnect_attempts >= 10:
+                        log('[ERROR]', f"Video stream unreachable after {self.video_reconnect_attempts} attempts - restarting tracking daemon")
+                        raise RuntimeError("Video stream unreachable - restarting tracking daemon")
+                    await asyncio.sleep(backoff)
                     self.cap = reconnect_rtsp_stream(self.cap, RTSP_URL, description="tracking daemon stream")
                     continue
 
@@ -504,6 +524,7 @@ class TrackingDaemon:
                 if not self.video_connected:
                     log('[INIT]', f"Video connection restored")
                     self.video_connected = True
+                    self.video_reconnect_attempts = 0  # Reset reconnect counter
 
                 self.frame_count += 1
 

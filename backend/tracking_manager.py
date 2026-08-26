@@ -74,6 +74,9 @@ class TrackingManager:
             # Start daemon as asyncio task
             self.daemon_task = asyncio.create_task(self.daemon.run())
 
+            # Watchdog: restart daemon if it dies while clients are connected
+            self.daemon_task.add_done_callback(self._on_daemon_done)
+
             log('[OK]', "Tracking daemon started (frame_queue accessible for video feed)")
 
         except FileNotFoundError as e:
@@ -101,6 +104,23 @@ class TrackingManager:
             log('[WARN]', f"Failed to start tracking daemon: {e}")
             self.daemon = None
             self.daemon_task = None
+
+    def _on_daemon_done(self, task):
+        """Watchdog: restart daemon if it dies while clients are connected"""
+        self.daemon_task = None
+        self.daemon = None
+        if task.cancelled():
+            log('[SHUT]', "Tracking daemon task cancelled")
+            return
+        exc = task.exception()
+        if exc:
+            log('[WARN]', f"Tracking daemon crashed: {exc}")
+        if self.should_track():
+            log('[INIT]', "Watchdog: restarting tracking daemon...")
+            try:
+                asyncio.create_task(self.start_tracking())
+            except RuntimeError:
+                log('[SHUT]', "Event loop closing, skip daemon restart")
 
     async def stop_tracking(self):
         """Stop tracking daemon (asyncio.Task)"""

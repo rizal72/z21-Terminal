@@ -13,6 +13,8 @@ import cv2
 import numpy as np
 from contextlib import asynccontextmanager
 from pathlib import Path
+import faulthandler
+faulthandler.enable()  # Print Python stack of all threads on crash (SIGSEGV) for diagnostics
 
 from z21_manager import Z21Manager
 from roster_loader import load_consist_with_functions, load_all_locomotives, load_all_locomotives_from_config, load_consists_from_config

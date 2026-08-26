@@ -7,6 +7,7 @@ import os
 # Silence FFmpeg/H264 decoder warnings BEFORE importing cv2
 os.environ['OPENCV_FFMPEG_LOGLEVEL'] = '-8'  # Quiet mode
 os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
+os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|stimeout;5000000'  # TCP transport + 5s socket timeout
 
 import cv2
 import json
@@ -393,6 +394,18 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
     fps_settings = tracking_config.get('fps', {})
     fps_target = fps_settings.get('video_feed', 15)  # Load from config, fallback to 15
 
+    if not RTSP_URL:
+        log('[FAIL]', "Camera credentials missing - video feed unavailable")
+        error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(error_frame, "Camera credentials missing", (100, 240),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        ret, buffer = cv2.imencode('.jpg', error_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        frame_bytes = buffer.tobytes()
+        while True:
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            time.sleep(1)
+
     log('[INIT]', f"Opening video stream: {RTSP_URL}")
     cap = cv2.VideoCapture(RTSP_URL)
 
@@ -424,7 +437,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
             start_time = time.time()
 
             ret, frame = cap.read()
-            if not ret:
+            if not ret or frame is None or frame.size == 0:
                 log('[WARN]', f"Failed to read frame, reconnecting...")
                 cap.release()
                 time.sleep(2)

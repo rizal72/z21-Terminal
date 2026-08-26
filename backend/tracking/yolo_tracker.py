@@ -375,6 +375,10 @@ class YOLOTracker:
         Returns:
             detections: dict {class_id: {'pos': (x,y), 'bbox': (x1,y1,x2,y2) or OBB points, 'conf': float, 'name': str}}
         """
+        # Guard: reject None/empty frames before inference (prevents crashes on corrupted streams)
+        if frame is None or frame.size == 0:
+            return {}
+
         # Performance tracking: start timer
         start_time = time.time()
 
