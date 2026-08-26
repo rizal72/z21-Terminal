@@ -26,8 +26,8 @@
     "10": {
       "name": "C10 Interno",
       "lead_address": 1,
-      "rear_address": 5,
-      "reference_loco": 5,
+      "rear_address": 2,
+      "reference_loco": 2,
       "adjust_loco": 1,
       "gate_ids": [
         3,
