@@ -342,6 +342,18 @@ sqlite3 backend/data/data.db "SELECT ..."
 - ✅ Faster query development (local REPL)
 - ✅ `backend/data/data.db` is gitignored (won't be committed)
 
+### JMRI → z21 DB Sync (external CV changes)
+
+**When**: CVs modified externally via DecoderPro/JMRI (z21 DB is NOT auto-updated)
+**Why**: UI reads from z21 DB on PC; DecoderPro writes only the decoder + Mac roster
+
+**Steps**:
+1. Read roster values on Mac: `venv/bin/python scripts/utils/cv_operations/read_cv_from_roster.py <addr>` (CV67-94 + CV2/CV5)
+2. Update PC DB via SSH with `update_cv_speed_table_in_db` + `update_decoder_metadata_in_db` (from `services.speed_table_helpers`, source='jmri_reimport')
+3. Verify: read back `cv68, cv70, vstart, vhigh, source` from PC DB
+
+**Caveat**: mandatory for ANY loco after DecoderPro changes (not just Hornby — DB is authoritative for UI)
+
 ### Backend Architecture
 
 **Modular v1.0.0** - Use existing routers and services. Don't modify `main.py` unless necessary.
