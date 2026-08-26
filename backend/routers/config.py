@@ -27,6 +27,26 @@ router = APIRouter(tags=["config"])
 CONFIG_PATH = get_config_path()
 
 
+def _sync_consist_state(z21_manager, address, consist_data):
+    """Update z21_manager consist_state after a CRUD, preserving runtime fields.
+
+    - If consist exists in state: update locomotives + refresh function definitions,
+      preserving runtime fields (speed, direction, power, delta_t, function states).
+    - If not: initialize the consist state.
+    """
+    addr = int(address)
+    if addr in z21_manager.consist_state:
+        state = z21_manager.consist_state[addr]
+        new_data = consist_data.get(addr, {})
+        state['locomotives'] = new_data.get('locomotives', state['locomotives'])
+        new_functions = {}
+        for fn in new_data.get('functions', []):
+            new_functions[fn['number']] = state['functions'].get(fn['number'], False)
+        state['functions'] = new_functions
+    else:
+        z21_manager.initialize_consist(addr, consist_data.get(addr, {}))
+
+
 def validate_locomotive_functions(address: str, functions: list) -> tuple[bool, str]:
     """
     Validate locomotive function array.
@@ -587,9 +607,6 @@ async def create_consist(
     z21_manager: Z21Manager = Depends(get_z21_manager)
 ):
     """Create a new consist in config.json"""
-    # Import dependencies module to access set functions
-    import dependencies
-
     try:
         consist_address = str(request.get("address"))
         lead_address = request.get("lead_address")
@@ -653,10 +670,13 @@ async def create_consist(
 
         mode_str = "Virtual" if virtual_mode else "DCC"
 
-        # Reload consist_data from updated config before broadcasting
-        consist_data = load_consists_from_config(CONFIG_PATH)
-        # Update global state
-        dependencies._consist_data = consist_data
+        # Refresh shared consist/locomotive data in-place (keeps all clients in sync)
+        from main import refresh_consist_data_inplace
+        import main as _main
+        refresh_consist_data_inplace()
+
+        # Initialize z21_manager state for the new consist
+        _sync_consist_state(z21_manager, consist_address, _main.consist_data)
 
         # Broadcast updated state to all connected clients (refresh dropdowns)
         await broadcast_initial_state()
@@ -674,8 +694,6 @@ async def update_consist(
     z21_manager: Z21Manager = Depends(get_z21_manager)
 ):
     """Update an existing consist in config.json"""
-    import dependencies
-
     try:
         # Load config
         config = load_config()
@@ -747,18 +765,26 @@ async def update_consist(
 
             mode_str = "Virtual" if new_virtual_mode else "DCC"
 
-            # Reload consist_data from updated config before broadcasting
-            consist_data = load_consists_from_config(CONFIG_PATH)
-            dependencies._consist_data = consist_data
+            # Refresh shared consist/locomotive data in-place (keeps all clients in sync)
+            from main import refresh_consist_data_inplace
+            import main as _main
+            refresh_consist_data_inplace()
+
+            # Reconcile z21_manager state (preserve runtime fields)
+            _sync_consist_state(z21_manager, address, _main.consist_data)
 
             # Broadcast updated state to all connected clients (refresh dropdowns)
             await broadcast_initial_state()
 
             return {"success": True, "message": f"Consist {address} updated and switched to {mode_str} Mode (CV19 written)"}
 
-        # Reload consist_data from updated config before broadcasting
-        consist_data = load_consists_from_config(CONFIG_PATH)
-        dependencies._consist_data = consist_data
+        # Refresh shared consist/locomotive data in-place (keeps all clients in sync)
+        from main import refresh_consist_data_inplace
+        import main as _main
+        refresh_consist_data_inplace()
+
+        # Reconcile z21_manager state (preserve runtime fields)
+        _sync_consist_state(z21_manager, address, _main.consist_data)
 
         # Broadcast updated state to all connected clients (refresh dropdowns)
         await broadcast_initial_state()
@@ -778,8 +804,6 @@ async def delete_consist(
     Delete a consist from config.json
     If consist is in DCC mode (virtual_mode=false), writes CV19=0 first
     """
-    import dependencies
-
     try:
         # Load config
         config = load_config()
@@ -806,9 +830,12 @@ async def delete_consist(
         # Save config
         save_config(config)
 
-        # Reload consist_data from updated config before broadcasting
-        consist_data = load_consists_from_config(CONFIG_PATH)
-        dependencies._consist_data = consist_data
+        # Refresh shared consist/locomotive data in-place (keeps all clients in sync)
+        from main import refresh_consist_data_inplace
+        refresh_consist_data_inplace()
+
+        # Remove deleted consist from z21_manager state
+        z21_manager.consist_state.pop(int(address), None)
 
         # Broadcast updated state to all connected clients (refresh dropdowns)
         await broadcast_initial_state()

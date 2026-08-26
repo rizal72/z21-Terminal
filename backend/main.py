@@ -502,18 +502,21 @@ async def reload_roster_data():
 
     if consists:
         log('[INIT]', f"Loading consists from config.json...")
-        consist_data = load_consists_from_config(CONFIG_PATH)
+        consist_data.clear()
+        consist_data.update(load_consists_from_config(CONFIG_PATH))
         if debug_enabled and consist_data:
             log('[INIT]', f"Loaded {len(consist_data)} consists from config.json")
     else:
         log('[WARN]', f"No consists in config.json, trying JMRI bootstrap...")
-        consist_data = load_consist_with_functions()
+        consist_data.clear()
+        consist_data.update(load_consist_with_functions())
         if debug_enabled and consist_data:
             log('[INIT]', f"Loaded {len(consist_data)} consists from JMRI")
 
     # Always load locomotives from config.json (JMRI fallback)
     log('[INIT]', f"Loading locomotives from config.json...")
-    locomotive_data = load_all_locomotives_from_config()
+    locomotive_data.clear()
+    locomotive_data.update(load_all_locomotives_from_config())
 
     if not locomotive_data:
         log('[WARN]', f"Warning: No locomotives loaded")
@@ -548,6 +551,22 @@ async def reload_roster_data():
 
     log('[INIT]', f"Roster reload complete!\n")
     return True
+
+
+def refresh_consist_data_inplace():
+    """Refresh main.consist_data/locomotive_data in-place (same object shared with dependencies and broadcast).
+
+    Mutating in-place (clear+update) instead of rebinding keeps all consumers
+    (broadcast, WebSocket, dependencies) on the SAME object identity, so every
+    connected client sees the updated roster immediately after CRUD operations.
+    """
+    global consist_data, locomotive_data
+    new_consists = load_consists_from_config(CONFIG_PATH)
+    consist_data.clear()
+    consist_data.update(new_consists)
+    new_locos = load_all_locomotives_from_config()
+    locomotive_data.clear()
+    locomotive_data.update(new_locos)
 
 
 @app.post("/api/restart-daemon")
