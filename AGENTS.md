@@ -373,9 +373,9 @@ Run `pyright backend/` before committing major backend refactoring. Current base
 
 ---
 
-## Checklist Pre-Deploy (verifica obbligatoria)
+## Pre-Deploy Checklist (What the Agent Must Verify)
 
-Prima di OGNI deploy, verifica obbligatoriamente:
+Before ANY deployment, the agent MUST check:
 
 1. ✅ **Venv activated?** (Mac only - `source venv/bin/activate`)
 2. ✅ **Git status clean?** (no .env or secret files staged)
@@ -395,24 +395,24 @@ Prima di OGNI deploy, verifica obbligatoriamente:
 
 ---
 
-## Come Deve Procedere l'Agente
+## What the Agent Should Do
 
-Quando l'utente dice "deploy su PC", "push in produzione", "aggiorna PC", "controlla log":
+When the user says "deploy to PC", "push to production", "update PC", "check logs":
 
-**Step 1**: Verifica cosa è cambiato (frontend/backend/docs)
-**Step 2**: Verifica la checklist pre-deploy (sopra)
-**Step 3**: Usa l'alias corretto con lo username
-**Step 4**: MAI eseguire comandi git/npm manuali
+**Step 1**: Check what changed (frontend/backend/docs)
+**Step 2**: Verify pre-deploy checklist (above)
+**Step 3**: Use the correct alias with username
+**Step 4**: NEVER execute manual git/npm commands
 
-**Esempio**:
+**Example**:
 ```
-Utente: "Ho modificato SpeedTableViewer.jsx, puoi deployare?"
+User: "Ho modificato SpeedTableViewer.jsx, puoi deployare?"
 
-L'agente verifica:
-- Frontend modificato (web/src/*) → z21-deploy-dev ✅
+The agent checks:
+- Frontend modified (web/src/*) → z21-deploy-dev ✅
 - Username: riccardo@gaming-pc ✅
 
-Esegue:
+Executes:
 ssh riccardo@gaming-pc "cd C:\z21-Terminal && z21-deploy-dev"
 ```
 
@@ -440,16 +440,16 @@ For more detailed information, see:
 
 ## Session Log - 2026-08-27
 
-### Bug fix
-- **Notifica compensazione reference** (`41cb352`): quando la reference viene ridotta (overflow: adjust già a 126) ora appare la notifica "Loco X (ref): Speed -Y%" — prima era silenziosa
-- **Fase 1 hardening video** (`f5d9f0d`): RTSP TCP + stimeout, guard frame None, backoff riconnessione, watchdog daemon, faulthandler → errori decode 108→0, disconnessioni 106→4
-- **Stale state dopo CRUD consist** (`c4226a4`): mutazione in-place del dict condiviso (broadcast/WS/main) + riconciliazione z21_manager → la UI si aggiorna live senza z21-restart
+### Bug fixes
+- **Reference compensation notification** (`41cb352`): when the reference is reduced (overflow: adjust already at 126) the notification "Loco X (ref): Speed -Y%" now appears — previously silent
+- **Phase 1 video hardening** (`f5d9f0d`): RTSP TCP + stimeout, frame None guard, reconnection backoff, daemon watchdog, faulthandler → decode errors 108→0, disconnections 106→4
+- **Stale state after consist CRUD** (`c4226a4`): in-place mutation of the shared dict (broadcast/WS/main) + z21_manager reconciliation → UI updates live without z21-restart
 
-### Infrastruttura
-- **TensorRT OBB rigenerato**: `best_obb.engine` era andato perso (de-tracciato da git, file locale non rigenerato) → il modello girava su ONNX → calo FPS. Riesportato su PC → TensorRT attivo
-- **Venv Mac ripristinato**: Python 3.11.16 (era rotto, symlink a python@3.11 inesistente)
+### Infrastructure
+- **TensorRT OBB regenerated**: `best_obb.engine` was lost (untracked from git, local file not regenerated) → model ran on ONNX → FPS drop. Re-exported on PC → TensorRT active
+- **Mac venv restored**: Python 3.11.16 (was broken, symlink to non-existent python@3.11)
 
-### Config / dati
-- **Config C10 temporaneo**: loco 1+2 placeholder (loco 5 liberata, usata con la 6 separatamente)
-- **Sync JMRI → z21 DB**: loco 6 sincronizzata (loco 5 era già a posto); procedura in "JMRI → z21 DB Sync" sopra
-- **Idea script sync JMRI** in `docs/FUTURE_IDEAS.md` (variante SSH)
+### Config / data
+- **Temporary C10 config**: loco 1+2 placeholder (loco 5 freed, used separately with loco 6)
+- **JMRI → z21 DB sync**: loco 6 synced (loco 5 already correct); procedure in "JMRI → z21 DB Sync" above
+- **JMRI sync script idea** in `docs/FUTURE_IDEAS.md` (SSH variant)
