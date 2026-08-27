@@ -444,6 +444,7 @@ For more detailed information, see:
 - **Reference compensation notification** (`41cb352`): when the reference is reduced (overflow: adjust already at 126) the notification "Loco X (ref): Speed -Y%" now appears — previously silent
 - **Phase 1 video hardening** (`f5d9f0d`): RTSP TCP + stimeout, frame None guard, reconnection backoff, daemon watchdog, faulthandler → decode errors 108→0, disconnections 106→4
 - **Stale state after consist CRUD** (`c4226a4`): in-place mutation of the shared dict (broadcast/WS/main) + z21_manager reconciliation → UI updates live without z21-restart
+- **Δt Panel button active state** (`2cd478e`): video panel toolbar's "Δt Panel" button now shows the pressed/active state (mirrors Debug/Edit pattern) — previously it had static styling and never reflected the open panel
 
 ### Infrastructure
 - **TensorRT OBB regenerated**: `best_obb.engine` was lost (untracked from git, local file not regenerated) → model ran on ONNX → FPS drop. Re-exported on PC → TensorRT active
