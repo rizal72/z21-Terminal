@@ -1,5 +1,6 @@
 # Claude Code settings (local permissions)
 .claude/
+.opencode/
 
 # Python
 __pycache__/
