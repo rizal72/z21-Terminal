@@ -63,6 +63,7 @@ function App() {
   const [videoFeedExpanded, setVideoFeedExpanded] = useState(false); // Video feed panel expand/collapse
   const [editMode, setEditMode] = useState(false); // Gate editor mode
   const [debugMode, setDebugMode] = useState(false); // Debug overlay mode
+  const [panelVisible, setPanelVisible] = useState(true); // Δt Panel visible (default true, come backend SHOW_DELTA_T_PANEL)
   const [testMode, setTestMode] = useState('normal'); // Test mode: 'normal' or 'testing' (controls momentum CV3/CV4)
   const [trackTelemetryOpen, setTrackTelemetryOpen] = useState(false); // Track telemetry popover
   const [z21HealthOpen, setZ21HealthOpen] = useState(false); // Z21 health popover
@@ -617,6 +618,7 @@ function App() {
           .then(res => res.json())
           .then(data => {
             const status = data.panel_visible ? 'visible' : 'hidden';
+            setPanelVisible(data.panel_visible);
             console.log(`🎛️  Δt panel toggled: ${status}`);
             // Show notification
             showNotification({
@@ -1291,6 +1293,8 @@ function App() {
           onEditModeChange={setEditMode}
           debugMode={debugMode}
           onDebugModeChange={setDebugMode}
+          panelVisible={panelVisible}
+          onPanelVisibleChange={setPanelVisible}
         />
 
         {/* Analytics Dashboard (desktop-only) */}

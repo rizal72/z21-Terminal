@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import GateEditor from './GateEditor';
 
-export default function VideoFeedPanel({ apiUrl, isExpanded, onExpandChange, editMode, onEditModeChange, debugMode, onDebugModeChange }) {
+export default function VideoFeedPanel({ apiUrl, isExpanded, onExpandChange, editMode, onEditModeChange, debugMode, onDebugModeChange, panelVisible, onPanelVisibleChange }) {
   const [isMobile, setIsMobile] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
   const containerRef = useRef(null);
@@ -94,10 +94,19 @@ export default function VideoFeedPanel({ apiUrl, isExpanded, onExpandChange, edi
                 onClick={() => {
                   fetch(`${apiUrl}/api/toggle-panel`, { method: 'POST' })
                     .then(res => res.json())
-                    .then(data => console.log(`🎛️  Panel toggled: ${data.panel_visible ? 'visible' : 'hidden'}`))
+                    .then(data => {
+                      if (onPanelVisibleChange) {
+                        onPanelVisibleChange(data.panel_visible);
+                      }
+                      console.log(`🎛️  Panel toggled: ${data.panel_visible ? 'visible' : 'hidden'}`);
+                    })
                     .catch(err => console.error('Failed to toggle panel:', err));
                 }}
-                className="px-3 py-1 bg-control-grey hover:bg-control-black text-track-steel text-sm rounded transition-colors"
+                className={`px-3 py-1 text-sm rounded transition-colors ${
+                  panelVisible
+                    ? 'bg-signal-amber text-control-black font-semibold'
+                    : 'bg-control-grey hover:bg-control-black text-track-steel'
+                }`}
                 title="Toggle Δt Panel (P)"
               >
                 Δt Panel
