@@ -35,6 +35,7 @@ from services.broadcast import (
     build_consist_response
 )
 from services.config_manager import ConfigManager
+from version import __version__
 import dependencies
 from routers import analytics, config, roster, status, speed_table
 from routers.roster import get_full_roster
@@ -462,7 +463,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="z21-Terminal Backend",
     description="WebSocket API for DCC locomotive control via Z21",
-    version="1.0.0",
+    version=__version__,
     lifespan=lifespan
 )
 

@@ -11,6 +11,7 @@ from typing import Dict, Any
 import time
 from dependencies import get_z21_manager, get_consist_data, get_connected_clients
 from z21_manager import Z21Manager
+from version import __version__
 
 router = APIRouter(tags=["status"])
 
@@ -34,7 +35,7 @@ async def api_status(
     """
     return {
         "name": "z21-Terminal Backend",
-        "version": "1.0.0",
+        "version": __version__,
         "status": "running",
         "z21_connected": z21_manager is not None and z21_manager.z21 is not None,
         "consists_loaded": len(consist_data),
