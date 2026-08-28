@@ -2,6 +2,8 @@
 
 **Autonomous web-based DCC locomotive controller** with real-time YOLO tracking, automatic speed compensation, and multi-device sync via Z21 LAN protocol.
 
+**Version**: v1.0.0
+
 **Key Highlights**:
 - 🚂 **JMRI-Independent**: Fully autonomous operations (roster, functions, speed tables managed in web UI)
 - 🎯 **YOLO Tracking**: Custom-trained AI detection with TensorRT GPU acceleration
@@ -31,7 +33,7 @@ z21-Terminal/
 
 ## Backend Architecture
 
-**Modular Design** (refactored 2025-01-15): Backend reduced from 2340 lines (monolithic) to 742 lines with modular architecture.
+**Modular Design** (refactored 2026-01-15): Backend reduced from 2340 lines (monolithic) to 742 lines with modular architecture.
 
 ### Directory Structure
 ```
@@ -256,6 +258,20 @@ python3 z21_controller.py 10            # Control consist 10
 4. Configure `config.json` and `camera_config.json` (if using YOLO tracking)
 5. Start backend: `python backend/main.py`
 6. Start frontend: `cd web && npm run dev` (development) or `npm run build` (production)
+
+## What's New (v1.0.0 Release - 2026-08-28)
+
+**Milestone**: First stable release - all v1.0.0 milestones complete.
+
+- **Centralized Versioning**: single source `backend/version.py`, imported by `main.py` and `status.py` (backend reports the app version consistently)
+- **Version Bump Script**: `scripts/release/bump_version.py` (pure - updates version files, no git ops; git flow is manual/explicit)
+- **Video Hardening**: RTSP TCP + stimeout, frame guards, reconnection backoff, daemon watchdog, faulthandler → decode errors 108→0
+- **Reference Compensation Notification**: UI notifica quando la reference viene compensata durante un overflow (previously silent)
+- **Consist CRUD Live Refresh**: UI aggiorna i consists senza z21-restart (in-place shared dict + z21_manager reconciliation)
+- **TensorRT OBB Regenerated**: `best_obb.engine` restored for GPU-optimized inference (was running on ONNX fallback)
+- **Δt Panel Button Active State**: video toolbar's "Δt Panel" button now shows the pressed state (mirrors Debug/Edit)
+
+### Previous (Jan 19-21, 2026)
 
 ## What's New (Jan 19-21, 2026)
 

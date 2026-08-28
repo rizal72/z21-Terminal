@@ -304,7 +304,7 @@ git checkout develop          # ⚠️ NEVER forget this!
 **Procedure** (bump script is PURE — no git ops, so git steps are manual/pushed explicitly):
 
 1. **Bump files**: `venv/bin/python scripts/release/bump_version.py <new_version>`
-   - Updates `backend/version.py`, `AGENTS.md` version line, `CLAUDE.md` version line
+   - Updates `backend/version.py`, `AGENTS.md` version line, `README.md` version line, `CLAUDE.md` version line
 2. **Commit + push bump** on `develop`:
    ```bash
    git add . && git commit -m "release: bump to v<new_version>" && git push origin develop

@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent.parent
 VERSION_PY = ROOT / "backend" / "version.py"
 AGENTS_MD = ROOT / "AGENTS.md"
+README_MD = ROOT / "README.md"
 CLAUDE_MD = ROOT / "CLAUDE.md"
 
 
@@ -81,6 +82,7 @@ def main():
 
     update_version_py(new_version)
     update_md_doc(AGENTS_MD, new_version)
+    update_md_doc(README_MD, new_version)
     update_md_doc(CLAUDE_MD, new_version)
 
     print("-" * 40)
