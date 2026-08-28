@@ -45,6 +45,22 @@
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <a href="Screenshots/Screenshot_1.png"><img src="Screenshots/thumbs/Screenshot_1.png" width="32%" alt="Live AI tracking: YOLO detection with gate timing overlays"></a>
+  <a href="Screenshots/Screenshot_2.png"><img src="Screenshots/thumbs/Screenshot_2.png" width="32%" alt="Locomotive controller: Virtual Consist mode with function control"></a>
+  <a href="Screenshots/Screenshot_3.png"><img src="Screenshots/thumbs/Screenshot_3.png" width="32%" alt="Analytics: session statistics and Δt trends"></a>
+</p>
+<p align="center">
+  <a href="Screenshots/Screenshot_4.png"><img src="Screenshots/thumbs/Screenshot_4.png" width="32%" alt="Analytics: YOLO performance (FPS and confidence)"></a>
+  <a href="Screenshots/Screenshot_5.png"><img src="Screenshots/thumbs/Screenshot_5.png" width="32%" alt="Analytics: speed tuning (CV67-94 curve)"></a>
+</p>
+
+*Click a thumbnail to view the full-size screenshot.*
+
+---
+
 ## Requirements
 
 - **Control Station**: Roco Z21 (White, Black, or Pro) connected to your network
