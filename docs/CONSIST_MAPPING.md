@@ -338,7 +338,7 @@ Esempio log con gate distanti:
 
 **Test 1: YOLO Model Classes**
 ```bash
-cd ~/Documents/_PROGETTI/z21-Terminal
+cd ~/Documents/projects/z21-Terminal
 python3 << EOF
 from ultralytics import YOLO
 model = YOLO('models/best.pt')

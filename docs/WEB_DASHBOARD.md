@@ -180,22 +180,22 @@ File: `~/.bash_aliases`
 
 ```bash
 # z21-Terminal aliases (aggiornati 2025-12-27)
-alias z21-terminal='cd ~/Documents/_PROGETTI/z21-Terminal/scripts && python3 z21_controller.py'
-alias z21-backend='cd ~/Documents/_PROGETTI/z21-Terminal/backend && uvicorn main:app --reload --host 127.0.0.1 --port 8000'
-alias z21-frontend='cd ~/Documents/_PROGETTI/z21-Terminal/web && npm run dev -- --host'
+alias z21-terminal='cd ~/Documents/projects/z21-Terminal/scripts && python3 z21_controller.py'
+alias z21-backend='cd ~/Documents/projects/z21-Terminal/backend && uvicorn main:app --reload --host 127.0.0.1 --port 8000'
+alias z21-frontend='cd ~/Documents/projects/z21-Terminal/web && npm run dev -- --host'
 
 # Funzione z21() - Lancia backend + frontend in tab iTerm2 separate
 z21() {
-    cd ~/Documents/_PROGETTI/z21-Terminal
+    cd ~/Documents/projects/z21-Terminal
     osascript <<END
 tell application "iTerm2"
     tell current window
         tell current session
-            write text "cd ~/Documents/_PROGETTI/z21-Terminal/backend && uvicorn main:app --reload --host 127.0.0.1 --port 8000"
+            write text "cd ~/Documents/projects/z21-Terminal/backend && uvicorn main:app --reload --host 127.0.0.1 --port 8000"
         end tell
         create tab with default profile
         tell current session
-            write text "cd ~/Documents/_PROGETTI/z21-Terminal/web && npm run dev -- --host"
+            write text "cd ~/Documents/projects/z21-Terminal/web && npm run dev -- --host"
         end tell
     end tell
 end tell
@@ -515,7 +515,7 @@ python3 z21_controller.py 3
 - [x] ~~Tailscale Serve permanente~~ ✅ CONFERMATO: configurazione persiste dopo reboot (2025-12-26)
   - Backend esposto su porta 8000, frontend su porta 5173
   - Comando verifica: `tailscale serve status`
-  - Accessibile via HTTPS: `https://mbp16diriccardo.tail9350d7.ts.net`
+  - Accessibile via HTTPS: `https://hostname.tailXXXXXX.ts.net`
 
 ---
 ---

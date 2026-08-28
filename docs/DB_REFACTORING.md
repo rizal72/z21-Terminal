@@ -290,7 +290,7 @@ CREATE TABLE cv_speed_table (
 - This is the **OFFICIAL database** (production data)
 
 **Development (Mac)**:
-- Path: `~/Documents/_PROGETTI/z21-Terminal/backend/data/analytics.db`
+- Path: `~/Documents/projects/z21-Terminal/backend/data/analytics.db`
 - This is a **COPY** - **potentially NOT up-to-date** with PC
 - Used for testing only
 
@@ -322,7 +322,7 @@ CREATE TABLE cv_speed_table (
 
 **Step 0.1: Rename File + Class**
 ```bash
-cd ~/Documents/_PROGETTI/z21-Terminal/backend/services
+cd ~/Documents/projects/z21-Terminal/backend/services
 mv analytics_db.py data_db.py
 ```
 
@@ -521,7 +521,7 @@ z21-backend
 
 **Step 1.3: Rename Physical File (Mac)**
 ```bash
-cd ~/Documents/_PROGETTI/z21-Terminal/backend/data
+cd ~/Documents/projects/z21-Terminal/backend/data
 mv analytics.db data.db
 ```
 
@@ -835,7 +835,7 @@ async def update_settings(update: SettingsUpdate):
 
 ### Test 1: Database Rename (Mac)
 ```bash
-cd ~/Documents/_PROGETTI/z21-Terminal/backend/data
+cd ~/Documents/projects/z21-Terminal/backend/data
 mv analytics.db data.db
 z21-backend  # Should start without errors
 # Test Speed Table Viewer
@@ -846,7 +846,7 @@ z21-backend  # Should start without errors
 ### Test 2: Database Rename (PC Production)
 ```powershell
 # SSH to PC
-ssh riccardo@gaming-pc
+ssh user@hostname
 
 # Deploy code changes
 z21-deploy-dev
@@ -959,7 +959,7 @@ z21-frontend
 **If Phase 0 fails**:
 ```bash
 # Mac
-cd ~/Documents/_PROGETTI/z21-Terminal/backend/services
+cd ~/Documents/projects/z21-Terminal/backend/services
 mv data_db.py analytics_db.py
 git checkout backend/  # Revert all import changes
 z21-backend  # Test restart
@@ -968,7 +968,7 @@ z21-backend  # Test restart
 **If Phase 1 fails**:
 ```bash
 # Mac
-cd ~/Documents/_PROGETTI/z21-Terminal/backend/data
+cd ~/Documents/projects/z21-Terminal/backend/data
 mv data.db analytics.db
 git checkout backend/services/data_db.py  # Revert DB path change
 
@@ -1169,7 +1169,7 @@ const CustomTick = ({ x, y, payload }) => {
 ~~Before starting implementation tomorrow:~~ **COMPLETED 2025-01-18**
 
 - [ ] Verify PC database is backed up (`cp analytics.db analytics.db.backup`)
-- [ ] Copy PC database to Mac for testing (`scp riccardo@gaming-pc:C:/z21-Terminal/backend/data/analytics.db ~/Documents/_PROGETTI/z21-Terminal/backend/data/`)
+- [ ] Copy PC database to Mac for testing (`scp user@hostname:C:/z21-Terminal/backend/data/analytics.db ~/Documents/projects/z21-Terminal/backend/data/`)
 - [ ] Verify Mac backend starts successfully with current DB
 - [ ] Review this document and confirm plan with user
 - [ ] Create feature branch: `git checkout -b feature/db-state-refactoring`
@@ -1181,7 +1181,7 @@ const CustomTick = ({ x, y, payload }) => {
 
 **Database Sync Status**:
 - PC: `C:\z21-Terminal\backend\data\analytics.db` (OFFICIAL, production data)
-- Mac: `~/Documents/_PROGETTI/z21-Terminal/backend/data/analytics.db` (COPY, potentially outdated)
+- Mac: `~/Documents/projects/z21-Terminal/backend/data/analytics.db` (COPY, potentially outdated)
 
 **Recommendation**: Before testing, copy PC DB → Mac to ensure consistent state.
 

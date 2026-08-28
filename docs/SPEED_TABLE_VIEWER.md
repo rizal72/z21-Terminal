@@ -296,13 +296,13 @@ for cv_index in range(67, 95):
 **Solution** (manual migration):
 ```bash
 # 1. Copy DB from PC to Mac
-scp riccardo@gaming-pc:C:/z21-Terminal/backend/data/data.db ~/Documents/_PROGETTI/z21-Terminal/backend/data/data.db
+scp user@hostname:C:/z21-Terminal/backend/data/data.db ~/Documents/projects/z21-Terminal/backend/data/data.db
 
 # 2. Run migration script (Mac only, requires JMRI roster)
 python scripts/migrate_decoder_metadata.py
 
 # 3. Copy DB from Mac to PC
-scp ~/Documents/_PROGETTI/z21-Terminal/backend/data/data.db riccardo@gaming-pc:C:/z21-Terminal/backend/data/data.db
+scp ~/Documents/projects/z21-Terminal/backend/data/data.db user@hostname:C:/z21-Terminal/backend/data/data.db
 ```
 
 **Migration Results**:

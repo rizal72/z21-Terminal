@@ -47,7 +47,7 @@ z21-restart
 
 **Testing checklist after deploy**:
 1. Backend starts without errors: Check `z21-log` (no Python exceptions)
-2. Frontend loads: Open browser `https://gaming-pc.tail9350d7.ts.net`
+2. Frontend loads: Open browser `https://hostname.tailXXXXXX.ts.net`
 3. Locomotive control works: Speed/direction/functions respond
 4. Analytics opens: Click Analytics button
 5. WebSocket connected: Check badges (WS, Z21 green)

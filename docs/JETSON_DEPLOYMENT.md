@@ -72,11 +72,11 @@ git commit -m "docs: aggiungi guide deployment Jetson"
 git push origin develop
 
 # SUL PC (via SSH)
-ssh riccardo@gaming-pc "cd C:/z21-Terminal && git pull"
-ssh riccardo@gaming-pc "cd C:/z21-Terminal/test/memory && ./run_full_memory_test.sh --duration 10"
+ssh user@hostname "cd C:/z21-Terminal && git pull"
+ssh user@hostname "cd C:/z21-Terminal/test/memory && ./run_full_memory_test.sh --duration 10"
 
 # Analizza risultati
-ssh riccardo@gaming-pc "cat C:/z21-Terminal/test/memory/results/summary_report_*.md"
+ssh user@hostname "cat C:/z21-Terminal/test/memory/results/summary_report_*.md"
 ```
 
 **Risultato atteso** (per Jetson 8GB):

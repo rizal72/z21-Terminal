@@ -534,7 +534,7 @@ ORDER BY timestamp DESC;
 
 ## 🧪 Production Testing (2026-01-23)
 
-**Environment**: PC Windows (gaming-pc), develop branch
+**Environment**: PC Windows (hostname), develop branch
 
 **Test Flow**:
 1. ✅ Hard refresh browser (Ctrl+F5)

@@ -333,7 +333,7 @@ alias z21-frontend='...'  # Solo frontend (porta 5173)
 alias z21-tracking='...'    # Solo tracking daemon
 ```
 
-**Osservazione Minore**: Nella funzione `z21()` alla riga 140, il `cd ~/Documents/_PROGETTI/z21-Terminal` potrebbe non servire molto poiché lo script AppleScript usa path assoluti, ma non è un errore - funziona correttamente.
+**Osservazione Minore**: Nella funzione `z21()` alla riga 140, il `cd ~/Documents/projects/z21-Terminal` potrebbe non servire molto poiché lo script AppleScript usa path assoluti, ma non è un errore - funziona correttamente.
 
 ---
 

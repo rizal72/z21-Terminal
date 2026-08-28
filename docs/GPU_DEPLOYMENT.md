@@ -5,7 +5,7 @@
 **Sistema attualmente in produzione**:
 - ✅ Backend running su PC Windows (porta 8000)
 - ✅ YOLO tracking su GPU NVIDIA
-- ✅ Tailscale Serve: https://gaming-pc.tail9350d7.ts.net
+- ✅ Tailscale Serve: https://hostname.tailXXXXXX.ts.net
 - ✅ Frontend servito da FastAPI (production mode)
 - ✅ CPU usage ridotto da 800% → ~100% (87% riduzione)
 - ✅ Deployment script `z21-deploy` funzionante
@@ -225,23 +225,23 @@ tailscale serve status
 # Tailscale Serve gestisce i certificati Let's Encrypt in automatico (validità: 90 giorni, rinnovo automatico)
 
 # Output atteso:
-# https://gaming-pc.tail9350d7.ts.net (tailnet only)
+# https://hostname.tailXXXXXX.ts.net (tailnet only)
 # |-- / proxy http://localhost:8000
 #
-# https://gaming-pc.tail9350d7.ts.net:8000 (tailnet only)
+# https://hostname.tailXXXXXX.ts.net:8000 (tailnet only)
 # |-- / proxy http://localhost:8000
 ```
 
-**URL frontend accessibile**: `https://gaming-pc.tail9350d7.ts.net` (senza porta!)
-**URL WebSocket**: `wss://gaming-pc.tail9350d7.ts.net:8000/ws` (con porta 8000)
+**URL frontend accessibile**: `https://hostname.tailXXXXXX.ts.net` (senza porta!)
+**URL WebSocket**: `wss://hostname.tailXXXXXX.ts.net:8000/ws` (con porta 8000)
 
 **Configurazione persiste dopo reboot** ✅
 
 **📝 Nota URL Tailscale**:
-- **Mac**: `https://mbp16diriccardo.tail9350d7.ts.net` (frontend Vite porta 5173)
-- **Mac Backend API**: `https://mbp16diriccardo.tail9350d7.ts.net:8000` (quando backend Mac è running)
-- **PC Windows**: `https://gaming-pc.tail9350d7.ts.net` (backend production - URL pulito senza porta!)
-- **PC WebSocket**: `wss://gaming-pc.tail9350d7.ts.net:8000/ws` (porta 8000 necessaria per WS)
+- **Mac**: `https://hostname.tailXXXXXX.ts.net` (frontend Vite porta 5173)
+- **Mac Backend API**: `https://hostname.tailXXXXXX.ts.net:8000` (quando backend Mac è running)
+- **PC Windows**: `https://hostname.tailXXXXXX.ts.net` (backend production - URL pulito senza porta!)
+- **PC WebSocket**: `wss://hostname.tailXXXXXX.ts.net:8000/ws` (porta 8000 necessaria per WS)
 
 **Pro**:
 - Funziona ovunque (casa, remoto, rete diversa)
@@ -307,7 +307,7 @@ New-NetFirewallRule -DisplayName "z21-Terminal Backend" -Direction Inbound -Prot
 ```
 
 **URL frontend accessibile (LAN locale)**: `http://192.168.1.3:8000` (porta esplicita richiesta)
-**URL alternativo**: `http://gaming-pc.local:8000` (se hostname risolve)
+**URL alternativo**: `http://hostname.local:8000` (se hostname risolve)
 
 **Pro**:
 - Zero overhead (no VPN tunnel)
@@ -328,7 +328,7 @@ New-NetFirewallRule -DisplayName "z21-Terminal Backend" -Direction Inbound -Prot
 **📝 Confronto URL**:
 | Modalità | URL Frontend | Porta | Protocollo | Funziona Remoto? |
 |----------|--------------|-------|------------|------------------|
-| **Tailscale** | `https://gaming-pc.tail9350d7.ts.net` | Implicita (443 → 8000) | HTTPS | ✅ Sì |
+| **Tailscale** | `https://hostname.tailXXXXXX.ts.net` | Implicita (443 → 8000) | HTTPS | ✅ Sì |
 | **LAN diretta** | `http://192.168.1.3:8000` | Esplicita (:8000) | HTTP | ❌ No (solo locale) |
 
 ---
@@ -398,8 +398,8 @@ Se `True` → ✅ GPU ready!
 
 | File | Percorso Mac | Percorso PC | Descrizione |
 |------|--------------|-------------|-------------|
-| **camera_config.json** | `~/Documents/_PROGETTI/z21-Terminal/` | `C:\z21-Terminal\` | Credenziali camera RTSP |
-| **JMRI Roster** | `~/Library/Preferences/JMRI/.../roster/` | `C:\Users\Riccardo\Library\Preferences\JMRI\.../roster\` | Roster locomotive e consist |
+| **camera_config.json** | `~/Documents/projects/z21-Terminal/` | `C:\z21-Terminal\` | Credenziali camera RTSP |
+| **JMRI Roster** | `~/Library/Preferences/JMRI/.../roster/` | `C:\Users\<username>\Library\Preferences\JMRI\.../roster\` | Roster locomotive e consist |
 
 **Note**: `consist_state.json` è deprecato (migrato in `config.json` che è tracciato da git)
 
@@ -409,7 +409,7 @@ Se `True` → ✅ GPU ready!
 
 ```bash
 # 1. Camera config (credenziali RTSP)
-scp ~/Documents/_PROGETTI/z21-Terminal/camera_config.json riccardo@192.168.1.3:C:/z21-Terminal/
+scp ~/Documents/projects/z21-Terminal/camera_config.json user@192.168.1.3:C:/z21-Terminal/
 
 # 2. JMRI Roster (locomotive configuration)
 # 2a. Crea tar del roster
@@ -417,10 +417,10 @@ cd ~/Library/Preferences/JMRI/La_mia_Ferrovia_in_JMRI.jmri
 tar czf /tmp/roster.tar.gz roster/
 
 # 2b. Copia tar su PC
-scp /tmp/roster.tar.gz riccardo@192.168.1.3:C:/Users/Riccardo/
+scp /tmp/roster.tar.gz user@192.168.1.3:C:/Users/<username>/
 
 # 2c. Estrai su PC (esegui su PC via SSH)
-ssh riccardo@192.168.1.3 'mkdir -p "C:\Users\Riccardo\Library\Preferences\JMRI\La_mia_Ferrovia_in_JMRI.jmri" && cd "C:\Users\Riccardo\Library\Preferences\JMRI\La_mia_Ferrovia_in_JMRI.jmri" && tar xzf C:\Users\Riccardo\roster.tar.gz'
+ssh user@192.168.1.3 'mkdir -p "C:\Users\<username>\Library\Preferences\JMRI\La_mia_Ferrovia_in_JMRI.jmri" && cd "C:\Users\<username>\Library\Preferences\JMRI\La_mia_Ferrovia_in_JMRI.jmri" && tar xzf C:\Users\<username>\roster.tar.gz'
 ```
 
 ### Verifica File Copiati
@@ -430,7 +430,7 @@ ssh riccardo@192.168.1.3 'mkdir -p "C:\Users\Riccardo\Library\Preferences\JMRI\L
 ```powershell
 # Verifica tutti i file necessari esistono
 Test-Path C:\z21-Terminal\camera_config.json
-Test-Path "C:\Users\Riccardo\Library\Preferences\JMRI\La_mia_Ferrovia_in_JMRI.jmri\roster\consist\consist.xml"
+Test-Path "C:\Users\<username>\Library\Preferences\JMRI\La_mia_Ferrovia_in_JMRI.jmri\roster\consist\consist.xml"
 
 # Output atteso: True per entrambi
 ```
@@ -500,15 +500,15 @@ curl http://PC_IP:8000/api/consists
 cd web
 
 # Edit .env (se non esiste, crealo)
-echo "VITE_API_URL=https://gaming-pc.tail9350d7.ts.net:8000" > .env
+echo "VITE_API_URL=https://hostname.tailXXXXXX.ts.net:8000" > .env
 
 # Oppure modifica vite.config.js per usare Tailscale URL:
 export default defineConfig({
   server: {
     proxy: {
-      '/api': 'https://gaming-pc.tail9350d7.ts.net:8000',
+      '/api': 'https://hostname.tailXXXXXX.ts.net:8000',
       '/ws': {
-        target: 'wss://gaming-pc.tail9350d7.ts.net:8000',
+        target: 'wss://hostname.tailXXXXXX.ts.net:8000',
         ws: true,
         changeOrigin: true
       }
@@ -522,7 +522,7 @@ npm run dev
 # Accesso: http://localhost:5173
 ```
 
-**Nota**: Gli URL Tailscale sono già configurati con il nome del tuo PC: `gaming-pc.tail9350d7.ts.net`
+**Nota**: Gli URL Tailscale sono già configurati con il nome del tuo PC: `hostname.tailXXXXXX.ts.net`
 
 #### Se usi IP locale (stesso network):
 
@@ -560,7 +560,7 @@ http://PC_IP:5173
 
 # Oppure via Tailscale (se configurato anche frontend con serve):
 tailscale serve --https=5173 --bg http://localhost:5173
-# Accesso: https://gaming-pc.tail9350d7.ts.net
+# Accesso: https://hostname.tailXXXXXX.ts.net
 ```
 
 ---
@@ -665,7 +665,7 @@ Tutti i comandi sono implementati come **funzioni PowerShell** nel `$PROFILE`. N
 
 Il file `$PROFILE` contiene le funzioni z21 e viene caricato automaticamente ad ogni avvio di PowerShell.
 
-**Location**: `C:\Users\Riccardo\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`
+**Location**: `C:\Users\<username>\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`
 
 **Contenuto completo**:
 
@@ -881,7 +881,7 @@ Dopo modifiche al `$PROFILE`, ricarica senza riavviare PowerShell:
 
 ```powershell
 # Dal Mac via SSH
-ssh riccardo@gaming-pc
+ssh user@hostname
 cd C:\z21-Terminal
 git pull
 z21-restart  # Riavvia backend (~2s)
@@ -1083,7 +1083,7 @@ z21-deploy
 z21-log
 
 # Oppure via SSH dal Mac
-ssh riccardo@gaming-pc "z21-log"
+ssh user@hostname "z21-log"
 
 # O comando manuale
 Get-Content C:\z21-Terminal\backend.log -Wait -Tail 50
@@ -1091,7 +1091,7 @@ Get-Content C:\z21-Terminal\backend.log -Wait -Tail 50
 
 **Accesso Production**:
 - Locale: http://localhost:8000
-- Tailscale: https://gaming-pc.tail9350d7.ts.net
+- Tailscale: https://hostname.tailXXXXXX.ts.net
 - Tutto servito da porta 8000 (backend + frontend)
 
 ### Workflow Development (Mac)
@@ -1145,7 +1145,7 @@ z21-stop
 # Backend stopped successfully
 
 # Da remoto via SSH dal Mac
-ssh riccardo@gaming-pc "z21-stop"
+ssh user@hostname "z21-stop"
 ```
 
 ---
@@ -1251,7 +1251,7 @@ Dopo setup funzionante:
 **PC Windows** (Production):
 - Branch: `main`
 - Mode: Production (dist/ servito da FastAPI)
-- Accesso: http://localhost:8000 o https://gaming-pc.tail9350d7.ts.net
+- Accesso: http://localhost:8000 o https://hostname.tailXXXXXX.ts.net
 - CPU usage: ~100% (GPU offload)
 - Comandi:
   - `z21-start` - Avvia backend in background
@@ -1286,7 +1286,7 @@ Dopo setup funzionante:
 **Ultimo aggiornamento**: 2025-01-07
 **Status**: ✅ **DEPLOYED & OPERATIONAL** (sistema in produzione su PC Windows)
 - Backend + YOLO tracking running su GPU NVIDIA
-- Tailscale Serve: https://gaming-pc.tail9350d7.ts.net
+- Tailscale Serve: https://hostname.tailXXXXXX.ts.net
 - Production mode attivo (frontend servito da FastAPI)
 - PowerShell aliases attivi: z21-start, z21-stop, z21-status, z21-log, z21-restart, z21-deploy, z21-backend, z21-frontend
 - Background mode persiste dopo SSH close (no Y/N prompt su Ctrl+C)

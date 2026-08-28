@@ -453,10 +453,10 @@ WHERE id IN (
 ### Copy database between Mac and PC
 ```bash
 # Mac → PC
-scp backend/data/data.db riccardo@gaming-pc:C:/z21-Terminal/backend/data/data.db
+scp backend/data/data.db user@hostname:C:/z21-Terminal/backend/data/data.db
 
 # PC → Mac
-scp riccardo@gaming-pc:C:/z21-Terminal/backend/data/data.db backend/data/data.db
+scp user@hostname:C:/z21-Terminal/backend/data/data.db backend/data/data.db
 ```
 
 ---

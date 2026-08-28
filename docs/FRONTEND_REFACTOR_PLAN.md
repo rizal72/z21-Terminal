@@ -14,7 +14,7 @@
 ## Testing Strategy (⚠️ CRITICAL - SAME AS BACKEND REFACTOR)
 
 **Branch**: `refactor-frontend` (separate from `develop`)
-**Testing Environment**: PC Windows production (gaming-pc)
+**Testing Environment**: PC Windows production (hostname)
 **Why PC**: Production environment with GPU (TensorRT), real YOLO tracking, complete feature set
 
 ### Deploy Workflow (After EACH Phase)
@@ -29,7 +29,7 @@ git push origin refactor-frontend
 #### 2. PC: Deploy & Test
 ```powershell
 # SSH from Mac to PC
-ssh riccardo@gaming-pc
+ssh user@hostname
 
 # Deploy refactor-frontend branch
 cd C:\z21-Terminal
@@ -55,7 +55,7 @@ z21-log
 
 #### 3. Manual Testing (See Testing Checklist Below)
 
-Open browser: **https://gaming-pc.tail9350d7.ts.net**
+Open browser: **https://hostname.tailXXXXXX.ts.net**
 
 Test ALL features:
 - ✅ Current view charts

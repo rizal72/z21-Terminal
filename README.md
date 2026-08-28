@@ -138,4 +138,4 @@ z21-Terminal is **autonomous for daily operations**, but **JMRI is needed for in
 
 ## License
 
-All rights reserved. This is a private project; a license will be added if/when it becomes public.
+This project is released under the MIT License. See the [LICENSE](LICENSE) file for details.

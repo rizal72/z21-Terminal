@@ -15,7 +15,7 @@ Dockerizzare z21-Terminal per creare un container **standalone e portatile** che
 - ✅ **Portatile**: Run su qualsiasi PC Windows/Linux senza setup manuale
 - ✅ **Isolamento**: Non sporca il filesystem, facile cleanup
 - ✅ **GPU Opzionale**: Con CUDA veloce, senza funziona comunque (YOLO fallbacks)
-- ✅ **Tailscale HTTPS**: Accessibile via `https://gaming-pc.tail9350d7.ts.net` senza specificare porta
+- ✅ **Tailscale HTTPS**: Accessibile via `https://hostname.tailXXXXXX.ts.net` senza specificare porta
 - ✅ **Liberà il PC**: Container può runnare in background, PC libero per altri task
 - ✅ **Distribuzione Pubblica**: Container standalone condivisibile via Docker Hub
 
@@ -767,7 +767,7 @@ tailscale funnel status
 
 **Accesso**:
 ```
-https://gaming-pc.tail9350d7.ts.net/     # Automatico, senza porta
+https://hostname.tailXXXXXX.ts.net/     # Automatico, senza porta
 ```
 
 ---
@@ -888,7 +888,7 @@ docker logs -f z21-terminal
 curl http://localhost:8000/api/status
 
 # Accesso via Tailscale (HTTPS, senza porta)
-# https://gaming-pc.tail9350d7.ts.net/
+# https://hostname.tailXXXXXX.ts.net/
 ```
 
 ✅ **Fatto!** z21-Terminal è ora in esecuzione in Docker.
@@ -989,17 +989,17 @@ tailscale funnel status
 curl http://localhost:8000/api/status
 
 # Verifica HTTPS accessibile
-curl https://gaming-pc.tail9350d7.ts.net/api/status
+curl https://hostname.tailXXXXXX.ts.net/api/status
 ```
 
 ### Accesso Publico
 
 ```bash
 # Funzionamento attuale (senza Docker)
-https://gaming-pc.tail9350d7.ts.net/
+https://hostname.tailXXXXXX.ts.net/
 
 # Con Docker - STESSO ACCESSO
-https://gaming-pc.tail9350d7.ts.net/
+https://hostname.tailXXXXXX.ts.net/
 
 # Nessuna differenza per l'utente finale!
 ```

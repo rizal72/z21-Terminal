@@ -271,7 +271,7 @@ ON locomotive_speed_table(last_modified DESC);
 
 **Usage**:
 ```bash
-cd ~/Documents/_PROGETTI/z21-Terminal
+cd ~/Documents/projects/z21-Terminal
 source venv/bin/activate
 python scripts/utils/import_speed_tables_from_jmri.py
 ```
@@ -385,7 +385,7 @@ git checkout -b feature/speed-table-db-migration
 
 ### Step 4: Run Import Script (Mac)
 ```bash
-cd ~/Documents/_PROGETTI/z21-Terminal
+cd ~/Documents/projects/z21-Terminal
 source venv/bin/activate
 python scripts/utils/import_speed_tables_from_jmri.py
 ```
@@ -436,10 +436,10 @@ git commit -m "feat: speed table DB migration + config refactoring
 git push origin feature/speed-table-db-migration
 
 # Deploy to PC
-ssh riccardo@gaming-pc "cd C:\z21-Terminal && z21-deploy-dev"
+ssh user@hostname "cd C:\z21-Terminal && z21-deploy-dev"
 
 # Run import script on PC
-ssh riccardo@gaming-pc "cd C:\z21-Terminal && python scripts\utils\import_speed_tables_from_jmri.py"
+ssh user@hostname "cd C:\z21-Terminal && python scripts\utils\import_speed_tables_from_jmri.py"
 ```
 
 ### Step 7: Production Testing (PC)

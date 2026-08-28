@@ -764,7 +764,7 @@ useEffect(() => {
 - ✅ Historical data stable (Overview view never auto-refreshes)
 - ✅ Clean WebSocket lifecycle (connect/disconnect with panel)
 
-**Testing Environment**: **PC Windows** via SSH (`riccardo@gaming-pc`)
+**Testing Environment**: **PC Windows** via SSH (`user@hostname`)
 - Deploy workflow: `z21-deploy-dev` (pull + build + restart)
 - Real locomotive movement testing with Consist 10/11
 
@@ -1495,7 +1495,7 @@ First attempt (`506c03c`) synced daemon when client connects:
   - `scripts/utils/enable_railcom_plus.py` (NEW)
   - `scripts/utils/test_railcom_listener.py` (NEW)
   - `backend/main.py`: Telemetry filter in lifespan
-  - `C:\Users\Riccardo\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`: z21-log alias
+  - `C:\Users\<username>\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`: z21-log alias
 
 ### 2025-01-08 - 🐍 **VENV SETUP MAC - CPU DEPENDENCIES**
 - **🐍 Virtual Environment Setup (macOS)** - Isolamento da system Python
@@ -1526,7 +1526,7 @@ First attempt (`506c03c`) synced daemon when client connects:
 
 ### 2025-01-08 - 🖥️ **WINDOWS PC ALIASES - STATUS CHECK & LOGGING FIX**
 - **🖥️ z21-status Alias (Windows PC)** - Quick backend status check
-  - **Funzione aggiunta a PowerShell profile**: `C:\Users\Riccardo\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`
+  - **Funzione aggiunta a PowerShell profile**: `C:\Users\<username>\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`
   - **Check method**: Verifica porta 8000 in ascolto (TCP listen state)
   - **Output**:
     - `[OK] Backend ATTIVO (porta 8000 in ascolto)` - Backend running
@@ -1544,7 +1544,7 @@ First attempt (`506c03c`) synced daemon when client connects:
   - **New**: `z21-restart` (chiaro - stop + start backend)
   - **Usage**: `z21-restart` per riavviare backend in background dopo updates
 - **📁 File Modified**:
-  - `C:\Users\Riccardo\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` (via SSH + scp workflow)
+  - `C:\Users\<username>\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` (via SSH + scp workflow)
 
 ### 2025-01-08 - 🧹 **CLEANUP: CONSIST_STATE.JSON REMOVAL**
 - **🧹 consist_state.json Deprecated** - Migration to config.json completed
@@ -1968,7 +1968,7 @@ First attempt (`506c03c`) synced daemon when client connects:
   - ✅ SSH passwordless configurato
   - ✅ Python + CUDA environment setup completato
   - ✅ Repository clonato + dependencies installate
-  - ✅ Tailscale Serve configurato (https://gaming-pc.tail9350d7.ts.net)
+  - ✅ Tailscale Serve configurato (https://hostname.tailXXXXXX.ts.net)
   - ✅ Backend running in production mode (porta 8000)
   - ✅ Frontend build servito da FastAPI (conditional serving)
   - ✅ YOLO tracking su GPU (CPU usage ridotto 800% → ~100%)
@@ -2181,11 +2181,11 @@ First attempt (`506c03c`) synced daemon when client connects:
   - Servizio configurato automatic startup
   - SSH passwordless funzionante: Mac → PC senza password
   - Fix permessi `administrators_authorized_keys` per utenti admin
-  - Test connessione: ✅ `ssh riccardo@192.168.1.3` senza password
+  - Test connessione: ✅ `ssh user@192.168.1.3` senza password
 - **📄 Guida accessibile via Tailscale**:
   - File copiato in `web/public/GPU_DEPLOYMENT.md`
   - HTML wrapper con markdown rendering: `GPU_DEPLOYMENT.html`
-  - Accesso: `https://mbp16diriccardo.tail9350d7.ts.net/GPU_DEPLOYMENT.html`
+  - Accesso: `https://hostname.tailXXXXXX.ts.net/GPU_DEPLOYMENT.html`
 - **🎯 Status GPU Deployment**: Step 1 (SSH) completato, resto pianificato
   - ✅ Step 1: SSH passwordless - COMPLETATO
   - ⏳ Step 2: Network/Tailscale (opzionale, IP locale già funziona)
@@ -3468,7 +3468,7 @@ Only v1.0.0 JMRI Independence, Speed Table Phase 2, and Phase 1 remain in main f
 - Frontend: React 18.3 + Vite 6.0 + Tailwind CSS
 - Hardware: Roco Z21 Bianca, Tapo IP camera 720P, PC Windows 11 + GPU
 
-**Production Deployment**: PC Windows (gaming-pc) via z21-deploy-dev
+**Production Deployment**: PC Windows (hostname) via z21-deploy-dev
 
 **Production Testing**: CV write verified on loco 7 (CV86: 80→82, confirmed via Hornby app)
 
@@ -3618,7 +3618,7 @@ Only v1.0.0 JMRI Independence, Speed Table Phase 2, and Phase 1 remain in main f
 
 **User Feedback During Creation**:
 - "dove possibile userei comandi one line"
-- "SSH gaming-pc da solo ti da errore, serve sempre l'username"
+- "SSH hostname da solo ti da errore, serve sempre l'username"
 - "ci sono altri aliases su PC che potrsti usare in altri scenari, uno su tutti z21-log"
 - "recentemente abbiamo deciso di mettere su git anche claude ed altri files md, per cui quella parte la devi togliere"
 - "hai fatto un check per vedere se alcune regole sono duplicate?"
@@ -3627,7 +3627,7 @@ Only v1.0.0 JMRI Independence, Speed Table Phase 2, and Phase 1 remain in main f
 - `.claude/skills/z21-deployment/SKILL.md` - Complete deployment workflow
 
 **Files Modified**:
-- `/Users/riccardosallusti/Documents/_PROGETTI/z21-Terminal/CLAUDE.md` - Simplified deployment sections
+- `/Users/<username>/Documents/projects/z21-Terminal/CLAUDE.md` - Simplified deployment sections
 
 ---
 

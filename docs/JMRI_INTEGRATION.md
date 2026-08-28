@@ -74,8 +74,8 @@ Per info essenziali, vedi main CLAUDE.md file.
 
 ### Percorsi
 
-- **Roster directory**: `/Users/riccardosallusti/Library/Preferences/JMRI/La_mia_Ferrovia_in_JMRI.jmri/roster/`
-- **Backup roster**: `/Users/riccardosallusti/Documents/Trenini/JMRI/Roster_Backup.roster`
+- **Roster directory**: `/Users/<username>/Library/Preferences/JMRI/La_mia_Ferrovia_in_JMRI.jmri/roster/`
+- **Backup roster**: `/Users/<username>/Documents/<layout-name>/JMRI/Roster_Backup.roster`
 
 ### Formato File Roster
 
