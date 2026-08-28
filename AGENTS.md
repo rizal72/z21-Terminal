@@ -1,5 +1,8 @@
 # AGENTS.md - Development Guidelines for Agentic Coding Assistants
 
+**Version**: v0.9.11 (Development - v1.0.0 Coming Soon)
+**Repository**: https://github.com/rizal72/z21-Terminal (Private, SSH)
+
 ## Build, Lint, and Test Commands
 
 ### Frontend (React + Vite)
