@@ -297,6 +297,30 @@ git merge develop --ff-only   # ✅ CORRECT (no merge commits)
 git checkout develop          # ⚠️ NEVER forget this!
 ```
 
+### Version Bump & Release
+
+**Trigger**: user says "bump X.Y.Z" (e.g. "bump 1.0.1"). Version lives in `backend/version.py` (single source of truth: `__version__`), imported by `backend/main.py` and `backend/routers/status.py`.
+
+**Procedure** (bump script is PURE — no git ops, so git steps are manual/pushed explicitly):
+
+1. **Bump files**: `venv/bin/python scripts/release/bump_version.py <new_version>`
+   - Updates `backend/version.py`, `AGENTS.md` version line, `CLAUDE.md` version line
+2. **Commit + push bump** on `develop`:
+   ```bash
+   git add . && git commit -m "release: bump to v<new_version>" && git push origin develop
+   ```
+3. **Tag** (on the bump commit): `git tag -a v<new_version> -m "z21-Terminal Release <new_version>" && git push origin v<new_version>`
+4. **Merge to main** (fast-forward ONLY), then ALWAYS return to develop:
+   ```bash
+   git checkout main && git merge develop --ff-only && git push origin main && git checkout develop
+   ```
+5. **Sync PC**: `ssh riccardo@gaming-pc "cd C:\z21-Terminal && git pull"` (add `&& z21-restart` only if backend must reload version)
+
+**Notes**:
+- `web/package.json` version is `0.0.0` boilerplate — do NOT bump it (not the app version)
+- Git `push`/merge always require explicit user consent (per AGENTS.md rules)
+- The bump script performs NO git operations by design
+
 ### Frontend Changes Require Rebuild
 
 **Backend changes** (`backend/*`):
