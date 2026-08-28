@@ -3,7 +3,8 @@
 Bump z21-Terminal version (PURE - no git operations).
 
 Updates the single source of truth (backend/version.py) and the doc version
-references (AGENTS.md, CLAUDE.md). Git commit/push/merge/tag must be done manually.
+references (AGENTS.md, README.md). CLAUDE.md is intentionally excluded (obsolete,
+kept frozen for historical reference). Git commit/push/merge/tag must be done manually.
 
 Usage:
     python scripts/release/bump_version.py 1.0.0
@@ -17,7 +18,6 @@ ROOT = Path(__file__).parent.parent.parent
 VERSION_PY = ROOT / "backend" / "version.py"
 AGENTS_MD = ROOT / "AGENTS.md"
 README_MD = ROOT / "README.md"
-CLAUDE_MD = ROOT / "CLAUDE.md"
 
 
 def validate_version(new_version: str) -> bool:
@@ -39,7 +39,7 @@ def update_version_py(new_version: str) -> None:
 
 
 def update_md_doc(path: Path, new_version: str) -> None:
-    """Update the **Version** line in a Markdown doc (AGENTS.md / CLAUDE.md).
+    """Update the **Version** line in a Markdown doc (AGENTS.md / README.md).
 
     Handles lines like:
       **Version**: v0.9.11 (Development - v1.0.0 Coming Soon)
@@ -83,7 +83,6 @@ def main():
     update_version_py(new_version)
     update_md_doc(AGENTS_MD, new_version)
     update_md_doc(README_MD, new_version)
-    update_md_doc(CLAUDE_MD, new_version)
 
     print("-" * 40)
     print("Version files updated. NO git operations performed (by design).")
