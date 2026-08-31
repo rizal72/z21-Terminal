@@ -50,6 +50,9 @@ config.local.json
 secrets.json
 .env
 
+# Private files (never committed)
+private/
+
 # Runtime state (not to be committed)
 backend/consist_state.json
 *.log
