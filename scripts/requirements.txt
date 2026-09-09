@@ -2,5 +2,7 @@
 ultralytics>=8.0.0    # YOLOv8 for locomotive detection
 opencv-python>=4.8.0  # Computer vision
 
+coremltools>=6.0      # CoreML export (Mac ANE inference, .mlpackage loader)
+
 # Z21 Protocol & JMRI Integration
 # (No external dependencies - uses standard library only)

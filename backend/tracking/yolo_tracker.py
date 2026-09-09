@@ -186,10 +186,11 @@ class YOLOTracker:
             else:
                 base_name = 'best'
 
-            # Check for models (priority: .engine > .onnx > .pt with fallback)
+            # Check for models (priority: .engine > .mlpackage > .onnx > .pt with fallback)
             engine_path = models_dir / f'{base_name}.engine'
             onnx_path = models_dir / f'{base_name}.onnx'
             pt_path = models_dir / f'{base_name}.pt'
+            coreml_path = models_dir / f'{base_name}.mlpackage'
 
             model_loaded = False
 
@@ -202,9 +203,20 @@ class YOLOTracker:
                     model_loaded = True
                 except Exception as e:
                     log('[WARN]', f"TensorRT engine failed: {e}")
+                    log('[WARN]', f"Falling back to CoreML/ONNX/PyTorch models...")
+
+            # Fallback to CoreML if engine failed or doesn't exist (Mac: ANE-optimized)
+            if not model_loaded and coreml_path.exists():
+                try:
+                    log('[INIT]', f"Attempting CoreML package: \033[91m{coreml_path.name}\033[0m...")
+                    self.model = YOLO(str(coreml_path), task='obb' if yolo_obb else 'detect')
+                    log('[INIT]', f"Using CoreML model: \033[91m{coreml_path.name}\033[0m (ANE-optimized, fastest on Apple Silicon)")
+                    model_loaded = True
+                except Exception as e:
+                    log('[WARN]', f"CoreML model failed: {e}")
                     log('[WARN]', f"Falling back to ONNX/PyTorch models...")
 
-            # Fallback to ONNX if engine failed or doesn't exist
+            # Fallback to ONNX if engine/CoreML failed or don't exist
             if not model_loaded and onnx_path.exists():
                 try:
                     log('[INIT]', f"Using ONNX model: \033[91m{onnx_path.name}\033[0m (1.5-2x faster than PyTorch)")
@@ -223,7 +235,7 @@ class YOLOTracker:
                 model_loaded = True
 
             if not model_loaded:
-                raise FileNotFoundError(f"No YOLO model found or all models failed to load: checked {engine_path}, {onnx_path}, and {pt_path}")
+                raise FileNotFoundError(f"No YOLO model found or all models failed to load: checked {engine_path}, {coreml_path}, {onnx_path}, and {pt_path}")
         else:
             # Model path provided explicitly
             if self.debug_enabled:
