@@ -2,7 +2,7 @@
 
 Archived changelog entries and failed experiments documentation.
 
-For recent changes, see main CLAUDE.md file.
+For recent changes, see docs/CHANGELOG.md.
 
 ---
 
