@@ -39,6 +39,21 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
+## 2026-09-10 — Docs genericization (`8a5b17c`, cleanup pass)
+
+- **CLAUDE references cleanup (stratum A - living instructions)**: deployment skill
+  (`.claude/skills/z21-deployment/SKILL.md`, untracked) fully genericized — "Claude" →
+  "the AI agent", "CLAUDE.md Management Policy" → CHANGELOG policy, docs-only deploy
+  tree now cites `AGENTS.md`/`docs/*`; OK-to-commit list updated (AGENTS.md untracked).
+- Tracked docs: `docs/Z21_PROTOCOL.md`, `docs/JMRI_INTEGRATION.md` dead pointers
+  ("see main CLAUDE.md") → `AGENTS.md`; `scripts/release/bump_version.py` docstring
+  no longer mentions CLAUDE.md; `test/memory/` instructions say "your AI coding agent".
+- Intentionally left: historical/archeological docs (CHANGELOG_ARCHIVE.md,
+  DB_REFACTORING.md, REFACTOR_PLAN.md, SPEED_TABLE_DB_MIGRATION.md, etc.),
+  author attributions, `.gitignore` entries (`.claude/`, `CLAUDE.md`).
+
+---
+
 ## 2026-08-27
 
 ### Bug fixes
@@ -64,3 +79,4 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 - **JMRI → z21 DB sync**: loco 6 synced (loco 5 already correct); procedure in
   "JMRI → z21 DB Sync" section of AGENTS.md.
 - **JMRI sync script idea** in `docs/FUTURE_IDEAS.md` (SSH variant).
+

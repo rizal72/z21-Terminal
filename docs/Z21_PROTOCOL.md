@@ -2,7 +2,7 @@
 
 Dettagli tecnici completi del protocollo Z21 LAN (UDP).
 
-Per info essenziali, vedi main CLAUDE.md file.
+Per info essenziali, vedi `AGENTS.md`.
 
 ---
 

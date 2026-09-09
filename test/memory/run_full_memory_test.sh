@@ -158,7 +158,7 @@ run_frontend_tests() {
     log_info ""
     log_info "Quick test sequence:"
     log_info "  1. Open dashboard in Chrome: http://localhost:5173"
-    log_info "  2. In Claude Code, run:"
+    log_info "  2. In your AI coding agent, run:"
     log_info "     mcp__chrome-devtools__evaluate_script"
     log_info "     function: '() => { return getHeapSize(); }'"
     log_info ""

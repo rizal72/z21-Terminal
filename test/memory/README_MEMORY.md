@@ -86,7 +86,7 @@ open http://localhost:5173
 # 2. Apri il test dashboard HTML in un'altra tab
 open test/memory/results/memory_test.html
 
-# 3. In Claude Code, usa Chrome DevTools MCP:
+# 3. Nel tuo AI coding agent (con Chrome DevTools MCP):
 #    - Esegui snippet da frontend_memory_test.js
 #    - Prendi snapshot memoria heap
 #    - Analizza WebSocket traffic

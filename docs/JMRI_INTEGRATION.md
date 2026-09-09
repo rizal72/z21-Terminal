@@ -2,7 +2,7 @@
 
 Dettagli completi sulla relazione tra z21-Terminal e JMRI.
 
-Per info essenziali, vedi main CLAUDE.md file.
+Per info essenziali, vedi `AGENTS.md`.
 
 ---
 

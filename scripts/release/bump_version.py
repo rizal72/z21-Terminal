@@ -3,8 +3,7 @@
 Bump z21-Terminal version (PURE - no git operations).
 
 Updates the single source of truth (backend/version.py) and the doc version
-references (AGENTS.md, README.md). CLAUDE.md is intentionally excluded (obsolete,
-kept frozen for historical reference). Git commit/push/merge/tag must be done manually.
+references (AGENTS.md, README.md). Git commit/push/merge/tag must be done manually.
 
 Usage:
     python scripts/release/bump_version.py 1.0.0
