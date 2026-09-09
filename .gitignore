@@ -42,6 +42,7 @@ scripts/utils/data/
 *snapshot*
 *.onnx
 *.engine
+*.mlpackage
 *.bak
 
 # Sensitive data
