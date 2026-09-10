@@ -197,7 +197,7 @@ ping 192.168.1.36   # IP del Mac (esempio)
 **Pro**: Zero configurazione, veloce
 **Contro**: Funziona solo a casa
 
-### Opzione B: Tailscale con Serve (✅ raccomandato - già in uso sul Mac)
+### Opzione B: Tailscale con Serve (✅ raccomandato - già in uso su PC e Mac)
 
 **Setup Tailscale** (5 minuti):
 1. Installa su entrambi: https://tailscale.com/download
@@ -259,12 +259,21 @@ tailscale serve status
 **Mac** (Development):
 - Frontend Vite: porta 5173
 - Backend FastAPI: porta 8000
-- Due servizi separati → **NON serve** `tailscale serve` per Mac
+- Servizi separati → se vuoi la dashboard in HTTPS via Tailscale, configura una regola
+  `serve` che esponga Vite:
+  ```bash
+  # 443 -> Vite dev server (dashboard HTTPS)
+  tailscale serve --bg http://localhost:5173
+
+  # opzionale: backend API su :8000
+  tailscale serve --bg https=8000 http://localhost:8000
+  ```
+- Vite accetta solo host in allowlist: `web/vite.config.js` già include `.ts.net` (wildcard)
 
 **PC** (Production):
 - Backend FastAPI (porta 8000) serve TUTTO (frontend + API + WebSocket)
 - Frontend servito da `web/dist/` (production build)
-- **Richiede** `tailscale serve` per esporre HTTPS
+- **Richiede** `tailscale serve` per esporre HTTPS (le 2 regole 443/8000 sopra)
 
 **Nota**: La sintassi corretta usa `=`:
 ```powershell

@@ -52,6 +52,18 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
   DB_REFACTORING.md, REFACTOR_PLAN.md, SPEED_TABLE_DB_MIGRATION.md, etc.),
   author attributions, `.gitignore` entries (`.claude/`, `CLAUDE.md`).
 
+
+---
+
+## 2026-09-10 — Tailscale doc corrections
+
+- `docs/GPU_DEPLOYMENT.md`: fixed self-contradiction in "Differenza Mac vs PC" — Mac
+  DOES use `tailscale serve` for HTTPS dashboard (documented commands: 443 → Vite 5173,
+  optional :8000 API); PC block restored. Section header updated ("in uso su PC e Mac").
+- Evidence: `web/vite.config.js` allowlists the Mac `*.ts.net` hostname (only needed
+  when Vite is reached via tailscale serve).
+- `AGENTS.md` (local, untracked): "Mac Dev (Tailscale)" URL now points to
+  `mbp14diriccardo` (current dev Mac); old `mbp16diriccardo` noted as retired.
 ---
 
 ## 2026-08-27
