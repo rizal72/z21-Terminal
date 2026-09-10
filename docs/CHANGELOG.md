@@ -64,6 +64,17 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
   when Vite is reached via tailscale serve).
 - `AGENTS.md` (local, untracked): "Mac Dev (Tailscale)" URL now points to
   `mbp14diriccardo` (current dev Mac); old `mbp16diriccardo` noted as retired.
+
+### Config — consist 10 placeholder locos (INTENTIONAL safety)
+- Consist 10 now uses **lead 1 + rear 4** (commit `fe6a32d`): rear loco 4 is a
+  NON-EXISTENT loco. Deliberate choice: while loco 1 is under repair, its position
+  (dead track) makes accidental consist-11/10 mixups harmless — wrong commands hit
+  no motor. Side effect (also desired): tracker skips consist 10 ("loco not in YOLO
+  training set" warning is expected).
+- Original mapping to restore after loco 1 repair: **lead 1 + rear 5**
+  (reference 5, adjust 1) — see commit `e087f8e` for the history: original 1+5 →
+  placeholder 1+2 (`e087f8e`) → dead loco 1+4 (`fe6a32d`).
+
 ---
 
 ## 2026-08-27
