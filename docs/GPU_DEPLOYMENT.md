@@ -259,16 +259,16 @@ tailscale serve status
 **Mac** (Development):
 - Frontend Vite: porta 5173
 - Backend FastAPI: porta 8000
-- Servizi separati → se vuoi la dashboard in HTTPS via Tailscale, configura una regola
-  `serve` che esponga Vite:
+- Servizi separati → se vuoi la dashboard in HTTPS via Tailscale, configura le regole:
   ```bash
   # 443 -> Vite dev server (dashboard HTTPS)
   tailscale serve --bg http://localhost:5173
 
-  # opzionale: backend API su :8000
-  tailscale serve --bg https=8000 http://localhost:8000
+  # opzionale: backend API su :8000 (nota: --https=8000 come FLAG)
+  tailscale serve --bg --https=8000 http://localhost:8000
   ```
-- Vite accetta solo host in allowlist: `web/vite.config.js` già include `.ts.net` (wildcard)
+  Config attiva su mbp14diriccardo (2026-09-10), validata live. Vite accetta solo
+  host in allowlist: `web/vite.config.js` già include `.ts.net` (wildcard)
 
 **PC** (Production):
 - Backend FastAPI (porta 8000) serve TUTTO (frontend + API + WebSocket)
