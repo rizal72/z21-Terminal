@@ -26,8 +26,8 @@
     "10": {
       "name": "C10 Interno",
       "lead_address": 1,
-      "rear_address": 2,
-      "reference_loco": 2,
+      "rear_address": 4,
+      "reference_loco": 4,
       "adjust_loco": 1,
       "gate_ids": [
         3,
@@ -60,11 +60,11 @@
       "id": 1,
       "name": "Gate 1",
       "center": [
-        995,
-        39
+        1014,
+        49
       ],
-      "width": 65,
-      "height": 43,
+      "width": 71,
+      "height": 53,
       "angle": 0,
       "color": [
         255,
@@ -76,12 +76,12 @@
       "id": 2,
       "name": "Gate 2",
       "center": [
-        14,
-        295
+        29,
+        296
       ],
       "width": 44,
       "height": 47,
-      "angle": -29,
+      "angle": -27,
       "color": [
         255,
         165,
@@ -92,8 +92,8 @@
       "id": 3,
       "name": "Gate 3",
       "center": [
-        235,
-        533
+        242,
+        527
       ],
       "width": 65,
       "height": 68,
@@ -108,12 +108,12 @@
       "id": 4,
       "name": "Gate 4",
       "center": [
-        1148,
-        169
+        1152,
+        153
       ],
       "width": 65,
       "height": 61,
-      "angle": -34,
+      "angle": -32,
       "color": [
         0,
         255,
