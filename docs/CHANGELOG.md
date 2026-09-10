@@ -52,6 +52,11 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
   DB_REFACTORING.md, REFACTOR_PLAN.md, SPEED_TABLE_DB_MIGRATION.md, etc.),
   author attributions, `.gitignore` entries (`.claude/`, `CLAUDE.md`).
 
+- **Documented `z21-start`** (PC PowerShell alias, existed but undocumented): idempotent
+  backend start — checks if the Task Scheduler task is already Running; use for FIRST
+  launch (e.g. after `wol` remote wake), `z21-restart` only for stop+start cycle.
+  Added to AGENTS.md backend aliases + deployment skill (untracked) + DB sync rule 2.
+
 
 ---
 
