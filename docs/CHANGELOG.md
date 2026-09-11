@@ -5,6 +5,21 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
+## 2026-09-11 — PC tooling resilience (single source of truth)
+
+### Infrastructure
+- **`start-backend.ps1`**: added idempotent `pip install -r requirements.txt` before uvicorn launch
+  (fast no-op when satisfied; warns and continues on failure so the backend starts even offline).
+  Covers every start path: aliases, Task Scheduler, manual. Closes review P2.1 permanently
+  (commit `bb94b7d`).
+- **`scripts/pc/z21-profile.ps1`** (NEW, git-tracked): all z21-* PowerShell functions moved from
+  the PC user profile into the repo - single source of truth, recoverable on a fresh machine by
+  clone + one dot-source line. PC profile reduced to that dot-source line (pre-migration backup:
+  `$PROFILE.bak` on PC). Verified: fresh SSH shell loads all functions via dot-source; backend
+  started through the new script (commit `f943c0c`).
+
+---
+
 ## 2026-09-11 — Audit-driven fix batch (backend hardening)
 
 ### Bug fixes
