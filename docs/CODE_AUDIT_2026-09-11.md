@@ -267,4 +267,39 @@ Review READ-ONLY su 54a09f7 + 63aa397: **nessun P1**. Verifica empirica del revi
 - **P3.3 `cast(Any, ...)`**: DECISIONE = mantenuto per ora. Alternativa futura piu` tipizzata: `cast(List["Results"], ...)` con import lazy di ultralytics.engine.results; da valutare se le stub migliorano. Nota INFO correlata: le due pyrightconfig (root + backend) vanno tenute sincronizzate a mano (rischio drift).
 - Tutti gli altri punti verificati OK (hoist yolo_obb semanticamente equivalente e NameError reale confermato con call site vivo in scripts/track_consist_yolo.py:692; set_auto_compensation firma e semantica corrette; guard roster_loader non alterano il flusso; config valide su Mac e PC).
 
+## Baseline TDI project-wide (2026-09-11, dopo full sweep)
+
+Prima misurazione su tutto il progetto. Metodo: sweep manuale con `read limit=5` su tutti gli 80 file git-tracked (.py/.js/.jsx) — ogni lettura scatta la complexity baseline di pi-lens (tree-sitter, analisi dal disco) e cattura lo snapshot in `~/.pi-lens/projects/<slug>/metrics-history.json`. In `~/.pi-lens/projects/Users-riccardosallusti-Documents-PROGETTI-z21-Terminal/metrics-history.json`. Per aggiornare la fotografia: ripetere la sweep (i file gia` presenti prendono un nuovo snapshot e aggiornano il trend).
+
+```text
+TECHNICAL DEBT INDEX: 37.1/100 (C - debito moderato)
+Files analyzed: 80 | Files with debt: 66 | Avg MI: 59.7 | Total cognitive: 8901
+Breakdown: Maintainability 40% | Cognitive 34% | Nesting 27% | Max Cyclomatic 29% | Entropy 62%
+```
+
+Scala: punteggio ALTO = piu` debito. Il campione di 6 file caldi di stamattina segnava 59 (D): il progetto intero sta meglio del suo campione caldo, come doveva essere.
+
+File peggiori per MI (il debito e` concentrato, ~15-20% del totale vive in 6-7 file):
+
+| File | MI | Cognitiva | Righe |
+| --- | --- | --- | --- |
+| web/src/components/SettingsModal.jsx | 35.5 | 224 | 1.244 |
+| web/src/components/AnalyticsPanel.jsx | 38.5 | 463 | 1.143 |
+| backend/services/data_db.py | 40.0 | 310 | 841 |
+| web/src/App.jsx | 40.9 | 677 | 1.156 |
+| web/src/components/charts/SpeedTableViewer.jsx | 42.5 | 429 | 949 |
+| web/src/components/ConsistController.jsx | 43.8 | 281 | 594 |
+| scripts/z21_controller.py (CLI) | 44.9 | 706 | 818 |
+| backend/routers/config.py | 45.3 | 410 | 671 |
+| web/src/components/ConsistForm.jsx | 46.2 | 98 | 405 |
+| backend/routers/speed_table.py | 46.6 | 187 | 524 |
+| scripts/track_consist_yolo.py | 47.0 | 476 | 710 |
+| backend/main.py | 47.1 | 379 | 585 |
+
+Note di lettura:
+- **Entropy 62%** e` il peso dominante a livello progetto (imprevedibilita`/mischia di pattern), la complessita` cognitiva e` concentrata in pochi file, non diffusa
+- Novita` rispetto ai radar precedenti: **SettingsModal.jsx** (MI peggiore del progetto) e **z21_controller.py** (CLI, cognitiva 706) emergono solo con la sweep completa
+- I file con metriche nulle sono i 3 `__init__.py` vuoti (corretto)
+- Da qui in poi i refactor mostreranno `improving/regressing` per file in `/lens-tdi` (confronto tra snapshot storici)
+
 Ultimo aggiornamento: 2026-09-11, audit generato da pi-lens su develop.
