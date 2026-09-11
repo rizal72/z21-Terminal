@@ -31,7 +31,7 @@ Il rumore era Pyright fuori dal venv (~27 falsi `reportMissingImports`: `fastapi
 - `pyrightconfig.json` (root): aggiunti `venvPath: "."` + `venv: "venv"`
 - `backend/pyrightconfig.json` (NUOVO): pi-lens tratta `backend/` come project root per i file lì sotto (log tool-cwd: `dispatch-root`), quindi serve una config in backend con `venvPath: ".."` che allinea CLI e LSP indipendentemente dal cwd
 
-Baseline reale post-config: **15 errori** (da ~49 segnalati grezzi). Nota: i 2 `possibly unbound` in speed_table.py presenti nel vecchio audit NON compaiono più col Pyright del venv (probabile drift/inferenza migliorata); l'errore è sparito anche dalla scansione attuale.
+Baseline reale post-config: **15 errori**, poi **12** dopo il `cast(Any, ...)` su `results` (63aa397, chiude i 3 errori `result.obb/.boxes` di typing ultralytics). Residuo: video_feed 6 + downsampling 6 (MODERATE deferiti). Nota: i 2 `possibly unbound` in speed_table.py presenti nel vecchio audit NON compaiono più col Pyright del venv (probabile drift/inferenza migliorata); l'errore è sparito anche dalla scansione attuale.
 
 Nota tecnica: la sessione pi-lens corrente mostra ancora gli import errors perche il server Pyright e`stato spawnato all'avvio SENZA la nuova config; un riavvio di sessione li elimina. Il gate CLI (authoritativo) e` gia` pulito.
 
@@ -245,7 +245,8 @@ Unico elenco per futuro intervento, in ordine di valore/costo:
 ## Come ripetere l'audit
 
 ```bash
-# Backend: type check ufficiale (gate pre-commit, baseline atteso ~22-26 errori veri)
+# Backend: type check ufficiale (gate pre-commit, baseline atteso 12 errori veri:
+#   video_feed 6 + downsampling 6, deferiti; i venv config hanno eliminato il rumore)
 pyright backend/
 
 # Frontend + backend con pi-lens (sessione agent): scansione full warning

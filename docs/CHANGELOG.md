@@ -5,6 +5,44 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
+## 2026-09-11 — Audit-driven fix batch (backend hardening)
+
+### Bug fixes
+- **`DataDB.set_auto_compensation`** (`54a09f7`): `tracking_manager.py:97` called the NONEXISTENT
+  `DataDB.update_consist_auto_compensation` → AttributeError in the "no YOLO model" graceful-degradation
+  path (would have crashed on model-missing startup). Now calls the real static method (data_db.py:998).
+- **`yolo_obb` unbound** (`54a09f7`): with an explicit `model_path`, `yolo_obb` was never assigned in
+  `__init__` → NameError. Live call site confirmed: `scripts/track_consist_yolo.py:692`.
+- Type hints: `Optional[str]` on `model_path`, `Optional[Dict[int, Dict]]` on `debug_info`.
+
+### Security
+- **defusedxml in `roster_loader.py`** (`54a09f7`): XXE hardening on JMRI roster XML parsing (3 parse
+  sites + 3 `root is None` guards, kept as defense-in-depth). `defusedxml==0.7.1` added to
+  `backend/requirements.txt` and installed on both venvs. **Deploy note (P2.1)**: pip install on PC
+  venv must precede `z21-restart` when requirements change — deploy aliases do not run pip.
+
+### Infrastructure / tooling
+- **Pyright venv configs** (`54a09f7`): `venvPath/venv` in root `pyrightconfig.json` + NEW
+  `backend/pyrightconfig.json` (pi-lens treats `backend/` as project root for backend files;
+  log evidence: `tool-cwd dispatch-root`). Import false positives gone; baseline now readable.
+- **`.pi-lens.json`** (`54a09f7`): rule `unchecked-throwing-call-python` disabled project-wide
+  (~40 baseline findings on `int()`/`float()` in inference hot loops; the real gaps — config_loader
+  `open()`/`json.loads` — tracked as audit backlog item 6). Takes effect at pi-lens session start.
+- **`cast(Any, ...)` on YOLO inference result** (`63aa397`): ultralytics stubs infer `Tensor`;
+  closes the 3 `result.obb/.boxes` baseline errors.
+
+### Review (APPROVED)
+- Subagent `opencode-go/glm-5.3` (thinking high), read-only, on the 2 fix commits: **no P1**.
+  P2.1 (defusedxml on PC venv) resolved at deploy; P3 decisions documented in
+  `docs/CODE_AUDIT_2026-09-11.md` (guards kept, `cast(Any)` kept).
+
+### Verification
+- `pyright backend/` = **12 errors** (video_feed 6 + downsampling 6, the documented deferred baseline);
+  zero errors in every touched file. PC deploy verified: pull + pip install + `z21-restart` → log clean,
+  Z21 ONLINE, no import crashes.
+
+---
+
 ## 2026-09-11 — Consolidated code audit (pi-lens full scan)
 
 ### Docs
