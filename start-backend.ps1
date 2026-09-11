@@ -12,6 +12,15 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
 
 Set-Location C:\z21-Terminal\backend
 
+# Sync Python dependencies (idempotent: fast no-op when already satisfied).
+# Deploy aliases do not run pip; a new import without install would crash the
+# backend at startup (happened 2026-09-11 with defusedxml, caught by review).
+Write-Host "Checking Python dependencies..."
+& ..\venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "WARNING: pip install failed (exit $LASTEXITCODE) - continuing with existing packages" -ForegroundColor Yellow
+}
+
 # Rotate old log before starting
 # Remove old backup if exists (to avoid "file already exists" error)
 if (Test-Path C:\z21-Terminal\backend.log.old) {
