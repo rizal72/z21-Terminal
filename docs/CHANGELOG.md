@@ -78,6 +78,12 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
   structural review-graph view (hubs, cycles, complexity hotspots).
 - Prioritized 10-item backlog with effort estimates; historical execution status of the
   old audit tracked in section A.0 (first 33 fixes done, all deferred items pending).
+- **TDI baseline project-wide added** (after full sweep of 80 git-tracked files via
+  `read limit=5` — each read captures a pi-lens complexity snapshot from disk):
+  `37.1/100 (C)` on 80 files, 66 with debt, avg MI 59.7 — debt concentrated (~15-20%
+  in 6-7 files). Top by MI: SettingsModal 35.5, AnalyticsPanel 38.5, data_db 40.0.
+  New findings: SettingsModal worst MI in the project; z21_controller.py highest
+  cognitive (706). Per-file `improving/regressing` trends now available in `/lens-tdi`.
 
 ---
 
