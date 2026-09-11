@@ -257,4 +257,13 @@ pyright backend/
 #   project_report (hubs, cicli, hotspots, dead weight)
 ```
 
+## Esito review post-fix (2026-09-11, subagent glm-5.3 thinking high)
+
+Review READ-ONLY su 54a09f7 + 63aa397: **nessun P1**. Verifica empirica del reviewer: baseline pyright 12 errori esatti sia da root sia da backend/ (config coerenti).
+
+- **P2.1 (operativo, prima del deploy PC)**: defusedxml deve essere installato nel venv del PC PRIMA del restart, altrimenti il backend non parte (roster_loader lo importa a livello modulo; gli alias di deploy non fanno pip install). Comando: `ssh riccardo@gaming-pc "cd C:\z21-Terminal && .\venv\Scripts\python.exe -m pip install -r backend\requirements.txt"` poi `z21-restart`. Valutare in futuro un check requirements negli alias di deploy.
+- **P3.2 guard `root is None`**: DECISIONE = mantenuti come defense-in-depth. Il reviewer li rileva irraggiungibili (getroot() non ritorna None dopo parse riuscito), ma rimuoverli reintrodurrebbe i pyright errori da stub Optional di defusedxml. Inoffensivi e documentati.
+- **P3.3 `cast(Any, ...)`**: DECISIONE = mantenuto per ora. Alternativa futura piu` tipizzata: `cast(List["Results"], ...)` con import lazy di ultralytics.engine.results; da valutare se le stub migliorano. Nota INFO correlata: le due pyrightconfig (root + backend) vanno tenute sincronizzate a mano (rischio drift).
+- Tutti gli altri punti verificati OK (hoist yolo_obb semanticamente equivalente e NameError reale confermato con call site vivo in scripts/track_consist_yolo.py:692; set_auto_compensation firma e semantica corrette; guard roster_loader non alterano il flusso; config valide su Mac e PC).
+
 Ultimo aggiornamento: 2026-09-11, audit generato da pi-lens su develop.
