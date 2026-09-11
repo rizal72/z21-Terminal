@@ -206,10 +206,13 @@ Coerenti con `docs/FRONTEND_REFACTOR_PLAN.md` (AnalyticsPanel era 1684 righe al 
 - Ciclo largo: backend <-> routers <-> services <-> tracking <-> websocket_handlers (79 archi). In parte intrinseco ai router FastAPI; quantificare con /lens-tdi prima di decidere interventi.
 - 4 layering violations minori (services -> backend, main -> routers, ecc.).
 - `main.py`: lifespan di ~285 righe (175-459) - candidato estrazione. Nota storica: dal refactor era 2340 righe, ora 782 (`docs/REFACTOR_PLAN.md` parzialmente eseguito).
+- **Verifica strutturale via lens-map payload (2026-09-11)**: zero import diretti backend<->web (le metà comunicano solo via HTTP/WS); `scripts/z21.py` confermato hub del protocollo (importato da main, routers, WS handlers, tracking - design a stella sano); hub confermati (z21_manager grado 20, log_colors 18, main 18, config_loader 17). Unico falso positivo grafico documentato: `web/src/hooks/useWebSocket.js -> backend/z21_manager.py` (impossibile: JS non importa Python - risoluzione errata di una stringa).
 
 ### Dead weight segnalato (bassa confidenza - NON cancellare senza verifica)
 
 Script CLI/one-off con runtime registration: `bump_version.py`, `read_cv_from_roster.py`, script training YOLO, `camera_utils.py`, `migrate_decoder_metadata.py`, `track_consist_yolo.py`. Tutti falsi positivi attesi (chiamati da shell, task scheduler o JMRI sync documentato in AGENTS.md).
+
+**Verificato 2026-09-11 via lens-map payload** (grado 0 in entrata/uscita per tutti): one-off script + build config (eslint/postcss/tailwind/vite) + `__init__.py` vuoti — nessun file vivo orfano, confermati falsi positivi.
 
 ---
 
