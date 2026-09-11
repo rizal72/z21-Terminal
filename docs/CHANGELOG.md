@@ -8,6 +8,7 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 ## 2026-09-11 — Consolidated code audit (pi-lens full scan)
 
 ### Docs
+
 - **New `docs/CODE_AUDIT_2026-09-11.md`**: single source of truth for code quality, replacing
   `docs/PYRIGHT_ANALYSIS.md` (absorbed and removed, content consolidated in section A).
 - Confirms the January 2026 pyright backlog (26 deferred errors) is 100% still open,
@@ -24,6 +25,7 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 ## 2026-09-10 — CoreML loader for Mac ANE inference (`988886c`, `34d2d01`)
 
 ### Feature
+
 - **CoreML loader** in `backend/tracking/yolo_tracker.py`: model selection chain is now
   `.engine` (TensorRT) > `.mlpackage` (CoreML) > `.onnx` > `.pt` (PyTorch). The CoreML
   branch sits between TensorRT and ONNX and follows the same try/except + log pattern
@@ -34,6 +36,7 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 - `coremltools>=6.0` added to `scripts/requirements.txt`.
 
 ### Review (APPROVED)
+
 - P2 fixed: CoreML-failure fallback log now says "Falling back to ONNX/PyTorch models..."
   (was "PyTorch", but ONNX is the next branch tried).
 - P3 informational: ultralytics 8.4 loads non-.pt backends lazily — `YOLO()` stores only
@@ -43,11 +46,13 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 - Known pyright errors in the file (lines 168, 244, 404, 438) are pre-existing baseline.
 
 ### Git / policy
+
 - `*.mlpackage` added to `.gitignore` and untracked (regenerable export, same policy
   as `*.onnx`/`*.engine`; `.pt` weights stay tracked). The 6 MB bundle briefly tracked
   in `988886c` remains in git history (no history rewrite).
 
 ### Verification
+
 - Smoke test on Mac M5 (ultralytics 8.4.146 + coremltools 9.0): tracker auto-selects
   `best_obb.mlpackage` with `task='obb'`, OBB inference works (black frame → 0 detections).
 - Not yet done: end-to-end smoke with the real RTSP camera — compare CoreML detections
@@ -73,7 +78,6 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
   launch (e.g. after `wol` remote wake), `z21-restart` only for stop+start cycle.
   Added to AGENTS.md backend aliases + deployment skill (untracked) + DB sync rule 2.
 
-
 ---
 
 ## 2026-09-10 — Tailscale doc corrections
@@ -87,6 +91,7 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
   `mbp14diriccardo` (current dev Mac); old `mbp16diriccardo` noted as retired.
 
 ### Config — consist 10 placeholder locos (INTENTIONAL safety)
+
 - Consist 10 now uses **lead 1 + rear 4** (commit `fe6a32d`): rear loco 4 is a
   NON-EXISTENT loco. Deliberate choice: while loco 1 is under repair, its position
   (dead track) makes accidental consist-11/10 mixups harmless — wrong commands hit
@@ -101,6 +106,7 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 ## 2026-08-27
 
 ### Bug fixes
+
 - **Reference compensation notification** (`41cb352`): when the reference is reduced
   (overflow: adjust already at 126) the notification "Loco X (ref): Speed -Y%" now
   appears — previously silent.
@@ -114,13 +120,14 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
   previously it had static styling and never reflected the open panel.
 
 ### Infrastructure
+
 - **TensorRT OBB regenerated**: `best_obb.engine` was lost (untracked from git, local
   file not regenerated) → model ran on ONNX → FPS drop. Re-exported on PC → TensorRT active.
 - **Mac venv restored**: Python 3.11.16 (was broken, symlink to non-existent python@3.11).
 
 ### Config / data
+
 - **Temporary C10 config**: loco 1+2 placeholder (loco 5 freed, used separately with loco 6).
 - **JMRI → z21 DB sync**: loco 6 synced (loco 5 already correct); procedure in
   "JMRI → z21 DB Sync" section of AGENTS.md.
 - **JMRI sync script idea** in `docs/FUTURE_IDEAS.md` (SSH variant).
-
