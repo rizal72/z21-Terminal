@@ -13,7 +13,7 @@ import numpy as np
 from pathlib import Path
 from collections import deque, defaultdict
 from statistics import mean
-from typing import Optional
+from typing import Any, Optional, cast
 from ultralytics import YOLO
 
 # Import centralized config loader (relative import from backend/)
@@ -167,7 +167,12 @@ class YOLOTracker:
     """
 
     def __init__(self, model_path: Optional[str] = None):
-        """Initialize tracker with YOLO model (config-driven multi-consist support)."""
+        """Initialize tracker with YOLO model (config-driven multi-consist support).
+
+        Args:
+            model_path: Explicit model file path. None (default) = auto-detect
+                from scripts/models/ with priority .engine > .mlpackage > .onnx > .pt.
+        """
         # Load config first to get debug mode and OBB flag
         config = load_config()
 
@@ -401,7 +406,9 @@ class YOLOTracker:
         start_time = time.time()
 
         # Run inference (imgsz, confidence, and IoU from config.json)
-        results = self.model(frame, conf=self.confidence_threshold, iou=self.iou_threshold, imgsz=self.yolo_imgsz, verbose=False)
+        # cast: ultralytics stubs type YOLO.__call__ poorly (inferred Tensor);
+        # at runtime it returns a list of Results objects (see docs/computer_vision.md).
+        results = cast(Any, self.model(frame, conf=self.confidence_threshold, iou=self.iou_threshold, imgsz=self.yolo_imgsz, verbose=False))
 
         detections = {}  # {class_id: {'pos': (x,y), 'bbox': bbox_data, 'conf': float, 'name': str}}
 
