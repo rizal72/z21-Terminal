@@ -128,7 +128,15 @@ Mai auditati prima. Valutare nel contesto: applicazione single-user su LAN domes
 | main.py | 473 | CORS wildcard `*` | Accettabile in LAN; da rivedere se il backend diventa raggiungibile oltre tailnet |
 | roster_loader.py | 31, 125, 200 | XML nativo vulnerabile a XXE (input: roster JMRI/RoCoFo) | Fix consigliato: `defusedxml` (3 punti, costo minimo). Input semi-fidato, rischio reale basso ma non zero |
 | routers/config.py | 536 | URL costruito da dato utente (pattern SSRF) | Verificare la sorgente del dato: se e` la config locale dell'operatore, rischio trascurabile |
-| services/data_db.py | 854 | SQL con concatenazione | DA VERIFICARE: possibile falso positivo se parametrizzato. Se davvero interpolato, priorita alta |
+| services/data_db.py | 854 | SQL con concatenazione | VERIFICATO falso positivo (vedi B.1) |
+
+#### B.1 Esito verifiche puntuali (2026-09-11)
+
+| Finding | Verdetto | Motivazione |
+| --- | --- | --- |
+| data_db.py:854 SQL concat | FALSO POSITIVO | La f-string interpola solo placeholder `?` (`','.join(['?']*n)`); tutti i valori passano in `params_hist` a `execute()`. Pattern sicuro standard per clausole IN |
+| AnalyticsPanel.jsx:556 .reverse() | FALSO POSITIVO | `[...sessions].reverse()`: lo spread crea una copia prima del reverse, lo stato React non viene mutato. Idioma corretto; eventuale `toReversed()` solo cosmetico |
+| config.py:536 SSRF pattern | BY DESIGN, accettabile | `test_camera_stream` costruisce RTSP da input operatore perche` e` la sua funzione (test camera con IP parametrico). Chiamante = solo operatore via LAN/Tailnet; log senza credenziali. Rafforzamento futuro opzionale: validare formato IP |
 
 ### C. Robustezza (ast-grep)
 
@@ -202,9 +210,9 @@ Unico elenco per futuro intervento, in ordine di valore/costo:
 
 1. **Config Pyright sul venv** (pi-lens + CLI) - elimina ~27 falsi positivi, baseline leggibile. Costo: 10 min.
 2. **Bug LOW risk baseline** (sez. A.4, ~15-20 min): possibly-unbound in speed_table.py, yolo_tracker.py, tracking_manager.py, speed_table_helpers.py.
-3. **Verifica SQL data_db.py:854** - se interpolato: preparare statement parametrizzato.
+3. ~~Verifica SQL data_db.py:854~~ - VERIFICATO: falso positivo (B.1), archiviato.
 4. **defusedxml in roster_loader.py** (3 punti, ~30 min).
-5. **`.reverse()` mutante AnalyticsPanel:556** - verificare se muta stato React.
+5. ~~`.reverse()` mutante AnalyticsPanel:556~~ - VERIFICATO: falso positivo (B.1), nessun fix.
 6. **Guard su config_loader.py** (messaggi d'errore puliti su config malformata).
 7. **Pulizia frontend meccanica**: imports inutilizzati AnalyticsPanel, console.log in catch, alert() -> useNotification. (~1-2 h)
 8. **video_feed.py + downsampling.py** (MODERATE, ~1-1.5 h, preferibilmente con test).
