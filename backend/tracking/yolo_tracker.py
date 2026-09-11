@@ -13,6 +13,7 @@ import numpy as np
 from pathlib import Path
 from collections import deque, defaultdict
 from statistics import mean
+from typing import Optional
 from ultralytics import YOLO
 
 # Import centralized config loader (relative import from backend/)
@@ -165,7 +166,7 @@ class YOLOTracker:
     PHASE 5 COMPLETE: Generic multi-consist support (consists loaded from config.json).
     """
 
-    def __init__(self, model_path: str = None):
+    def __init__(self, model_path: Optional[str] = None):
         """Initialize tracker with YOLO model (config-driven multi-consist support)."""
         # Load config first to get debug mode and OBB flag
         config = load_config()
@@ -238,6 +239,11 @@ class YOLOTracker:
                 raise FileNotFoundError(f"No YOLO model found or all models failed to load: checked {engine_path}, {coreml_path}, {onnx_path}, and {pt_path}")
         else:
             # Model path provided explicitly
+            # NOTE: yolo_obb must be re-read here — it is only assigned inside the
+            # auto-detect branch above. Without this line, loading a model with an
+            # explicit path raised NameError (previously caught by pyright as
+            # "yolo_obb is unbound").
+            yolo_obb = config.get('tracking', {}).get('yolo_obb', False)
             if self.debug_enabled:
                 log('[INIT]', f"Loading YOLO model: {model_path}")
 

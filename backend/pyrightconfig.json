@@ -1,17 +1,16 @@
 {
   "include": [
-    "backend"
+    "."
   ],
   "exclude": [
-    "backend/data",
-    "**/__pycache__",
-    "**/.pytest_cache"
+    "data",
+    "**/__pycache__"
   ],
-  "venvPath": ".",
+  "venvPath": "..",
   "venv": "venv",
   "extraPaths": [
-    "scripts",
-    "scripts/utils/cv_operations"
+    "../scripts",
+    "../scripts/utils/cv_operations"
   ],
   "pythonVersion": "3.12",
   "typeCheckingMode": "basic",

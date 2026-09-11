@@ -94,7 +94,7 @@ class TrackingManager:
 
             for consist_id_str in consists.keys():
                 consist_id = int(consist_id_str)
-                DataDB.update_consist_auto_compensation(consist_id, False)
+                DataDB.set_auto_compensation(consist_id, False)
                 log('[INFO]', f"Consist {consist_id}: auto_compensation disabled")
 
             self.daemon = None

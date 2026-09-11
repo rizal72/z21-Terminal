@@ -24,9 +24,16 @@ Prima sessione con pi-lens installato. Risultato chiave: **i problemi di typing 
 
 ---
 
-## Nota critica: rumore dell'ambiente di scan
+## Nota critica: rumore dell'ambiente di scan (RISOLTA 2026-09-11)
 
-Pyright in questa sessione gira **fuori dal venv**, quindi segnala ~27 falsi `reportMissingImports` (`fastapi`, `cv2`, `numpy`, `ultralytics`, `websockets`, `z21`, `uvicorn`), tutte risolte a runtime dal venv e da `pyrightconfig.json` (extraPaths). Da escludere dal conteggio. I 22 errori reali residui coincidono con il baseline di 26 documentato (qualche differenza da drift del codice da v0.9.11 a v1.0.0). **Azione futura: puntare Pyright/pi-lens al venv per eliminare il rumore.**
+Il rumore era Pyright fuori dal venv (~27 falsi `reportMissingImports`: `fastapi`, `cv2`, `numpy`, `ultralytics`, `websockets`, `z21`, `uvicorn`). Risolto con due config:
+
+- `pyrightconfig.json` (root): aggiunti `venvPath: "."` + `venv: "venv"`
+- `backend/pyrightconfig.json` (NUOVO): pi-lens tratta `backend/` come project root per i file lì sotto (log tool-cwd: `dispatch-root`), quindi serve una config in backend con `venvPath: ".."` che allinea CLI e LSP indipendentemente dal cwd
+
+Baseline reale post-config: **15 errori** (da ~49 segnalati grezzi). Nota: i 2 `possibly unbound` in speed_table.py presenti nel vecchio audit NON compaiono più col Pyright del venv (probabile drift/inferenza migliorata); l'errore è sparito anche dalla scansione attuale.
+
+Nota tecnica: la sessione pi-lens corrente mostra ancora gli import errors perche il server Pyright e`stato spawnato all'avvio SENZA la nuova config; un riavvio di sessione li elimina. Il gate CLI (authoritativo) e` gia` pulito.
 
 ---
 
@@ -41,10 +48,11 @@ Questi NON sono scoperte nuove: sono il debito accettato a gennaio 2026 nel vecc
 | services/data_db.py | 9 | defaultdict + lambda: inferenza tipi (`get_analytics_summary`) | ALTO | deferito (serve TypedDict + test) |
 | video_feed.py | 6 | return None su firma `-> str` + chiavi dict non validate (`draw_detections`) | MEDIO | deferito |
 | services/downsampling.py | 6 | LTTB: indice `int | None` (edge case bucket vuoto) | MEDIO | deferito |
-| routers/speed_table.py:693-694 | 2 | `vstart_int`/`vhigh_int` possibly unbound | BASSO | deferito (fix 15 min) |
-| tracking/yolo_tracker.py:245,168 | 2 | `yolo_obb` unbound; None su str | BASSO | deferito |
-| tracking_manager.py:97 | 1 | attributo `DataDB.update_consist_auto_compensation` non risolto | BASSO | deferito (verificare se metodo dinamico o bug) |
-| services/speed_table_helpers.py:111 | 1 | None su Dict | BASSO | deferito |
+| routers/speed_table.py:693-694 | 2 | `vstart_int`/`vhigh_int` possibly unbound | BASSO | RISOLTO in venv-scan: non piu` presenti col Pyright del venv |
+| tracking/yolo_tracker.py:245,168 | 2 | `yolo_obb` unbound; None su str | BASSO | RISOLTO 2026-09-11 (commit fix LOW risk) |
+| tracking_manager.py:97 | 1 | attributo `DataDB.update_consist_auto_compensation` non risolto | BASSO | RISOLTO 2026-09-11: era un BUG vero, il metodo non esiste; sostituito con `DataDB.set_auto_compensation` (data_db.py:998). Il percorso di fallback "modello YOLO mancante" sarebbe crashato con AttributeError |
+| services/speed_table_helpers.py:111 | 1 | None su Dict | BASSO | RISOLTO 2026-09-11 (`Optional[Dict[int, Dict]] = None`) |
+| tracking/yolo_tracker.py:407,441 | 3 | `result.obb`/`result.boxes` su tipo dedotto Tensor | LIBRERIA | deferito: typing di ultralytics, non fixabile con guard (baseline noto dal changelog 2026-09-10) |
 
 #### A.0 Stato di esecuzione del backlog storico (verificato su git + codice attuale)
 
@@ -136,11 +144,12 @@ Mai auditati prima. Valutare nel contesto: applicazione single-user su LAN domes
 | --- | --- | --- |
 | data_db.py:854 SQL concat | FALSO POSITIVO | La f-string interpola solo placeholder `?` (`','.join(['?']*n)`); tutti i valori passano in `params_hist` a `execute()`. Pattern sicuro standard per clausole IN |
 | AnalyticsPanel.jsx:556 .reverse() | FALSO POSITIVO | `[...sessions].reverse()`: lo spread crea una copia prima del reverse, lo stato React non viene mutato. Idioma corretto; eventuale `toReversed()` solo cosmetico |
-| config.py:536 SSRF pattern | BY DESIGN, accettabile | `test_camera_stream` costruisce RTSP da input operatore perche` e` la sua funzione (test camera con IP parametrico). Chiamante = solo operatore via LAN/Tailnet; log senza credenziali. Rafforzamento futuro opzionale: validare formato IP |
+| config.py:536 SSRF pattern | BY DESIGN, accettabile | `test_camera_stream` costruisce RTSP da input operatore perche`e` la sua funzione (test camera con IP parametrico). Chiamante = solo operatore via LAN/Tailnet; log senza credenziali. Rafforzamento futuro opzionale: validare formato IP |
 
 ### C. Robustezza (ast-grep)
 
-- `config_loader.py`: 7 chiamate lancianti senza try/except (linee 71, 72, 143, 177, 188, 200, 201). Un `config.json` malformato sul PC a deploy tempo = backend giu con traceback grezzo. Candidato a guard con messaggio d'errore pulito.
+- `config_loader.py`: 7 chiamate lancianti senza try/except (linee 71, 72, 143, 177, 188, 200, 201). Un `config.json` malformato sul PC a deploy tempo = backend giu con traceback grezzo. Candidato a guard con messaggio d'errore pulito. **Resta APERTO (backlog item 6).**
+- **Regola `unchecked-throwing-call-python` disattivata a livello progetto** (`.pi-lens.json`, 2026-09-11): genera ~40 finding baseline quasi tutti su `int()`/`float()` nei hot loop di inferenza YOLO (valori numerici, mai non-numerici in pratica). I pattern veramente utili della regola (`open()`/`json.loads`) sono gia` tracciati in backlog item 6; riesaminare la disattivazione quando item 6 lands.
 
 ---
 
@@ -208,10 +217,10 @@ Script CLI/one-off con runtime registration: `bump_version.py`, `read_cv_from_ro
 
 Unico elenco per futuro intervento, in ordine di valore/costo:
 
-1. **Config Pyright sul venv** (pi-lens + CLI) - elimina ~27 falsi positivi, baseline leggibile. Costo: 10 min.
-2. **Bug LOW risk baseline** (sez. A.4, ~15-20 min): possibly-unbound in speed_table.py, yolo_tracker.py, tracking_manager.py, speed_table_helpers.py.
+1. ~~**Config Pyright sul venv**~~ - RISOLTO 2026-09-11: `pyrightconfig.json` (root, venvPath) + `backend/pyrightconfig.json` (nuovo, venvPath ".."). Baseline CLI: 19 errori -> 15 dopo i fix.
+2. ~~**Bug LOW risk baseline** (sez. A.4)~~ - RISOLTO 2026-09-11: 4 fix applicati e verificati col Pyright del venv (yolo_tracker Optional + yolo_obb hoist, tracking_manager set_auto_compensation, speed_table_helpers Optional). Baseline: 15 errori residui = video_feed 6 + downsampling 6 + yolo ultralytics 3.
 3. ~~Verifica SQL data_db.py:854~~ - VERIFICATO: falso positivo (B.1), archiviato.
-4. **defusedxml in roster_loader.py** (3 punti, ~30 min).
+4. ~~**defusedxml in roster_loader.py**~~ - RISOLTO 2026-09-11: import defusedxml + 3 guard `root is None` (aggiunti perche le stub di defusedxml tipizzano getroot() Optional) + `defusedxml==0.7.1` in backend/requirements.txt e venv.
 5. ~~`.reverse()` mutante AnalyticsPanel:556~~ - VERIFICATO: falso positivo (B.1), nessun fix.
 6. **Guard su config_loader.py** (messaggi d'errore puliti su config malformata).
 7. **Pulizia frontend meccanica**: imports inutilizzati AnalyticsPanel, console.log in catch, alert() -> useNotification. (~1-2 h)

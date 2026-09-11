@@ -2,7 +2,7 @@
 Utility per caricare dati roster e consist da file XML JMRI
 """
 import os
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from pathlib import Path
 from services.config_helpers import get_locomotive_functions
 
@@ -30,6 +30,9 @@ def load_consist_from_jmri():
     try:
         tree = ET.parse(CONSIST_FILE)
         root = tree.getroot()
+        if root is None:
+            print(f"Warning: Empty or invalid consist file: {CONSIST_FILE}")
+            return consists
 
         for consist_elem in root.findall('.//consist'):
             consist_number = consist_elem.get('consistNumber')
@@ -124,6 +127,8 @@ def load_functions_from_roster(address):
             try:
                 tree = ET.parse(roster_file)
                 root = tree.getroot()
+                if root is None:
+                    continue
 
                 # Check if this is the right locomotive
                 # Address is in the locomotive element attribute
@@ -199,6 +204,8 @@ def load_all_locomotives():
             try:
                 tree = ET.parse(roster_file)
                 root = tree.getroot()
+                if root is None:
+                    continue
 
                 loco_elem = root.find('.//locomotive')
                 if loco_elem is None:

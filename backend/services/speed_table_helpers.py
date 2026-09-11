@@ -17,7 +17,9 @@ from typing import Dict, Optional, List
 from log_colors import log
 from math_utils import js_round
 
-# Add scripts/utils/cv_operations to path for Locomotive class import
+# Add scripts/utils/cv_operations to path for Locomotive class import.
+# Needed because read_cv_from_roster lives outside backend/; the equivalent
+# pyright setting is extraPaths in backend/pyrightconfig.json.
 SCRIPT_DIR = Path(__file__).parent.parent.parent / "scripts" / "utils" / "cv_operations"
 sys.path.insert(0, str(SCRIPT_DIR))
 
@@ -108,7 +110,7 @@ def calculate_cv_recommendations(
     vstart: Optional[int] = None,
     vhigh: Optional[int] = None,
     critical_threshold: int = 5,
-    debug_info: Dict[int, Dict] = None
+    debug_info: Optional[Dict[int, Dict]] = None
 ) -> List[Dict]:
     """
     Calculate CV adjustment recommendations based on weighted CRITICAL counts and delta_t sign.

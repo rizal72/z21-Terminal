@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/loonguo/pi-lens/main/rules/rule-schema.json",
+  "rules": {
+    "unchecked-throwing-call-python": {
+      "disable": [
+        "unchecked-throwing-call-python"
+      ]
+    }
+  }
+}
