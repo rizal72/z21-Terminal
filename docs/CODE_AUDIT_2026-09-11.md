@@ -1,0 +1,243 @@
+# Code Audit - 2026-09-11 (pi-lens full scan)
+
+**Versione auditata**: v1.0.0
+**Strumenti**: pi-lens (review graph + LSP) con runner Pyright, typescript-language-server, ast-grep, Semgrep
+**Scope**: `backend/` (32 file) + `web/src` (27 file), scansione full in sola lettura
+**Status codice**: nessuna modifica apportata (sessione di audit)
+
+---
+
+## Executive Summary
+
+Prima sessione con pi-lens installato. Risultato chiave: **i problemi di typing backend noti sono confermati e invariati** rispetto al baseline Pyright di gennaio 2026 (26 errori deferiti, audit v0.9.11). Il vecchio documento `docs/PYRIGHT_ANALYSIS.md` e` stato assorbito e consolidato in questo file (sezione A) e rimosso per evitare duplicazioni. Il valore nuovo di questo audit sta in tre aree mai coperte prima:
+
+1. **Sicurezza backend** (4 findings Semgrep, mai auditati)
+2. **Qualita frontend** (109 warning su 27 file, mai auditati)
+3. **Vista strutturale** (review graph: hub, cicli, complessita)
+
+**Numeri grezzi**:
+
+| Area | Errori bloccanti | Warning/qualita | Note |
+| --- | --- | --- | --- |
+| backend | 22 veri (~49 segnalati) | 13 | ~27 segnalazioni = falso rumore venv |
+| web/src | 0 | 109 | tutti warning qualita/leggibilita |
+
+---
+
+## Nota critica: rumore dell'ambiente di scan
+
+Pyright in questa sessione gira **fuori dal venv**, quindi segnala ~27 falsi `reportMissingImports` (`fastapi`, `cv2`, `numpy`, `ultralytics`, `websockets`, `z21`, `uvicorn`), tutte risolte a runtime dal venv e da `pyrightconfig.json` (extraPaths). Da escludere dal conteggio. I 22 errori reali residui coincidono con il baseline di 26 documentato (qualche differenza da drift del codice da v0.9.11 a v1.0.0). **Azione futura: puntare Pyright/pi-lens al venv per eliminare il rumore.**
+
+---
+
+## Backend - problemi reali
+
+### A. Baseline Pyright noto (audit v0.9.11, gennaio 2026 - assorbito)
+
+Questi NON sono scoperte nuove: sono il debito accettato a gennaio 2026 nel vecchio PYRIGHT_ANALYSIS.md (59 -> 26 errori, -56%, zero breaking changes), qui consolidato. La riduzione da 59 a 26 fu ottenuta in 4 fasi con zero breaking changes: fix import (pyrightconfig.json extraPaths), guard su Z21Manager (enable/disable_virtual_mode, toggle_test_mode), validazione WebSocket handlers, fix single-file (broadcast.py, speed_table.py, tracking_daemon.py).
+
+| File | Errori | Categoria | Rischio | Status |
+| --- | --- | --- | --- | --- |
+| services/data_db.py | 9 | defaultdict + lambda: inferenza tipi (`get_analytics_summary`) | ALTO | deferito (serve TypedDict + test) |
+| video_feed.py | 6 | return None su firma `-> str` + chiavi dict non validate (`draw_detections`) | MEDIO | deferito |
+| services/downsampling.py | 6 | LTTB: indice `int | None` (edge case bucket vuoto) | MEDIO | deferito |
+| routers/speed_table.py:693-694 | 2 | `vstart_int`/`vhigh_int` possibly unbound | BASSO | deferito (fix 15 min) |
+| tracking/yolo_tracker.py:245,168 | 2 | `yolo_obb` unbound; None su str | BASSO | deferito |
+| tracking_manager.py:97 | 1 | attributo `DataDB.update_consist_auto_compensation` non risolto | BASSO | deferito (verificare se metodo dinamico o bug) |
+| services/speed_table_helpers.py:111 | 1 | None su Dict | BASSO | deferito |
+
+#### A.0 Stato di esecuzione del backlog storico (verificato su git + codice attuale)
+
+Cosa fu davvero eseguito del vecchio audit e cosa resta aperto:
+
+| Parte del vecchio audit | Stato | Evidenza |
+| --- | --- | --- |
+| Riduzione 59 -> 26 (fasi 1-4: import, guard Z21Manager, WS handlers, fix single-file) | ESEGUITA | commit af02676 (2026-01-23) "fix type hints Phase 2"; la scansione attuale non segnala piu` quei problemi |
+| Backlog differito: LOW risk (A.4) | APERTO | verificato sul codice: vstart_int/vhigh_int ancora unbound, mai toccati da git |
+| Backlog differito: MODERATE video_feed.py | APERTO | riga 74 ancora `-> str` (Optional mai applicato) |
+| Backlog differito: MODERATE downsampling.py | APERTO | guard max_area_point assente dal codice |
+| Backlog differito: HIGH data_db.py TypedDict | APERTO | 9 errori ancora presenti in scansione |
+
+Storie parallele (non provenienti da questo audit): modularizzazione main.py 2340 -> 753 righe (REFACTOR_PLAN.md, eseguita gennaio 2026, PRIMA dell'audit v0.9.11); FRONTEND_REFACTOR_PLAN solo in minima parte eseguito (AnalyticsPanel resta monolitico); sicurezza (sezione B) mai auditata prima di oggi, interamente in sospeso.
+
+#### A.1 ALTO RISCHIO: services/data_db.py (9 errori) - `get_analytics_summary`
+
+**Causa radice**: Pyright non inferisce i tipi di `defaultdict(lambda: {'delta_t_values': [], 'synced_count': 0, ...})`. Il lambda restituisce `dict[str, int | list[Any]]` (unione di tutti i value), quindi ogni accesso ai dizionari e` tipizzato come `int | list[Any]` invece del tipo specifico per chiave.
+
+**Perche`e` critico**: la funzione calcola le statistiche del dashboard (avg/min/max Delta-t, trend LEAD/REAR FASTER, synced percentage, raccomandazioni speed table). Se rotta: statistiche errate, raccomandazioni inaffidabili, errori solo a runtime.
+
+**Fix corretto** (deferito perche` richiede refactoring strutturale + test):
+
+```python
+from typing import TypedDict
+
+class ConsistData(TypedDict):
+    delta_t_values: list[float]
+    synced_count: int
+    warning_count: int
+    critical_count: int
+
+consist_data: defaultdict[int, ConsistData] = defaultdict(...)
+```
+
+**Anti-pattern da evitare**: `# type: ignore` nasconde il problema senza risolverlo, blocca il refactoring futuro e inutilizza l'autocompletamento.
+
+**Quando fixare**: con la test suite analytics (non esiste oggi) o al refactoring analytics v1.1.0. Il codice funziona in produzione, meglio 26 errori documentati che 0 errori + bug in produzione.
+
+#### A.2 MEDIO RISCHIO: video_feed.py (6 errori)
+
+**Problema 1** (`load_camera_config`, righe 73-101): firma dichiara `-> str` ma ritorna `None` su errore. Fix banale (1 riga): `-> Optional[str]`; propagazione: tutti i call site devono aggiungere il check None.
+
+**Problema 2** (`draw_detections`, righe 286-296): chiavi dei dict detection non validate prima dell'uso; `address` puo` essere None e viene passato a `COLORS.get(address, ...)`. Fix: guard`if address is None: continue` + cast `int(address)` (3 righe). Nota: cambia il comportamento (detection senza address viene skippata invece di glitch visivo) - testare con dati malformati.
+
+**Quando fixare**: con test video feed o refactoring tracking_daemon output. Effort ~30 min.
+
+#### A.3 MEDIO RISCHIO: services/downsampling.py (6 errori) - algoritmo LTTB
+
+**Causa radice**: `max_area_point` inizializzato a None; se `range_start == range_end` (bucket vuoto con `max_points` piccoli) il loop interno non gira e resta None -> `data[None]` = IndexError a runtime.
+
+**Fix**: guard dopo il loop: `if max_area_point is None: max_area_point = range_start` (fallback al primo punto del bucket). Testare con max_points 100/500/1000/2000 e edge case `len(data) <= max_points`. Criticita` bassa (solo rendering grafici, fail-safe esiste). Effort ~30-45 min.
+
+#### A.4 BASSO RISCHIO: Others (6 errori, fix ~15-20 min, zero effetti collaterali)
+
+| File | Errore | Fix |
+| --- | --- | --- |
+| routers/speed_table.py:693-694 | `vstart_int`/`vhigh_int` possibly unbound | inizializzare prima del blocco try |
+| tracking/yolo_tracker.py:245 | `yolo_obb` unbound | guard + inizializzazione |
+| tracking/yolo_tracker.py:168 | None su parametro str | guard check |
+| tracking_manager.py:97 | attributo classe non risolto | type annotation (o confermare metodo dinamico) |
+| services/speed_table_helpers.py:111 | None su Dict | Optional return type |
+
+#### A.5 Matrice di rischio (dal vecchio audit)
+
+| Criterio | ALTO (data_db) | MEDIO (video/downsampling) | BASSO (others) |
+| --- | --- | --- | --- |
+| Complessita fix | TypedDict + refactoring | firma/guard + edge case | guard 3 righe |
+| Effetti collaterali | cambio data model | skip dati invalidi | zero |
+| Test necessari | obbligatori | consigliati | facoltativi |
+| Business critical | analytics dashboard | video/charts | validazione input |
+| Effort | 1-3 h | 30-45 min | 15-20 min |
+| Priorita | al refactoring v1.1.0 | con test coverage | anytime |
+
+### B. Sicurezza (Semgrep) - NOVITA di questo audit
+
+Mai auditati prima. Valutare nel contesto: applicazione single-user su LAN domestica + Tailscale, non esposta a internet pubblico.
+
+| File | Linea | Finding | Valutazione |
+| --- | --- | --- | --- |
+| main.py | 473 | CORS wildcard `*` | Accettabile in LAN; da rivedere se il backend diventa raggiungibile oltre tailnet |
+| roster_loader.py | 31, 125, 200 | XML nativo vulnerabile a XXE (input: roster JMRI/RoCoFo) | Fix consigliato: `defusedxml` (3 punti, costo minimo). Input semi-fidato, rischio reale basso ma non zero |
+| routers/config.py | 536 | URL costruito da dato utente (pattern SSRF) | Verificare la sorgente del dato: se e` la config locale dell'operatore, rischio trascurabile |
+| services/data_db.py | 854 | SQL con concatenazione | DA VERIFICARE: possibile falso positivo se parametrizzato. Se davvero interpolato, priorita alta |
+
+### C. Robustezza (ast-grep)
+
+- `config_loader.py`: 7 chiamate lancianti senza try/except (linee 71, 72, 143, 177, 188, 200, 201). Un `config.json` malformato sul PC a deploy tempo = backend giu con traceback grezzo. Candidato a guard con messaggio d'errore pulito.
+
+---
+
+## Frontend - 0 errori, 109 warning (qualita, non bug)
+
+Distribuzione per categoria:
+
+| Categoria | Conteggio | File principali |
+| --- | --- | --- |
+| console.log/debug in produzione | ~35 | App.jsx (28), VideoFeedPanel (5), GateEditor (7), SettingsModal (2) |
+| ternari annidati | ~22 | AnalyticsPanel (6), SpeedTableViewer (7), ConsistController (4), altri |
+| alert() | 11 | SettingsModal (6), ConsistManagerModal (4), SpeedTableViewer (1), AnalyticsPanel (1) |
+| isNaN/isFinite globali | 8 | SpeedTableViewer (6), DeltaTChart (2), AnalyticsPanel (2) |
+| == invece di === | 3 | AnalyticsPanel (2), HistoricalTrendChart (1) |
+| .reverse() mutante | 1 | AnalyticsPanel:556 |
+| .filter().length invece di .some() | 1 | ConsistManagerModal:220 |
+| JSON.parse(JSON.stringify()) | 2 | SettingsModal:69,137 |
+| webkitAudioContext (hint TS) | 1 | App.jsx:106 |
+
+**Segnali da non perdere**:
+
+- `AnalyticsPanel.jsx:556` - `.reverse()` su array che potrebbe essere stato React: potenziale bug sottile (mutazione di stato), non solo stile
+- `alert()` in conflitto con il sistema di notifiche esistente (`useNotification.jsx`) - refactoring meccanico a basso costo
+
+**Hint TS utili**: AnalyticsPanel ha 6 import/variabili inutilizzate (memo, filterEventsBySession, getAddressFilter, formatOperatingTime, getSpeedTuningRecommendation, formatDuration) - pulizia immediata.
+
+---
+
+## Vista strutturale (review graph, 77/77 file)
+
+### Hub ad alto fan-in (modifiche ad impatto largo)
+
+| File | Importer | Blast radius |
+| --- | --- | --- |
+| backend/log_colors.py | 17 | 26 |
+| backend/config_loader.py | 15 | 22 |
+| backend/z21_manager.py | 9 | 22 |
+| web/src/utils/analyticsHelpers.js | 6 | 26 |
+| backend/services/data_db.py | 6 | 14 |
+
+### Risk hotspots (complessita cicomatica)
+
+| Componente | Complessita | Righe |
+| --- | --- | --- |
+| components/AnalyticsPanel.jsx | 203 | 1280+ |
+| App.jsx | 185 | 1416 |
+| components/charts/SpeedTableViewer.jsx | 182 | 1030+ |
+| components/ConsistController.jsx | 115 | - |
+
+Coerenti con `docs/FRONTEND_REFACTOR_PLAN.md` (AnalyticsPanel era 1684 righe al tempo del piano).
+
+### Cicli e layering
+
+- Ciclo largo: backend <-> routers <-> services <-> tracking <-> websocket_handlers (79 archi). In parte intrinseco ai router FastAPI; quantificare con /lens-tdi prima di decidere interventi.
+- 4 layering violations minori (services -> backend, main -> routers, ecc.).
+- `main.py`: lifespan di ~285 righe (175-459) - candidato estrazione. Nota storica: dal refactor era 2340 righe, ora 782 (`docs/REFACTOR_PLAN.md` parzialmente eseguito).
+
+### Dead weight segnalato (bassa confidenza - NON cancellare senza verifica)
+
+Script CLI/one-off con runtime registration: `bump_version.py`, `read_cv_from_roster.py`, script training YOLO, `camera_utils.py`, `migrate_decoder_metadata.py`, `track_consist_yolo.py`. Tutti falsi positivi attesi (chiamati da shell, task scheduler o JMRI sync documentato in AGENTS.md).
+
+---
+
+## Backlog prioritario consolidato
+
+Unico elenco per futuro intervento, in ordine di valore/costo:
+
+1. **Config Pyright sul venv** (pi-lens + CLI) - elimina ~27 falsi positivi, baseline leggibile. Costo: 10 min.
+2. **Bug LOW risk baseline** (sez. A.4, ~15-20 min): possibly-unbound in speed_table.py, yolo_tracker.py, tracking_manager.py, speed_table_helpers.py.
+3. **Verifica SQL data_db.py:854** - se interpolato: preparare statement parametrizzato.
+4. **defusedxml in roster_loader.py** (3 punti, ~30 min).
+5. **`.reverse()` mutante AnalyticsPanel:556** - verificare se muta stato React.
+6. **Guard su config_loader.py** (messaggi d'errore puliti su config malformata).
+7. **Pulizia frontend meccanica**: imports inutilizzati AnalyticsPanel, console.log in catch, alert() -> useNotification. (~1-2 h)
+8. **video_feed.py + downsampling.py** (MODERATE, ~1-1.5 h, preferibilmente con test).
+9. **data_db.py TypedDict + test analytics** (HIGH, ~2-3 h, agganciare a v1.1.0).
+10. **Split monoliti frontend** (vedi FRONTEND_REFACTOR_PLAN.md) e estrazione lifespan - da fare dopo /lens-tdi per quantificare.
+
+---
+
+## Cross-reference documentazione esistente
+
+| Documento | Contenuto | Relazione con questo audit |
+| --- | --- | --- |
+| docs/PYRIGHT_ANALYSIS.md | Audit typing backend v0.9.11 (rimosso 2026-09-11) | Contenuto assorbito in sezione A di questo audit (questo file e`l'unico punto di verita`) |
+| docs/REFACTOR_PLAN.md | Modularizzazione backend (main.py 2340 -> attuale) | Parzialmente eseguito; main.py ora 782 righe |
+| docs/FRONTEND_REFACTOR_PLAN.md | Modularizzazione AnalyticsPanel | Coerente con hotspot attuali |
+| docs/DB_REFACTORING.md | Refactoring DB | Contesto per data_db.py |
+| docs/LOG_REFACTORING.md | Refactoring log | Contesto per console.log frontend / log backend |
+
+---
+
+## Come ripetere l'audit
+
+```bash
+# Backend: type check ufficiale (gate pre-commit, baseline atteso ~22-26 errori veri)
+pyright backend/
+
+# Frontend + backend con pi-lens (sessione agent): scansione full warning
+#   lens_diagnostics source=lsp scope=workspace mode=full path=web/src
+#   lens_diagnostics source=lsp scope=workspace mode=full path=backend
+#   severity=warning per includere gli errori
+
+# Vista strutturale
+#   project_report (hubs, cicli, hotspots, dead weight)
+```
+
+Ultimo aggiornamento: 2026-09-11, audit generato da pi-lens su develop.

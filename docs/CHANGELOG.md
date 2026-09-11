@@ -5,6 +5,22 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
+## 2026-09-11 — Consolidated code audit (pi-lens full scan)
+
+### Docs
+- **New `docs/CODE_AUDIT_2026-09-11.md`**: single source of truth for code quality, replacing
+  `docs/PYRIGHT_ANALYSIS.md` (absorbed and removed, content consolidated in section A).
+- Confirms the January 2026 pyright backlog (26 deferred errors) is 100% still open,
+  verified against current code (video_feed `-> str`, LTTB guard absent, vstart/vhigh unbound).
+- New findings, never audited before: backend security (Semgrep: CORS wildcard, XXE in
+  roster_loader x3, SSRF pattern in config.py, SQL concat in data_db.py:854), frontend
+  quality (109 warnings on 27 files: console.log, nested ternaries, alert(), ==, mutating .reverse),
+  structural review-graph view (hubs, cycles, complexity hotspots).
+- Prioritized 10-item backlog with effort estimates; historical execution status of the
+  old audit tracked in section A.0 (first 33 fixes done, all deferred items pending).
+
+---
+
 ## 2026-09-10 — CoreML loader for Mac ANE inference (`988886c`, `34d2d01`)
 
 ### Feature
