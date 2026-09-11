@@ -1,5 +1,9 @@
 # Refactor Plan - Code Modularization
 
+> **STATUS (2026-09-11): piano ESEGUITO e chiuso.** `backend/main.py` modularizzato (2.340 → 781 righe;
+> routers/services/WS handlers estratti — verificato in `docs/CODE_AUDIT_2026-09-11.md`, TDI project-wide 37.1/C).
+> Valore del documento: storico. La parte frontend non eseguita è gestita in `docs/FRONTEND_REFACTOR_PLAN.md`.
+
 **Goal**: Split monolithic files into modular, maintainable structure before implementing Speed Table Auto-Tuning.
 
 **Current State**:

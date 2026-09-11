@@ -1,5 +1,10 @@
 # Frontend Refactor Plan: AnalyticsPanel Modularization
 
+> **STATUS (2026-09-11): piano parzialmente eseguito, dati stanti.** Stato corrente in `docs/CODE_AUDIT_2026-09-11.md`
+> (TDI project-wide 37.1/C, per-file MI/complessità con trend). Fase grafici eseguita: estratti in `components/charts/`.
+> AnalyticsPanel residuo: 1.143 righe (MI 38.5, cognitiva 463). Nuovo target emerso dal TDI e assente dal piano originale:
+> **SettingsModal.jsx** (1.244 righe, MI 35.5 — MI peggiore del progetto). Da revisionare prima del prossimo giro di refactor.
+
 ## Executive Summary
 
 **Current State**: `web/src/components/AnalyticsPanel.jsx` = 1684 lines, monolithic component
