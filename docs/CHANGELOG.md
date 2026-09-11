@@ -8,6 +8,7 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 ## 2026-09-11 — PC tooling resilience (single source of truth)
 
 ### Infrastructure
+
 - **`start-backend.ps1`**: added idempotent `pip install -r requirements.txt` before uvicorn launch
   (fast no-op when satisfied; warns and continues on failure so the backend starts even offline).
   Covers every start path: aliases, Task Scheduler, manual. Closes review P2.1 permanently
