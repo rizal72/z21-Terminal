@@ -30,7 +30,7 @@
 - **Same accuracy** (FP16 half-precision: <0.1% mAP loss)
 
 **Hardware requirements**:
-- NVIDIA GPU (we have: RTX 2060, 8GB VRAM)
+- NVIDIA GPU (we have: RTX 2060 Super, 8GB VRAM)
 - CUDA support (we have: PyTorch 2.5.1+cu121)
 - Windows/Linux (we have: Windows 11)
 
@@ -175,7 +175,7 @@ rm scripts/models/best_obb.engine
 ```python
 model.export(
     format='engine',    # TensorRT engine format
-    device=0,           # GPU 0 (RTX 2060)
+    device=0,           # GPU 0 (RTX 2060 Super)
     half=True,          # FP16 half-precision (2x speed, <0.1% accuracy loss)
     verbose=True        # Show export progress
 )
@@ -186,11 +186,11 @@ model.export(
 - **Speed**: 2x faster on modern GPUs (Tensor Cores)
 - **Memory**: 50% less VRAM usage
 - **Accuracy**: <0.1% mAP loss (imperceptible for our use case)
-- **RTX 2060**: Supports Tensor Cores → FP16 optimized
+- **RTX 2060 Super**: Supports Tensor Cores → FP16 optimized
 
 ### Engine File Characteristics
 
-- **GPU-specific**: Optimized for RTX 2060 (re-export if GPU changes)
+- **GPU-specific**: Optimized for RTX 2060 Super (re-export if GPU changes)
 - **Larger size**: 18-30MB vs 6MB .pt (includes optimization metadata)
 - **Load time**: Instant (no re-compilation needed)
 - **Portability**: Not portable (needs re-export on different GPU/system)
@@ -212,7 +212,7 @@ model.export(
 - Frame skip: **eliminated** ✅
 - Gate timing: **real-time** (<100ms delay) ✅
 
-### Actual Performance (PC Windows RTX 2060)
+### Actual Performance (PC Windows RTX 2060 Super)
 - ✅ Export time: ~2 minutes (one-time)
 - ✅ Model files:
   - `best_obb.pt`: 6.6 MB (PyTorch backup)

@@ -1340,7 +1340,7 @@ python track_consist_yolo.py
   ```
 - **Commits**: `1012ccb` (ONNX fallback), `2d17969` (task='obb' fix)
 
-**Production Results** (PC Windows RTX 2060):
+**Production Results** (PC Windows RTX 2060 Super):
 | Format | Speed | Bbox Lag | File Size | Status |
 |--------|-------|----------|-----------|--------|
 | PyTorch `.pt` | ~30ms/frame | 2-3s | 6.6 MB | Backup |
@@ -1357,7 +1357,7 @@ python track_consist_yolo.py
 **Export Time**: ~2 minutes one-time (GPU-specific optimization)
 
 **Hardware Requirements**:
-- NVIDIA GPU with CUDA support (we have: RTX 2060, 8GB VRAM)
+- NVIDIA GPU with CUDA support (we have: RTX 2060 Super, 8GB VRAM)
 - PyTorch with CUDA (we have: PyTorch 2.5.1+cu121)
 - TensorRT (bundled with ultralytics)
 
