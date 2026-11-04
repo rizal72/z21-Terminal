@@ -5,6 +5,23 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
+## 2026-11-04 — Consist 10 on locos 6 and 5 (loco 1 under repair)
+
+### Config
+
+- **consist 10**: lead 6 (D445 1140) + rear 5 (D645 014), reference 5 @ gate 3,
+  adjust 6 @ gate 4, threshold 5 - the two locos on the layout today, used for
+  local tests on the Mac and for demos run from the gaming PC while loco 1
+  (Gr.675 017) is under repair.
+- **Original mapping kept**: the `notes` in `config.json` and the new
+  `docs/CONSISTS.md` record the restore target (lead 1 + rear 5, reference 5,
+  adjust 1) and the placeholder history (`e087f8e` lead 1 + rear 2, `fe6a32d`
+  lead 1 + rear 4 on a dead track).
+- **No data change**: speed tables for locos 5 and 6 already exist on both
+  machines; the Mac and PC databases are intentionally not synced.
+
+---
+
 ## 2026-09-11 — PC tooling resilience (single source of truth)
 
 ### Infrastructure
