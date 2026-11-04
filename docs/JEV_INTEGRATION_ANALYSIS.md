@@ -10,6 +10,14 @@
 > **Revised 2026-09-21**, after the owner clarified the layout (§2.1). The first
 > draft assumed consist attribution could fall back on position and order; with
 > four locomotives always in frame and a tunnel blind spot, it cannot. See §7 B.
+>
+> **Update 2026-11-04**: consist 10 is deliberately the phantom pair lead 1 +
+> rear 4 while loco 1 is under repair, so the tracker skips it by design and no
+> Δt is measured for it. The locos on the track, 5 D645 014 and 6 D445 1140, run
+> individually (UI panels, or the `z21-terminal` CLI). Loco 6 is not in
+> `CLASS_NAMES` and can never be recognised, so any identity work for it means
+> retraining, as §3 describes. The "reference loco 5, adjust loco 1" statement
+> in §2 is the original mapping to restore, not the current one.
 
 Related: `docs/COMPUTER_VISION.md` (the CV system), `docs/LOCOMOTIVE_SYNC_MAC_PC.md`
 (roster sync), `backend/tracking/yolo_tracker.py` (identity lives here).

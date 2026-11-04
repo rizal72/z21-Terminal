@@ -5,18 +5,19 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
-## 2026-11-04 — Consist 10 on locos 6 and 5 (loco 1 under repair)
+## 2026-11-04 — Consist 10 stays phantom while loco 1 is repaired
 
 ### Config
 
-- **consist 10**: lead 6 (D445 1140) + rear 5 (D645 014), reference 5 @ gate 3,
-  adjust 6 @ gate 4, threshold 5 - the two locos on the layout today, used for
-  local tests on the Mac and for demos run from the gaming PC while loco 1
-  (Gr.675 017) is under repair.
-- **Original mapping kept**: the `notes` in `config.json` and the new
-  `docs/CONSISTS.md` record the restore target (lead 1 + rear 5, reference 5,
-  adjust 1) and the placeholder history (`e087f8e` lead 1 + rear 2, `fe6a32d`
-  lead 1 + rear 4 on a dead track).
+- **consist 10 unchanged**: lead 1 + rear 4 (`2048 010-9`, loco not on the
+  layout) stays the deliberate phantom pair. An attempt to run it on 5 + 6 was
+  reverted: both would be flagged `in_consist` and lose speed and direction in
+  the UI (`ConsistController.jsx:405`), while the tracker skips the consist
+  anyway (loco 6 has no YOLO class, `yolo_tracker.py:325`).
+- **Record**: `notes` in `config.json`, the new `docs/CONSISTS.md` and a dated
+  block in `docs/JEV_INTEGRATION_ANALYSIS.md` now say how to drive 5 and 6
+  individually (UI panels or the `z21-terminal` CLI) and how to restore the
+  original 1 + 5 mapping when loco 1 returns.
 - **No data change**: speed tables for locos 5 and 6 already exist on both
   machines; the Mac and PC databases are intentionally not synced.
 

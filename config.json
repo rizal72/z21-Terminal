@@ -25,10 +25,10 @@
   "consists": {
     "10": {
       "name": "C10 Interno",
-      "lead_address": 6,
-      "rear_address": 5,
-      "reference_loco": 5,
-      "adjust_loco": 6,
+      "lead_address": 1,
+      "rear_address": 4,
+      "reference_loco": 4,
+      "adjust_loco": 1,
       "gate_ids": [
         3,
         4
@@ -38,7 +38,7 @@
         "adjust": 4
       },
       "recommendation_threshold": 5,
-      "notes": "ORIGINAL (restore when loco 1 returns): lead 1 Gr.675 017 + rear 5 D645 014, reference 5 @ gate 3, adjust 1 @ gate 4, threshold 5 (asymmetric gates, longer track, fewer crossings per lap). Asymmetric gate timing: only the L5@G3-L1@G4 pairing is valid (figure-8 track geometry). CURRENT while loco 1 is under repair: lead 6 D445 1140 + rear 5, reference 5 @ gate 3, adjust 6 @ gate 4."
+      "notes": "CURRENT (loco 1 under repair): intentionally the phantom pair lead 1 + rear 4 (2048 010-9, loco not on the layout) so the tracker skips consist 10 and the two locos on the track, 5 D645 014 and 6 D445 1140, stay free for individual control - a loco in a consist loses speed and direction in the UI; drive them with their own panels or z21-terminal. ORIGINAL (restore when loco 1 returns): lead 1 Gr.675 017 + rear 5 D645 014, reference 5 @ gate 3, adjust 1 @ gate 4, threshold 5 (asymmetric gates, longer track, fewer crossings per lap). Asymmetric gate timing: only the L5@G3-L1@G4 pairing is valid (figure-8 track geometry)."
     },
     "11": {
       "name": "C11 Esterno",
