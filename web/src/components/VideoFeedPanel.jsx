@@ -23,6 +23,27 @@ export default function VideoFeedPanel({ apiUrl, isExpanded, onExpandChange, edi
     if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
   }, []);
 
+  // PTZ: one camera step per click, disabled while a request is in flight.
+  const [ptzBusy, setPtzBusy] = useState(false);
+
+  const moveCamera = async (direction) => {
+    if (ptzBusy) return;
+    setPtzBusy(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/camera/step`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction }),
+      });
+      const data = await res.json();
+      if (!data.success) console.error('Camera move failed:', data.error);
+    } catch (err) {
+      console.error('Camera move error:', err);
+    } finally {
+      setPtzBusy(false);
+    }
+  };
+
   // Detect mobile on mount and resize
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -184,6 +205,37 @@ export default function VideoFeedPanel({ apiUrl, isExpanded, onExpandChange, edi
                 videoHeight={videoDimensions.height}
                 onClose={() => onEditModeChange(false)}
               />
+            )}
+
+            {/* Camera PTZ: one step per click, in the letterbox on the right.
+                Desktop only: on mobile the image fills the container. */}
+            {!isMobile && (
+              <div className="absolute bottom-3 right-3 z-10 grid grid-cols-3 grid-rows-3 gap-1 pointer-events-none select-none">
+                <button
+                  onClick={() => moveCamera('up')}
+                  disabled={ptzBusy}
+                  className="col-start-2 row-start-1 w-7 h-7 flex items-center justify-center text-xs rounded bg-control-grey/90 hover:bg-control-black text-track-steel disabled:opacity-40 pointer-events-auto"
+                  title="Camera up"
+                >▲</button>
+                <button
+                  onClick={() => moveCamera('left')}
+                  disabled={ptzBusy}
+                  className="col-start-1 row-start-2 w-7 h-7 flex items-center justify-center text-xs rounded bg-control-grey/90 hover:bg-control-black text-track-steel disabled:opacity-40 pointer-events-auto"
+                  title="Camera left"
+                >◀</button>
+                <button
+                  onClick={() => moveCamera('right')}
+                  disabled={ptzBusy}
+                  className="col-start-3 row-start-2 w-7 h-7 flex items-center justify-center text-xs rounded bg-control-grey/90 hover:bg-control-black text-track-steel disabled:opacity-40 pointer-events-auto"
+                  title="Camera right"
+                >▶</button>
+                <button
+                  onClick={() => moveCamera('down')}
+                  disabled={ptzBusy}
+                  className="col-start-2 row-start-3 w-7 h-7 flex items-center justify-center text-xs rounded bg-control-grey/90 hover:bg-control-black text-track-steel disabled:opacity-40 pointer-events-auto"
+                  title="Camera down"
+                >▼</button>
+              </div>
             )}
           </div>
 

@@ -32,6 +32,22 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
+## 2026-11-05 — Camera PTZ from the video panel
+
+### Camera
+
+- **Pan/tilt from the video panel**: four arrows, one step per click
+  (`POST /api/camera/step`), inside the letterbox band at the bottom right;
+  hidden on mobile. Backend: `backend/routers/camera.py`.
+- **ONVIF, not the Tapo JSON API**: this firmware needs the TP-Link cloud
+  password and a UDP discovery `pytapo` does not implement, and failed logins
+  suspend the camera for 30 minutes. ONVIF on port 2020 uses the camera account
+  already present for RTSP; `RelativeMove` is refused, so each click does
+  `GetStatus` plus an `AbsoluteMove` of 0.01 normalized units.
+- **Docs**: `docs/CAMERA_PTZ.md`.
+
+---
+
 ## 2026-11-04 — Consist 10 stays phantom while loco 1 is repaired
 
 ### Config
