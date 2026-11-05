@@ -54,8 +54,13 @@ phase 1 it was 2 + (viewers - 1).
 - No resize: the gate editor maps clicks against the image's native size
   (1280x720). A scaled stream would break stored gate coordinates.
 - Before the first frame the feed sends `Connecting to camera...`; `Video stream
-  unavailable` only appears after 5 s without a frame. The RTSP handshake on the
-  PC takes about 3 s, which is what the old text reported as a failure.
+  unavailable` only if no frame arrives within 5 s. The RTSP handshake on the
+  PC takes about 3 s, which is what the old text reported as a failure. The
+  error frame uses the camera resolution, so the panel does not change shape.
+- After the first frame a stalled capture **repeats the last frame once per
+  second** as a keepalive: no black error frame lands on a running video, and a
+  real camera outage looks like a frozen image. The reader logs a `frame gap` of
+  more than 2 s, which is how a stall is diagnosed.
 - The frontend reloads the MJPEG source after 2 s on error, with a cache-buster,
   because the browser does not reopen a dropped MJPEG connection by itself.
 - No manual switch when leaving or entering the house: nothing to configure.

@@ -381,13 +381,31 @@ STREAM_JPEG_QUALITY = 65
 _ERROR_FRAMES: Dict[str, bytes] = {}
 
 
+def _stream_size() -> tuple:
+    """Camera resolution, so the error frame matches the video's aspect ratio."""
+    try:
+        resolution = load_config().get('camera', {}).get('resolution', {})
+        width = int(resolution.get('width', 1280))
+        height = int(resolution.get('height', 720))
+        if width > 0 and height > 0:
+            return width, height
+    except Exception:
+        pass
+    return 1280, 720
+
+
 def _error_frame_bytes(text: str = "Video stream unavailable") -> bytes:
     """Build (once per message) a black frame carrying an error text."""
     frame_bytes = _ERROR_FRAMES.get(text)
     if frame_bytes is None:
-        frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(frame, text, (60, 240),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        width, height = _stream_size()
+        frame = np.zeros((height, width, 3), dtype=np.uint8)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        scale = max(0.6, width / 1600)
+        thickness = max(1, width // 640)
+        (text_w, text_h), _baseline = cv2.getTextSize(text, font, scale, thickness)
+        origin = ((width - text_w) // 2, (height + text_h) // 2)
+        cv2.putText(frame, text, origin, font, scale, (255, 255, 255), thickness)
         ok, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
         frame_bytes = buffer.tobytes() if ok else b''
         _ERROR_FRAMES[text] = frame_bytes
@@ -489,9 +507,12 @@ class _LatestFrame:
                     continue
 
                 with self._lock:
+                    now = time.monotonic()
+                    if self._ts > 0 and now - self._ts > 2.0:
+                        log('[VIDEO]', f"frame gap {now - self._ts:.1f}s")
                     self._frame = frame
                     self._seq += 1
-                    self._ts = time.monotonic()
+                    self._ts = now
         except Exception as e:
             log('[FAIL]', f"Video reader error: {e}")
         finally:
@@ -549,11 +570,12 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
 
     _video_hub.add_client()
     last_seq = -1
+    last_chunk = None
     wait_started = None
 
     try:
         while True:
-            frame, seq, ts = _video_hub.latest()
+            frame, seq, _ts = _video_hub.latest()
 
             if frame is None:
                 _video_hub.ensure_reader()  # a failed start must not leave a viewer stuck
@@ -570,15 +592,13 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
                 continue
 
             if seq == last_seq:
-                # Nothing new: show the error frame once the capture has been
-                # silent for longer than the RTSP timeout, instead of leaving
-                # the browser on a frozen image.
-                if time.monotonic() - ts > 5.0:
+                if last_chunk is not None:
+                    # A stalled capture: repeat the last frame as a keepalive.
+                    # Flashing an error frame over a running video helps nobody.
+                    # Also retry a reader that died while this frame is cached.
                     _video_hub.ensure_reader()
-                    frame_bytes = _error_frame_bytes()
-                    yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-                    time.sleep(1)
+                    yield last_chunk
+                    time.sleep(1.0)
                 else:
                     time.sleep(0.01)
                 continue
@@ -623,8 +643,10 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
             frame_bytes = buffer.tobytes()
 
             # Yield multipart frame
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            chunk = (b'--frame\r\n'
+                     b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            yield chunk
+            last_chunk = chunk
 
             # Ceiling only: a slow client has already spent more than this.
             elapsed = time.time() - start_time

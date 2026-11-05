@@ -14,9 +14,10 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
   MJPEG generator sends the newest frame at most `fps.video_feed` times per
   second, which becomes a ceiling instead of a target. A slow client now skips
   frames instead of queueing them, so latency stays constant. JPEG quality 80
-  to 65 (frame 195 KB to 101 KB). A capture that stops delivering shows the
-  error frame after 5 s instead of leaving a frozen image in the browser; before
-  the first frame the viewer sees `Connecting to camera...`.
+  to 65 (frame 195 KB to 101 KB). Before the first frame the viewer sees
+  `Connecting to camera...`; after it, a stalled capture repeats the last frame
+  once per second instead of flashing a black error frame, and the reader logs
+  any frame gap over 2 s.
 - **`web/src/components/VideoFeedPanel.jsx`**: the MJPEG `<img>` retries the
   source after 2 s on error (cache-buster), because the browser does not reopen
   a dropped MJPEG connection by itself.
