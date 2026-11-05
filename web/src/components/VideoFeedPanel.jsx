@@ -4,8 +4,24 @@ import GateEditor from './GateEditor';
 export default function VideoFeedPanel({ apiUrl, isExpanded, onExpandChange, editMode, onEditModeChange, debugMode, onDebugModeChange, panelVisible, onPanelVisibleChange }) {
   const [isMobile, setIsMobile] = useState(false);
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
+  const [feedAttempt, setFeedAttempt] = useState(0);
   const containerRef = useRef(null);
   const imgRef = useRef(null);
+  const retryTimerRef = useRef(null);
+
+  // The MJPEG connection can drop (WiFi, tab suspended) and the browser does
+  // not reopen it by itself: reload the source with a cache-buster after 2 s.
+  const handleFeedError = () => {
+    if (retryTimerRef.current) return;
+    retryTimerRef.current = setTimeout(() => {
+      retryTimerRef.current = null;
+      setFeedAttempt((attempt) => attempt + 1);
+    }, 2000);
+  };
+
+  useEffect(() => () => {
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+  }, []);
 
   // Detect mobile on mount and resize
   useEffect(() => {
@@ -152,11 +168,12 @@ export default function VideoFeedPanel({ apiUrl, isExpanded, onExpandChange, edi
           <div ref={containerRef} className="relative">
             <img
               ref={imgRef}
-              src={`${apiUrl}/api/video_feed`}
+              src={`${apiUrl}/api/video_feed?t=${feedAttempt}`}
               alt="Live YOLO tracking feed"
               className="w-full h-auto"
               style={{ maxHeight: '70vh', objectFit: 'contain' }}
               onLoad={updateVideoDimensions}
+              onError={handleFeedError}
             />
 
             {/* Gate Editor Overlay */}

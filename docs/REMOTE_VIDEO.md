@@ -53,6 +53,11 @@ phase 1 it was 2 + (viewers - 1).
   the stream adapts by itself: high on the LAN, low remotely, always live.
 - No resize: the gate editor maps clicks against the image's native size
   (1280x720). A scaled stream would break stored gate coordinates.
+- Before the first frame the feed sends `Connecting to camera...`; `Video stream
+  unavailable` only appears after 5 s without a frame. The RTSP handshake on the
+  PC takes about 3 s, which is what the old text reported as a failure.
+- The frontend reloads the MJPEG source after 2 s on error, with a cache-buster,
+  because the browser does not reopen a dropped MJPEG connection by itself.
 - No manual switch when leaving or entering the house: nothing to configure.
 
 Measured on the implementer's Mac (camera reached over Tailscale, 2.1 fps

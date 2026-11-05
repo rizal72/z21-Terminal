@@ -491,7 +491,7 @@ class _LatestFrame:
                 with self._lock:
                     self._frame = frame
                     self._seq += 1
-                    self._ts = time.time()
+                    self._ts = time.monotonic()
         except Exception as e:
             log('[FAIL]', f"Video reader error: {e}")
         finally:
@@ -549,6 +549,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
 
     _video_hub.add_client()
     last_seq = -1
+    wait_started = None
 
     try:
         while True:
@@ -556,7 +557,13 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
 
             if frame is None:
                 _video_hub.ensure_reader()  # a failed start must not leave a viewer stuck
-                frame_bytes = _error_frame_bytes()
+                if wait_started is None:
+                    wait_started = time.monotonic()
+                # The RTSP handshake takes a moment: say what is happening
+                # instead of claiming the stream is unavailable.
+                text = ("Connecting to camera..." if time.monotonic() - wait_started < 5
+                        else "Video stream unavailable")
+                frame_bytes = _error_frame_bytes(text)
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
                 time.sleep(1)
@@ -566,7 +573,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
                 # Nothing new: show the error frame once the capture has been
                 # silent for longer than the RTSP timeout, instead of leaving
                 # the browser on a frozen image.
-                if time.time() - ts > 5.0:
+                if time.monotonic() - ts > 5.0:
                     _video_hub.ensure_reader()
                     frame_bytes = _error_frame_bytes()
                     yield (b'--frame\r\n'

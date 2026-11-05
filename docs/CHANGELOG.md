@@ -15,7 +15,11 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
   second, which becomes a ceiling instead of a target. A slow client now skips
   frames instead of queueing them, so latency stays constant. JPEG quality 80
   to 65 (frame 195 KB to 101 KB). A capture that stops delivering shows the
-  error frame after 5 s instead of leaving a frozen image in the browser.
+  error frame after 5 s instead of leaving a frozen image in the browser; before
+  the first frame the viewer sees `Connecting to camera...`.
+- **`web/src/components/VideoFeedPanel.jsx`**: the MJPEG `<img>` retries the
+  source after 2 s on error (cache-buster), because the browser does not reopen
+  a dropped MJPEG connection by itself.
 - **Recognition untouched**: the tracking daemon keeps its own capture at
   `fps.active` 30 / `fps.idle` 1. No frame queue between the two pipelines.
 - **Measured before**: `fps.video_feed` 30 offered ~47 Mbit/s over a 2.7 Mbit/s
