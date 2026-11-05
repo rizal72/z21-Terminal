@@ -603,9 +603,8 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
                     time.sleep(0.01)
                 continue
 
-            last_seq = seq
             frame = frame.copy()  # drawing mutates it; the hub keeps the original
-            start_time = time.time()
+            start_time = time.monotonic()
 
             # Draw gate overlays
             frame = draw_gates(frame, gates)
@@ -638,8 +637,9 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
             ret, buffer = cv2.imencode('.jpg', frame,
                                        [cv2.IMWRITE_JPEG_QUALITY, STREAM_JPEG_QUALITY])
             if not ret:
-                continue
+                continue  # keep last_seq unset: retry this frame next pass
 
+            last_seq = seq  # consumed only once the frame is actually sent
             frame_bytes = buffer.tobytes()
 
             # Yield multipart frame
@@ -649,7 +649,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
             last_chunk = chunk
 
             # Ceiling only: a slow client has already spent more than this.
-            elapsed = time.time() - start_time
+            elapsed = time.monotonic() - start_time
             if elapsed < min_interval:
                 time.sleep(min_interval - elapsed)
 
