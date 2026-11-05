@@ -592,7 +592,7 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
                 continue
 
             if seq == last_seq:
-                if last_chunk is not None:
+                if last_chunk is not None and time.monotonic() - _ts > 1.0:
                     # A stalled capture: repeat the last frame as a keepalive.
                     # Flashing an error frame over a running video helps nobody.
                     # Also retry a reader that died while this frame is cached.
