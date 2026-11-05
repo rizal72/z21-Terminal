@@ -16,9 +16,10 @@ import datetime
 import hashlib
 import os
 import re
+import threading
 from typing import Dict, Tuple
+from xml.sax.saxutils import escape
 
-import requests
 from fastapi import APIRouter
 
 from config_loader import load_config
@@ -41,6 +42,7 @@ _STEPS = {
 }
 
 _profile_token = None
+_move_lock = threading.Lock()
 
 
 def _camera_config() -> Tuple[str, str, str]:
@@ -62,7 +64,7 @@ def _wsse(username: str, password: str) -> str:
     return (
         '<soap:Header><Security xmlns="http://docs.oasis-open.org/wss/2004/01/'
         'oasis-200401-wss-wssecurity-secext-1.0.xsd"><UsernameToken>'
-        f"<Username>{username}</Username>"
+        f"<Username>{escape(username)}</Username>"
         '<Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-'
         f'username-token-profile-1.0#PasswordDigest">{digest}</Password>'
         '<Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-'
@@ -73,6 +75,9 @@ def _wsse(username: str, password: str) -> str:
 
 
 def _call(host: str, user: str, password: str, body: str) -> str:
+    # Local import: the backend must start even before pip installs requests.
+    import requests
+
     envelope = (
         '<?xml version="1.0"?>'
         '<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope">'
@@ -117,10 +122,14 @@ def _position(host: str, user: str, password: str, profile: str) -> Tuple[float,
         f'<GetStatus xmlns="http://www.onvif.org/ver20/ptz/wsdl">'
         f"<ProfileToken>{profile}</ProfileToken></GetStatus>",
     )
-    match = re.search(r'<tt:PanTilt[^>]*x="([^"]+)"[^>]*y="([^"]+)"', text)
-    if not match:
+    tag = re.search(r'<(?:\w+:)?PanTilt\b[^>]*>', text)
+    if not tag:
         raise RuntimeError("PTZ position missing in GetStatus reply")
-    return float(match.group(1)), float(match.group(2))
+    x = re.search(r'\bx="([^"]+)"', tag.group(0))
+    y = re.search(r'\by="([^"]+)"', tag.group(0))
+    if not (x and y):
+        raise RuntimeError("PTZ position missing in GetStatus reply")
+    return float(x.group(1)), float(y.group(1))
 
 
 def _move_to(host: str, user: str, password: str, profile: str, x: float, y: float) -> None:
@@ -143,10 +152,13 @@ async def camera_step(payload: Dict[str, str]):
     dx, dy = _STEPS[direction]
 
     def move():
-        host, user, password = _camera_config()
-        profile = _get_profile_token(host, user, password)
-        x, y = _position(host, user, password, profile)
-        _move_to(host, user, password, profile, x + dx, y + dy)
+        with _move_lock:  # serialize clicks so two tabs cannot lose a step
+            host, user, password = _camera_config()
+            profile = _get_profile_token(host, user, password)
+            x, y = _position(host, user, password, profile)
+            x = min(1.0, max(-1.0, x + dx))
+            y = min(1.0, max(-1.0, y + dy))
+            _move_to(host, user, password, profile, x, y)
 
     global _profile_token
     try:

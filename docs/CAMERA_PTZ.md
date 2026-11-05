@@ -40,7 +40,8 @@ does two calls: `GetStatus` for the current normalized pan/tilt, then
 ## UI
 
 Four buttons in a compact d-pad, bottom right of the video panel, inside the
-letterbox band; hidden on mobile, where the image fills the container. They are
+letterbox band; hidden on mobile, where the image fills the container. On a
+narrow window the band disappears and they sit over the image corner. They are
 disabled while a request is in flight. The panel is only rendered while
 expanded.
 
