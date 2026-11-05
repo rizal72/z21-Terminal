@@ -412,6 +412,12 @@ def write_cv_ops_mode(self, address, cv_number, cv_value):
 ### ✅ Phase 4 Completion Tasks (COMPLETED 2025-01-03)
 
 #### **Task 4.1: Video Performance Optimization** ✅ **COMPLETED** (2025-01-01 → 2025-01-03)
+
+**Historical**: the frame queue described below was removed in a later refactor.
+The tracking daemon keeps its own capture at full rate, and the video feed opens
+its own, shared by every viewer and keeping only the newest frame. Current
+architecture and the remote-video plan: `docs/REMOTE_VIDEO.md`.
+
 **Problema**: Video freeze 1s+ quando entrambe le loco attraversano gate e Δt viene calcolato/aggiornato.
 
 **Root cause**: Dual `cv2.VideoCapture` RTSP contention
@@ -1513,6 +1519,11 @@ if (e.key === 'b' || e.key === 'B') {
 ```
 
 ### Known Limitations: RTSP Lag
+
+**Update 2026-11-05**: the MJPEG feed now sends the newest frame instead of a
+growing RTSP buffer, so remote viewers get a constant lag at whatever rate the
+link carries, instead of tens of seconds. Measurements, phase 1 design and the
+WebRTC plan: `docs/REMOTE_VIDEO.md`.
 
 **Problema**: Bbox mostrano posizione ~1-2s **avanti** rispetto al video visibile.
 

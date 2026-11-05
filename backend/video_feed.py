@@ -12,6 +12,7 @@ os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp|stimeout;50000
 import cv2
 import json
 import time
+import threading
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -373,10 +374,153 @@ SHOW_DELTA_T_PANEL = True
 # Global toggle for debug overlay (bounding boxes + pallini + confidence)
 SHOW_DEBUG_OVERLAY = False
 
+# JPEG quality for streamed frames. The frame size, not the encoding time, is
+# what limits a remote viewer: lower quality means more frames on the same link.
+STREAM_JPEG_QUALITY = 65
+
+_ERROR_FRAMES: Dict[str, bytes] = {}
+
+
+def _error_frame_bytes(text: str = "Video stream unavailable") -> bytes:
+    """Build (once per message) a black frame carrying an error text."""
+    frame_bytes = _ERROR_FRAMES.get(text)
+    if frame_bytes is None:
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(frame, text, (60, 240),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        ok, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        frame_bytes = buffer.tobytes() if ok else b''
+        _ERROR_FRAMES[text] = frame_bytes
+    return frame_bytes
+
+
+class _LatestFrame:
+    """
+    One RTSP capture shared by every viewer, keeping only the newest frame.
+
+    The old per-request capture read the stream in lockstep with the HTTP
+    response: a slow viewer blocked the read, the RTSP buffer filled, and the
+    stream fell behind by tens of seconds. Here a reader thread drains the
+    capture and stores the newest frame, so a slow viewer skips frames instead
+    of queueing them. The capture opens with the first viewer and closes with
+    the last: the reader notices the stop between two reads, and a hung read can
+    delay the close beyond the RTSP timeout the capture asks for.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._frame = None
+        self._seq = 0
+        self._ts = 0.0
+        self._clients = 0
+        self._thread = None
+        self._stop = threading.Event()
+
+    def _start_locked(self):
+        """Start the reader thread. Caller holds the lock."""
+        self._stop.clear()
+        thread = threading.Thread(
+            target=self._run, name="rtsp-latest-frame", daemon=True)
+        try:
+            thread.start()
+        except Exception as e:
+            # Leave _thread empty so the next viewer retries instead of
+            # waiting forever on a reader that never existed.
+            log('[FAIL]', f"Failed to start video reader: {e}")
+            self._thread = None
+            return
+        self._thread = thread
+
+    def add_client(self):
+        with self._lock:
+            self._clients += 1
+            if self._thread is None:
+                self._start_locked()
+            else:
+                self._stop.clear()  # cancel a pending shutdown
+
+    def ensure_reader(self):
+        """Restart the reader if it is missing while viewers are attached."""
+        with self._lock:
+            if self._thread is None and self._clients > 0:
+                self._start_locked()
+
+    def remove_client(self):
+        with self._lock:
+            self._clients = max(0, self._clients - 1)
+            if self._clients == 0:
+                self._stop.set()
+                log('[OK]', "Video stream closing (no viewers)")
+
+    def latest(self):
+        """Newest frame, its sequence number and when it was read.
+
+        The frame is returned without copying: the reader replaces the
+        reference, never the array, so the caller can copy it after checking
+        the sequence and skip that copy when nothing new arrived.
+        """
+        with self._lock:
+            if self._frame is None:
+                return None, -1, 0.0
+            return self._frame, self._seq, self._ts
+
+    def _run(self):
+        cap = None
+        try:
+            log('[INIT]', f"Opening video stream (shared): {RTSP_URL}")
+            while not self._stop.is_set():
+                if cap is None:
+                    cap = cv2.VideoCapture(RTSP_URL)
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    if not cap.isOpened():
+                        log('[FAIL]', "Failed to open video stream")
+                        cap.release()
+                        cap = None
+                        self._stop.wait(2.0)
+                        continue
+                    log('[OK]', "Video stream opened")
+
+                ret, frame = cap.read()
+                if not ret or frame is None or frame.size == 0:
+                    log('[WARN]', "Failed to read frame, reconnecting...")
+                    cap.release()
+                    cap = None
+                    self._stop.wait(2.0)
+                    continue
+
+                with self._lock:
+                    self._frame = frame
+                    self._seq += 1
+                    self._ts = time.time()
+        except Exception as e:
+            log('[FAIL]', f"Video reader error: {e}")
+        finally:
+            # Bookkeeping must run even if releasing the capture raises,
+            # otherwise _thread stays set and no viewer can start a reader.
+            try:
+                if cap is not None:
+                    cap.release()
+            except Exception as e:
+                log('[WARN]', f"Failed to release video capture: {e}")
+            with self._lock:
+                self._thread = None
+                if self._clients > 0:
+                    # A viewer arrived while this thread was shutting down.
+                    self._start_locked()
+            log('[OK]', "Video stream closed")
+
+
+_video_hub = _LatestFrame()
+
 
 def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=None):
     """
-    Generator for MJPEG video stream with overlay
+    Generator for MJPEG video stream with overlay.
+
+    Sends the newest frame available, at most `fps.video_feed` times per second.
+    That value is a ceiling, not a target: when the client is slower the loop
+    simply picks a newer frame on the next pass, so latency stays constant
+    instead of growing with the RTSP buffer.
 
     Args:
         tracking_data_callback: Optional function to get latest tracking data
@@ -389,61 +533,52 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
     config = load_config()
     gates = config.get('gates', [])
 
-    # Load FPS from config (feature added in Phase 4 - keep it)
+    # Video feed rate ceiling (not a target)
     tracking_config = config.get('tracking', {})
     fps_settings = tracking_config.get('fps', {})
-    fps_target = fps_settings.get('video_feed', 15)  # Load from config, fallback to 15
+    fps_ceiling = fps_settings.get('video_feed', 15)
+    min_interval = (1.0 / fps_ceiling) if fps_ceiling else 0.0
 
     if not RTSP_URL:
         log('[FAIL]', "Camera credentials missing - video feed unavailable")
-        error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(error_frame, "Camera credentials missing", (100, 240),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        ret, buffer = cv2.imencode('.jpg', error_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        frame_bytes = buffer.tobytes()
+        frame_bytes = _error_frame_bytes("Camera credentials missing")
         while True:
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
             time.sleep(1)
 
-    log('[INIT]', f"Opening video stream: {RTSP_URL}")
-    cap = cv2.VideoCapture(RTSP_URL)
-
-    # CRITICAL: Set minimal buffer to prevent lag accumulation
-    # RTSP streams buffer frames causing 20+ second delays over time
-    # buffer=1 = always read FRESHEST frame available (adaptive skip if processing is slow)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-    if not cap.isOpened():
-        log('[FAIL]', "Failed to open video stream")
-        # Return a black frame with error message
-        error_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(error_frame, "Video stream unavailable", (100, 240),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        ret, buffer = cv2.imencode('.jpg', error_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        frame_bytes = buffer.tobytes()
-        while True:
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            time.sleep(1)
-
-    log('[OK]', "Video stream opened")
-
-    frame_count = 0
-    frame_delay = 1.0 / fps_target
+    _video_hub.add_client()
+    last_seq = -1
 
     try:
         while True:
-            start_time = time.time()
+            frame, seq, ts = _video_hub.latest()
 
-            ret, frame = cap.read()
-            if not ret or frame is None or frame.size == 0:
-                log('[WARN]', f"Failed to read frame, reconnecting...")
-                cap.release()
-                time.sleep(2)
-                cap = cv2.VideoCapture(RTSP_URL)
-                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Restore buffer=1 after reconnect
+            if frame is None:
+                _video_hub.ensure_reader()  # a failed start must not leave a viewer stuck
+                frame_bytes = _error_frame_bytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                time.sleep(1)
                 continue
+
+            if seq == last_seq:
+                # Nothing new: show the error frame once the capture has been
+                # silent for longer than the RTSP timeout, instead of leaving
+                # the browser on a frozen image.
+                if time.time() - ts > 5.0:
+                    _video_hub.ensure_reader()
+                    frame_bytes = _error_frame_bytes()
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                    time.sleep(1)
+                else:
+                    time.sleep(0.01)
+                continue
+
+            last_seq = seq
+            frame = frame.copy()  # drawing mutates it; the hub keeps the original
+            start_time = time.time()
 
             # Draw gate overlays
             frame = draw_gates(frame, gates)
@@ -473,7 +608,8 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
                 frame = draw_tracking_info(frame, tracking_data)
 
             # Encode frame as JPEG
-            ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            ret, buffer = cv2.imencode('.jpg', frame,
+                                       [cv2.IMWRITE_JPEG_QUALITY, STREAM_JPEG_QUALITY])
             if not ret:
                 continue
 
@@ -483,19 +619,15 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
-            frame_count += 1
-
-            # Frame rate limiting
+            # Ceiling only: a slow client has already spent more than this.
             elapsed = time.time() - start_time
-            sleep_time = frame_delay - elapsed
-            if sleep_time > 0:
-                time.sleep(sleep_time)
+            if elapsed < min_interval:
+                time.sleep(min_interval - elapsed)
 
     except Exception as e:
         log('[FAIL]', f"Video stream error: {e}")
     finally:
-        cap.release()
-        log('[OK]', "Video stream closed")
+        _video_hub.remove_client()
 
 
 if __name__ == '__main__':

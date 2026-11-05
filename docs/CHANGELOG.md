@@ -5,6 +5,28 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
+## 2026-11-05 — Remote video: newest frame, constant lag
+
+### Backend
+
+- **`video_feed.py`**: one shared `VideoCapture` with a reader thread that keeps
+  only the newest frame, opened by the first viewer and closed by the last; each
+  MJPEG generator sends the newest frame at most `fps.video_feed` times per
+  second, which becomes a ceiling instead of a target. A slow client now skips
+  frames instead of queueing them, so latency stays constant. JPEG quality 80
+  to 65 (frame 195 KB to 101 KB). A capture that stops delivering shows the
+  error frame after 5 s instead of leaving a frozen image in the browser.
+- **Recognition untouched**: the tracking daemon keeps its own capture at
+  `fps.active` 30 / `fps.idle` 1. No frame queue between the two pipelines.
+- **Measured before**: `fps.video_feed` 30 offered ~47 Mbit/s over a 2.7 Mbit/s
+  link, and the stream fell behind ~0.94 s per second (30 s of lag). RTT 1.14 s
+  with the panel open, 0.46 s closed.
+- **Docs**: new `docs/REMOTE_VIDEO.md` (measurements, phase 1, phase 2 plan with
+  the 2026 WebRTC survey); the stale frame-queue section in
+  `docs/COMPUTER_VISION.md` now points there.
+
+---
+
 ## 2026-11-04 — Consist 10 stays phantom while loco 1 is repaired
 
 ### Config
