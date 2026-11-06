@@ -19,7 +19,10 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:
+    sys.exit("Pillow missing: run with venv/bin/python (the repo venv has it)")
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 ROSTER_PATH = Path.home() / "Library/Preferences/JMRI/La_mia_Ferrovia_in_JMRI.jmri/roster"
@@ -58,6 +61,8 @@ def main() -> int:
     addresses = {int(a) for a in config.get("locomotives", {})}
     if args.address is not None:
         addresses &= {args.address}
+        if not addresses:
+            print(f"[WARN] address {args.address} is not in config.json")
 
     images = roster_images()
     missing = sorted(addresses - set(images))

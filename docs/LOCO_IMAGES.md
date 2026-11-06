@@ -50,5 +50,5 @@ already picked on the other side. `ConsistCard.jsx` shows static thumbnails.
 ## Limits
 
 - No search or type-ahead: the list is short enough to scan.
-- The 40 px thumbnail on mobile is a crop; the full picture is in the sheet.
+- On mobile the picture is 40 px wide, letterboxed, so it reads as a small chip; the full size is in the sheet.
 - A new locomotive needs the import script run on the Mac, then a commit.

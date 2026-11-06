@@ -1,9 +1,26 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import LocoImage from './LocoImage';
 
 const PANEL_WIDTH = 420;
 const PANEL_MAX_HEIGHT = 420;
+const MOBILE = '(max-width: 767px)';
+
+// The lock counts, so a picker closing cannot unlock the page while another
+// list, or the consist manager, still holds it.
+let lockCount = 0;
+let savedOverflow = '';
+
+function lockScroll() {
+  if (lockCount === 0) savedOverflow = document.body.style.overflow;
+  lockCount += 1;
+  document.body.style.overflow = 'hidden';
+}
+
+function unlockScroll() {
+  lockCount = Math.max(0, lockCount - 1);
+  if (lockCount === 0) document.body.style.overflow = savedOverflow;
+}
 
 /**
  * Pictures for an option: one for a locomotive, lead + rear for a consist.
@@ -60,7 +77,12 @@ export default function LocoPicker({
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
   const [active, setActive] = useState(0);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE).matches);
   const buttonRef = useRef(null);
+  const listRef = useRef(null);
+  const closeRef = useRef(null);
+  const lastRect = useRef(null);
+  const listId = useId();
 
   const items = options.filter(
     (option) => !(option.type === 'locomotive' && exclude.includes(option.address))
@@ -70,10 +92,36 @@ export default function LocoPicker({
     : -1;
   const selected = selectedIndex >= 0 ? items[selectedIndex] : null;
 
-  const close = () => setOpen(false);
+  useEffect(() => {
+    const onOtherOpened = (event) => {
+      if (event.detail !== listId) setOpen(false);
+    };
+    document.addEventListener('loco-picker-open', onOtherOpened);
+    return () => document.removeEventListener('loco-picker-open', onOtherOpened);
+  }, [listId]);
+
+  // Keep the same mobile/desktop decision as the layout.
+  useEffect(() => {
+    const query = window.matchMedia(MOBILE);
+    const onChange = () => setIsMobile(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+
+  const close = (refocus = false) => {
+    setOpen(false);
+    if (refocus) buttonRef.current?.focus();
+  };
 
   const openList = () => {
-    setRect(buttonRef.current.getBoundingClientRect());
+    // One list at a time: every picker closes when another one announces itself.
+    document.dispatchEvent(new CustomEvent('loco-picker-open', { detail: listId }));
+    const box = buttonRef.current?.getBoundingClientRect();
+    if (box) {
+      const measured = { top: box.top, left: box.left, width: box.width, height: box.height };
+      lastRect.current = measured;
+      setRect(measured);
+    }
     setActive(selectedIndex >= 0 ? selectedIndex : 0);
     setOpen(true);
   };
@@ -81,35 +129,59 @@ export default function LocoPicker({
   const choose = (option) => {
     if (!option) return;
     onChange({ type: option.type, address: option.address });
-    close();
+    close(true);
   };
 
+  // Geometry follows the button: a layout shift above it would otherwise leave
+  // the panel where the button used to be.
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
 
-    const updateRect = () => setRect(buttonRef.current?.getBoundingClientRect() ?? null);
+    let frame = 0;
+    const tick = () => {
+      const element = buttonRef.current;
+      if (element) {
+        const box = element.getBoundingClientRect();
+        const known = lastRect.current;
+        if (
+          !known ||
+          known.top !== box.top ||
+          known.left !== box.left ||
+          known.width !== box.width ||
+          known.height !== box.height
+        ) {
+          const measured = { top: box.top, left: box.left, width: box.width, height: box.height };
+          lastRect.current = measured;
+          setRect(measured);
+        }
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
     const onPointerDown = (event) => {
-      if (!event.target.closest('[data-loco-picker]')) close();
+      if (!event.target.closest('[data-loco-picker]')) setOpen(false);
     };
 
-    window.addEventListener('resize', updateRect);
-    window.addEventListener('scroll', updateRect, true);
     document.addEventListener('mousedown', onPointerDown);
-    // Restore what was there: the consist manager also locks the body.
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    lockScroll();
+    listRef.current?.focus({ preventScroll: true });
 
     return () => {
-      window.removeEventListener('resize', updateRect);
-      window.removeEventListener('scroll', updateRect, true);
       document.removeEventListener('mousedown', onPointerDown);
-      document.body.style.overflow = previousOverflow;
+      unlockScroll();
     };
   }, [open]);
 
   const onKeyDown = (event) => {
     if (event.key === 'Escape') {
-      close();
+      event.preventDefault();
+      close(true);
       return;
     }
     if (!open) {
@@ -128,12 +200,22 @@ export default function LocoPicker({
     } else if (event.key === 'Enter') {
       event.preventDefault();
       choose(items[active]);
+    } else if (event.key === 'Tab') {
+      event.preventDefault();
+      if (isMobile && closeRef.current) {
+        const focusable = [closeRef.current, listRef.current].filter(Boolean);
+        const index = focusable.indexOf(document.activeElement);
+        const step = event.shiftKey ? -1 : 1;
+        focusable[(index + step + focusable.length) % focusable.length].focus();
+      } else {
+        close(true);
+      }
     }
   };
 
   // Below the button when there is room, above it otherwise.
   const panelStyle = () => {
-    if (!rect) return {};
+    if (!rect || typeof window === 'undefined') return {};
     const width = Math.min(PANEL_WIDTH, window.innerWidth - 16);
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
     const below = window.innerHeight - rect.bottom - 8;
@@ -146,12 +228,21 @@ export default function LocoPicker({
   };
 
   const list = (
-    <ul role="listbox" className="min-h-0 flex-1 overflow-y-auto py-1">
+    <ul
+      ref={listRef}
+      id={listId}
+      role="listbox"
+      tabIndex={-1}
+      aria-label={title}
+      aria-activedescendant={items[active] ? `${listId}-${active}` : undefined}
+      className="min-h-0 flex-1 overflow-y-auto py-1 focus:outline-none"
+    >
       {items.map((option, index) => {
         const isSelected = index === selectedIndex;
         return (
           <li
             key={`${option.type}-${option.address}`}
+            id={`${listId}-${index}`}
             role="option"
             aria-selected={isSelected}
             onMouseEnter={() => setActive(index)}
@@ -178,15 +269,15 @@ export default function LocoPicker({
   );
 
   return (
-    <div className="relative w-full min-w-0">
+    <div className="relative w-full min-w-0" onKeyDown={onKeyDown}>
       <button
         ref={buttonRef}
         type="button"
         data-loco-picker
         onClick={() => (open ? close() : openList())}
-        onKeyDown={onKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={open ? listId : undefined}
         className={`flex w-full min-w-0 items-center gap-2 rounded border bg-control-dark px-2 py-1.5 text-left transition-colors focus:outline-none ${
           invalid ? 'border-signal-red' : 'border-control-grey hover:border-signal-amber focus:border-signal-amber'
         }`}
@@ -207,18 +298,23 @@ export default function LocoPicker({
 
       {open &&
         createPortal(
-          <>
-            {/* Mobile: full screen sheet */}
-            <div data-loco-picker className="fixed inset-0 z-[100] md:hidden">
-              <div className="absolute inset-0 bg-black/70" onClick={close} />
-              <div className="absolute inset-0 flex flex-col bg-control-black">
+          isMobile ? (
+            <div data-loco-picker className="fixed inset-0 z-[100]">
+              <div className="absolute inset-0 bg-black/70" onClick={() => close()} />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={title}
+                className="absolute inset-0 flex flex-col bg-control-black"
+              >
                 <div className="flex items-center justify-between border-b border-control-grey px-4 py-3">
                   <span className="font-display text-sm font-semibold uppercase tracking-wider text-signal-amber">
                     {title}
                   </span>
                   <button
+                    ref={closeRef}
                     type="button"
-                    onClick={close}
+                    onClick={() => close(true)}
                     className="flex h-8 w-8 items-center justify-center rounded border border-control-grey text-track-steel hover:border-signal-red hover:text-signal-red"
                     aria-label="Close"
                   >
@@ -228,16 +324,15 @@ export default function LocoPicker({
                 {list}
               </div>
             </div>
-
-            {/* Desktop: panel under the button */}
+          ) : (
             <div
               data-loco-picker
               style={panelStyle()}
-              className="fixed z-[100] hidden flex-col overflow-hidden rounded border border-control-grey bg-control-black shadow-2xl md:flex"
+              className="fixed z-[100] flex flex-col overflow-hidden rounded border border-control-grey bg-control-black shadow-2xl"
             >
               {list}
             </div>
-          </>,
+          ),
           document.body
         )}
     </div>
