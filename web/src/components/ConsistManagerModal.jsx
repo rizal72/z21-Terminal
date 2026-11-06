@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import ConsistCard from './ConsistCard';
+import useEscapeToClose from '../hooks/useEscapeToClose';
 import ConsistForm from './ConsistForm';
 
 export default function ConsistManagerModal({ onClose }) {
+  useEscapeToClose(onClose);
+
   const [consists, setConsists] = useState({});
   const [gates, setGates] = useState([]);
   const [trackingAssignments, setTrackingAssignments] = useState({});

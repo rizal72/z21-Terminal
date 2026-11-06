@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import useEscapeToClose from '../hooks/useEscapeToClose';
 
 /**
  * Settings Modal Component (Phase 3)
@@ -13,6 +14,8 @@ import { useState, useEffect } from 'react';
  * - Locomotives (function labels inline edit)
  */
 export default function SettingsModal({ isOpen, onClose, apiUrl }) {
+  useEscapeToClose(onClose);
+
   const [activeTab, setActiveTab] = useState('system');
   const [settings, setSettings] = useState(null);
   const [initialSettings, setInitialSettings] = useState(null);
