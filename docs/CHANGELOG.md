@@ -5,6 +5,22 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
+## 2026-11-06 — Escape closes what is open
+
+### Frontend
+
+- **Escape closes the open overlay first**: the picker, the Consist Manager and
+  the Settings modal consume it (capture phase, `useEscapeToClose`), so the
+  global emergency stop needs a second press. With nothing open, Escape still
+  toggles track power.
+- The global handler skips keys a component already handled
+  (`defaultPrevented`): before, Escape inside an open picker stopped the layout.
+- **Scrollbar kept in flow** (`html { overflow-y: scroll }`): with a modal or
+  the picker open the page no longer shifts sideways. `scrollbar-gutter: stable`
+  was measured on this layout and did nothing.
+
+---
+
 ## 2026-11-06 — Locomotive pictures in the roster picker
 
 ### Frontend
