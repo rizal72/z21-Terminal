@@ -218,12 +218,12 @@ export default function LocoPicker({
     if (!rect || typeof window === 'undefined') return {};
     const width = Math.min(PANEL_WIDTH, window.innerWidth - 16);
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
-    const below = window.innerHeight - rect.bottom - 8;
+    const below = window.innerHeight - (rect.top + rect.height) - 8;
     const above = rect.top - 8;
     const placeBelow = below >= 240 || below >= above;
     const maxHeight = Math.max(160, Math.min(PANEL_MAX_HEIGHT, placeBelow ? below : above));
     return placeBelow
-      ? { top: rect.bottom + 4, left, width, maxHeight }
+      ? { top: rect.top + rect.height + 4, left, width, maxHeight }
       : { bottom: window.innerHeight - rect.top + 4, left, width, maxHeight };
   };
 
