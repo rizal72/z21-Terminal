@@ -826,7 +826,11 @@ function App() {
           type: 'consist',
           address: consist.address,
           label: consistLabel,
-          trackName: consist.trackName
+          name: consist.rear_name
+            ? `${consist.lead_name} + ${consist.rear_name}`
+            : consist.lead_name,
+          trackName: consist.trackName,
+          locomotives: consist.locomotives
         });
       }
     });
@@ -839,6 +843,7 @@ function App() {
           type: 'locomotive',
           address: loco.address,
           label: `Loco ${loco.address}: ${loco.name}${inConsistWarning}`,
+          name: loco.name,
           inConsist: loco.in_consist
         });
       }

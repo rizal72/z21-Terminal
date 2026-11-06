@@ -100,6 +100,7 @@ z21-Terminal/
 - ✅ Responsive design (desktop/tablet/phone)
 - ✅ Dark theme "Control Room Noir" con estetica industriale
 - ✅ Indicatori stato real-time (velocità, direzione, power, funzioni)
+- ✅ Selettore locomotiva/consist con immagine (`LocoPicker`, vedi `docs/LOCO_IMAGES.md`)
 - ✅ Connection status indicator
 
 **Real-time sync**:
@@ -246,6 +247,9 @@ END
   - Test incrementali confermarono che solo shadow-lg/animate-glow causavano il bug
 
 ### Debug Mobile Responsive (2025-12-25)
+
+> Storico: questa e la sezione successiva descrivono il layout con `<select>` nativo e icona
+> Font Awesome, che `LocoPicker` ha sostituito (vedi `docs/LOCO_IMAGES.md`).
 
 **Problema iniziale**: Controller overflow orizzontale su iPhone 13 mini (375px width)
 - Contenuto tagliato a destra dal 60% in poi

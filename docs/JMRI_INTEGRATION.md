@@ -18,16 +18,22 @@ Per info essenziali, vedi `AGENTS.md`.
 
 ### ❌ Dipendenza Rimasta
 
-- **Function Labels F0-F28**: Ancora letti da roster XML JMRI
-  - Percorso: `~/Library/Preferences/JMRI/.../roster/*.xml`
-  - Usati in: Web Dashboard ConsistController (pulsanti funzioni)
-  - **Roadmap**: Migrare a `config.json` `locomotives[address]['functions']`
+- **Creazione di una locomotiva nuova**: si fa in DecoderPro (indirizzo DCC,
+  decoder, CV), poi `scripts/utils/import_single_locomotive.py` la porta in
+  `config.json` e in `data.db`. Non e' una lettura a runtime.
+- **Reimport CV67-94**: `POST /api/speed-table/reimport/{consist_id}` legge
+  l'XML JMRI, quindi e' un'operazione da Mac; sul PC non trova il roster e
+  restituisce `None`.
 
-**Nota**: JMRI utile per initial locomotive setup, ma NON necessario per operazioni quotidiane
+Le function labels F0-F28 stanno in `config.json`
+(`locomotives[address]['functions']`): non sono piu' lette dal roster.
+
+**Nota**: JMRI serve solo per il setup iniziale di una locomotiva, mai durante
+l'uso quotidiano.
 
 ## Coesistenza
 
-- **z21-Terminal NON richiede JMRI in esecuzione**: legge solo i file XML del roster
+- **z21-Terminal NON richiede JMRI**: il roster viene da `config.json`; gli XML JMRI sono solo il fallback quando `config.json` non ha locomotive
 - z21-Terminal e JMRI possono funzionare contemporaneamente (opzionale)
 - Entrambi comunicano con Z21 via protocollo LAN (UDP porta 21105)
 - Ultimo comando inviato ha priorità in caso di controllo simultaneo
@@ -47,7 +53,7 @@ Per info essenziali, vedi `AGENTS.md`.
 | Automazione/scripting | ⚠️ Jython | ✅ Python 3 |
 | Controllo funzioni F0-F28 | ✅ | ✅ |
 | Lettura stato locomotiva | ✅ | ✅ |
-| **Function labels F0-F28** | ✅ XML roster | ❌ **Ancora da JMRI** (last dependency) |
+| **Function labels F0-F28** | ✅ XML roster | ✅ `config.json` |
 
 ## Workflow Operativo
 

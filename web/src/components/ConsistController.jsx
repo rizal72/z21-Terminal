@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import DeltaTStatsPanel from './DeltaTStatsPanel';
+import LocoPicker from './LocoPicker';
 
 export default function ConsistController({
   item,
@@ -285,24 +286,14 @@ export default function ConsistController({
             <label className="text-xs font-mono text-track-steel uppercase tracking-wider mb-2 block">
               Controller #{controllerNumber}
             </label>
-            <div className="flex items-center gap-2 overflow-hidden">
-              <select
-                value=""
-                onChange={(e) => {
-                  if (e.target.value) {
-                    const [type, address] = e.target.value.split('-');
-                    onSelectionChange({ type, address: parseInt(address) });
-                  }
-                }}
-                className="flex-1 min-w-0 max-w-full bg-control-dark border border-control-grey rounded pl-3 py-2 text-white font-mono text-sm focus:border-signal-amber focus:outline-none overflow-hidden text-ellipsis"
-              >
-                <option value="">-- Select Locomotive or Consist --</option>
-                {rosterOptions.map((option) => (
-                  <option key={`${option.type}-${option.address}`} value={`${option.type}-${option.address}`}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-center gap-2">
+              <LocoPicker
+                value={null}
+                options={rosterOptions}
+                onChange={onSelectionChange}
+                placeholder="-- Select Locomotive or Consist --"
+                title={`Controller #${controllerNumber}`}
+              />
             </div>
           </div>
         </div>
@@ -353,39 +344,13 @@ export default function ConsistController({
           <label className="text-xs font-mono text-track-steel uppercase tracking-wider mb-2 block">
             Controller #{controllerNumber}
           </label>
-          <div className="flex items-center gap-2 overflow-hidden">
-            <select
-              value={`${selection.type}-${selection.address}`}
-              onChange={(e) => {
-                const [type, address] = e.target.value.split('-');
-                onSelectionChange({ type, address: parseInt(address) });
-              }}
-              className="flex-1 min-w-0 max-w-full bg-control-dark border border-control-grey rounded px-3 py-2 text-white font-mono text-sm focus:border-signal-amber focus:outline-none overflow-hidden text-ellipsis"
-            >
-              {rosterOptions.map((option) => (
-                <option key={`${option.type}-${option.address}`} value={`${option.type}-${option.address}`}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            {/* Train icon indicator */}
-            <div className="flex items-center justify-center w-10 h-10 bg-control-dark border border-control-grey rounded flex-shrink-0">
-              <div className="relative">
-                <div
-                  className="absolute inset-0 bg-signal-amber rounded-full opacity-20 blur-md transition-opacity duration-300"
-                  style={{
-                    opacity: speed > 0 ? 0.3 : 0
-                  }}
-                ></div>
-                <i
-                  className="fa-solid fa-train text-signal-amber relative z-10 transition-all duration-300"
-                  style={{
-                    fontSize: '1.25rem',
-                    filter: speed > 0 ? 'drop-shadow(0 0 4px rgba(255, 149, 0, 0.8))' : 'none'
-                  }}
-                ></i>
-              </div>
-            </div>
+          <div className="flex items-center gap-2">
+            <LocoPicker
+              value={selection}
+              options={rosterOptions}
+              onChange={onSelectionChange}
+              title={`Controller #${controllerNumber}`}
+            />
           </div>
         </div>
 

@@ -165,6 +165,7 @@ python scripts/utils/import_single_locomotive.py --address 2
 
 **Next steps** (after import):
 1. Verify `config.json` → `locomotives.<address>` entry
-2. Restart backend (`z21-restart` on PC)
-3. Test locomotive control in web dashboard
-4. Optional: Add locomotive to consist in web UI (Consist Manager)
+2. Import the picture: `python scripts/utils/import_loco_images.py --address 2` (see `docs/LOCO_IMAGES.md`)
+3. Restart backend (`z21-restart` on PC)
+4. Test locomotive control in web dashboard
+5. Optional: Add locomotive to consist in web UI (Consist Manager)

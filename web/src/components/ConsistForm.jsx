@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import LocoPicker from './LocoPicker';
 
 export default function ConsistForm({ consist, locomotives, gates, onSubmit, onCancel }) {
   const isEdit = !!consist;
@@ -27,6 +28,18 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
     // Only non-consist locomotives when creating
     return !loco.in_consist;
   });
+
+  // Options for the picker: locomotives with their pictures
+  const locoOptions = availableLocomotives.map(([address, loco]) => ({
+    type: 'locomotive',
+    address: Number(address),
+    name: loco.name,
+    label: `${loco.name} (#${address})`,
+    inConsist: loco.in_consist
+  }));
+
+  const selectedLoco = (address) =>
+    address === '' ? null : { type: 'locomotive', address: Number(address) };
 
   const handleChange = (field, value) => {
     setFormData(prev => ({
@@ -168,20 +181,15 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
         <label className="block text-sm font-medium text-white mb-2">
           Lead Locomotive *
         </label>
-        <select
-          value={formData.lead_address}
-          onChange={(e) => handleChange('lead_address', e.target.value)}
-          className={`w-full px-3 py-2 bg-control-black border rounded text-white ${
-            errors.lead_address ? 'border-signal-red' : 'border-control-grey'
-          } focus:border-signal-amber focus:outline-none`}
-        >
-          <option value="">Select lead locomotive...</option>
-          {availableLocomotives.map(([address, loco]) => (
-            <option key={address} value={address}>
-              {loco.name} (#{address})
-            </option>
-          ))}
-        </select>
+        <LocoPicker
+          value={selectedLoco(formData.lead_address)}
+          options={locoOptions}
+          exclude={formData.rear_address === '' ? [] : [Number(formData.rear_address)]}
+          onChange={(choice) => handleChange('lead_address', String(choice.address))}
+          placeholder="Select lead locomotive..."
+          title="Lead locomotive"
+          invalid={Boolean(errors.lead_address)}
+        />
         {errors.lead_address && (
           <p className="text-signal-red text-xs mt-1">{errors.lead_address}</p>
         )}
@@ -192,20 +200,15 @@ export default function ConsistForm({ consist, locomotives, gates, onSubmit, onC
         <label className="block text-sm font-medium text-white mb-2">
           Rear Locomotive *
         </label>
-        <select
-          value={formData.rear_address}
-          onChange={(e) => handleChange('rear_address', e.target.value)}
-          className={`w-full px-3 py-2 bg-control-black border rounded text-white ${
-            errors.rear_address ? 'border-signal-red' : 'border-control-grey'
-          } focus:border-signal-amber focus:outline-none`}
-        >
-          <option value="">Select rear locomotive...</option>
-          {availableLocomotives.map(([address, loco]) => (
-            <option key={address} value={address}>
-              {loco.name} (#{address})
-            </option>
-          ))}
-        </select>
+        <LocoPicker
+          value={selectedLoco(formData.rear_address)}
+          options={locoOptions}
+          exclude={formData.lead_address === '' ? [] : [Number(formData.lead_address)]}
+          onChange={(choice) => handleChange('rear_address', String(choice.address))}
+          placeholder="Select rear locomotive..."
+          title="Rear locomotive"
+          invalid={Boolean(errors.rear_address)}
+        />
         {errors.rear_address && (
           <p className="text-signal-red text-xs mt-1">{errors.rear_address}</p>
         )}

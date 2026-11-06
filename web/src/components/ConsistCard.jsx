@@ -1,3 +1,5 @@
+import LocoImage from './LocoImage';
+
 export default function ConsistCard({
   consistAddress,
   assignment,
@@ -75,6 +77,7 @@ export default function ConsistCard({
         <div className="flex items-center gap-2 text-sm flex-wrap">
           <i className="fa-solid fa-circle-arrow-right text-signal-green"></i>
           <span className="text-track-steel">Lead:</span>
+          <LocoImage address={assignment.lead_address} className="h-5 w-10 shrink-0 rounded bg-control-black object-contain" />
           <span className="text-white font-mono">
             {leadName} <span className="text-signal-amber">(#{assignment.lead_address})</span>
           </span>
@@ -92,6 +95,7 @@ export default function ConsistCard({
         <div className="flex items-center gap-2 text-sm flex-wrap">
           <i className="fa-solid fa-circle-arrow-right text-signal-green"></i>
           <span className="text-track-steel">Rear:</span>
+          <LocoImage address={assignment.rear_address} className="h-5 w-10 shrink-0 rounded bg-control-black object-contain" />
           <span className="text-white font-mono">
             {rearName} <span className="text-signal-amber">(#{assignment.rear_address})</span>
           </span>

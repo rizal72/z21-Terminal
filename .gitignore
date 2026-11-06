@@ -72,3 +72,6 @@ package-lock.json
 *.backup
 AGENTS.md
 CLAUDE.md
+
+# Playwright MCP output (screenshots, console logs)
+.playwright-mcp/

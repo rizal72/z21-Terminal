@@ -5,6 +5,28 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
+## 2026-11-06 — Locomotive pictures in the roster picker
+
+### Frontend
+
+- **One picker with pictures instead of the native `<select>`**: a button shows
+  the locomotive (lead + rear for a consist) and opens a list where every entry
+  carries its picture, name and address. On mobile the list is a full screen
+  sheet; on desktop a 420 px panel under the button. Used in the controller
+  header and in the consist form for lead and rear. Keyboard: arrows, Enter,
+  Escape.
+- **Consist manager**: thumbnails next to Lead and Rear.
+- **Pictures**: `web/public/loco_images/<dcc_address>.jpg`, 480 px, from JMRI's
+  `iconFilePath`, committed so the PC needs no JMRI. Regenerate with
+  `scripts/utils/import_loco_images.py`.
+
+### Docs
+
+- `docs/LOCO_IMAGES.md` (new); `docs/JMRI_INTEGRATION.md` corrected: the
+  function labels F0-F28 come from `config.json`, not from the JMRI roster.
+
+---
+
 ## 2026-11-05 — Remote video: newest frame, constant lag
 
 ### Backend

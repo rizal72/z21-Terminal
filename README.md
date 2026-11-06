@@ -21,6 +21,7 @@
 - **Function Editor**: Edit F0-F28 labels and lockable flags (accordion UI, hot reload)
 - **Speed Table Editor**: View/edit CV67-94 speed curves (direct CV write, color-coded recommendations)
 - **Consist Manager**: Full CRUD operations via web UI (create/edit/delete consists, gate assignment)
+- **Picture picker**: locomotives and consists are chosen from a list with their picture (side view from the JMRI roster), on desktop and mobile
 - **CV3/CV4 Editor**: Inline acceleration/deceleration editor
 - Touch-optimized controls, PWA installable, wake-lock, emergency stop, track power & Z21 health monitoring
 
