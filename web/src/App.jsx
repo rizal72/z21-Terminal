@@ -575,6 +575,9 @@ function App() {
   // Global keyboard shortcuts (ESC for emergency stop, TAB to cycle controllers)
   useEffect(() => {
     const handleGlobalKeyPress = (e) => {
+      // A dialog that consumed the key (the picker closes on Escape) must not
+      // also toggle track power.
+      if (e.defaultPrevented) return;
       // TAB: cycle through controllers (allow even when dropdown focused)
       if (e.key === 'Tab') {
         e.preventDefault();

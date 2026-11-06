@@ -181,6 +181,8 @@ export default function LocoPicker({
   const onKeyDown = (event) => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      // ESC is also the global emergency stop: keep it inside the list.
+      event.stopPropagation();
       close(true);
       return;
     }
