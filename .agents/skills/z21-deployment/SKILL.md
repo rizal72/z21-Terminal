@@ -79,6 +79,10 @@ ssh riccardo@gaming-pc "cd C:\z21-Terminal && z21-start"
 - Checks if the Task Scheduler task is already Running; starts only if not
 - Use for the FIRST launch of a session (e.g. after `wol` remote wake-up)
 - `z21-restart` = full stop + start cycle (use ONLY when backend is already running)
+- **No login needed**: the task runs with the machine at the Windows login
+  screen (verified 2026-11-06: task Running, port 8000 answering, nobody
+  logged in). After power-on Windows brings its services up progressively:
+  allow a minute, then check the port, not the desktop.
 
 **z21-restart** (Restart backend):
 ```bash
