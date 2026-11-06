@@ -5,10 +5,11 @@
 @tailwind utilities;
 
 @layer base {
-  /* Reserve the scrollbar: a modal or the picker locks the body, and the layout
-     must not jump when the bar disappears. */
+  /* Keep the scrollbar in flow: locking the body for a modal or the picker
+     removes it, and without this the whole page shifts. scrollbar-gutter was
+     measured here and did nothing. */
   html {
-    scrollbar-gutter: stable;
+    overflow-y: scroll;
   }
 
   body {
