@@ -5,6 +5,12 @@
 @tailwind utilities;
 
 @layer base {
+  /* Reserve the scrollbar: a modal or the picker locks the body, and the layout
+     must not jump when the bar disappears. */
+  html {
+    scrollbar-gutter: stable;
+  }
+
   body {
     @apply bg-control-black text-white font-body antialiased;
     margin: 0;
