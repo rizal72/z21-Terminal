@@ -61,6 +61,29 @@ z21-terminal   # Python CLI controller
 - Accessibile da rete locale: http://192.168.1.xxx:5173
 - Hot reload su entrambi frontend e backend
 
+### Cambiare la porta del backend (8000): perché resta dov'è
+
+2026-11-09. Il conflitto che ha motivato la domanda è la sola riga di 404 che la
+discovery di vLLM lascia nel log quando sonda `127.0.0.1:8000`; la regola globale
+che tiene spenta quella discovery lo neutralizza, quindi non c'è un problema
+funzionale da risolvere.
+
+Costo misurato di uno spostamento:
+
+- 7 punti di codice/config: `web/src/App.jsx:89,96` (URL costruiti a mano), i 3
+  proxy in `web/vite.config.js`, `start-backend.ps1`,
+  `scripts/pc/z21-profile.ps1`, `backend/main.py` (uvicorn + 3 righe di log),
+  `backend/tracking_daemon.py`
+- 2 righe in `~/.bash_aliases` sul Mac
+- 1 regola firewall sul PC (`z21-Terminal Backend`)
+- 4 mapping `tailscale serve` (2 sul PC verso la 8000, 2 sul Mac)
+- PWA e segnalibri legati all'origine `:8000`
+
+Si riapre solo quando un servizio vero contende la porta. In quel caso il lavoro è
+il refactor a sorgente unica — porta in `config.json`, letta da backend, Vite e
+alias, con `App.jsx` che deriva l'origine da `window.location` — non la
+sostituzione del numero nei sette punti.
+
 ### Struttura Progetto
 
 ```
