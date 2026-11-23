@@ -198,6 +198,20 @@ colors: {
 - Touch-optimized controls (48px minimum touch target)
 - Animazioni fade-in staggered per i panel
 
+**Scrollbar** (`web/src/index.css`):
+- `::-webkit-scrollbar` è l'implementazione principale, non un fallback: 8px, thumb
+  `track-steel`, hover `signal-amber`. Contrasto misurato: 3.66:1 thumb su `control-dark`,
+  4.16:1 su `control-black`, 7.92:1 in hover (WCAG 1.4.11).
+- Le proprietà standard `scrollbar-color` / `scrollbar-width` sono state misurate e scartate
+  (2026-11-14, Chromium 152; non ripetuto su Safari): basta `scrollbar-color` perché le regole
+  WebKit vengano ignorate e la barra torni quella overlay di macOS (gutter 0, visibile solo
+  mentre si scorre, nessuno stato hover). `scrollbar-width` accetta solo `auto | thin | none`,
+  quindi gli 8px non sono dichiarabili: l'API standard è meno capace di quella che usiamo.
+- Per lo stesso motivo `html { overflow-y: scroll }` resta: è ciò che tiene fermo il layout
+  quando una modale blocca il body.
+- Da riaprire solo se un browser smette di supportare `::-webkit-scrollbar`: la barra tornerebbe
+  quella nativa, senza guasti.
+
 ### Alias Bash Creati
 
 File: `~/.bash_aliases`

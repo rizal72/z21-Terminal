@@ -599,6 +599,8 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
               value={editingValue}
               onChange={(e) => setEditingValue(e.target.value)}
               onKeyDown={(e) => {
+                // Enter that confirms an IME composition is not a submit
+                if (e.isComposing) return;
                 if (e.key === 'Enter') saveEdit();
               }}
               onBlur={() => {
@@ -747,6 +749,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                     setEditingVstart(false);
                   }}
                   onKeyDown={(e) => {
+                    if (e.isComposing) return;
                     if (e.key === 'Enter') {
                       const val = parseInt(editingVstartValue);
                       if (!isNaN(val) && val !== vstart) {
@@ -789,6 +792,7 @@ const SpeedTableViewer = ({ consistId, sessionId }) => {
                     setEditingVhigh(false);
                   }}
                   onKeyDown={(e) => {
+                    if (e.isComposing) return;
                     if (e.key === 'Enter') {
                       const val = parseInt(editingVhighValue);
                       if (!isNaN(val) && val !== vhigh) {

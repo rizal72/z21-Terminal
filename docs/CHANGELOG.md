@@ -5,6 +5,21 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
+## 2026-11-14 — Enter during IME composition
+
+### Frontend
+
+- **Enter doesn't commit while the IME is composing**: the three numeric inputs in
+  `SpeedTableViewer.jsx` (bar value, CV2 Vstart, CV5 Vhigh) return early on `e.isComposing`,
+  so the keystroke that confirms a composed character no longer writes a CV.
+
+### Docs
+
+- `WEB_DASHBOARD.md` records why the standard `scrollbar-color` / `scrollbar-width` are not
+  used: they replace the custom 8px bar with the macOS overlay one.
+
+---
+
 ## 2026-11-06 — Escape closes what is open
 
 ### Frontend
