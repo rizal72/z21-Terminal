@@ -1,8 +1,8 @@
 # Remote video: latency and plan
 
-**Status**: phase 1 implemented (latest-frame hub), not yet deployed. Phase 2
-planned. Measurements 2026-11-05, from an office network over Tailscale, backend
-on the gaming PC, frontend in Chrome.
+**Status**: phase 1 implemented (latest-frame hub) and deployed. Phase 2 planned.
+The measurements below record the problem phase 1 fixed; they are not the
+current state. The dated numbers live in the changelog entry of 2026-11-05.
 
 ## The problem
 
@@ -65,20 +65,18 @@ phase 1 it was 2 + (viewers - 1).
   because the browser does not reopen a dropped MJPEG connection by itself.
 - No manual switch when leaving or entering the house: nothing to configure.
 
-Measured on the implementer's Mac (camera reached over Tailscale, 2.1 fps
-available): 101 KB per frame at quality 65, against 195 KB at 80. At the
-measured 2.7 Mbit/s that is about 3 fps live, up from 0.4 fps with a growing
-lag. On the LAN the ceiling of 30 applies.
+Quality 65 keeps each frame small enough for a home uplink, where bandwidth
+bounds the rate; on the LAN the ceiling of 30 applies. The exact numbers are in
+the 2026-11-05 changelog entry.
 
-Acceptance tests, still to run from outside the house after deployment:
+Acceptance tests, passed from an external network:
 
-1. Panel open: fps and bitrate, and the RTT must stay close to the closed value
-   (0.46 s). If it climbs back to ~1 s the uplink is still saturated.
-2. End to end: send F0, timestamp the frames, measure when the brightness
-   changes. Target below 2 s.
+1. Panel open: fps and bitrate acceptable, and the RTT stays close to the closed
+   value; if it climbs back, the uplink is still saturated.
+2. End to end: the light change reaches the video within the 2 s target.
 3. The tracking log still shows 30 fps active / 1 idle; gates and delta-t work;
    the debug boxes are aligned with the image.
-4. Two viewers (Mac and phone): both live, neither slowing the other.
+4. Two viewers: both live, neither slowing the other.
 
 Deploy: backend only, `git pull` + `z21-restart` on the PC, no frontend rebuild.
 

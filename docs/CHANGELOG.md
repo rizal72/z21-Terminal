@@ -5,6 +5,16 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
+## 2026-11-25 — Remote video deployed
+
+### Docs
+
+- `REMOTE_VIDEO.md`: the status records phase 1 deployed, and the acceptance
+  tests as passed from an external network. The page now describes the current
+  state; the dated numbers stay in the 2026-11-05 entry below.
+
+---
+
 ## 2026-11-14 — Enter during IME composition
 
 ### Frontend
