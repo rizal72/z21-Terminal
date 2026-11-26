@@ -153,7 +153,7 @@ async def get_speed_table_data(consist_id: int) -> Dict[str, Any]:
     cursor.execute('''
         SELECT step, cv_last_modified
         FROM cv_modification_timestamps
-        WHERE loco_address = ?
+        WHERE loco_address = %s
     ''', (adjust_loco_address,))
     cv_timestamps = {row[0]: row[1] for row in cursor.fetchall()}
     conn.close()
@@ -302,16 +302,15 @@ async def write_speed_table_to_decoder(
             # First, read OLD values from database (previous_values JSON in locomotive_speed_table)
             cursor.execute('''
                 SELECT previous_values FROM locomotive_speed_table
-                WHERE loco_address = ?
+                WHERE loco_address = %s
             ''', (adjust_loco_address,))
             row = cursor.fetchone()
             old_values = {}
             if row and row[0]:
-                import json
                 try:
                     # previous_values stores the OLD values (before this write)
-                    old_values = {int(k): int(v) for k, v in json.loads(row[0]).items()}
-                except:
+                    old_values = {int(k): int(v) for k, v in row[0].items()}
+                except (AttributeError, TypeError, ValueError):
                     pass
 
             # Update timestamps ONLY for CVs that changed value
@@ -332,10 +331,11 @@ async def write_speed_table_to_decoder(
 
                 # Value changed or first write, update timestamp
                 cursor.execute('''
-                    UPDATE cv_modification_timestamps
-                    SET cv_last_modified = ?
-                    WHERE loco_address = ? AND step = ?
-                ''', (current_timestamp, adjust_loco_address, step))
+                    INSERT INTO cv_modification_timestamps (loco_address, step, cv_last_modified)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (loco_address, step)
+                    DO UPDATE SET cv_last_modified = EXCLUDED.cv_last_modified
+                ''', (adjust_loco_address, step, current_timestamp))
                 modified_count += 1
 
                 # Track change details for log

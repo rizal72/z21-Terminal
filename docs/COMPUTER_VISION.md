@@ -1043,7 +1043,7 @@ python track_consist_yolo.py
 
 **Decisione**: Adottato **YOLO custom training** (object detection ML) → ✅ **funzionante** (vedi sezione sotto)
 
-**Dettagli completi**: Vedi `docs/CHANGELOG_ARCHIVE.md` (4 approcci testati, problemi identificati, conclusioni)
+**Dettagli completi**: Vedi `docs/archive/CHANGELOG_ARCHIVE.md` (4 approcci testati, problemi identificati, conclusioni)
 
 ### Nuovo Approccio: YOLO Object Detection (decisione 2025-12-29)
 

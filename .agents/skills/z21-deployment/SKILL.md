@@ -116,45 +116,19 @@ ssh riccardo@gaming-pc "cd C:\z21-Terminal && z21-log"
 
 ---
 
-## Database Debugging (PC -> Mac)
+## Database (Postgres on the pi4)
 
-**ALWAYS copy database from PC to Mac before running SQL queries**
+The database is one, on the pi4. There is nothing to copy between machines, and
+`backend/data/data.db` is only the old SQLite file kept as a rollback.
 
-**Why**: PowerShell SSH sessions make complex SQL queries difficult (escaping issues, syntax errors)
-
-**Pattern**:
-```bash
-# Copy database from PC to Mac (overwrites backend/data/data.db)
-scp riccardo@gaming-pc:C:/z21-Terminal/backend/data/data.db backend/data/data.db
-
-# Now run queries locally on Mac
-sqlite3 backend/data/data.db "SELECT ..."
+```sh
+# read-only queries, from any machine on the tailnet
+psql "postgresql://z21:<password>@100.124.43.88:5432/z21" -c "SELECT ..."
 ```
 
-**Benefits**:
-- No escaping issues (native SQLite on Mac)
-- Mac DB stays up-to-date with PC production data
-- Faster query development (local REPL)
-- `backend/data/data.db` is gitignored (won't be committed)
-
-**When to use**: Any time you need to run SQL queries for debugging, testing, or analysis
-
-**Example workflow**:
-```bash
-# 1. Copy fresh DB from PC
-scp riccardo@gaming-pc:C:/z21-Terminal/backend/data/data.db backend/data/data.db
-
-# 2. Run queries locally
-sqlite3 backend/data/data.db "
-  SELECT COUNT(*) FROM events
-  WHERE event_type='delta_t'
-    AND json_extract(data, '\$.consist_id')=11
-"
-
-# 3. No need to commit (DB is gitignored)
-```
-
----
+The connection string lives in `backend/.env` (`DATABASE_URL`). Only one backend runs at
+a time: it holds an advisory lock, and a second one logs `Another host holds the writer
+lock` and does not write sessions. Details and backups: `docs/DATABASE_POSTGRES.md`.
 
 ## CRITICAL Rules (NON-NEGOTIABLE)
 
@@ -357,7 +331,7 @@ ssh riccardo@gaming-pc "cd C:\z21-Terminal && z21-deploy-dev"
 
 ## CHANGELOG Management Policy
 
-**Structure**: `docs/CHANGELOG.md` (active, last ~30 days) -> `docs/CHANGELOG_ARCHIVE.md` (history).
+**Structure**: `docs/CHANGELOG.md` (active, last ~30 days) -> `docs/archive/CHANGELOG_ARCHIVE.md` (history).
 
 **Strategy**:
 1. **Recent Changes (Last 30 Days)**: only in `docs/CHANGELOG.md`
@@ -366,15 +340,15 @@ ssh riccardo@gaming-pc "cd C:\z21-Terminal && z21-deploy-dev"
    - AGENTS.md stays slim and AI-readable: rules and pointers only, NO changelog entries
 
 2. **Technical Details**: always in dedicated docs
-   - Architecture -> docs/REFACTOR_PLAN.md, FRONTEND_REFACTOR_PLAN.md
+   - Architecture -> docs/archive/REFACTOR_PLAN.md, docs/archive/FRONTEND_REFACTOR_PLAN.md
    - Features -> docs/FEATURE_NAME.md (26+ specialized docs exist)
 
 3. **When to Archive**:
    - Quarterly (every 3 months)
-   - Move old entries from `docs/CHANGELOG.md` to the TOP of `docs/CHANGELOG_ARCHIVE.md` (reverse chronological)
+   - Move old entries from `docs/CHANGELOG.md` to the TOP of `docs/archive/CHANGELOG_ARCHIVE.md` (reverse chronological)
    - Commit: "docs: archive changelog (pre-YYYY-MM-DD)"
 
-**Why**: Keep `docs/CHANGELOG.md` focused on current work; AGENTS.md lean; history preserved in CHANGELOG_ARCHIVE.md.
+**Why**: Keep `docs/CHANGELOG.md` focused on current work; AGENTS.md lean; history preserved in docs/archive/CHANGELOG_ARCHIVE.md.
 
 ---
 
@@ -388,7 +362,7 @@ Key Points:
 - PowerShell aliases (z21-start, z21-deploy-dev, z21-deploy, z21-restart, z21-stop, z21-log)
 - Pre-deploy checklist (6 items)
 - Config files behavior (config.json vs config.local.json)
-- Database debugging pattern (PC -> Mac copy workflow)
+- Database: one Postgres on the pi4, no copy between machines
 - CHANGELOG management policy (active docs/CHANGELOG.md, quarterly archive)
 
 **All commands include `ssh riccardo@gaming-pc` and use aliases. Zero duplications.**

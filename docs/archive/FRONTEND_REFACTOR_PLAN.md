@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # Frontend Refactor Plan: AnalyticsPanel Modularization
 
 > **STATUS (2026-09-11): piano parzialmente eseguito, dati stanti.** Stato corrente in `docs/CODE_AUDIT_2026-09-11.md`

@@ -700,7 +700,11 @@ class Z21Manager:
                 consist_id = int(consist_id_str)
 
                 # Get operational state from database
-                consist_state_db = DataDB.get_consist_state(consist_id)
+                try:
+                    consist_state_db = DataDB.get_consist_state(consist_id)
+                except Exception as e:
+                    log('[WARN]', f"Database unavailable for consist {consist_id}: {e}")
+                    consist_state_db = None
                 if consist_state_db:
                     virtual_mode = consist_state_db['virtual_mode']
                     auto_compensation = consist_state_db['auto_compensation_enabled']
@@ -740,8 +744,11 @@ class Z21Manager:
                     auto_compensation = consist.get('auto_compensation_enabled', False)
 
                     # Write to database
-                    DataDB.set_virtual_mode(consist_id, virtual_mode)
-                    DataDB.set_auto_compensation(consist_id, auto_compensation)
+                    try:
+                        DataDB.set_virtual_mode(consist_id, virtual_mode)
+                        DataDB.set_auto_compensation(consist_id, auto_compensation)
+                    except Exception as e:
+                        log('[WARN]', f"Could not persist consist state: {e}")
 
             if self.debug_enabled:
                 saved_state = {k: {'virtual_mode': v.get('virtual_mode'), 'auto_compensation_enabled': v.get('auto_compensation_enabled')}
@@ -802,7 +809,10 @@ class Z21Manager:
                 total_elapsed = time.time() - start_time
                 log('[CV]', f"Total time: {total_elapsed:.2f}s")
                 # Save to database (Phase 2 DB refactoring)
-                DataDB.set_test_mode('testing')
+                try:
+                    DataDB.set_test_mode('testing')
+                except Exception as e:
+                    log('[WARN]', f"Could not persist test mode: {e}")
                 if failed_locos:
                     return True, 'testing', f"TEST MODE enabled - {success_count}/{len(addresses)} locomotives updated (failed: {', '.join(map(str, failed_locos))})"
                 return True, 'testing', f"TEST MODE enabled - CV testing values for {len(addresses)} locomotives"

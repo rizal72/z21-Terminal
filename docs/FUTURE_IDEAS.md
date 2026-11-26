@@ -28,10 +28,10 @@ The following features were in this document but have since been implemented:
 **Status**: Implemented in **Analytics Tab** (2026-01-14)
 - Real-time FPS chart with average FPS badge
 - Per-locomotive confidence display
-- Detection stats tracked in `data.db` (events table, event_type='yolo_performance')
+- Detection stats tracked in the database (events table, event_type='yolo_performance')
 
 ### Historical Session Database ✅
-**Status**: Implemented as **data.db** (2026-01-17)
+**Status**: Implemented in the events table (2026-01-17)
 - SQLite database with tables: sessions, events, locomotive_stats, locomotive_speed_table, consist_state
 - Event types: delta_t, speed_setting, loco_operating_time, yolo_performance
 - Auto-pruning not yet implemented (manual VACUUM for now)
@@ -360,7 +360,7 @@ These ideas are NOT in the roadmap. If any are needed in the future, consider:
    - Session Replay Mode (requires playback engine for stored events)
    - Consist lock mechanism (WebSocket + backend state)
    - Decoder health monitoring (periodic CV read)
-   - CSV/JSON export for sessions (data.db already structured)
+   - CSV/JSON export for sessions (the events table is already structured)
 
 3. **Large projects** (1-2 weeks):
    - Virtual stations & routes (complex route planner UI)

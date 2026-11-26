@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # Event Deletion Feature (YOLO False Positive Cleanup)
 
 **Status**: ✅ **IMPLEMENTED** (2026-01-23)

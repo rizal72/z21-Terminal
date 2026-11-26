@@ -10,7 +10,6 @@ Utilities for Speed Table Viewer feature:
 """
 
 import sys
-import sqlite3
 import json
 from pathlib import Path
 from typing import Dict, Optional, List
@@ -280,7 +279,7 @@ def read_cv_speed_table_from_db(loco_address: int) -> Optional[dict]:
                cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94,
                vstart, vhigh, decoder_type
         FROM locomotive_speed_table
-        WHERE loco_address = ?
+        WHERE loco_address = %s
     """, (loco_address,))
 
     row = cursor.fetchone()
@@ -333,7 +332,7 @@ def update_cv_speed_table_in_db(
                    cv77, cv78, cv79, cv80, cv81, cv82, cv83, cv84, cv85, cv86,
                    cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94
             FROM locomotive_speed_table
-            WHERE loco_address = ?
+            WHERE loco_address = %s
         """, (loco_address,))
 
         row = cursor.fetchone()
@@ -348,19 +347,33 @@ def update_cv_speed_table_in_db(
 
         # Insert or replace
         cursor.execute("""
-            INSERT OR REPLACE INTO locomotive_speed_table (
+            INSERT INTO locomotive_speed_table (
                 loco_address,
                 cv67, cv68, cv69, cv70, cv71, cv72, cv73, cv74, cv75, cv76,
                 cv77, cv78, cv79, cv80, cv81, cv82, cv83, cv84, cv85, cv86,
                 cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94,
                 previous_values, last_modified, source
             ) VALUES (
-                ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, CURRENT_TIMESTAMP, ?
+                %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s::jsonb, CURRENT_TIMESTAMP, %s
             )
+            ON CONFLICT (loco_address) DO UPDATE SET
+                cv67 = EXCLUDED.cv67, cv68 = EXCLUDED.cv68, cv69 = EXCLUDED.cv69,
+                cv70 = EXCLUDED.cv70, cv71 = EXCLUDED.cv71, cv72 = EXCLUDED.cv72,
+                cv73 = EXCLUDED.cv73, cv74 = EXCLUDED.cv74, cv75 = EXCLUDED.cv75,
+                cv76 = EXCLUDED.cv76, cv77 = EXCLUDED.cv77, cv78 = EXCLUDED.cv78,
+                cv79 = EXCLUDED.cv79, cv80 = EXCLUDED.cv80, cv81 = EXCLUDED.cv81,
+                cv82 = EXCLUDED.cv82, cv83 = EXCLUDED.cv83, cv84 = EXCLUDED.cv84,
+                cv85 = EXCLUDED.cv85, cv86 = EXCLUDED.cv86, cv87 = EXCLUDED.cv87,
+                cv88 = EXCLUDED.cv88, cv89 = EXCLUDED.cv89, cv90 = EXCLUDED.cv90,
+                cv91 = EXCLUDED.cv91, cv92 = EXCLUDED.cv92, cv93 = EXCLUDED.cv93,
+                cv94 = EXCLUDED.cv94,
+                previous_values = EXCLUDED.previous_values,
+                last_modified = CURRENT_TIMESTAMP,
+                source = EXCLUDED.source
         """, (loco_address, *new_values, previous_values, source))
 
         conn.commit()
@@ -391,7 +404,7 @@ def undo_cv_speed_table(loco_address: int) -> Optional[Dict[int, int]]:
     cursor.execute("""
         SELECT previous_values
         FROM locomotive_speed_table
-        WHERE loco_address = ?
+        WHERE loco_address = %s
     """, (loco_address,))
 
     row = cursor.fetchone()
@@ -401,7 +414,7 @@ def undo_cv_speed_table(loco_address: int) -> Optional[Dict[int, int]]:
         return None  # No undo available
 
     # Parse JSON
-    previous_values = json.loads(row[0])
+    previous_values = row[0]
 
     # Swap: current ↔ previous (so we can undo the undo)
     cursor.execute("""
@@ -409,29 +422,31 @@ def undo_cv_speed_table(loco_address: int) -> Optional[Dict[int, int]]:
                cv77, cv78, cv79, cv80, cv81, cv82, cv83, cv84, cv85, cv86,
                cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94
         FROM locomotive_speed_table
-        WHERE loco_address = ?
+        WHERE loco_address = %s
     """, (loco_address,))
 
     current_row = cursor.fetchone()
     current_values_json = json.dumps({67 + i: current_row[i] for i in range(28)})
 
-    # Update DB with previous values (current → previous snapshot)
-    new_values = [previous_values[str(67 + i)] for i in range(28)]
+    # Update DB with previous values (current → previous snapshot). JSON keeps keys as
+    # strings; callers expect ints, so convert once here.
+    previous_values = {int(k): v for k, v in previous_values.items()}
+    new_values = [previous_values[67 + i] for i in range(28)]
 
     cursor.execute("""
         UPDATE locomotive_speed_table
-        SET cv67=?, cv68=?, cv69=?, cv70=?, cv71=?, cv72=?, cv73=?, cv74=?, cv75=?, cv76=?,
-            cv77=?, cv78=?, cv79=?, cv80=?, cv81=?, cv82=?, cv83=?, cv84=?, cv85=?, cv86=?,
-            cv87=?, cv88=?, cv89=?, cv90=?, cv91=?, cv92=?, cv93=?, cv94=?,
-            previous_values=?, last_modified=CURRENT_TIMESTAMP, source='undo'
-        WHERE loco_address=?
+        SET cv67=%s, cv68=%s, cv69=%s, cv70=%s, cv71=%s, cv72=%s, cv73=%s, cv74=%s, cv75=%s, cv76=%s,
+            cv77=%s, cv78=%s, cv79=%s, cv80=%s, cv81=%s, cv82=%s, cv83=%s, cv84=%s, cv85=%s, cv86=%s,
+            cv87=%s, cv88=%s, cv89=%s, cv90=%s, cv91=%s, cv92=%s, cv93=%s, cv94=%s,
+            previous_values=%s::jsonb, last_modified=CURRENT_TIMESTAMP, source='undo'
+        WHERE loco_address=%s
     """, (*new_values, current_values_json, loco_address))
 
     # Reset cv_modification_timestamps to 0 (removes green border indicator)
     cursor.execute("""
         UPDATE cv_modification_timestamps
         SET cv_last_modified = 0
-        WHERE loco_address = ?
+        WHERE loco_address = %s
     """, (loco_address,))
 
     conn.commit()
@@ -459,8 +474,8 @@ def update_decoder_metadata_in_db(loco_address: int, vstart: Optional[int], vhig
 
     cursor.execute("""
         UPDATE locomotive_speed_table
-        SET vstart = ?, vhigh = ?, decoder_type = ?
-        WHERE loco_address = ?
+        SET vstart = %s, vhigh = %s, decoder_type = %s
+        WHERE loco_address = %s
     """, (vstart, vhigh, decoder_type, loco_address))
 
     conn.commit()

@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # Subagent Analysis Report: z21-Terminal Codebase
 
 **Generated**: 2026-02-07

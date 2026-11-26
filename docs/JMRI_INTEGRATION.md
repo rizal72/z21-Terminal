@@ -10,7 +10,7 @@ Per info essenziali, vedi `AGENTS.md`.
 
 ### ✅ Già Indipendente (v1.0.0)
 
-- **CV67-94 Speed Table**: Stored in `data.db` (locomotive_speed_table table), editable via web UI
+- **CV67-94 Speed Table**: Stored in the `z21` Postgres database (`locomotive_speed_table`), editable via web UI
 - **CV19 Consist Management**: Virtual/DCC Mode toggle writes CV19 automatically
 - **Locomotive Metadata**: `config.json` unified (name, decoder, color, cv_profiles)
 - **Consist Configuration**: `config.json` (lead_address, rear_address, virtual_mode)
@@ -20,10 +20,10 @@ Per info essenziali, vedi `AGENTS.md`.
 
 - **Creazione di una locomotiva nuova**: si fa in DecoderPro (indirizzo DCC,
   decoder, CV), poi `scripts/utils/import_single_locomotive.py` la porta in
-  `config.json` e in `data.db`. Non e' una lettura a runtime.
+  `config.json` e nel database. Non e' una lettura a runtime.
 - **Reimport CV67-94**: `POST /api/speed-table/reimport/{consist_id}` legge
   l'XML JMRI, quindi e' un'operazione da Mac; sul PC non trova il roster e
-  restituisce `None`.
+  risponde `404`, con il messaggio che spiega perche'.
 
 Le function labels F0-F28 stanno in `config.json`
 (`locomotives[address]['functions']`): non sono piu' lette dal roster.

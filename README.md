@@ -66,19 +66,34 @@
 
 - **Control Station**: Roco Z21 (White, Black, or Pro) connected to your network
 - **Network**: Z21 and the computer on the same network (or via VPN)
-- **Python** 3.8+ and **Node.js** 18+ (for frontend build)
+- **Python** 3.11+ and **Node.js** 18+
+- **PostgreSQL** 17: Docker (`deploy/docker-compose.yml`) or an instance you already run
 - **Optional**: JMRI (initial decoder setup), IP camera with RTSP support (for YOLO tracking), NVIDIA GPU with CUDA (for TensorRT acceleration)
 
 ---
 
 ## Installation / Quick Start
 
-1. Clone the repository
-2. Install Python dependencies: `pip install -r requirements.txt`
-3. Install frontend dependencies: `cd web && npm install`
-4. Configure `config.json` (and `config.local.json` for machine-specific credentials)
-5. Start the backend: `python backend/main.py`
-6. Start the frontend: `cd web && npm run dev` (development) or `npm run build` + serve via backend (production)
+1. Clone the repository and install the dependencies:
+   ```sh
+   pip install -r backend/requirements.txt
+   cd web && npm install && cd ..
+   ```
+2. Start the database, empty, and copy the connection string:
+   ```sh
+   cd deploy && docker compose up -d && cd ..
+   cp deploy/.env.example backend/.env
+   ```
+3. Configure `config.json`, and `config.local.json` for machine credentials.
+4. Build the frontend, then start the backend:
+   ```sh
+   cd web && npm run build && cd ..
+   python backend/main.py
+   ```
+
+The first install also pulls PyTorch, because the tracking stack needs it; expect a large download
+once. The tables are created at the first start. Using an existing Postgres instead of Docker: set
+`DATABASE_URL` in `backend/.env` and skip step 2, as described in `docs/DATABASE_POSTGRES.md`.
 
 Access the dashboard at:
 - **Local**: `http://localhost:5173` (dev) / `http://localhost:8000` (production)
@@ -99,8 +114,8 @@ Access the dashboard at:
                      ┌──────┴────────┐
                      │               │
                 ┌────▼─────┐   ┌─────▼──────┐
-                │ data.db  │   │ YOLO Daemon│
-                │ (SQLite) │   │ (Tracking) │
+                │ Postgres │   │ YOLO Daemon│
+                │  (z21)   │   │ (Tracking) │
                 └──────────┘   └────────────┘
 ```
 
@@ -145,6 +160,11 @@ z21-Terminal is **autonomous for daily operations**, but **JMRI is needed for in
 - **Daily operations** (z21-Terminal, no JMRI needed): functions, speed tables, consists, control, compensation
 
 ---
+
+## Documentation
+
+`docs/README.md` is the index: current documents by subject, and `docs/archive/` for what is kept as a
+record only.
 
 ## Notes
 

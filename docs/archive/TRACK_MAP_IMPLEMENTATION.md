@@ -1,3 +1,7 @@
+Historical, kept as a record. Not current.
+
+Postponed work, its own notes said not to commit it.
+
 # 🗺️ Track Occupancy Map - Implementation Status
 
 **Feature**: Real-time locomotive position visualization on SVG track map

@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # Database State Refactoring + Settings UI
 
 **Date**: 2025-01-17 → 2025-01-18

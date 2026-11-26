@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # Speed Table Database Migration + Config Refactoring
 
 **Status**: ✅ **IMPLEMENTED AND DEPLOYED** (v1.0.0)

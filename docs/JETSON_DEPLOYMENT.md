@@ -377,7 +377,7 @@ volumes:
 
 ### Altro
 - **[Chrome DevTools Optimization](./CHROME_DEVTOOLS_OPTIMIZATION.md)** - MCP server per testing frontend
-- **[Backend Architecture](./REFACTOR_PLAN.md)** - Modular architecture design
+- **[Backend Architecture](archive/REFACTOR_PLAN.md)** - Modular architecture design
 
 ---
 

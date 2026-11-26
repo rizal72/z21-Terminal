@@ -27,7 +27,7 @@ Drive them with their own UI panels, or with the `z21-terminal` CLI
 (`scripts/z21_controller.py`), which is quicker for single locos.
 
 Loco 6 has no YOLO class, so it can never be recognised; giving it one means
-retraining (`docs/JEV_INTEGRATION_ANALYSIS.md`, section 3).
+retraining (`docs/archive/JEV_INTEGRATION_ANALYSIS.md`, section 3).
 
 ## Consist 10 history
 

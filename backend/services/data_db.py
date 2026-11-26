@@ -10,25 +10,21 @@ Eliminates code duplication across endpoints.
 """
 
 from pathlib import Path
-import sqlite3
 import json
 import time
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
 from datetime import datetime
 from math_utils import js_round
-
-# Database path (relative to this service file)
-DB_PATH = Path(__file__).parent.parent / "data" / "data.db"
-
+from services import db
 
 class DataDB:
     """Centralized database access layer - analytics, speed tables, operational state"""
 
     @staticmethod
-    def get_connection() -> sqlite3.Connection:
+    def get_connection():
         """Get database connection"""
-        return sqlite3.connect(str(DB_PATH))
+        return db.get_connection()
 
     @staticmethod
     def get_latest_session() -> Optional[Dict]:
@@ -88,7 +84,7 @@ class DataDB:
                 INNER JOIN events e ON e.session_id = s.id
                 WHERE s.validated = 1
                   AND e.event_type = 'delta_t'
-                  AND json_extract(e.data, '$.consist_id') = ?
+                  AND (e.data->>'consist_id')::int = %s
             """
             params = [consist_id]
 
@@ -139,7 +135,7 @@ class DataDB:
 
         if session_id:
             cursor.execute(
-                "SELECT id, session_id, timestamp, data FROM events WHERE session_id = ? AND event_type = 'delta_t' ORDER BY timestamp",
+                "SELECT id, session_id, timestamp, data FROM events WHERE session_id = %s AND event_type = 'delta_t' ORDER BY timestamp",
                 (session_id,)
             )
         else:
@@ -149,7 +145,7 @@ class DataDB:
 
         events = []
         for row in cursor.fetchall():
-            data = json.loads(row[3])
+            data = row[3]
             events.append({
                 'id': row[0],
                 'session_id': row[1],
@@ -180,7 +176,7 @@ class DataDB:
 
         if session_id:
             cursor.execute(
-                "SELECT session_id, timestamp, data FROM events WHERE session_id = ? AND event_type = 'yolo_performance' ORDER BY timestamp",
+                "SELECT session_id, timestamp, data FROM events WHERE session_id = %s AND event_type = 'yolo_performance' ORDER BY timestamp",
                 (session_id,)
             )
         else:
@@ -190,7 +186,7 @@ class DataDB:
 
         events = []
         for row in cursor.fetchall():
-            data = json.loads(row[2])
+            data = row[2]
             events.append({
                 'session_id': row[0],
                 'timestamp': row[1],
@@ -218,7 +214,7 @@ class DataDB:
 
         if session_id:
             cursor.execute(
-                "SELECT session_id, timestamp, data FROM events WHERE session_id = ? AND event_type = 'loco_operating_time' ORDER BY timestamp",
+                "SELECT session_id, timestamp, data FROM events WHERE session_id = %s AND event_type = 'loco_operating_time' ORDER BY timestamp",
                 (session_id,)
             )
         else:
@@ -228,7 +224,7 @@ class DataDB:
 
         events = []
         for row in cursor.fetchall():
-            data = json.loads(row[2])
+            data = row[2]
             events.append({
                 'session_id': row[0],
                 'timestamp': row[1],
@@ -294,7 +290,7 @@ class DataDB:
         cursor.execute("SELECT data FROM events WHERE event_type = 'delta_t'")
         gate_crossings = defaultdict(int)
         for row in cursor.fetchall():
-            data = json.loads(row[0])
+            data = row[0]
             gate_crossings[data['consist_id']] += 1
 
         conn.close()
@@ -315,7 +311,7 @@ class DataDB:
         cursor = conn.cursor()
 
         # Get session metadata
-        cursor.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
+        cursor.execute("SELECT * FROM sessions WHERE id = %s", (session_id,))
         session_row = cursor.fetchone()
         if not session_row:
             conn.close()
@@ -331,13 +327,13 @@ class DataDB:
 
         # Get all delta_t events for this session
         cursor.execute(
-            "SELECT timestamp, data FROM events WHERE session_id = ? AND event_type = 'delta_t' ORDER BY timestamp",
+            "SELECT timestamp, data FROM events WHERE session_id = %s AND event_type = 'delta_t' ORDER BY timestamp",
             (session_id,)
         )
 
         events = []
         for row in cursor.fetchall():
-            data = json.loads(row[1])
+            data = row[1]
             events.append({
                 'timestamp': row[0],
                 'consist_id': data['consist_id'],
@@ -379,7 +375,7 @@ class DataDB:
             FROM sessions
             WHERE validated = 1
             ORDER BY start_time DESC
-            LIMIT ?
+            LIMIT %s
         """, (limit,))
 
         sessions = cursor.fetchall()
@@ -395,7 +391,7 @@ class DataDB:
             cursor.execute("""
                 SELECT data
                 FROM events
-                WHERE session_id = ? AND event_type = 'delta_t'
+                WHERE session_id = %s AND event_type = 'delta_t'
                 ORDER BY timestamp
             """, (session_id,))
 
@@ -414,7 +410,7 @@ class DataDB:
             })
 
             for (data_json,) in event_rows:
-                data = json.loads(data_json)
+                data = data_json
                 consist_id = data.get('consist_id')
                 delta_t = data.get('delta_t')
                 status = data.get('status')
@@ -531,14 +527,14 @@ class DataDB:
             SELECT timestamp, data
             FROM events
             WHERE event_type = 'speed_setting'
-            AND json_extract(data, '$.consist_id') = ?
+            AND (data->>'consist_id')::int = %s
             ORDER BY timestamp DESC
-            LIMIT ?
+            LIMIT %s
         """, (consist_id, limit))
 
         speed_events = []
         for row in cursor.fetchall():
-            data = json.loads(row[1])
+            data = row[1]
             speed_events.append({
                 'timestamp': row[0],
                 'speed_new': data['speed_new']
@@ -561,13 +557,13 @@ class DataDB:
             SELECT timestamp, data
             FROM events
             WHERE event_type = 'delta_t'
-            AND json_extract(data, '$.consist_id') = ?
+            AND (data->>'consist_id')::int = %s
             ORDER BY timestamp ASC
         """, (consist_id,))
 
         delta_t_events = []
         for row in cursor.fetchall():
-            data = json.loads(row[1])
+            data = row[1]
             delta_t_events.append({
                 'timestamp': row[0],
                 'delta_t': data['delta_t'],
@@ -710,7 +706,7 @@ class DataDB:
             cursor.execute('''
                 SELECT step, cv_last_modified
                 FROM cv_modification_timestamps
-                WHERE loco_address = ?
+                WHERE loco_address = %s
             ''', (adjust_loco_address,))
 
             for row in cursor.fetchall():
@@ -727,12 +723,12 @@ class DataDB:
         # Get all unique speeds with delta_t events (for debug panel - show ALL tested speeds)
         # Exclude speed 0 (stopped locomotives)
         cursor.execute('''
-            SELECT DISTINCT json_extract(data, '$.speed') as speed
+            SELECT DISTINCT (data->>'speed')::int as speed
             FROM events
             WHERE event_type = 'delta_t'
-              AND json_extract(data, '$.consist_id') = ?
-              AND json_extract(data, '$.speed') IS NOT NULL
-              AND json_extract(data, '$.speed') > 0
+              AND (data->>'consist_id')::int = %s
+              AND (data->>'speed')::int IS NOT NULL
+              AND (data->>'speed')::int > 0
         ''', (consist_id,))
 
         all_speeds = [int(row[0]) for row in cursor.fetchall()]
@@ -744,9 +740,9 @@ class DataDB:
                 SELECT COUNT(*)
                 FROM events
                 WHERE event_type = 'delta_t'
-                  AND json_extract(data, '$.consist_id') = ?
-                  AND json_extract(data, '$.speed') = ?
-                  AND json_extract(data, '$.status') IN ('CRITICAL', 'WARNING')
+                  AND (data->>'consist_id')::int = %s
+                  AND (data->>'speed')::int = %s
+                  AND (data->>'status') IN ('CRITICAL', 'WARNING')
             ''', (consist_id, speed))
             if cursor.fetchone()[0] > 0:
                 speeds_with_issues.append(speed)
@@ -780,15 +776,15 @@ class DataDB:
                 cursor.execute('''
                     SELECT
                         COUNT(*) as count,
-                        AVG(json_extract(data, '$.delta_t')) as mean_delta_t,
-                        SUM(CASE WHEN json_extract(data, '$.status') = 'CRITICAL' THEN 1 ELSE 0 END) as critical_count,
-                        SUM(CASE WHEN json_extract(data, '$.status') = 'WARNING' THEN 1 ELSE 0 END) as warning_count
+                        AVG((data->>'delta_t')::double precision) as mean_delta_t,
+                        SUM(CASE WHEN (data->>'status') = 'CRITICAL' THEN 1 ELSE 0 END) as critical_count,
+                        SUM(CASE WHEN (data->>'status') = 'WARNING' THEN 1 ELSE 0 END) as warning_count
                     FROM events
                     WHERE event_type = 'delta_t'
-                      AND json_extract(data, '$.consist_id') = ?
-                      AND session_id = ?
-                      AND json_extract(data, '$.speed') = ?
-                      AND timestamp > ?
+                      AND (data->>'consist_id')::int = %s
+                      AND session_id = %s
+                      AND (data->>'speed')::int = %s
+                      AND timestamp > %s
                 ''', (consist_id, current_session_id, speed, cv_modified_timestamp))
 
                 row = cursor.fetchone()
@@ -821,12 +817,12 @@ class DataDB:
                 SELECT DISTINCT session_id
                 FROM events
                 WHERE event_type = 'delta_t'
-                  AND json_extract(data, '$.consist_id') = ?
+                  AND (data->>'consist_id')::int = %s
             '''
             params_sessions = [consist_id]
 
             if current_session_id:
-                query_sessions += ' AND session_id != ?'
+                query_sessions += ' AND session_id != %s'
                 params_sessions.append(current_session_id)
 
             query_sessions += ' ORDER BY session_id DESC LIMIT 5'
@@ -835,19 +831,19 @@ class DataDB:
             historical_stats['session_ids'] = historical_sessions
 
             if historical_sessions:
-                placeholders = ','.join(['?'] * len(historical_sessions))
+                placeholders = ','.join(['%s'] * len(historical_sessions))
                 query_hist = f'''
                     SELECT
                         COUNT(*) as count,
-                        AVG(json_extract(data, '$.delta_t')) as mean_delta_t,
-                        SUM(CASE WHEN json_extract(data, '$.status') = 'CRITICAL' THEN 1 ELSE 0 END) as critical_count,
-                        SUM(CASE WHEN json_extract(data, '$.status') = 'WARNING' THEN 1 ELSE 0 END) as warning_count
+                        AVG((data->>'delta_t')::double precision) as mean_delta_t,
+                        SUM(CASE WHEN (data->>'status') = 'CRITICAL' THEN 1 ELSE 0 END) as critical_count,
+                        SUM(CASE WHEN (data->>'status') = 'WARNING' THEN 1 ELSE 0 END) as warning_count
                     FROM events
                     WHERE event_type = 'delta_t'
-                      AND json_extract(data, '$.consist_id') = ?
+                      AND (data->>'consist_id')::int = %s
                       AND session_id IN ({placeholders})
-                      AND json_extract(data, '$.speed') = ?
-                      AND timestamp > ?
+                      AND (data->>'speed')::int = %s
+                      AND timestamp > %s
                 '''
                 params_hist = [consist_id] + historical_sessions + [speed, cv_modified_timestamp]
 
@@ -909,9 +905,9 @@ class DataDB:
                 SELECT session_id
                 FROM events
                 WHERE event_type = 'delta_t'
-                  AND json_extract(data, '$.consist_id') = ?
-                  AND json_extract(data, '$.speed') = ?
-                  AND timestamp > ?
+                  AND (data->>'consist_id')::int = %s
+                  AND (data->>'speed')::int = %s
+                  AND timestamp > %s
                 ORDER BY timestamp DESC
                 LIMIT 1
             ''', (consist_id, speed, cv_modified_timestamp))
@@ -925,13 +921,13 @@ class DataDB:
             cursor.execute('''
                 SELECT
                     COUNT(*) as total_events,
-                    SUM(CASE WHEN json_extract(data, '$.status') = 'CRITICAL' THEN 1 ELSE 0 END) as critical_events
+                    SUM(CASE WHEN (data->>'status') = 'CRITICAL' THEN 1 ELSE 0 END) as critical_events
                 FROM events
                 WHERE event_type = 'delta_t'
-                  AND json_extract(data, '$.consist_id') = ?
-                  AND session_id = ?
-                  AND json_extract(data, '$.speed') = ?
-                  AND timestamp > ?
+                  AND (data->>'consist_id')::int = %s
+                  AND session_id = %s
+                  AND (data->>'speed')::int = %s
+                  AND timestamp > %s
             ''', (consist_id, last_session_id, speed, cv_modified_timestamp))
 
             last_session_stats = cursor.fetchone()
@@ -959,7 +955,7 @@ class DataDB:
         cursor.execute("""
             SELECT virtual_mode, auto_compensation_enabled
             FROM consist_state
-            WHERE consist_id = ?
+            WHERE consist_id = %s
         """, (consist_id,))
 
         row = cursor.fetchone()
@@ -985,7 +981,7 @@ class DataDB:
 
         cursor.execute("""
             INSERT INTO consist_state (consist_id, virtual_mode, auto_compensation_enabled)
-            VALUES (?, ?, (SELECT COALESCE(auto_compensation_enabled, 1) FROM consist_state WHERE consist_id = ?))
+            VALUES (%s, %s, (SELECT COALESCE(auto_compensation_enabled, true) FROM consist_state WHERE consist_id = %s))
             ON CONFLICT(consist_id) DO UPDATE SET
                 virtual_mode = excluded.virtual_mode,
                 last_updated = CURRENT_TIMESTAMP
@@ -1002,7 +998,7 @@ class DataDB:
 
         cursor.execute("""
             INSERT INTO consist_state (consist_id, virtual_mode, auto_compensation_enabled)
-            VALUES (?, (SELECT COALESCE(virtual_mode, 1) FROM consist_state WHERE consist_id = ?), ?)
+            VALUES (%s, (SELECT COALESCE(virtual_mode, true) FROM consist_state WHERE consist_id = %s), %s)
             ON CONFLICT(consist_id) DO UPDATE SET
                 auto_compensation_enabled = excluded.auto_compensation_enabled,
                 last_updated = CURRENT_TIMESTAMP
@@ -1036,7 +1032,7 @@ class DataDB:
 
         cursor.execute("""
             INSERT INTO system_state (key, value, last_updated)
-            VALUES ('test_mode', ?, CURRENT_TIMESTAMP)
+            VALUES ('test_mode', %s, CURRENT_TIMESTAMP)
             ON CONFLICT(key) DO UPDATE SET
                 value = excluded.value,
                 last_updated = CURRENT_TIMESTAMP
@@ -1046,39 +1042,3 @@ class DataDB:
         conn.close()
 
     # === Database Migration Methods ===
-
-    @staticmethod
-    def migrate_speed_table_decoder_support():
-        """
-        Add vstart, vhigh, decoder_type columns to locomotive_speed_table (idempotent).
-
-        This migration enables ESU mfx decoder support where:
-        - CV67 (step 1) = FIXED at 1 (not editable)
-        - CV94 (step 28) = FIXED at 255 (not editable)
-        - CV68-93 (step 2-27) = SCALED between CV2 (Vstart) and CV5 (Vhigh)
-
-        Migration is idempotent - safe to run multiple times.
-        """
-        conn = DataDB.get_connection()
-        cursor = conn.cursor()
-
-        # Check existing columns
-        cursor.execute("PRAGMA table_info(locomotive_speed_table)")
-        columns = [row[1] for row in cursor.fetchall()]
-
-        # Add missing columns (nullable for graceful degradation)
-        if 'vstart' not in columns:
-            cursor.execute("ALTER TABLE locomotive_speed_table ADD COLUMN vstart INTEGER")
-            print("[DB Migration] Added 'vstart' column to locomotive_speed_table")
-
-        if 'vhigh' not in columns:
-            cursor.execute("ALTER TABLE locomotive_speed_table ADD COLUMN vhigh INTEGER")
-            print("[DB Migration] Added 'vhigh' column to locomotive_speed_table")
-
-        if 'decoder_type' not in columns:
-            cursor.execute("ALTER TABLE locomotive_speed_table ADD COLUMN decoder_type TEXT")
-            print("[DB Migration] Added 'decoder_type' column to locomotive_speed_table")
-
-        conn.commit()
-        conn.close()
-        print("[DB Migration] Speed table decoder support migration completed")

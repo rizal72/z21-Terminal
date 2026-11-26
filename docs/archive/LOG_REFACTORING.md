@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # Log Refactoring - Design Definitivo
 
 **Data**: 2025-01-09

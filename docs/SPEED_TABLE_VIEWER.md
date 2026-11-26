@@ -9,7 +9,7 @@
 **✅ All Features Complete**:
 - ✅ Interactive CV editing with checkpoint interpolation
 - ✅ Direct CV write to decoder via Z21 POM
-- ✅ CV67-94 stored in database (data.db - locomotive_speed_table table)
+- ✅ CV67-94 stored in the database (`locomotive_speed_table`, Postgres on the pi4)
 - ✅ Undo support (1-level, restore previous values, green border persists)
 - ✅ Green border indicator for modified CVs (persistent, cv_last_modified > 0)
 - ~~Re-import from JMRI roster~~ (DEPRECATED 2026-01-22, hidden from UI)
@@ -99,7 +99,7 @@ Added 3 columns to `locomotive_speed_table`:
 - `vhigh` (INTEGER) - CV5 (Vhigh) for ESU, NULL for NMRA
 - `decoder_type` (TEXT) - 'esu_mfx' or 'nmra_standard'
 
-**Migration**: ONE-SHOT script `scripts/migrate_decoder_metadata.py` reads from JMRI roster (Mac only), then database copied to PC.
+**Migration**: these columns are part of the schema; a JMRI roster import (`scripts/utils/import_single_locomotive.py`) fills them through the same helpers the web UI uses.
 
 ### Frontend Changes (SpeedTableViewer.jsx)
 
@@ -293,16 +293,10 @@ for cv_index in range(67, 95):
 - Step 1 and 28 were editable (should be grey/read-only for ESU)
 - API returned `"decoder_type": null` → frontend couldn't apply ESU rules
 
-**Solution** (manual migration):
+**Solution** (reimport from the roster, no database copying):
 ```bash
-# 1. Copy DB from PC to Mac
-scp user@hostname:C:/z21-Terminal/backend/data/data.db ~/Documents/projects/z21-Terminal/backend/data/data.db
-
-# 2. Run migration script (Mac only, requires JMRI roster)
-python scripts/migrate_decoder_metadata.py
-
-# 3. Copy DB from Mac to PC
-scp ~/Documents/projects/z21-Terminal/backend/data/data.db user@hostname:C:/z21-Terminal/backend/data/data.db
+# Requires roster access (a Mac with JMRI installed)
+python scripts/utils/import_single_locomotive.py <address>
 ```
 
 **Migration Results**:
@@ -663,7 +657,7 @@ Visual JMRI-style speed table viewer (CV67-94) with interactive editing, direct 
 
 - ~~**Re-import** (DEPRECATED - Hidden from UI as of 2026-01-22)~~
   - **Reason**: JMRI used ONLY for initial new locomotive setup
-  - **Alternative**: Use `scripts/import_single_locomotive.py` for new locomotives
+  - **Alternative**: Use `scripts/utils/import_single_locomotive.py` for new locomotives
   - Backend code preserved but button removed from UI
   - Daily operations never require JMRI interaction
 
@@ -681,17 +675,17 @@ backend/
 ├── services/
 │   ├── speed_table_helpers.py     # CV DB operations + calculations
 │   ├── config_helpers.py          # Backward compatible config loaders
-│   └── analytics_db.py            # Query CRITICAL events + mean Δt
+│   └── data_db.py                 # Query CRITICAL events + mean Δt
 └── scripts/utils/
     ├── cv_operations/
     │   └── read_cv_from_roster.py # JMRI roster XML parser (fallback)
-    └── import_speed_tables_from_jmri.py  # One-time import script
+    └── import_single_locomotive.py  # Roster import (the old one-time script is gone)
 ```
 
 **Key Functions** (speed_table_helpers.py):
 
 1. **`read_cv_speed_table_from_db(loco_address)`** - Read CV67-94 from database (primary)
-   - Queries `locomotive_speed_table` table in data.db
+   - Queries the `locomotive_speed_table` table
    - Returns: `{67: 10, 68: 15, ..., 94: 255}` or `None` if not found
 
 2. **`read_cv_speed_table(loco_address)`** - Read CV67-94 from JMRI roster XML (fallback)
@@ -738,7 +732,7 @@ cv_timestamps = {row[0]: row[1] for row in cursor.fetchall()}
 # Returns: {1: 1737578400.0, 2: 0, 3: 1737492738.25, ..., 28: 0}
 ```
 
-**Frontend Logic** (`web/src/components/SpeedTableViewer.jsx`):
+**Frontend Logic** (`web/src/components/charts/SpeedTableViewer.jsx`):
 ```javascript
 // For each bar (step 1-28):
 const cvTimestamp = cvTimestamps[step] || 0;
@@ -786,7 +780,7 @@ AnalyticsPanel (parent)
 SpeedTableViewer
   ↓ fetch /api/speed-table/{consistId}
 Backend Router
-  ↓ queries analytics_db + roster
+  ↓ queries data_db + roster
 Returns:
   - cv_values (CV67-94 current values)
   - critical_events (speed → count)
@@ -893,8 +887,8 @@ Returns:
   "success": true,
   "adjust_loco_address": 7,
   "cvs_written": 28,
-  "cvs_failed": [],
-  "total_time": "2.81s"
+  "failed_cvs": [],
+  "total_time": 2.81
 }
 ```
 
@@ -904,8 +898,8 @@ Returns:
   "success": false,
   "adjust_loco_address": 7,
   "cvs_written": 26,
-  "cvs_failed": [86, 89],
-  "total_time": "2.95s"
+  "failed_cvs": [86, 89],
+  "total_time": 2.95
 }
 ```
 
@@ -934,8 +928,8 @@ Returns:
     "94": 255
   },
   "cvs_written": 28,
-  "cvs_failed": [],
-  "total_time": "2.82s"
+  "failed_cvs": [],
+  "total_time": 2.82
 }
 ```
 

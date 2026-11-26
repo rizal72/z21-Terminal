@@ -404,7 +404,7 @@ return reportsData.sessions.filter(session =>
 - `docs/WEB_DASHBOARD.md` - Web stack, features, workflow
 - `docs/COMPUTER_VISION.md` - YOLO tracking, gate detection
 - `docs/CONSIST_MAPPING.md` - Lead/Rear → Reference/Adjust logic
-- `docs/CONFIG_REFACTOR.md` - Config.json structure refactoring
+- `docs/archive/CONFIG_REFACTOR.md` - Config.json structure refactoring
 - `docs/ANALYTICS.md` - Analytics Dashboard (Current/Overview modes)
 - **`docs/REPORTS_TAB.md`** - This file (Reports tab specifics)
 

@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # Jev integration analysis
 
 > Analysis only — nothing was applied, installed or changed. Written 2026-09-21.

@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # Code Audit - 2026-09-11 (pi-lens full scan)
 
 **Versione auditata**: v1.0.0

@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # PC Docker Deployment - z21-Terminal
 
 **Version**: 1.0.0

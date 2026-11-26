@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # Changelog Archive (2025-12-16 → 2026-01-27)
 
 Archived changelog entries and failed experiments documentation.

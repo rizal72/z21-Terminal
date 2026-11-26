@@ -164,7 +164,7 @@ setSettings({
 
 - **[SPEED_TABLE_VIEWER.md](SPEED_TABLE_VIEWER.md)** - Speed table CV67-94 editor
 - **[JMRI_INTEGRATION.md](JMRI_INTEGRATION.md)** - JMRI independence roadmap
-- **[SETTINGS_UI_DESIGN.md](SETTINGS_UI_DESIGN.md)** - Settings modal structure
+- **[SETTINGS_UI_DESIGN.md](archive/SETTINGS_UI_DESIGN.md)** - Settings modal structure
 - **[FUTURE_IDEAS.md](FUTURE_IDEAS.md)** - Original feature spec (Quick Win section)
 
 ---

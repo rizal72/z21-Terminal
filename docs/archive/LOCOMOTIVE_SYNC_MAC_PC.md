@@ -1,3 +1,8 @@
+Historical, kept as a record. Not current.
+
+The problem this proposes to solve, a database present on one machine only, is gone:
+there is one database on the pi4. Kept for the reasoning, not for the steps.
+
 # Locomotive Synchronization: Mac ↔ PC
 
 **Status**: 📋 DOCUMENTED - Not Yet Implemented

@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:17
+    container_name: z21-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: z21
+      POSTGRES_PASSWORD: z21
+      POSTGRES_DB: z21
+    # The backend runs on the same machine, so the port stays on loopback.
+    # Change the password here if this machine is shared.
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - z21-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U z21 -d z21"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  z21-pgdata:

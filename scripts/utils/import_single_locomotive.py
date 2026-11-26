@@ -25,7 +25,6 @@ Safety:
 """
 
 import sys
-import sqlite3
 import json
 import shutil
 import argparse
@@ -42,7 +41,6 @@ from read_cv_from_roster import load_all_locomotives
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config.json"
-DB_PATH = PROJECT_ROOT / "backend" / "data" / "data.db"
 
 # Default colors for locomotives (fallback if not in config)
 DEFAULT_COLORS = {
@@ -158,8 +156,11 @@ def write_speed_table_to_db(loco):
     sys.path.insert(0, str(BACKEND_DIR))
     from services.decoder_helpers import DECODER_TYPE_MAP, enforce_esu_fixed_values
 
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    # Writes go through the same helpers the web UI uses (Postgres, one schema).
+    from services.speed_table_helpers import (
+        update_cv_speed_table_in_db,
+        update_decoder_metadata_in_db,
+    )
 
     # Extract CV67-94 from loco.cv dict
     cv_values = {}
@@ -188,45 +189,10 @@ def write_speed_table_to_db(loco):
         cv_values = enforce_esu_fixed_values(cv_values, decoder_type)
         print(f"   ESU decoder: enforced CV67=1, CV94=255")
 
-    # Get previous values for undo snapshot
-    cursor.execute("""
-        SELECT cv67, cv68, cv69, cv70, cv71, cv72, cv73, cv74, cv75, cv76,
-               cv77, cv78, cv79, cv80, cv81, cv82, cv83, cv84, cv85, cv86,
-               cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94
-        FROM locomotive_speed_table
-        WHERE loco_address = ?
-    """, (loco.address,))
-
-    existing_row = cursor.fetchone()
-    previous_values = None
-    if existing_row:
-        # Save current as previous (undo snapshot)
-        previous_values = json.dumps({67 + i: existing_row[i] for i in range(28) if existing_row[i] is not None})
-
-    # Prepare CV67-94 values list (in order)
-    cv_values_list = [cv_values.get(67 + i) for i in range(28)]
-
-    # Insert or replace with decoder metadata
-    cursor.execute("""
-        INSERT OR REPLACE INTO locomotive_speed_table (
-            loco_address,
-            cv67, cv68, cv69, cv70, cv71, cv72, cv73, cv74, cv75, cv76,
-            cv77, cv78, cv79, cv80, cv81, cv82, cv83, cv84, cv85, cv86,
-            cv87, cv88, cv89, cv90, cv91, cv92, cv93, cv94,
-            vstart, vhigh, decoder_type,
-            previous_values, last_modified, source
-        ) VALUES (
-            ?,
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?,
-            ?, CURRENT_TIMESTAMP, 'jmri_import'
-        )
-    """, (loco.address, *cv_values_list, vstart, vhigh, decoder_type, previous_values))
-
-    conn.commit()
-    conn.close()
+    if not update_cv_speed_table_in_db(loco.address, cv_values, source='jmri_import'):
+        print(f"[ERROR] Speed table write failed for loco {loco.address}")
+        return
+    update_decoder_metadata_in_db(loco.address, vstart, vhigh, decoder_type)
 
     print(f"[OK] Speed table CV67-94 + decoder metadata written to database for loco {loco.address}")
 

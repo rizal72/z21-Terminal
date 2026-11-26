@@ -1,7 +1,37 @@
 # Changelog
 
 Active changelog for recent changes. Entries older than ~30 days are moved to
-[CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
+[archive/CHANGELOG_ARCHIVE.md](archive/CHANGELOG_ARCHIVE.md).
+
+---
+
+## 2026-11-26 — Database moved to Postgres on the pi4
+
+### Backend
+
+- One Postgres 17 database replaces the per-host SQLite file: Mac and PC connect to the same
+  instance and the manual copy between machines is gone. `events.data` and `previous_values`
+  are `jsonb`, `events.id` is an identity column and keeps its numbers.
+- The writer takes an advisory lock at startup; a second backend serves reads and does not
+  create, close or delete sessions.
+- An unreachable database no longer costs events: the logger keeps up to 1000 queued and
+  retries every 10 s, with a 2 s connect timeout, and train control does not depend on it.
+- `psycopg[binary]` added; the URL is read from `backend/.env` by `services/db.py`.
+- `scripts/utils/import_single_locomotive.py` writes through the same helpers as the web UI.
+
+### Deployment
+
+- `deploy/docker-compose.yml` and `deploy/.env.example`: Postgres 17 on loopback, for a
+  single-machine install.
+- Backups: `scripts/db/pg-dump-if-changed.sh`, checked every 5 minutes, dumps only when the
+  data has been quiet for 15 minutes, five archives on the USB disk, restore tested.
+
+### Docs
+
+- `DATABASE_POSTGRES.md` added; `DATABASE_SCHEMA.md` rewritten for PostgreSQL; README quick
+  start and architecture diagram updated.
+- `docs/archive/` added for executed plans, refactors, migrations and audits, each with a
+  first line saying it is a record; `docs/README.md` is the index.
 
 ---
 
@@ -121,7 +151,7 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
   the UI (`ConsistController.jsx:405`), while the tracker skips the consist
   anyway (loco 6 has no YOLO class, `yolo_tracker.py:325`).
 - **Record**: `notes` in `config.json`, the new `docs/CONSISTS.md` and a dated
-  block in `docs/JEV_INTEGRATION_ANALYSIS.md` now say how to drive 5 and 6
+  block in `docs/archive/JEV_INTEGRATION_ANALYSIS.md` now say how to drive 5 and 6
   individually (UI panels or the `z21-terminal` CLI) and how to restore the
   original 1 + 5 mapping when loco 1 returns.
 - **No data change**: speed tables for locos 5 and 6 already exist on both
@@ -178,7 +208,7 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 - Subagent `opencode-go/glm-5.3` (thinking high), read-only, on the 2 fix commits: **no P1**.
   P2.1 (defusedxml on PC venv) resolved at deploy; P3 decisions documented in
-  `docs/CODE_AUDIT_2026-09-11.md` (guards kept, `cast(Any)` kept).
+  `docs/archive/CODE_AUDIT_2026-09-11.md` (guards kept, `cast(Any)` kept).
 
 ### Verification
 
@@ -192,7 +222,7 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ### Docs
 
-- **New `docs/CODE_AUDIT_2026-09-11.md`**: single source of truth for code quality, replacing
+- **New `docs/archive/CODE_AUDIT_2026-09-11.md`**: single source of truth for code quality, replacing
   `docs/PYRIGHT_ANALYSIS.md` (absorbed and removed, content consolidated in section A).
 - Confirms the January 2026 pyright backlog (26 deferred errors) is 100% still open,
   verified against current code (video_feed `-> str`, LTTB guard absent, vstart/vhigh unbound).

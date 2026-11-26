@@ -24,6 +24,7 @@ from video_feed import generate_video_frames
 from config_loader import load_config, save_config, get_config_path
 from log_colors import log, colorize_status, enable_auto_coloring, STATUS_YELLOW, RESET
 from services.data_db import DataDB
+from services import db
 from services.broadcast import (
     init_broadcast_service,
     update_z21_status,
@@ -184,6 +185,18 @@ async def lifespan(app: FastAPI):
     logging.getLogger("uvicorn.access").addFilter(TelemetryFilter())
 
     log('[INIT]', f"z21-Terminal Backend Starting...")
+
+    # Database: create/extend the schema, then take the writer lock. A second
+    # backend on the other host serves reads and never touches sessions.
+    try:
+        db.init_schema()
+        if db.acquire_writer_lock():
+            log('[INIT]', f"Database ready (writer) at {db.describe()}")
+        else:
+            log('[WARN]', "Another host holds the writer lock: this backend will not log analytics")
+    except Exception as e:
+        log('[ERROR]', f"Database unavailable: {e}")
+        log('[ERROR]', "Tracking continues; analytics will fail until the database is reachable (docs/DATABASE_POSTGRES.md)")
 
     # Load debug mode configuration FIRST
     debug_enabled = ConfigManager.get_debug_enabled()

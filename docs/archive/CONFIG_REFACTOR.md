@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # config.json Structure Refactor
 
 **Date**: 2025-01-03

@@ -244,4 +244,4 @@ tail -f backend/z21-terminal.log
 
 - [Chrome DevTools Optimization](../../docs/CHROME_DEVTOOLS_OPTIMIZATION.md)
 - [Computer Vision - TensorRT](../../docs/TENSORRT_OPTIMIZATION.md)
-- [Backend Architecture](../../docs/REFACTOR_PLAN.md)
+- [Backend Architecture](../../docs/archive/REFACTOR_PLAN.md)

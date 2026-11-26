@@ -27,6 +27,7 @@ from config_loader import load_config
 from tracking.yolo_tracker import YOLOTracker
 from tracking.rtsp_handler import load_camera_config, setup_rtsp_stream, reconnect_rtsp_stream
 from analytics_logger import AnalyticsLogger
+from services import db
 from log_colors import log
 import dependencies
 
@@ -463,24 +464,21 @@ class TrackingDaemon:
             # Use absolute path to match endpoint expectations
             db_path = project_root / 'backend' / 'data' / 'data.db'
 
-            # Cleanup zombie sessions from previous crashes/restarts (BEFORE creating new session)
-            try:
-                import sqlite3
-                conn = sqlite3.connect(str(db_path))
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM events WHERE session_id IN (SELECT id FROM sessions WHERE validated = 0)")
-                cursor.execute("DELETE FROM sessions WHERE validated = 0")
-                deleted = cursor.rowcount
-                conn.commit()
-                conn.close()
-                if deleted > 0:
-                    log('[ANALYTICS]', f"Cleaned up {deleted} zombie sessions from previous runs")
-            except Exception as e:
-                log('[WARN]', f"Zombie cleanup failed: {e}")
+            # Cleanup zombie sessions from previous crashes/restarts (BEFORE creating new session).
+            # Only the writer may do it: events cascade from sessions, so a passive host running
+            # this would delete the active session of the host that is actually recording.
+            if db.is_writer():
+                try:
+                    with db.connection() as conn:
+                        deleted = conn.execute("DELETE FROM sessions WHERE validated = 0").rowcount
+                    if deleted > 0:
+                        log('[ANALYTICS]', f"Cleaned up {deleted} zombie sessions from previous runs")
+                except Exception as e:
+                    log('[WARN]', f"Zombie cleanup failed: {e}")
 
             self.analytics_logger = AnalyticsLogger(db_path=str(db_path), idle_timeout=idle_timeout)
             self.analytics_flush_task = asyncio.create_task(self.analytics_logger.start_flush_loop())
-            log('[ANALYTICS]', f"Analytics logging enabled (DB: {self.analytics_logger.db_path})")
+            log('[ANALYTICS]', f"Analytics logging enabled (Postgres, session {self.analytics_logger.session_id})")
 
             # Make analytics_logger globally accessible for speed_setting event logging
             dependencies.set_analytics_logger(self.analytics_logger)

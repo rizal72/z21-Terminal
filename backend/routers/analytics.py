@@ -75,7 +75,7 @@ async def delete_event(event_id: int):
 
     # Verify event exists and is delta_t
     cursor.execute('''
-        SELECT event_type, session_id FROM events WHERE id = ?
+        SELECT event_type, session_id FROM events WHERE id = %s
     ''', (event_id,))
 
     row = cursor.fetchone()
@@ -93,19 +93,19 @@ async def delete_event(event_id: int):
         )
 
     # Delete event
-    cursor.execute('DELETE FROM events WHERE id = ?', (event_id,))
+    cursor.execute('DELETE FROM events WHERE id = %s', (event_id,))
 
     # Update session event_count (-1)
     cursor.execute('''
         UPDATE sessions
         SET event_count = event_count - 1
-        WHERE id = ?
+        WHERE id = %s
     ''', (session_id,))
 
     # Check if session still has delta_t events (for validation)
     cursor.execute('''
         SELECT COUNT(*) FROM events
-        WHERE session_id = ? AND event_type = 'delta_t'
+        WHERE session_id = %s AND event_type = 'delta_t'
     ''', (session_id,))
 
     remaining_delta_t = cursor.fetchone()[0]
@@ -115,7 +115,7 @@ async def delete_event(event_id: int):
         cursor.execute('''
             UPDATE sessions
             SET validated = 0
-            WHERE id = ?
+            WHERE id = %s
         ''', (session_id,))
         log('[ANALYTICS]', f"Session {session_id} invalidated (no delta_t events after deletion)")
 

@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # Settings UI - Unified Configuration Design
 
 **Status**: ✅ **IMPLEMENTED** (Settings UI with 8 tabs + Auto-Reload)

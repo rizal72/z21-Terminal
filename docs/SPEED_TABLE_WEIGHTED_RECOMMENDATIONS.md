@@ -1,6 +1,7 @@
 # Speed Table Weighted Recommendations
 
-**Status**: 🚧 In Development (2026-01-20)
+**Status**: implemented (2026-01-20); the algorithm lives in `backend/services/data_db.py`
+(`get_critical_events_by_speed`, `get_speed_correlation`)
 **Related**: SPEED_TABLE_VIEWER.md, DATABASE_SCHEMA.md, ANALYTICS.md
 
 ---

@@ -1,3 +1,5 @@
+Historical, kept as a record. Not current.
+
 # Refactor Plan - Code Modularization
 
 > **STATUS (2026-09-11): piano ESEGUITO e chiuso.** `backend/main.py` modularizzato (2.340 → 781 righe;
