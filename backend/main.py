@@ -21,7 +21,7 @@ from roster_loader import load_consist_with_functions, load_all_locomotives, loa
 from tracking_manager import TrackingManager
 import video_feed as video_feed_module
 from video_feed import generate_video_frames
-from config_loader import load_config, save_config, get_config_path
+from config_loader import load_config, save_config, get_config_path, warm_config_cache
 from log_colors import log, colorize_status, enable_auto_coloring, STATUS_YELLOW, RESET
 from services.data_db import DataDB
 from services import db
@@ -60,8 +60,8 @@ connected_clients: List[WebSocket] = []
 consist_data: Dict[int, Dict[str, Any]] = {}
 locomotive_data: Dict[int, Dict[str, Any]] = {}
 controllers_config: List[Dict[str, Any]] = []  # Shared controller configuration
-timing_thresholds: Dict[str, float] = DEFAULT_TIMING_THRESHOLDS.copy()  # Dynamic thresholds from config.json
-reference_locos: Dict[str, Dict[str, int]] = {}  # Reference loco strategy from config.json
+timing_thresholds: Dict[str, float] = DEFAULT_TIMING_THRESHOLDS.copy()  # Dynamic thresholds from the stored configuration
+reference_locos: Dict[str, Dict[str, int]] = {}  # Reference loco strategy from the stored configuration
 tracked_consist_ids: List[int] = []  # Consist IDs with gate tracking configured (from tracking_assignments)
 loco_start_times: Dict[int, float] = {}  # Track locomotive movement start times (address -> timestamp)
 
@@ -71,7 +71,7 @@ health_check_task = None
 last_track_power_state = True
 z21_online = False
 z21_consecutive_failures = 0  # Track consecutive health check failures (requires 2 before marking offline)
-debug_enabled = False  # Debug mode flag (loaded from config.json)
+debug_enabled = False  # Debug mode flag (loaded from the stored configuration)
 
 
 async def poll_track_power():
@@ -190,6 +190,9 @@ async def lifespan(app: FastAPI):
     # backend on the other host serves reads and never touches sessions.
     try:
         db.init_schema()
+        # The config lives in the database: seed it from config.seed.json on an empty one,
+        # then serve it from the cache (the first reads happened at import, from the file).
+        warm_config_cache()
         if db.acquire_writer_lock():
             log('[INIT]', f"Database ready (writer) at {db.describe()}")
         else:
@@ -207,17 +210,17 @@ async def lifespan(app: FastAPI):
     else:
         log('[INIT]', f"Debug mode: {STATUS_YELLOW}DISABLED{RESET} (only connections, dT updates, and speed corrections)")
 
-    # Load timing thresholds from config.json
-    log('[INIT]', f"Loading timing thresholds from config.json...")
+    # Load timing thresholds from the stored configuration
+    log('[INIT]', f"Loading timing thresholds from the stored configuration...")
     try:
         timing_thresholds = ConfigManager.get_timing_thresholds()
         if debug_enabled:
             log('[INIT]', f"Timing thresholds: WARNING >= {timing_thresholds['warning']}s, CRITICAL >= {timing_thresholds['critical']}s")
     except FileNotFoundError:
-        log('[WARN]', f"config.json not found, using default thresholds (WARNING>={DEFAULT_TIMING_THRESHOLDS['warning']}s, CRITICAL>={DEFAULT_TIMING_THRESHOLDS['critical']}s)")
+        log('[WARN]', f"config.seed.json not found, using default thresholds (WARNING>={DEFAULT_TIMING_THRESHOLDS['warning']}s, CRITICAL>={DEFAULT_TIMING_THRESHOLDS['critical']}s)")
         timing_thresholds = DEFAULT_TIMING_THRESHOLDS.copy()
     except Exception as e:
-        log('[WARN]', f"Error loading config.json: {e}, using defaults")
+        log('[WARN]', f"Error loading the stored configuration: {e}, using defaults")
         timing_thresholds = DEFAULT_TIMING_THRESHOLDS.copy()
 
     # Load reference loco configuration (from consists)
@@ -243,7 +246,7 @@ async def lifespan(app: FastAPI):
         tracked_consist_ids = []
 
     # Load consist configuration
-    # Priority: config.json consists → JMRI (bootstrap only)
+    # Priority: stored configuration consists → JMRI (bootstrap only)
     try:
         config = load_config()
         consists = config.get('consists', {})
@@ -257,8 +260,8 @@ async def lifespan(app: FastAPI):
         z21_port = 21105
 
     if consists:
-        # Load from config.json (source of truth)
-        log('[INIT]', f"Loading consists from config.json (source of truth)...")
+        # Load from the stored configuration (source of truth)
+        log('[INIT]', f"Loading consists from the stored configuration (source of truth)...")
         consist_data = load_consists_from_config(CONFIG_PATH)
         if debug_enabled and consist_data:
             for addr, data in consist_data.items():
@@ -267,7 +270,7 @@ async def lifespan(app: FastAPI):
                     names = ' + '.join([loco['name'] for loco in locomotives])
                     log('[INIT]', f"Consist {addr}: {names} ({len(data['functions'])} functions)")
     else:
-        # Bootstrap from JMRI (one-time only, then save to config.json)
+        # Bootstrap from JMRI (one-time only, then save to the stored configuration)
         log('[INIT]', f"Bootstrapping consists from JMRI (first run)...")
         consist_data = load_consist_with_functions()
 
@@ -283,8 +286,8 @@ async def lifespan(app: FastAPI):
                     else:
                         log('[INIT]', f"Consist {addr}: (empty) ({len(data['functions'])} functions)")
 
-            # Save to config.json for future use
-            log('[INIT]', f"Saving consists to config.json for future use...")
+            # Save to the stored configuration for future use
+            log('[INIT]', f"Saving consists to the stored configuration for future use...")
             # Reload config to ensure we have latest version
             try:
                 config = load_config()
@@ -309,10 +312,10 @@ async def lifespan(app: FastAPI):
 
             # Save updated config
             save_config(config)
-            log('[INIT]', f"Saved {len(consist_data)} consists to config.json")
+            log('[INIT]', f"Saved {len(consist_data)} consists to the stored configuration")
 
-    # Load all locomotives from config.json (JMRI fallback)
-    log('[INIT]', f"Loading all locomotives from config.json...")
+    # Load all locomotives from the stored configuration (JMRI fallback)
+    log('[INIT]', f"Loading all locomotives from the stored configuration...")
     locomotive_data = load_all_locomotives_from_config()
 
     if not locomotive_data:
@@ -500,7 +503,7 @@ app.include_router(camera.router)
 
 
 async def reload_roster_data():
-    """Reload roster and consists from config.json (and locomotives from JMRI)"""
+    """Reload roster and consists from the stored configuration (and locomotives from JMRI)"""
     global consist_data, locomotive_data
 
     log('[INIT]', f"Reloading roster...")
@@ -512,24 +515,24 @@ async def reload_roster_data():
         log('[WARN]', f"Error loading config: {e}")
         return False
 
-    # Load consists from config.json (source of truth)
+    # Load consists from the stored configuration (source of truth)
     consists = config.get('consists', {})
 
     if consists:
-        log('[INIT]', f"Loading consists from config.json...")
+        log('[INIT]', f"Loading consists from the stored configuration...")
         consist_data.clear()
         consist_data.update(load_consists_from_config(CONFIG_PATH))
         if debug_enabled and consist_data:
-            log('[INIT]', f"Loaded {len(consist_data)} consists from config.json")
+            log('[INIT]', f"Loaded {len(consist_data)} consists from the stored configuration")
     else:
-        log('[WARN]', f"No consists in config.json, trying JMRI bootstrap...")
+        log('[WARN]', f"No consists in the stored configuration, trying JMRI bootstrap...")
         consist_data.clear()
         consist_data.update(load_consist_with_functions())
         if debug_enabled and consist_data:
             log('[INIT]', f"Loaded {len(consist_data)} consists from JMRI")
 
-    # Always load locomotives from config.json (JMRI fallback)
-    log('[INIT]', f"Loading locomotives from config.json...")
+    # Always load locomotives from the stored configuration (JMRI fallback)
+    log('[INIT]', f"Loading locomotives from the stored configuration...")
     locomotive_data.clear()
     locomotive_data.update(load_all_locomotives_from_config())
 

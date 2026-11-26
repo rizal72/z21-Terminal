@@ -29,15 +29,10 @@ from pathlib import Path
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root / "backend"))
 
 from ultralytics import YOLO
-
-
-def load_config():
-    """Load config.json to determine which model to export."""
-    config_path = project_root / "config.json"
-    with open(config_path, encoding='utf-8') as f:
-        return json.load(f)
+from config_loader import load_config
 
 
 def export_to_tensorrt(model_path: Path, half: bool = True):

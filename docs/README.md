@@ -8,6 +8,9 @@ first line says so.
 
 - `../README.md`, what the project is and how to run it.
 - `DATABASE_POSTGRES.md`, where the database lives, how it is backed up, what happens when it is down.
+- The configuration lives in that database too: gates, consists, locomotives and thresholds, one
+  document shared by every host. `config.seed.json` is only the seed. Also in `DATABASE_POSTGRES.md`,
+  "Configuration".
 
 ## Reference
 

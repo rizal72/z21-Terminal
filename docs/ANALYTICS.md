@@ -373,7 +373,7 @@ if debug_enabled:
 - ❌ `550->500` (50 events, 9.1%) - No log (<10%)
 - ✅ `600->500` (100 events, 16.7%) - **LOG** (>10%)
 - ✅ `1000->500` (500 events, 50%) - **LOG** (>10% and >100)
-- ❌ Any reduction if `config.json` → `debug.enabled = false` - No log
+- ❌ Any reduction when debug mode is off - No log
 
 **Frontend**:
 - **Zero changes required** - still receives array of events
@@ -394,11 +394,12 @@ if debug_enabled:
 
 **Configuration**:
 - Adjust via Settings UI → Analytics tab → Max Chart Events (100-2000)
-- Or edit `config.json` → `analytics.max_chart_events` (default 500)
+- It lives in the stored configuration: the dashboard writes it, while `config.seed.json` only seeds an
+  empty database (see `DATABASE_POSTGRES.md`, "Configuration")
 - Lower values = better performance, less history visible
 - Higher values = more data, slower rendering
 - Recommended: 300-1000 depending on hardware
-- Debug log: `config.json` → `"debug": {"enabled": true}`
+- Debug log: `config.local.json` → `"debug": {"enabled": true}` (per machine, never stored)
 
 **✅ IMPLEMENTED** (2025-01-13 - commit `683d263`):
 - ✅ **LTTB Downsampling** (Largest Triangle Three Buckets)
@@ -1032,7 +1033,7 @@ VALUES (?, ?, 'loco_fault', '{"address": 7, "fault_type": "derailment", "gate_id
 
 ## Configuration
 
-**In `config.json`**:
+**In the stored configuration** (edited from the dashboard; `config.seed.json` seeds an empty database):
 ```json
 {
   "tracking": {
@@ -1126,7 +1127,7 @@ VALUES (?, ?, 'loco_fault', '{"address": 7, "fault_type": "derailment", "gate_id
 - `web/src/App.jsx` - Keyboard shortcuts, state management
 
 **Config**:
-- `config.json` - Idle timeout parameter
+- the stored configuration (`config.seed.json` is only the seed) - idle timeout parameter
 - the `z21` Postgres database on the pi4 (`docs/DATABASE_POSTGRES.md`)
 
 ---

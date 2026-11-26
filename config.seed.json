@@ -76,8 +76,8 @@
       "id": 2,
       "name": "Gate 2",
       "center": [
-        29,
-        296
+        37,
+        328
       ],
       "width": 44,
       "height": 47,
@@ -113,7 +113,7 @@
       ],
       "width": 65,
       "height": 61,
-      "angle": -32,
+      "angle": -29,
       "color": [
         0,
         255,

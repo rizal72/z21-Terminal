@@ -9,6 +9,7 @@ Handles all roster-related endpoints:
 
 from fastapi import APIRouter, Depends
 from typing import Dict, Any
+from config_loader import reload_config
 from dependencies import get_locomotive_data, get_consist_data, get_z21_manager
 from z21_manager import Z21Manager
 from log_colors import log
@@ -87,6 +88,9 @@ async def reload_roster(
     from dependencies import get_connected_clients
 
     try:
+        # A locomotive imported by a script writes the database, not this process's
+        # cache: refresh it here so the new one appears without a restart.
+        reload_config()
         success = await main.reload_roster_data()
         if success:
             connected_clients = get_connected_clients()

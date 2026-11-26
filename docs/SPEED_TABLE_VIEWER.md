@@ -133,7 +133,7 @@ Added 3 columns to `locomotive_speed_table`:
 - Updates database after successful write
 
 **Decoder Detection**: `services/decoder_helpers.py`
-- `get_decoder_type_from_config()` - Detects decoder type from config.json
+- `get_decoder_type_from_config()` - Detects decoder type from the stored configuration
 - `validate_cv_write_allowed()` - Blocks CV67/CV94 writes for ESU
 - `enforce_esu_fixed_values()` - Forces CV67=1, CV94=255 for ESU
 
@@ -179,7 +179,7 @@ Added 3 columns to `locomotive_speed_table`:
 - `docs/DATABASE_SCHEMA.md` - Database schema with vstart/vhigh/decoder_type columns
 
 ### Related Future Enhancements
-- **CV3/CV4 Editor** - Currently CV3 (Accel) and CV4 (Decel) are hardcoded in config.json. Future UI for editing these values would be useful during speed table tuning when testing with momentum enabled. See `docs/FUTURE_IDEAS.md` → "CV3/CV4 Acceleration/Deceleration Editor"
+- **CV3/CV4 Editor** - Currently CV3 (Accel) and CV4 (Decel) are hardcoded in the stored configuration. Future UI for editing these values would be useful during speed table tuning when testing with momentum enabled. See `docs/FUTURE_IDEAS.md` → "CV3/CV4 Acceleration/Deceleration Editor"
 
 ---
 

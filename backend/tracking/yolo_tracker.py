@@ -143,7 +143,7 @@ class YOLOTracker:
     - lead/rear = JMRI consist roles (NOT physical position!)
       - lead: receives function commands (F0-F28)
       - rear: "succube" loco (follows lead for movement)
-    - reference/adjust = Speed matching roles (config.json)
+    - reference/adjust = Speed matching roles (stored configuration)
       - reference: stable decoder, NEVER modified
       - adjust: unstable decoder, ALWAYS compensated
 
@@ -163,7 +163,7 @@ class YOLOTracker:
     - Ensures BOTH timestamps are fresh (> last_delta_t_time)
     - Prevents spurious dT from stale timestamps
 
-    PHASE 5 COMPLETE: Generic multi-consist support (consists loaded from config.json).
+    PHASE 5 COMPLETE: Generic multi-consist support (consists loaded from the stored configuration).
     """
 
     def __init__(self, model_path: Optional[str] = None):
@@ -302,7 +302,7 @@ class YOLOTracker:
             log('[INIT]', f"Reference locos: {len(self.reference_locos)} consists configured")
 
         # === PHASE 5: CONFIG-DRIVEN MULTI-CONSIST SUPPORT ===
-        # Load consists from config.json
+        # Load consists from the stored configuration
         consists = config.get('consists', {})
 
         # Build consist_config (mapping consist_id → addresses + YOLO class IDs)
@@ -405,7 +405,7 @@ class YOLOTracker:
         # Performance tracking: start timer
         start_time = time.time()
 
-        # Run inference (imgsz, confidence, and IoU from config.json)
+        # Run inference (imgsz, confidence, and IoU from the stored configuration)
         # cast: ultralytics stubs type YOLO.__call__ poorly (inferred Tensor);
         # at runtime it returns a list of Results objects (see docs/computer_vision.md).
         results = cast(Any, self.model(frame, conf=self.confidence_threshold, iou=self.iou_threshold, imgsz=self.yolo_imgsz, verbose=False))

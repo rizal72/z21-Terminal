@@ -8,13 +8,12 @@ shows in its Icon column). Run on the Mac, where JMRI lives; the result is
 committed, so the PC never needs JMRI.
 
 Usage:
-    venv/bin/python scripts/utils/import_loco_images.py            # all in config.json
+    venv/bin/python scripts/utils/import_loco_images.py            # all in the stored configuration
     venv/bin/python scripts/utils/import_loco_images.py --address 2
     venv/bin/python scripts/utils/import_loco_images.py --dry-run
 """
 
 import argparse
-import json
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -29,6 +28,9 @@ ROSTER_PATH = Path.home() / "Library/Preferences/JMRI/La_mia_Ferrovia_in_JMRI.jm
 OUTPUT_DIR = PROJECT_ROOT / "web" / "public" / "loco_images"
 WIDTH = 480
 QUALITY = 85
+
+sys.path.insert(0, str(PROJECT_ROOT / "backend"))
+from config_loader import load_config
 
 
 def roster_images() -> dict:
@@ -57,12 +59,12 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="show what would be written")
     args = parser.parse_args()
 
-    config = json.loads((PROJECT_ROOT / "config.json").read_text())
+    config = load_config()
     addresses = {int(a) for a in config.get("locomotives", {})}
     if args.address is not None:
         addresses &= {args.address}
         if not addresses:
-            print(f"[WARN] address {args.address} is not in config.json")
+            print(f"[WARN] address {args.address} is not in the stored configuration")
 
     images = roster_images()
     missing = sorted(addresses - set(images))

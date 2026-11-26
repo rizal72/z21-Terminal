@@ -12,20 +12,21 @@ Per info essenziali, vedi `AGENTS.md`.
 
 - **CV67-94 Speed Table**: Stored in the `z21` Postgres database (`locomotive_speed_table`), editable via web UI
 - **CV19 Consist Management**: Virtual/DCC Mode toggle writes CV19 automatically
-- **Locomotive Metadata**: `config.json` unified (name, decoder, color, cv_profiles)
-- **Consist Configuration**: `config.json` (lead_address, rear_address, virtual_mode)
+- **Locomotive Metadata**: the stored configuration (name, decoder, color, cv_profiles)
+- **Consist Configuration**: the stored configuration (lead_address, rear_address, virtual_mode)
 - **Consist CRUD**: Create/edit/delete consists via web UI
 
 ### ❌ Dipendenza Rimasta
 
 - **Creazione di una locomotiva nuova**: si fa in DecoderPro (indirizzo DCC,
-  decoder, CV), poi `scripts/utils/import_single_locomotive.py` la porta in
-  `config.json` e nel database. Non e' una lettura a runtime.
+  decoder, CV), poi `scripts/utils/import_single_locomotive.py` la porta nella
+  configurazione salvata e nella speed table. Non e' una lettura a runtime;
+  dopo lo script si ricarica il roster dalla dashboard (`POST /api/reload-roster`).
 - **Reimport CV67-94**: `POST /api/speed-table/reimport/{consist_id}` legge
   l'XML JMRI, quindi e' un'operazione da Mac; sul PC non trova il roster e
   risponde `404`, con il messaggio che spiega perche'.
 
-Le function labels F0-F28 stanno in `config.json`
+Le function labels F0-F28 stanno nella configurazione salvata
 (`locomotives[address]['functions']`): non sono piu' lette dal roster.
 
 **Nota**: JMRI serve solo per il setup iniziale di una locomotiva, mai durante
@@ -33,7 +34,7 @@ l'uso quotidiano.
 
 ## Coesistenza
 
-- **z21-Terminal NON richiede JMRI**: il roster viene da `config.json`; gli XML JMRI sono solo il fallback quando `config.json` non ha locomotive
+- **z21-Terminal NON richiede JMRI**: il roster viene dalla configurazione salvata; gli XML JMRI sono solo il fallback quando quella non ha locomotive
 - z21-Terminal e JMRI possono funzionare contemporaneamente (opzionale)
 - Entrambi comunicano con Z21 via protocollo LAN (UDP porta 21105)
 - Ultimo comando inviato ha priorità in caso di controllo simultaneo
@@ -53,7 +54,7 @@ l'uso quotidiano.
 | Automazione/scripting | ⚠️ Jython | ✅ Python 3 |
 | Controllo funzioni F0-F28 | ✅ | ✅ |
 | Lettura stato locomotiva | ✅ | ✅ |
-| **Function labels F0-F28** | ✅ XML roster | ✅ `config.json` |
+| **Function labels F0-F28** | ✅ XML roster | ✅ the stored configuration |
 
 ## Workflow Operativo
 

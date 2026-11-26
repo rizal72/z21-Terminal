@@ -94,7 +94,7 @@ def load_functions_from_roster(address):
     Carica funzioni F0-F28 dal file roster XML per una locomotiva
 
     Priority:
-    1. config.json (locomotives.functions) - if available
+    1. the stored configuration (locomotives.functions) - if available
     2. JMRI roster XML - fallback if not in config
 
     Args:
@@ -107,7 +107,7 @@ def load_functions_from_roster(address):
             ...
         ]
     """
-    # Try config.json first (preferred)
+    # Try the stored configuration first (preferred)
     functions = get_locomotive_functions(address)
     if functions is not None:
         return functions
@@ -221,7 +221,7 @@ def load_all_locomotives():
                 # Get name (roster ID)
                 name = loco_elem.get('id', f'Loco {address}')
 
-                # Load functions (config.json first, JMRI XML fallback)
+                # Load functions (stored configuration first, JMRI XML fallback)
                 functions = get_locomotive_functions(address)
                 if functions is None:
                     # Fallback to JMRI roster XML
@@ -261,10 +261,10 @@ def load_all_locomotives():
 
 def load_all_locomotives_from_config():
     """
-    Carica tutte le locomotive da config.json invece di JMRI roster
+    Carica tutte le locomotive dalla configurazione salvata invece di JMRI roster
 
     Priority:
-    1. config.json (locomotives section) - preferred
+    1. the stored configuration (locomotives section) - preferred
     2. JMRI roster XML - fallback if config missing
 
     Returns:
@@ -333,10 +333,10 @@ def load_all_locomotives_from_config():
 
 def load_consists_from_config(config_path=None):
     """
-    Carica consist da config.json invece che da JMRI
+    Carica consist dalla configurazione salvata invece che da JMRI
 
     Args:
-        config_path: Path to config.json (deprecated, uses centralized loader now)
+        config_path: Path to the stored configuration (deprecated, uses centralized loader now)
 
     Returns:
         dict: Same structure as load_consist_with_functions()

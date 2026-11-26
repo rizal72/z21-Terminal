@@ -458,10 +458,10 @@ async def handle_toggle_auto_compensation(
         if is_virtual:
             # Only allow toggle if in Virtual Mode
             consist['auto_compensation_enabled'] = enable
-            # Persist to config.json (critical: preserves setting across restarts)
+            # Persist to the database (critical: preserves setting across restarts)
             z21_manager._save_persisted_state()
-            # Always log (important operation that modifies config.json)
-            log('[COMP]', f"Auto-compensation {'enabled' if enable else 'disabled'} for consist {consist_address} (saved to config.json)")
+            # Always log (important operation that modifies stored consist state)
+            log('[COMP]', f"Auto-compensation {'enabled' if enable else 'disabled'} for consist {consist_address} (saved to the database)")
             # Broadcast updated state to all clients
             await broadcast_state_update(consist_address)
         else:

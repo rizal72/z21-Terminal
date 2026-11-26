@@ -80,7 +80,7 @@ Costo misurato di uno spostamento:
 - PWA e segnalibri legati all'origine `:8000`
 
 Si riapre solo quando un servizio vero contende la porta. In quel caso il lavoro è
-il refactor a sorgente unica — porta in `config.json`, letta da backend, Vite e
+il refactor a sorgente unica — porta in the stored configuration, letta da backend, Vite e
 alias, con `App.jsx` che deriva l'origine da `window.location` — non la
 sostituzione del numero nei sette punti.
 
@@ -154,7 +154,7 @@ z21-Terminal/
   - Min size 20px to prevent collapse
 - ✅ Coordinate system: camera space 1280x720 (aligned with YOLO tracking)
 - ✅ Accurate video dimensions (excludes letterbox bars from objectFit: contain)
-- ✅ Auto-backup: creates `config.json.backup` before save (single file, overwrites)
+- ✅ Saved to the database (no file copy is written on save)
 - ✅ UI: Centered Save/Cancel toolbar, instructions at bottom
 - ✅ Desktop/tablet only (hidden on mobile <768px)
 - ✅ Component: `web/src/components/GateEditor.jsx` (313 lines)

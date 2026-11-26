@@ -110,7 +110,10 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save settings');
+        // The server says why, and it must be shown: a failed save used to come back
+        // as 200 with status "error", and the modal announced success.
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || body.message || 'Failed to save settings');
       }
 
       const result = await response.json();
@@ -153,7 +156,9 @@ export default function SettingsModal({ isOpen, onClose, apiUrl }) {
       }
     } catch (err) {
       console.error('Settings save error:', err);
-      setError(err.message);
+      // Not setError: that branch replaces the whole form with "Error loading settings"
+      // and the unsaved edits would be gone.
+      alert(`Settings NOT saved.\n\n${err.message}`);
     } finally {
       setSaving(false);
     }

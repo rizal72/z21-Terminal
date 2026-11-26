@@ -124,7 +124,7 @@ Result: Perfect speed matching across ALL speed steps, eliminating need for Virt
 
 **Key Features**:
 - ✅ "Next N Events" correlation (adaptive to track length differences)
-- ✅ Dynamic thresholds from config.json (no hardcoding)
+- ✅ Dynamic thresholds from the stored configuration (no hardcoding)
 - ✅ Color-coded scatter points by dominant status
 - ✅ Error bars showing standard deviation
 - ✅ Summary cards (speed changes, samples, buckets)

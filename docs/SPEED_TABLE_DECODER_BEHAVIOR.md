@@ -210,7 +210,7 @@ def import_locomotive_speed_table(address):
     speed_table = read_cvs_67_94_from_roster(address)
 
     # Detect decoder type
-    decoder = get_decoder_type(address)  # From config.json
+    decoder = get_decoder_type(address)  # From the stored configuration
 
     if decoder in ["LokSound", "LokPilot"]:
         # ESU mfx® style
@@ -278,7 +278,7 @@ def write_vstart_vhigh(address, vstart=None, vhigh=None):
 
 ### 5. Decoder type detection
 
-**Source**: `config.json` → `locomotives.X.decoder`
+**Source**: the stored configuration → `locomotives.X.decoder`
 
 **Mapping**:
 ```python
@@ -366,7 +366,7 @@ Zimo decoders support multiple speed table modes. Need to check:
 3. ⏳ Design Speed Table Viewer UI (ESU vs NMRA modes)
 4. ⏳ Implement CV2/CV5 editing for ESU decoders
 5. ⏳ Update import script to read CV2/CV5
-6. ⏳ Add decoder type detection (config.json)
+6. ⏳ Add decoder type detection (the stored configuration)
 7. ⏳ Test with Zimo MX630 (Loco 4)
 8. ⏳ Update CONSIST_ROSTER.md with decoder notes
 

@@ -9,7 +9,7 @@ No per-host copy, no manual sync.
 |---|---|
 | host | `pi4`, Debian 12, `100.124.43.88` on Tailscale |
 | engine | PostgreSQL 17, from `apt.postgresql.org`, `bookworm-pgdg` |
-| database | `z21` (production), `z21_test` (scratch, can be dropped and recreated) |
+| database | `z21` (production). `z21_test` is not kept: create it when a check needs a scratch database |
 | role | `z21`, `scram-sha-256` |
 | access | `pg_hba.conf` allows only `100.64.0.0/10` and localhost; the port is closed everywhere else |
 | data | `/var/lib/postgresql/17/main`, on the SD card |
@@ -52,6 +52,32 @@ renames a column cannot ship until both branches have moved past it. There is no
 and nothing to run by hand.
 
 `data.db`, the old SQLite file, is still on the development machines as a rollback and is ignored by git.
+
+## Configuration
+
+The configuration is one document in the `config` table (a single `jsonb` row), not a file: gates,
+consists, locomotives, functions, thresholds. The dashboard writes it there, and every host reads the
+same one, so a gate moved on the PC is already moved on the Mac.
+
+Two layers:
+
+| | |
+|---|---|
+| the stored document | what the dashboard edits; the truth |
+| `config.local.json` | per machine: camera credentials and `debug.enabled`, merged on top, never stored |
+
+`config.seed.json` is the **seed**: it fills the table the first time the backend starts against an empty
+database, and it is never written at runtime. A hand edit of the file counts only after
+`venv/bin/python scripts/db/load_config.py`; the command refuses when a document is already stored,
+because an old file would otherwise wipe the edits made since the seed. `--force` replaces it.
+
+The backend keeps the merged document in memory: `load_config()` is called in hot paths, some per
+frame, so it cannot query per call. `save_config()` writes the row and refreshes the cache together.
+A write made outside the backend (the locomotive import script) is picked up by
+`POST /api/reload-roster`, which re-reads the row first.
+
+When the database is unreachable the backend still starts, reads `config.seed.json`, and runs the trains;
+only saving fails, loudly, in the settings window.
 
 ## Backups
 

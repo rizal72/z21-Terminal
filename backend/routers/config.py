@@ -7,12 +7,12 @@ Handles all configuration-related endpoints:
 - Tracking configuration access
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict, Any
 from pathlib import Path
 import json
 import asyncio
-from config_loader import load_config, save_config, get_config_path
+from config_loader import load_config, save_config, save_local_config
 from roster_loader import load_consists_from_config
 from services.broadcast import build_consist_response, broadcast_initial_state
 from services.config_manager import ConfigManager
@@ -22,9 +22,6 @@ from log_colors import log
 from math_utils import js_round
 
 router = APIRouter(tags=["config"])
-
-# Configuration paths
-CONFIG_PATH = get_config_path()
 
 
 def _sync_consist_state(z21_manager, address, consist_data):
@@ -86,14 +83,20 @@ def validate_locomotive_functions(address: str, functions: list) -> tuple[bool, 
 
 @router.get("/api/config")
 async def get_config():
-    """Get entire config.json for Settings UI"""
-    return load_config()
+    """Get the configuration for the Settings UI. The camera password is never sent."""
+    config = load_config()
+    camera = config.get("camera")
+    if isinstance(camera, dict) and "password" in camera:
+        # The UI posts the whole document back, so the empty value must mean
+        # "keep the stored password", never "set it to empty".
+        camera["password"] = ""
+    return config
 
 
 @router.post("/api/settings/update")
 async def update_settings(request: dict):
     """
-    Update config.json and determine which services need restart
+    Update the stored configuration and determine which services need restart
 
     Handles unified config structure:
     - System (debug.enabled)
@@ -136,10 +139,10 @@ async def update_settings(request: dict):
                 "enabled": new_debug
             }
 
-            # Keep debug.enabled = false in config.json (fallback default)
+            # Keep debug.enabled = false in the stored configuration (fallback default)
             if "debug" not in config:
                 config["debug"] = {}
-            config["debug"]["enabled"] = False  # Always false in config.json
+            config["debug"]["enabled"] = False  # Always false in the stored configuration
 
         # Z21 Network settings (z21.host, z21.port)
         if "z21" in request:
@@ -187,25 +190,23 @@ async def update_settings(request: dict):
                     log('[SETTINGS]', f"Camera stream: {old_camera.get('stream')} -> {new_camera.get('stream')} (video_feed + tracker restart required)")
                     changes_summary.append(f"camera.stream: {old_camera.get('stream')} -> {new_camera.get('stream')}")
 
-            # Split: public settings → config.json, credentials → config.local.json
+            # Split: public settings → the stored configuration, credentials → config.local.json
             config["camera"] = {
                 "ip": new_camera.get("ip", "192.168.1.4"),
                 "port": new_camera.get("port", 554),
                 "stream": new_camera.get("stream", "stream2"),
                 "resolution": new_camera.get("resolution", {"width": 1280, "height": 720}),
-                "username": "",  # Empty in config.json
-                "password": "",  # Empty in config.json
+                "username": "",  # Empty in the stored configuration
+                "password": "",  # Empty in the stored configuration
                 "notes": config.get("camera", {}).get("notes", "Camera credentials MUST be in config.local.json (gitignored)")
             }
 
-            # Save credentials to config.local.json (gitignored) - only log if changed
-            if new_camera.get("username") or new_camera.get("password"):
-                config_local["camera"] = {
-                    "username": new_camera.get("username", ""),
-                    "password": new_camera.get("password", "")
-                }
-                # Note: We always save credentials to config.local.json but don't log unless they changed
-                # (can't compare passwords since old ones are in config.local.json, not in memory)
+            # Save credentials to config.local.json. An empty password means unchanged:
+            # the UI receives it empty and posts the whole document back.
+            local_camera = {"username": new_camera.get("username", "")}
+            if new_camera.get("password"):
+                local_camera["password"] = new_camera["password"]
+            config_local["camera"] = local_camera
 
         # Video Feed settings (video.fps - hot reload, no restart)
         if "video" in request:
@@ -367,27 +368,12 @@ async def update_settings(request: dict):
                 # Locomotive changes require page reload (frontend needs to reload function labels)
                 restart_needed.append("frontend")
 
-        # Save config.json (always save, even if no changes - user might have clicked Save)
+        # Save the stored configuration (always save, even if no changes - user might have clicked Save)
         save_config(config)
 
-        # Save config.local.json (credentials only)
+        # Save config.local.json (credentials, debug mode)
         if config_local:
-            from pathlib import Path
-            config_local_path = get_config_path().parent / "config.local.json"
-
-            # Load existing config.local.json to merge
-            try:
-                with open(config_local_path, 'r') as f:
-                    existing_local = json.load(f)
-            except (FileNotFoundError, json.JSONDecodeError):
-                existing_local = {}
-
-            # Merge camera credentials
-            existing_local.update(config_local)
-
-            # Save merged config.local.json
-            with open(config_local_path, 'w') as f:
-                json.dump(existing_local, f, indent=2)
+            save_local_config(config_local)
 
         # Deduplicate restart list
         restart_needed = list(set(restart_needed))
@@ -413,17 +399,15 @@ async def update_settings(request: dict):
         log('[ERROR]', f"[SETTINGS] Settings update failed: {e}")
         import traceback
         log('[ERROR]', f"[SETTINGS] Traceback: {traceback.format_exc()}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "restart_needed": []
-        }
+        # Never a 200 here: the UI checks response.ok, and a 200 made it announce
+        # "saved successfully" over a save that never reached the database.
+        raise HTTPException(status_code=503, detail=f"Settings not saved: {e}")
 
 
 @router.post("/api/settings/yolo-preset/load")
 async def load_yolo_preset(request: dict):
     """
-    Load YOLO preset profile from config.json
+    Load YOLO preset profile from the stored configuration
 
     Request body:
         {"preset": "tracking_OBB"}  or  {"preset": "tracking_standard"}
@@ -529,6 +513,10 @@ async def test_camera_stream(request: dict):
         stream = request.get("stream", "stream2")
         username = request.get("username", "")
         password = request.get("password", "")
+        if not password:
+            # GET /api/config returns the password empty; an empty field means
+            # "use the stored one", so the test button behaves like the save.
+            password = (load_config().get("camera") or {}).get("password", "")
 
         if not username or not password:
             return {"status": "error", "message": "Camera credentials required"}
@@ -606,7 +594,7 @@ async def create_consist(
     request: dict,
     z21_manager: Z21Manager = Depends(get_z21_manager)
 ):
-    """Create a new consist in config.json"""
+    """Create a new consist in the stored configuration"""
     try:
         consist_address = str(request.get("address"))
         lead_address = request.get("lead_address")
@@ -693,7 +681,7 @@ async def update_consist(
     request: dict,
     z21_manager: Z21Manager = Depends(get_z21_manager)
 ):
-    """Update an existing consist in config.json"""
+    """Update an existing consist in the stored configuration"""
     try:
         # Load config
         config = load_config()
@@ -801,7 +789,7 @@ async def delete_consist(
     z21_manager: Z21Manager = Depends(get_z21_manager)
 ):
     """
-    Delete a consist from config.json
+    Delete a consist from the stored configuration
     If consist is in DCC mode (virtual_mode=false), writes CV19=0 first
     """
     try:
@@ -909,17 +897,6 @@ async def save_gates(gates: List[Dict[str, Any]]):
                     "message": f"Invalid gate format, missing required fields"
                 }
 
-        # Create backup before saving
-        import shutil
-        from datetime import datetime
-
-        config_path = get_config_path()  # Use centralized config path
-        backup_name = "config.json.backup"
-        backup_path = config_path.parent / backup_name
-
-        shutil.copy(config_path, backup_path)
-        log('[INIT]', f"Config backup created: {backup_name}")
-
         # Round all numeric values to integers (OpenCV requires int for coordinates)
         for gate in gates:
             gate['center'] = [int(js_round(gate['center'][0])), int(js_round(gate['center'][1]))]
@@ -937,11 +914,11 @@ async def save_gates(gates: List[Dict[str, Any]]):
         log('[INIT]', f"Gates configuration saved ({len(gates)} gates)")
         return {
             "status": "success",
-            "message": f"Saved {len(gates)} gates (backup: {backup_name})"
+            "message": f"Saved {len(gates)} gates"
         }
     except Exception as e:
         log('[WARN]', f"Error saving gates: {e}")
         return {
             "status": "error",
-            "message": str(e)
+            "message": f"Gates not saved: {e}"
         }

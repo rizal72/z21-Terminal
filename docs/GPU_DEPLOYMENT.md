@@ -410,7 +410,7 @@ Se `True` → ✅ GPU ready!
 | **camera_config.json** | `~/Documents/projects/z21-Terminal/` | `C:\z21-Terminal\` | Credenziali camera RTSP |
 | **JMRI Roster** | `~/Library/Preferences/JMRI/.../roster/` | `C:\Users\<username>\Library\Preferences\JMRI\.../roster\` | Roster locomotive e consist |
 
-**Note**: `consist_state.json` è deprecato (migrato in `config.json` che è tracciato da git)
+**Note**: `consist_state.json` è deprecato (migrato nella tabella `consist_state`, nel database condiviso)
 
 ### Comandi di Copia
 
@@ -444,7 +444,7 @@ Test-Path "C:\Users\<username>\Library\Preferences\JMRI\La_mia_Ferrovia_in_JMRI.
 # Output atteso: True per entrambi
 ```
 
-**Note**: Lo stato Virtual Mode (virtual_mode, auto_compensation_enabled) è ora salvato in `config.json` che è tracciato da git, quindi viene copiato automaticamente con `git pull`.
+**Note**: lo stato Virtual Mode (virtual_mode, auto_compensation_enabled) sta nella tabella `consist_state` del database condiviso, quindi non va copiato: ogni macchina che punta allo stesso database lo vede (`docs/DATABASE_POSTGRES.md`).
 
 ---
 
@@ -917,7 +917,7 @@ z21-deploy
 **Quando usare `z21-deploy`:**
 - ✅ Modifiche frontend (`web/` directory)
 - ✅ Modifiche dipendenze (`requirements*.txt`)
-- ✅ Modifiche config critici (struttura `config.json`)
+- ✅ Modifiche config critici (struttura della configurazione)
 
 **Quando basta `git pull + z21-restart`:**
 - ✅ Modifiche solo backend (`.py` files)
@@ -1229,7 +1229,7 @@ Dopo setup funzionante:
    - Questo file NON è in git (contiene credenziali)
    - Copia manualmente da Mac a PC la prima volta
    - Backup periodico raccomandato
-   - **Note**: `consist_state.json` deprecato (migrato in `config.json` tracciato da git)
+   - **Note**: `consist_state.json` deprecato (migrato nella tabella `consist_state` del database)
 
 ---
 

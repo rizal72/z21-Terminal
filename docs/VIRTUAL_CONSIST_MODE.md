@@ -14,7 +14,7 @@ Virtual Consist Mode permette di controllare locomotive in consist **SEPARATAMEN
 2. ✅ **Speed compensation real-time** usando Δt feedback da gate timing (Phase 4)
 3. ✅ **UI transparente**: utente vede UN solo slider, app controlla lead/rear separatamente
 4. ✅ **Reversibile istantaneamente**: toggle back a DCC mode in 1 click
-5. ✅ **Persist state**: `config.json` `consists[id]['virtual_mode']` mantiene mode tra restart
+5. ✅ **Persist state**: `consists[id]['virtual_mode']` nella configurazione salvata mantiene il mode tra restart
 
 ---
 
@@ -56,7 +56,7 @@ def enable_virtual_mode(self, consist_address):
     if success_lead and success_rear:
         consist['virtual_mode'] = True
         consist['auto_compensation_enabled'] = True  # Default ON
-        self._save_persisted_state()  # Saves to config.json
+        self._save_persisted_state()  # Saves to the stored configuration
         return True
     return False
 ```
@@ -79,7 +79,7 @@ def disable_virtual_mode(self, consist_address):
     if success_lead and success_rear:
         consist['virtual_mode'] = False
         consist['auto_compensation_enabled'] = False
-        self._save_persisted_state()  # Saves to config.json
+        self._save_persisted_state()  # Saves to the stored configuration
         return True
     return False
 ```
@@ -126,7 +126,7 @@ def set_speed(self, consist_address, speed, direction):
     self.z21.set_loco_speed(rear_addr, speed_rear, direction)
 ```
 
-### State Persistence: config.json
+### State Persistence: the stored configuration
 
 ```json
 {
@@ -151,9 +151,9 @@ def set_speed(self, consist_address, speed, direction):
 }
 ```
 
-**File location**: `config.json` (committed to git)
+**Location**: the consist definitions in the `config` table, the operational state in `consist_state`, both in Postgres and shared by every host (`DATABASE_POSTGRES.md`)
 
-**Persistence**: `z21_manager._save_persisted_state()` saves `virtual_mode` and `auto_compensation_enabled` to config.json after every toggle
+**Persistence**: `z21_manager._save_persisted_state()` writes `virtual_mode` and `auto_compensation_enabled` to `consist_state` through `DataDB` after every toggle
 
 ---
 
@@ -378,7 +378,7 @@ speed_rear = 80            (loco 8 unchanged)
 - [x] ✅ WebSocket reconnect preserves Virtual Mode state
 
 ### State Persistence
-- [x] ✅ config.json updated on every Virtual/DCC Mode toggle
+- [x] ✅ the stored configuration updated on every Virtual/DCC Mode toggle
 - [x] ✅ State loaded on backend restart (`_load_persisted_state()`)
 - [x] ✅ State synced to frontend via initial_state message
 - [x] ✅ Multi-consist support (independent Virtual Mode per consist)
@@ -444,7 +444,7 @@ speed_rear = 80            (loco 8 unchanged)
 - `web/src/App.jsx` - WebSocket handlers integration
 
 **Config**:
-- `config.json` - Contains `consists[id]['virtual_mode']` and `auto_compensation_enabled` (committed to git)
+- the stored configuration - contains `consists[id]['virtual_mode']` and `auto_compensation_enabled`, shared by every host
 
 ---
 

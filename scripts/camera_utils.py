@@ -2,7 +2,7 @@
 Camera Utilities - Shared camera config loader
 
 This module provides a centralized way to load camera credentials
-from config.json + config.local.json (unified config system).
+from the stored configuration + config.local.json (unified config system).
 """
 import sys
 from pathlib import Path
@@ -14,7 +14,7 @@ from config_loader import load_config
 
 def load_camera_config():
     """
-    Load camera configuration from config.json (credentials from config.local.json).
+    Load camera configuration from the stored configuration (credentials from config.local.json).
 
     Returns:
         tuple: (rtsp_url, camera_ip, camera_port, stream)
@@ -47,7 +47,7 @@ def load_camera_config():
 
     except FileNotFoundError as e:
         print(f"\n❌ ERROR: Config file not found: {e}")
-        print(f"   Ensure config.json exists in project root.")
+        print(f"   Ensure config.seed.json exists in project root.")
         print(f"   See README_CAMERA.md for setup instructions.\n")
         sys.exit(1)
 

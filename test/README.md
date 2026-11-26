@@ -96,7 +96,7 @@ Le immagini **L4T** includono:
 
 ```bash
 # 1. Copia file sul Jetson
-scp -r test/docker backend web scripts config.json jetson@jetson-orin-nano:/home/jetson/z21-terminal/
+scp -r test/docker backend web scripts config.seed.json jetson@jetson-orin-nano:/home/jetson/z21-terminal/
 
 # 2. Build e avvia sul Jetson
 ssh jetson@jetson-orin-nano

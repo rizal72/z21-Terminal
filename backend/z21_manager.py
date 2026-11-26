@@ -2,13 +2,13 @@
 Z21Manager - Wrapper per la libreria z21.py con gestione stato consist
 
 REFACTOR HISTORY:
-- 2025-01-03: config.json structure refactored (see docs/CONFIG_REFACTOR.md)
+- 2025-01-03: stored configuration structure refactored (see docs/CONFIG_REFACTOR.md)
   - Hierarchical structure: debug -> consists -> gates -> tracking
   - Consolidated reference_locos inside each consist
   - Grouped settings: tracking.fps, tracking.timing_thresholds
 
 FUTURE CONSIDERATION (see docs/CONFIG_REFACTOR.md):
-Potential split into config.json (static) + state.json (runtime).
+Potential split into the stored configuration (static) + state.json (runtime).
 Currently consolidated for simplicity. Revisit if state management becomes complex.
 """
 import sys
@@ -39,10 +39,10 @@ class Z21Manager:
             z21_ip (str): Indirizzo IP della Z21
             z21_port (int): Porta UDP della Z21 (default: 21105)
             verbose (bool): Modalità verbose per debug
-            reference_locos (dict): Reference loco strategy config from config.json
+            reference_locos (dict): Reference loco strategy config from the stored configuration
             timing_thresholds (dict): Timing thresholds config {'warning': 1.0, 'critical': 1.5}
             debug_enabled (bool): Debug mode for verbose logging
-            config_path (Path): Path to config.json for persisting virtual_mode state
+            config_path (Path): Path to config.seed.json, the seed (operational state persists to the database)
         """
         self.z21_ip = z21_ip
         self.z21_port = z21_port
@@ -690,7 +690,7 @@ class Z21Manager:
     def _load_persisted_state(self):
         """Load persisted operational state from database (consist_state table)"""
         try:
-            # Load from database (Phase 2 DB refactoring - config.json only for configuration)
+            # Load from database (Phase 2 DB refactoring - the stored configuration holds only settings)
             config = load_config()
             consists = config.get('consists', {})
 
@@ -768,7 +768,7 @@ class Z21Manager:
             current_mode = DataDB.get_test_mode()
             locomotives = get_all_locomotives()
             if not locomotives:
-                return False, current_mode, "No locomotives configured in config.json"
+                return False, current_mode, "No locomotives configured in the stored configuration"
 
             # Guard check for Z21 connection
             if self.z21 is None:
@@ -789,7 +789,7 @@ class Z21Manager:
             if new_mode == 'testing':
                 import time
                 start_time = time.time()
-                log('[CV]', f"Writing CV testing values from config.json...")
+                log('[CV]', f"Writing CV testing values from the stored configuration...")
                 success_count = 0
                 failed_locos = []
                 for addr in addresses:
@@ -819,7 +819,7 @@ class Z21Manager:
             else:
                 import time
                 start_time = time.time()
-                log('[CV]', f"Restoring CV values from config.json normal profiles...")
+                log('[CV]', f"Restoring CV values from the stored configuration normal profiles...")
                 success_count = 0
                 failed_locos = []
                 for addr in addresses:

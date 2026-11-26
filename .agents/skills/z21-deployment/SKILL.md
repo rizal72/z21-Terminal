@@ -268,19 +268,26 @@ console.log("Locomotive detected")
 
 ## Config Files Behavior
 
-**config.json** (tracked in git):
-- Overwritten by `git reset --hard` (deploy aliases)
-- Contains default configuration
+**The configuration lives in the database** (the `config` table, one document): gates, consists,
+locomotives and their functions, tracking thresholds. The dashboard edits it, and every host reads
+the same one, so a gate moved on the PC is already moved on the Mac.
 
-**config.local.json** (gitignored):
-- NEVER overwritten by deploy
-- Use for local overrides (camera settings, test mode)
+**config.seed.json** (tracked in git): the **seed**, read only when the database has no document. Never
+written at runtime, so `git reset --hard` cannot destroy configuration. A hand edit counts only
+after `venv/bin/python scripts/db/load_config.py`; it refuses when a document is stored, and
+`--force` replaces it.
 
-Deploy preserves local overrides:
+**config.local.json** (gitignored): the only per-machine file, camera credentials and
+`debug.enabled`. Preserved by deploy, never stored in the database.
+
+Deploy no longer touches the configuration:
 ```
-z21-deploy-dev -> git reset --hard -> config.json overwritten
+z21-deploy-dev -> git reset --hard -> config.seed.json unchanged (nobody writes it)
              -> config.local.json PRESERVED
 ```
+
+**Adding a locomotive**: `scripts/utils/import_single_locomotive.py`, then `POST /api/reload-roster`
+(the backend re-reads the stored document). Never a hand edit of `config.seed.json`.
 
 ---
 
@@ -361,7 +368,7 @@ Key Points:
 - Deployment decision tree (docs/backend/frontend)
 - PowerShell aliases (z21-start, z21-deploy-dev, z21-deploy, z21-restart, z21-stop, z21-log)
 - Pre-deploy checklist (6 items)
-- Config files behavior (config.json vs config.local.json)
+- Config files behavior (config.seed.json vs config.local.json)
 - Database: one Postgres on the pi4, no copy between machines
 - CHANGELOG management policy (active docs/CHANGELOG.md, quarterly archive)
 

@@ -43,7 +43,7 @@
 **Location**: `scripts/utils/export_tensorrt.py`
 
 **What it does**:
-- Reads `config.json` to determine active model (standard vs OBB)
+- Reads the stored configuration to determine active model (standard vs OBB)
 - Exports `best.pt` or `best_obb.pt` to TensorRT `.engine` format
 - Optimizes for current GPU (engine is GPU-specific)
 - Uses FP16 half-precision for 2x speed boost
@@ -273,8 +273,7 @@ pip install --upgrade ultralytics
 
 ### Model switching (standard ↔ OBB)
 ```bash
-# Switch model in config
-nano config.json  # Change yolo_obb: true/false
+# Switch model in the dashboard: Settings -> Tracking -> yolo_obb (true/false)
 
 # Export new model
 python scripts/utils/export_tensorrt.py  # Auto-detects from config

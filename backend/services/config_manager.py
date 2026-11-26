@@ -42,18 +42,18 @@ class ConfigManager:
             Dict with keys: warning, critical (thresholds in seconds)
 
         Raises:
-            ValueError: If timing_thresholds missing or incomplete in config.json
+            ValueError: If timing_thresholds missing or incomplete in the stored configuration
         """
         config = load_config()
         tracking_config = config.get('tracking', {})
 
         if 'timing_thresholds' not in tracking_config:
-            raise ValueError("timing_thresholds missing in config.json - config corrupted!")
+            raise ValueError("timing_thresholds missing in the stored configuration - config corrupted!")
 
         thresholds = tracking_config['timing_thresholds']
 
         if 'warning' not in thresholds or 'critical' not in thresholds:
-            raise ValueError(f"Invalid timing_thresholds in config.json: {thresholds} - must have 'warning' and 'critical' keys")
+            raise ValueError(f"Invalid timing_thresholds in the stored configuration: {thresholds} - must have 'warning' and 'critical' keys")
 
         return {
             'warning': thresholds['warning'],

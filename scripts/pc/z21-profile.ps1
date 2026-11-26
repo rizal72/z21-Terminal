@@ -105,7 +105,7 @@ function Deploy-Z21Terminal {
         Write-Host "ERROR: Git sync failed!" -ForegroundColor Red
         return
     }
-    Write-Host "Synced to origin/$Branch (config.json reset, config.local.json preserved)" -ForegroundColor Green
+    Write-Host "Synced to origin/$Branch (configuration lives in the database, config.local.json preserved)" -ForegroundColor Green
 
     Write-Host ""
     Write-Host "[3/4] Building frontend..." -ForegroundColor Yellow
@@ -124,7 +124,7 @@ function Deploy-Z21Terminal {
 
     Write-Host ""
     Write-Host "=== $branchDisplay Deployment Complete! ===" -ForegroundColor Green
-    Write-Host "Branch: $Branch | Config: config.json + config.local.json override" -ForegroundColor Gray
+    Write-Host "Branch: $Branch | Config: database (config.seed.json is only the seed) + config.local.json" -ForegroundColor Gray
     Write-Host ""
 }
 

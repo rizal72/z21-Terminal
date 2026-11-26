@@ -80,7 +80,7 @@ WORKDIR /app
 # Copy application code
 COPY backend/ ./backend/
 COPY scripts/ ./scripts/
-COPY config.json ./
+COPY config.seed.json ./
 COPY config.local.json.example ./config.local.json
 
 # Create directories

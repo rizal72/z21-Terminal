@@ -214,6 +214,14 @@ CREATE TABLE IF NOT EXISTS cv_modification_timestamps (
     cv_last_modified double precision DEFAULT 0,
     PRIMARY KEY (loco_address, step)
 );
+
+-- One complete configuration document, shared by every host. config.seed.json seeds it
+-- when it is empty; config.local.json overrides it locally with per-machine secrets.
+CREATE TABLE IF NOT EXISTS config (
+    id integer PRIMARY KEY CHECK (id = 1),
+    document jsonb NOT NULL,
+    updated_at double precision NOT NULL DEFAULT extract(epoch from now())
+);
 """
 
 # Additive changes, applied in order on every start. One database serves both

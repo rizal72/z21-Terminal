@@ -84,7 +84,8 @@
    cd deploy && docker compose up -d && cd ..
    cp deploy/.env.example backend/.env
    ```
-3. Configure `config.json`, and `config.local.json` for machine credentials.
+3. Configure `config.seed.json` (the seed for an empty database) and `config.local.json` for machine
+   credentials. After the first start, the dashboard edits the database, not the file.
 4. Build the frontend, then start the backend:
    ```sh
    cd web && npm run build && cd ..
@@ -122,7 +123,7 @@ Access the dashboard at:
 - `backend/` — FastAPI backend (routers, services, WebSocket handlers, tracking)
 - `web/` — React frontend (Vite + Tailwind)
 - `scripts/` — CLI utilities and YOLO training pipeline
-- `config.json` — central configuration (consists, gates, thresholds)
+- `config.seed.json` — the seed configuration for an empty database (consists, gates, thresholds)
 
 ---
 
@@ -144,11 +145,22 @@ For multi-locomotive tracking, the system uses a camera (RTSP) and a trained YOL
 
 ## Configuration
 
-### config.json
-Central configuration: consists, gates, tracking FPS/thresholds, YOLO parameters, analytics, locomotives.
+The configuration lives in the database, as one document shared by every machine: consists,
+gates, tracking thresholds, YOLO parameters, analytics, locomotives. The dashboard reads and
+writes it, so nothing has to be copied when you move from one host to another.
+
+### config.seed.json
+The **seed**: read once, when the database has no configuration yet. It is never written at
+runtime, so editing it by hand counts only after
+`python scripts/db/load_config.py` (which refuses once a document is stored: `--force` replaces it).
 
 ### config.local.json
-Machine-specific overrides (camera credentials, debug mode) — gitignored, never committed.
+Machine-specific values: camera credentials, debug mode. Merged on top of the stored document,
+gitignored, never committed, never stored in the database.
+
+### Adding a locomotive
+`python scripts/utils/import_single_locomotive.py <address>`, then reload the roster from the
+dashboard. It writes the database, so every machine sees it.
 
 ---
 

@@ -1,6 +1,6 @@
 # Consists
 
-Active assignments live in `config.json` (`consists`). This page records what is
+Active assignments live in the stored configuration (`consists`). This page records what is
 current and what to restore, because the `notes` field is not shown by the UI.
 
 ## Current
@@ -45,8 +45,8 @@ track), threshold 10.
 
 ## Restore consist 10
 
-1. In the UI or `config.json`: lead 1, rear 5, reference 5, adjust 1 (gates 3/4,
+1. In the UI or the stored configuration: lead 1, rear 5, reference 5, adjust 1 (gates 3/4,
    threshold 5).
-2. Update `notes` in `config.json` so 1+5 reads as current.
+2. Update `notes` in the stored configuration so 1+5 reads as current.
 3. Commit, push, deploy: `git push origin develop`, then
    `ssh riccardo@gaming-pc "cd C:\z21-Terminal && git pull && z21-restart"`.

@@ -99,7 +99,7 @@ fi
 
 # Verify Z21 configuration
 echo "Z21 Configuration:"
-if grep -q "192.168.1.111" /app/config.json 2>/dev/null; then
+if grep -q "192.168.1.111" /app/config.seed.json 2>/dev/null; then
     echo -e "${GREEN}  ✓ Z21 Host: 192.168.1.111${NC}"
 fi
 

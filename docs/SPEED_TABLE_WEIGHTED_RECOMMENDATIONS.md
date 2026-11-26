@@ -95,7 +95,7 @@ weighted_critical_count = (count_current * weight_current) + (count_historical *
 
 ## Configuration
 
-### config.json - Per-Consist Thresholds
+### the stored configuration - Per-Consist Thresholds
 
 ```json
 {
@@ -124,7 +124,7 @@ weighted_critical_count = (count_current * weight_current) + (count_historical *
 - **Asymmetric gates** (Consist 10): 1 crossing per lap (only one direction valid) → fewer events → lower threshold (5)
 - **Track length**: Longer track = longer lap time = fewer events per session → lower threshold
 
-**UI Editor**: Can be edited via **Consist Manager** (⚙️ button) → Edit Consist → "Recommendation Threshold (Advanced)" field (no need to manually edit config.json)
+**UI Editor**: Can be edited via **Consist Manager** (⚙️ button) → Edit Consist → "Recommendation Threshold (Advanced)" field (no need to manually edit the stored configuration)
 
 ---
 
@@ -388,7 +388,7 @@ WHERE event_type='delta_t'
 ## Implementation Checklist
 
 ### Backend
-- [x] Add `recommendation_threshold` to config.json (consist 10: 5, consist 11: 10)
+- [x] Add `recommendation_threshold` to the stored configuration (consist 10: 5, consist 11: 10)
 - [x] Refactor `get_critical_events_by_speed()` with new parameters
 - [x] Implement CV modification timestamp filtering
 - [x] Implement current/historical session splitting (last 5 sessions)

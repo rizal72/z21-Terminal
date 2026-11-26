@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
-Import Single Locomotive from JMRI Roster to config.json + Database
+Import Single Locomotive from JMRI Roster into the database
 
 What it does:
 1. Takes a DCC address as input (e.g., 2, 6)
 2. Reads that single locomotive from JMRI roster XML
-3. Creates backup of config.json
-4. Adds locomotive to config.json (or updates if already exists)
-5. Writes CV67-94 to data.db (locomotive_speed_table)
-6. Does NOT touch other locomotives in config or DB
+3. Adds the locomotive to the stored configuration (or updates it if already there)
+4. Writes CV67-94 to the locomotive_speed_table
+5. Does NOT touch other locomotives in the configuration or the database
+
+The configuration lives in the database, shared by every host. Reload the roster in the
+dashboard afterwards (POST /api/reload-roster) and the locomotive is there, on every
+machine, without a restart.
 
 Usage:
     cd ~/Documents/_PROGETTI/z21-Terminal
@@ -19,28 +22,28 @@ Usage:
     python scripts/utils/import_single_locomotive.py --address 2 --dry-run
 
 Safety:
-- Automatic config.json backup before modification
-- Non-destructive: only adds/updates specified locomotive
+- Non-destructive: only adds/updates the specified locomotive
 - Idempotent: can run multiple times safely
 """
 
 import sys
 import json
-import shutil
 import argparse
 from pathlib import Path
-from datetime import datetime
 from typing import Dict, Optional, List
+
+# Add backend/ to path for the shared configuration loader
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "backend"))
 
 # Add scripts/utils/cv_operations to path for Locomotive class import
 SCRIPT_DIR = Path(__file__).parent.parent.parent / "scripts" / "utils" / "cv_operations"
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from read_cv_from_roster import load_all_locomotives
+from config_loader import load_config, save_config
 
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-CONFIG_PATH = PROJECT_ROOT / "config.json"
 
 # Default colors for locomotives (fallback if not in config)
 DEFAULT_COLORS = {
@@ -52,35 +55,6 @@ DEFAULT_COLORS = {
     "7": "#00FF00",  # Green
     "8": "#FF0000"   # Red
 }
-
-
-def backup_config():
-    """
-    Create timestamped backup of config.json.
-
-    Returns:
-        Path to backup file
-    """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = CONFIG_PATH.with_suffix(f'.json.backup_{timestamp}')
-
-    shutil.copy2(CONFIG_PATH, backup_path)
-    print(f"[OK] Config backup created: {backup_path.name}")
-
-    return backup_path
-
-
-def load_config() -> dict:
-    """Load current config.json."""
-    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-
-def save_config(config: dict):
-    """Save config.json with pretty formatting."""
-    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
-    print(f"[OK] Config saved: {CONFIG_PATH}")
 
 
 def get_locomotive_from_jmri(address: int) -> Optional[object]:
@@ -101,7 +75,7 @@ def get_locomotive_from_jmri(address: int) -> Optional[object]:
 
 def create_locomotive_config(loco) -> dict:
     """
-    Create config.json entry for locomotive.
+    Create the stored configuration entry for locomotive.
 
     Args:
         loco: Locomotive object from JMRI roster
@@ -213,7 +187,7 @@ def import_locomotive(address: int, dry_run: bool = False) -> bool:
     print(f"{'='*60}\n")
 
     # Step 1: Load locomotive from JMRI
-    print(f"[1/4] Loading locomotive {address} from JMRI roster...")
+    print(f"[1/3] Loading locomotive {address} from JMRI roster...")
     loco = get_locomotive_from_jmri(address)
 
     if not loco:
@@ -236,13 +210,13 @@ def import_locomotive(address: int, dry_run: bool = False) -> bool:
     exists_in_config = str(address) in config.get('locomotives', {})
 
     if exists_in_config:
-        print(f"[INFO] Locomotive {address} already exists in config.json (will be updated)")
+        print(f"[INFO] Locomotive {address} already exists in the configuration (will be updated)")
     else:
-        print(f"[INFO] Locomotive {address} is NEW (will be added to config.json)")
+        print(f"[INFO] Locomotive {address} is NEW (will be added to the configuration)")
 
     if dry_run:
         action = "update" if exists_in_config else "add"
-        print(f"\n[DRY RUN] Would {action} in config.json:")
+        print(f"\n[DRY RUN] Would {action} in the stored configuration:")
         loco_config = create_locomotive_config(loco)
         print(json.dumps(loco_config, indent=2, ensure_ascii=False))
 
@@ -255,12 +229,8 @@ def import_locomotive(address: int, dry_run: bool = False) -> bool:
         print(json.dumps(cv_values, indent=2))
         return True
 
-    # Step 2: Backup config.json
-    print(f"\n[2/4] Creating config.json backup...")
-    backup_config()
-
-    # Step 3: Update config.json
-    print(f"\n[3/4] Updating config.json...")
+    # Step 2: Update the configuration (the database, shared by every host)
+    print(f"\n[2/3] Updating the stored configuration...")
     config = load_config()
 
     # Ensure locomotives section exists
@@ -272,10 +242,10 @@ def import_locomotive(address: int, dry_run: bool = False) -> bool:
     config['locomotives'][str(address)] = loco_config
 
     save_config(config)
-    print(f"[OK] Locomotive {address} added/updated in config.json")
+    print(f"[OK] Locomotive {address} added/updated in the stored configuration")
 
-    # Step 4: Write speed table to database
-    print(f"\n[4/4] Writing speed table to database...")
+    # Step 3: Write speed table to database
+    print(f"\n[3/3] Writing speed table to database...")
     write_speed_table_to_db(loco)
 
     print(f"\n{'='*60}")
@@ -283,8 +253,8 @@ def import_locomotive(address: int, dry_run: bool = False) -> bool:
     print(f"{'='*60}")
     print(f"\nLocomotive {address} ({loco.name}) imported successfully")
     print(f"Next steps:")
-    print(f"  1. Verify config.json → locomotives.{address}")
-    print(f"  2. Restart backend to load new locomotive")
+    print(f"  1. Reload the roster in the dashboard (POST /api/reload-roster)")
+    print(f"  2. Verify the locomotive and its functions")
     print(f"  3. Test locomotive control in dashboard")
 
     return True

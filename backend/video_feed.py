@@ -17,7 +17,7 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from config_loader import load_config, get_config_path
+from config_loader import config_version, load_config, get_config_path
 from services.config_helpers import get_all_locomotives
 from log_colors import log
 
@@ -44,7 +44,7 @@ def hex_to_bgr(hex_color: str) -> tuple:
 
 def load_locomotive_colors() -> Dict[int, tuple]:
     """
-    Load locomotive colors from config.json and convert to BGR.
+    Load locomotive colors from the stored configuration and convert to BGR.
 
     Uses config_helpers.get_all_locomotives() (backward compatible with old format).
 
@@ -74,7 +74,7 @@ def load_locomotive_colors() -> Dict[int, tuple]:
 
 def load_camera_config() -> str:
     """
-    Load camera configuration from unified config.json and build RTSP URL.
+    Load camera configuration from the stored configuration and build RTSP URL.
 
     Reads from config['camera'] section (credentials auto-merged from config.local.json).
 
@@ -550,9 +550,11 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
     Yields:
         bytes: MJPEG frame data
     """
-    # Load gate configuration
+    # Load gate configuration. The stream outlives a save, so the gates are re-read
+    # when config_version() moves, never per frame.
     config = load_config()
     gates = config.get('gates', [])
+    gates_version = config_version()
 
     # Video feed rate ceiling (not a target)
     tracking_config = config.get('tracking', {})
@@ -602,6 +604,11 @@ def generate_video_frames(tracking_data_callback=None, yolo_detections_callback=
                 else:
                     time.sleep(0.01)
                 continue
+
+            version = config_version()
+            if version != gates_version:
+                gates = load_config().get('gates', [])
+                gates_version = version
 
             frame = frame.copy()  # drawing mutates it; the hub keeps the original
             start_time = time.monotonic()

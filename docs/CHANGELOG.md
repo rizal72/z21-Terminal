@@ -5,6 +5,43 @@ Active changelog for recent changes. Entries older than ~30 days are moved to
 
 ---
 
+## 2026-11-26 — Configuration moved to the database
+
+### Backend
+
+- The configuration is one document in the `config` table: gates, consists, locomotives,
+  functions, thresholds. The dashboard edits it there, so a gate moved on one machine is
+  already moved on the other, and a deploy's `git reset --hard` cannot destroy it.
+- `config.seed.json` (renamed from `config.json`) is the seed for an empty database, never
+  written at runtime. A hand edit counts after `scripts/db/load_config.py`, which refuses when
+  a document is stored (`--force` replaces it).
+- `config.local.json` keeps what is per machine: camera credentials and `debug.enabled`,
+  merged on top and never stored.
+- The merged document is cached in memory (`load_config()` runs in hot paths); `save_config()`
+  writes the row and the cache together. A write by a script is picked up by
+  `POST /api/reload-roster`.
+- The video feed no longer freezes the gates it read when the stream opened: `config_version()`
+  moves on every save, and the feed re-reads them before the next frame. Saving a gate shows it
+  on the video without reloading the page.
+- A save that cannot reach the database now returns 503 and the settings window shows the
+  reason; it used to answer 200 with `status: "error"` and the UI announced success.
+
+### Frontend
+
+- `SettingsModal` shows the server's message when a save fails.
+- `GET /api/config` no longer returns the camera password; an empty value means "keep the
+  stored one", so saving after a reload does not erase it.
+
+### Scripts
+
+- `import_single_locomotive.py`, `import_loco_images.py` and `export_tensorrt.py` read and
+  write through `config_loader` instead of the file. Adding a locomotive is that script plus
+  a roster reload.
+- `scripts/db/load_config.py` added for a hand-edited seed file.
+- `save-gates` no longer copies the seed file to a `.backup`.
+
+---
+
 ## 2026-11-26 — Database moved to Postgres on the pi4
 
 ### Backend

@@ -10,7 +10,7 @@
 - ✅ Backend API: `/api/consists` (GET/POST/PUT/DELETE), `/api/restart-daemon`
 - ✅ Integration: Desktop inline button + Mobile menu item
 - ✅ Production: Deployed and tested on Mac (dev) and PC (production)
-- ✅ **2026-01-20**: Added `recommendation_threshold` field (Advanced section) - editable via UI, saved to config.json
+- ✅ **2026-01-20**: Added `recommendation_threshold` field (Advanced section) - editable via UI, saved to the stored configuration
 
 ---
 
@@ -771,7 +771,7 @@ export default function ConsistManagerModal({ isOpen, onClose, apiUrl }) {
   - "Asymmetric gates (1 crossing/lap): 5 recommended"
 
 **Backend Integration**:
-- Saved to config.json via POST/PUT `/api/consists`
+- Saved to the stored configuration via POST/PUT `/api/consists`
 - Used by weighted recommendations algorithm (see SPEED_TABLE_WEIGHTED_RECOMMENDATIONS.md)
 - Default: 10 if not provided (symmetric mode)
 

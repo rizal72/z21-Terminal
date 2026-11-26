@@ -122,7 +122,7 @@ def load_consists() -> Dict[int, Dict]:
 
 def load_consist_modes() -> Dict[int, Dict]:
     """
-    Load consist configuration from config.json (virtual_mode + locomotives).
+    Load consist configuration from the stored configuration (virtual_mode + locomotives).
 
     Returns:
         dict: {

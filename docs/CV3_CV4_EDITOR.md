@@ -8,7 +8,7 @@
 
 ## Overview
 
-UI editor for CV3 (Acceleration) and CV4 (Deceleration) in `config.json` without JMRI.
+UI editor for CV3 (Acceleration) and CV4 (Deceleration) in the stored configuration without JMRI.
 
 **Why**: During speed table tuning we work with momentum off (CV3=CV4=0). When we activate accel/decel, the speed table tuning may be affected. Need to quickly test different CV3/CV4 values.
 
@@ -16,9 +16,9 @@ UI editor for CV3 (Acceleration) and CV4 (Deceleration) in `config.json` without
 
 ## Current Situation (Before Implementation)
 
-- CV3/CV4 values hardcoded in `config.json` → `locomotives.X.cv_profiles.normal` and `testing`
+- CV3/CV4 values hardcoded in the stored configuration → `locomotives.X.cv_profiles.normal` and `testing`
 - Toggle TEST/NORMAL (hotkey `T`) writes values from config to decoder
-- Modifying values requires: JMRI + manual config.json edit
+- Modifying values requires: JMRI + manual edit of the stored configuration
 
 ---
 
@@ -52,7 +52,7 @@ UI editor for CV3 (Acceleration) and CV4 (Deceleration) in `config.json` without
 
 ## Workflow
 
-1. **User edits CV3/CV4** in Settings → **Saves only in config.json** (does NOT write to decoder immediately)
+1. **User edits CV3/CV4** in Settings → **Saves only in the stored configuration** (does NOT write to decoder immediately)
 2. **User presses hotkey `T`** → Toggle TEST/NORMAL → **At that point** writes CV3/CV4 to decoder
 3. **Edited values are active only in NORMAL mode** (test mode always CV3=CV4=0)
 
@@ -93,14 +93,14 @@ setSettings({
 ### Backend
 
 **Already implemented** - no changes needed:
-- `/api/settings/update` saves config.json (existing endpoint)
+- `/api/settings/update` saves the stored configuration (existing endpoint)
 - Toggle TEST/NORMAL reads `cv_profiles.normal` and writes CV3/CV4 to decoder via POM (existing logic)
 
 ---
 
 ## Config Structure
 
-**config.json**:
+**In the stored configuration**:
 ```json
 {
   "locomotives": {
@@ -137,7 +137,7 @@ setSettings({
    - Change CV3 value (e.g., 78 → 80)
    - Change CV4 value (e.g., 58 → 60)
    - Verify input validation (0-255 range enforced)
-5. **Save settings** → Verify config.json updated
+5. **Save settings** → Verify the stored configuration updated
 6. **Press hotkey `T`** → Verify decoder receives new CV3/CV4 values
 
 ---

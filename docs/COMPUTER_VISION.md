@@ -78,7 +78,7 @@ Sistema di tracking locomotive via webcam per:
 **Consist 10** (tracciato interno - figura 8):
 - **2 gate configurati** - gate_ids: [3, 4] ✅ (G3: 1086,326 80x80px, G4: 479,29 50x50px)
 - **⚠️ ASYMMETRIC MODE** (geometria figura-8 asimmetrica):
-  - `gate_assignment: {reference: 3, adjust: 4}` in config.json
+  - `gate_assignment: {reference: 3, adjust: 4}` in the stored configuration
   - **Calcola SOLO**: L5@G3-L1@G4 (~0.5s quando sincronizzato)
   - **Ignora**: L1@G3-L5@G4 (~-18s sempre invalido per geometria tracciato)
   - **Motivo**: gate NON a metà esatta del percorso (impossibile su figura 8)
@@ -332,7 +332,7 @@ def write_cv_ops_mode(self, address, cv_number, cv_value):
   - YOLOv8 nano trained su 4 locomotive (mAP50 = **0.931** - best model)
   - Square 640x640 optimization for fast CPU inference
   - Detection real-time tutte e 4 classi con confidence 0.60-0.92
-  - Inference size configurable via `config.json` → `tracking.yolo_imgsz: 640`
+  - Inference size configurable in the stored configuration: `tracking.yolo_imgsz: 640`
   - Pannello "All Locomotives Detected" con indicators colorati
   - Console logging intelligente (immediate + periodic summary)
   - Model history: v3 (80.7%), v4 rectangular (91.9%), v5 square (93.1% ✅)
@@ -450,7 +450,7 @@ architecture and the remote-video plan: `docs/REMOTE_VIDEO.md`.
 
 **Goal**: Config-driven multi-consist support
 - Replace hardcoded variables con `self.consist_data` dict
-- Load `tracking_assignments` from config.json
+- Load `tracking_assignments` from the stored configuration
 - Generic method `_update_gate_timing(consist_id, lead_pos, rear_pos)`
 - Loop over all configured consists dynamically
 
@@ -463,7 +463,7 @@ architecture and the remote-video plan: `docs/REMOTE_VIDEO.md`.
 **Status**: ✅ **COMPLETED**
 - ✅ `consist_data` dict replaces all hardcoded variables
 - ✅ Generic `_update_gate_timing()` works for ANY consist
-- ✅ Multi-consist support via config.json
+- ✅ Multi-consist support via the stored configuration
 - ✅ See `docs/CONSIST_TRACKING.md` for details
 
 **Implementation**: 7 steps completed
@@ -745,7 +745,7 @@ class ConsistManager:
 **Features pianificate**:
 - ✓ Locomotive markers (cerchi colorati con direction arrows)
 - ✓ Info overlays (ID, nome, speed, direction, confidence)
-- ✓ Gate overlays (transformed coordinates da config.json)
+- ✓ Gate overlays (transformed coordinates dalla configurazione salvata)
 - ✓ Track paths ridisegnati da layout foto
 
 **Motivo postpone**:
@@ -1003,7 +1003,7 @@ def main():
 - ✅ Position updates handle single loco detection correctly
 - ✅ Bounding boxes included in detections for debug mode
 - ✅ Consist names added to consist_config
-- ✅ Gate colors propagated from config.json
+- ✅ Gate colors propagated from the stored configuration
 - ✅ Co-visibility panel removed (redundant)
 - ✅ Debug overlay moved before early return (always visible with D key)
 - ✅ All info panels resized to uniform 430px width
@@ -1029,7 +1029,7 @@ python track_consist_yolo.py
 
 **Both scripts**:
 - Load same YOLO model (`scripts/models/best.pt`)
-- Use same gate definitions (`config.json`)
+- Use same gate definitions (the stored configuration)
 - Run same detection algorithm (`YOLOTracker.update()`)
 - Calculate same Δt values (cross-gate validation)
 
@@ -1264,7 +1264,7 @@ python track_consist_yolo.py
 - **Result**: mAP50 = **0.931** (best standard model)
 - **Rationale**: Faster inference on Mac CPU, simpler processing, best mAP achieved
 - **Deployment**: Currently active as `scripts/models/best.pt`
-- **Inference size**: Configurable via `config.json` → `tracking.yolo_imgsz: 640`
+- **Inference size**: Configurable in the stored configuration: `tracking.yolo_imgsz: 640`
 - **Training time**: 4 minutes on Google Colab GPU T4
 - **File**: `scripts/models/best.pt` (standard axis-aligned bounding boxes)
 
@@ -1288,7 +1288,7 @@ python track_consist_yolo.py
 - **File**: `scripts/models/best_obb.pt` - **ACTIVE** ✅
 
 **Model Selection (Auto-Switching)**:
-- **Implementation**: `yolo_tracker.py` auto-selects model based on `config.json` → `tracking.yolo_obb` flag
+- **Implementation**: `yolo_tracker.py` auto-selects model based on `tracking.yolo_obb` in the stored configuration
   - `yolo_obb: false` → loads `best.pt` (standard axis-aligned)
   - `yolo_obb: true` → loads `best_obb.pt` (Oriented Bounding Boxes) ✅ **ACTIVE**
 - **Log message**: Always visible at startup (not debug-gated)
@@ -1383,7 +1383,7 @@ python track_consist_yolo.py
 **Deployment Strategy**:
 - **Mac (current)**: v5 square 640x640 - fast CPU inference ✅
 - **PC GPU (future)**: v4 rectangular 640x1152 - accurate GPU inference
-- **Switching**: Update symlink `scripts/models/best.pt` + set `config.json` → `yolo_imgsz`
+- **Switching**: Update symlink `scripts/models/best.pt` + set `yolo_imgsz` in the stored configuration
 
 **⚠️ CRITICAL**: DCC Address Class Mapping
 - Classes use DCC address (CV1) as prefix: `1_Gr675_017`, `5_D645_014`, `7_E656_239`, `8_E444_056`
@@ -1575,10 +1575,10 @@ WebRTC plan: `docs/REMOTE_VIDEO.md`.
 ```
 
 **Mac** (CPU-only):
-- Nessun `config.local.json` → usa default 15 FPS da `config.json`
+- Nessun `config.local.json` → usa default 15 FPS dalla configurazione salvata
 
 **Deep merge automatico**:
-- `config_loader.py` merge `config.json` + `config.local.json`
+- `config_loader.py` merges the stored document and `config.local.json`
 - Override locale non committato su git (machine-specific)
 - Persistente su tutti i branch (git non tocca file ignorati)
 

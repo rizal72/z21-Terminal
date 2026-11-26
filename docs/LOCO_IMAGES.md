@@ -20,7 +20,7 @@ pictures are static assets of the frontend.
 Regenerate them on the Mac (the only machine with JMRI):
 
 ```bash
-venv/bin/python scripts/utils/import_loco_images.py              # every loco in config.json
+venv/bin/python scripts/utils/import_loco_images.py              # every loco in the stored configuration
 venv/bin/python scripts/utils/import_loco_images.py --address 2  # one loco
 venv/bin/python scripts/utils/import_loco_images.py --dry-run    # show, write nothing
 ```

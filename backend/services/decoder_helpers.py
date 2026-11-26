@@ -27,7 +27,7 @@ DECODER_TYPE_MAP = {
 
 def get_decoder_type_from_config(loco_address: int) -> str:
     """
-    Detect decoder type from config.json locomotive metadata.
+    Detect decoder type from the stored configuration locomotive metadata.
 
     Args:
         loco_address: Locomotive DCC address (1-10239)

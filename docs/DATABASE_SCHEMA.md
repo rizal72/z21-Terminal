@@ -17,6 +17,7 @@
 | `cv_modification_timestamps` | Per-CV modification timestamps | 196 (7 locos × 28 steps) |
 | `consist_state` | Virtual Mode + Auto Compensation state | 2 (one per consist) |
 | `system_state` | System-wide key-value state | ~few |
+| `config` | The configuration document (gates, consists, locomotives, thresholds) | 1 |
 
 ---
 
@@ -83,7 +84,7 @@ CREATE INDEX idx_timestamp ON events(timestamp);
 }
 ```
 
-**Status thresholds** (from `config.json`):
+**Status thresholds** (from the stored configuration):
 - `SYNCED`: |Δt| < 1.0s
 - `WARNING`: 1.0s ≤ |Δt| < 1.5s
 - `CRITICAL`: |Δt| ≥ 1.5s
@@ -353,6 +354,25 @@ last_updated: 2026-01-18 23:22:48
 
 ---
 
+## Table: config
+
+**Purpose**: the whole configuration as one document: gates, consists, locomotives and their
+functions, tracking thresholds, YOLO parameters, analytics. One row, always `id = 1`.
+
+```sql
+CREATE TABLE config (
+    id integer PRIMARY KEY CHECK (id = 1),
+    document jsonb NOT NULL,
+    updated_at double precision NOT NULL DEFAULT extract(epoch from now())
+);
+```
+
+**Seeded** from `config.seed.json` when the table is empty, never written to that file at runtime.
+Camera credentials and `debug.enabled` are stripped before writing: they live in
+`config.local.json`, per machine. Reading and writing: `DATABASE_POSTGRES.md`, "Configuration".
+
+---
+
 ## Common Queries
 
 ### Find all gate crossings for consist 11 in last 24h
@@ -496,6 +516,6 @@ SELECT 'system_state', COUNT(*) FROM system_state;
 - **2025-01-17**: Migrated from analytics.db → data.db (unified database)
 - **2025-01-17**: Added locomotive_speed_table (CV67-94 storage)
 - **2025-01-17**: Added consist_state (Virtual Mode tracking)
-- **2025-01-17**: Migrated JMRI roster to config.json (locomotive functions)
+- **2025-01-17**: Migrated JMRI roster to config.seed.json (locomotive functions)
 
 See `docs/archive/SPEED_TABLE_DB_MIGRATION.md` and `docs/SPEED_TABLE_DECODER_BEHAVIOR.md` for complete migration details.

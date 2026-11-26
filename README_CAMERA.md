@@ -31,10 +31,10 @@ The tracking daemon and video feed require camera credentials to access the RTSP
 
 Camera configuration is split between two files:
 
-- **`config.json`** (tracked in git): IP, port, stream name, resolution
+- **The stored configuration** (in the database, edited from the dashboard): IP, port, stream name, resolution
 - **`config.local.json`** (gitignored): Username and password only
 
-The system automatically merges `config.local.json` over `config.json` at runtime.
+The system automatically merges `config.local.json` over the stored document at runtime.
 
 ## Troubleshooting
 
@@ -55,4 +55,4 @@ Just run the setup steps above.
 
 We use **stream2** (720P) for best balance between quality and performance.
 
-Stream selection is configured in `config.json` under `camera.stream`.
+Stream selection is configured in the dashboard, under `camera.stream`.

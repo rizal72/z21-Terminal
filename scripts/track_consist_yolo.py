@@ -2,7 +2,7 @@
 """
 YOLO-based tracking for multiple consists (config-driven).
 
-Dynamically tracks N consists based on config.json:
+Dynamically tracks N consists based on the stored configuration:
     - Consist 10 (Tracciato Interno): Gr.675 017 + D645 014
     - Consist 11 (Tracciato Esterno): E656 239 + E444 056
     - Additional consists can be added via config
@@ -27,7 +27,7 @@ Controls:
     - P: Toggle info panels (clean view, gates+markers only)
     - Y: Toggle YOLO inference (disable = pause video for fast gate editing)
     - M: Toggle Marker Mode (gate positioning/editing)
-    - S: Save gate positions to config.json (Marker Mode only)
+    - S: Save gate positions to the stored configuration (Marker Mode only)
     - R: Reset gate crossing counters (all consists)
 
 Marker Mode (M key):
@@ -38,7 +38,7 @@ Marker Mode (M key):
     - Q/E: Rotate gate (±10°)
     - ENTER: Commit gate changes
     - BACKSPACE: Delete selected gate
-    - S: Save ALL gates to config.json
+    - S: Save ALL gates to the stored configuration
 
 Requirements:
     - Trained YOLOv8 model (best.pt) with all 4 locomotive classes
@@ -139,7 +139,7 @@ ROTATION_STEP = -15  # Degrees per R key press (counter-clockwise, negative for 
 GATE_COLOR = (0, 255, 255)  # Yellow
 GATE_SAVED_COLOR = (0, 255, 0)  # Green
 
-# Gate timing detection (Phase 4 - loaded from config.json)
+# Gate timing detection (Phase 4 - loaded from the stored configuration)
 # Consist 11: 2 shared gates - both locos cross both gates
 # Gates and timing thresholds loaded dynamically from JSON config
 
@@ -147,17 +147,9 @@ GATE_SAVED_COLOR = (0, 255, 0)  # Green
 
 
 def save_config(config):
-    """Save system configuration to JSON file (with automatic backup)."""
+    """Save the configuration to the database, through the central loader."""
     try:
-        # Create backup before overwriting
-        config_file = get_config_path()
-        if config_file.exists():
-            import shutil
-            backup_file = config_file.with_suffix('.json.backup')
-            shutil.copy2(config_file, backup_file)
-            print(f"💾 Backup created: {backup_file.name}")
-
-        # Save using centralized config_loader (writes to config.json, NOT config.local.json)
+        # save_config_central writes the stored document (and config.local.json is untouched)
         save_config_central(config)
         print(f"✅ Config saved: {len(config.get('gates', []))} gates")
         return True

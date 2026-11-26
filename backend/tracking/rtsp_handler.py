@@ -6,7 +6,7 @@ Used by both:
 - scripts/track_consist_yolo.py (standalone GUI testing)
 - backend/video_feed.py (MJPEG stream for web browser)
 
-All use the same 'stream' from unified config.json (credentials from config.local.json).
+All use the same 'stream' from the stored configuration (credentials from config.local.json).
 Handles camera config loading and RTSP stream setup with optimal buffering.
 """
 import os
@@ -28,7 +28,7 @@ from config_loader import load_config
 
 def load_camera_config():
     """
-    Load camera configuration from unified config.json and build RTSP URL.
+    Load camera configuration from the stored configuration and build RTSP URL.
 
     Reads from config['camera'] section (credentials auto-merged from config.local.json).
 
